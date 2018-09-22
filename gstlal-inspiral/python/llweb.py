@@ -123,13 +123,13 @@ td {
 	border-radius: 25px;
 	border: 2px solid gray;
 	background: white;
-	padding: 20px; 
+	padding: 20px;
 	width: 97%;
 	box-shadow: 10px 10px 5px #888888;
 }
 
 .tabs {
-  position: relative;   
+  position: relative;
   min-height: 10in; /* This part sucks */
   clear: both;
   margin: 25px 0;
@@ -140,16 +140,16 @@ td {
 }
 
 .tab label {
-  background: #eee; 
-  padding: 10px; 
-  border: 1px solid #ccc; 
-  margin-left: -1px; 
+  background: #eee;
+  padding: 10px;
+  border: 1px solid #ccc;
+  margin-left: -1px;
   position: relative;
-  left: 1px; 
+  left: 1px;
 }
 
 .tab [type=radio] {
-  display: none;   
+  display: none;
 }
 
 .content {
@@ -160,7 +160,7 @@ td {
   right: 0;
   bottom: 0;
   padding: 20px;
-  border: 1px solid #ccc; 
+  border: 1px solid #ccc;
 }
 
 [type=radio]:checked ~ label {
@@ -245,7 +245,7 @@ class GstlalWebSummary(object):
 	def status(self):
 		valid_latency = self.valid_latency()
 		if self.oldest_data() > 1800:
-			return 2, "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data() 
+			return 2, "<em class=red>SOME DATA OLDER THAN %d seconds</em>" % self.oldest_data()
 		if not valid_latency:
 			return 1, "<em class=red>NO COINCIDENT EVENTS FOUND!</em>"
 		if self.missed["latency_history"]:
@@ -323,7 +323,7 @@ class GstlalWebSummary(object):
 		return fig, h
 
 	def finish_plot(self, ylim):
-		plt.grid(color=(0.1,0.4,0.5), linewidth=2)	
+		plt.grid(color=(0.1,0.4,0.5), linewidth=2)
 		ticks = ["%s : %s " % (id, reg) for (id, reg) in sorted(self.registry.items())]
 		plt.xticks(numpy.arange(len(ticks))+.3, ticks, rotation=90, fontsize = 10)
 		plt.xlim([0, len(ticks)])
@@ -375,7 +375,7 @@ class GstlalWebSummary(object):
 			max_y = 1
 		missed_x = range(len(missed))
 		missed_y = numpy.ones(len(missed_x)) * max_y
-		
+
 		h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
 		h.bar(found_x, found_y, color='w', alpha=0.9, linewidth=2)
 		h.bar(found_x, time_y, color='w', alpha=0.7, linewidth=2)
@@ -447,17 +447,17 @@ class GstlalWebSummary(object):
 		return self.finish_plot([0.9 * min_y, max_y])
 
 	def plot_ram(self, fig, h, found, missed):
-		
+
 		found_x = range(len(found))
 		found_y = numpy.log10(numpy.array([found[k][0,1] for k in sorted(found)]))
 
-		try:	
+		try:
 			max_y, min_y = max(found_y), min(found_y)
 		except ValueError:
 			max_y, min_y = (1,0)
 		missed_x = range(len(missed))
 		missed_y = numpy.ones(len(missed_x)) * max_y
-		
+
 		h.bar(missed_x, missed_y, color='r', alpha=0.9, linewidth=2)
 		h.bar(found_x, found_y, color='w', alpha=0.9, linewidth=2)
 		plt.title("max RAM usage (GB)")
@@ -475,7 +475,7 @@ class GstlalWebSummary(object):
 
 	#
 	# Single Node plots
-	# 
+	#
 
 	def livetime_pie(self):
 		out = ""

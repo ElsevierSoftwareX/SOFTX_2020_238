@@ -328,7 +328,7 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, 
 	axes.set_title(r"$\ln P(%s | \{%s\}, \mathrm{signal})$" % (", ".join("\mathrm{SNR}_{\mathrm{%s}}" % instrument for instrument in instruments), ", ".join("{D_{\mathrm{H}}}_{\mathrm{%s}}=%.3g" % item for item in sorted(horizon_distances.items()))))
 	fig.tight_layout(pad = .8)
 	return fig
-	
+
 
 def plot_likelihood_ratio_pdf(rankingstatpdf, (xlo, xhi), title, which = "noise"):
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))

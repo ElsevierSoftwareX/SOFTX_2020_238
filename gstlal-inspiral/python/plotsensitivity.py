@@ -76,7 +76,7 @@ def plot_range(found_inj, missed_inj, seg_bins, (tlo, thi), (dlo, dhi), horizon_
 		fig = plt.figure()
 	if axes is None:
 		axes = fig.add_subplot(111)
-	
+
 	# FIXME Add number of distance bins as option
 	ndbins = rate.NDBins((rate.LinearBins(dlo, dhi, int(dhi - dlo + 1)), rate.IrregularBins(seg_bins)))
 	vol, err = imr_utils.compute_search_volume_in_bins([f[1] for f in found_inj], missed_inj + [f[1] for f in found_inj], ndbins, lambda sim: (sim.distance, sim.geocent_end_time))

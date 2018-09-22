@@ -124,7 +124,7 @@ class Handler(simplehandler.Handler):
 #
 # =============================================================================
 #
-#               Modified Version of mkbasicsrc from datasource.py 
+#               Modified Version of mkbasicsrc from datasource.py
 #
 # =============================================================================
 #

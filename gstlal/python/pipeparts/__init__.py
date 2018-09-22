@@ -56,7 +56,7 @@ __version__ = "FIXME"
 __date__ = "FIXME"
 
 
-## 
+##
 # @file
 #
 # A file that contains the pipeparts module code

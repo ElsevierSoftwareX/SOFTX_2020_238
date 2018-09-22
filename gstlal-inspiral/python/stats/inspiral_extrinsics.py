@@ -89,9 +89,9 @@ The probabilities are factored in the following way:
 .. math::
 
 	P(\\vec{\\rho}, \\vec{t}, \\vec{\phi}, \\vec{O} | \\vec{D_H}, s)
-	= 
-	\underbrace{P(\\vec{\\rho}, \\vec{t}, \\vec{\phi} | \\vec{O}, \\vec{D_H}, s)}_{\mathrm{1:\,TimePhaseSNR()}} 
-	\\times 
+	=
+	\underbrace{P(\\vec{\\rho}, \\vec{t}, \\vec{\phi} | \\vec{O}, \\vec{D_H}, s)}_{\mathrm{1:\,TimePhaseSNR()}}
+	\\times
 	\underbrace{P(\\vec{O} | \\vec{D_H}, s)}_{\mathrm{2:\,p\_of\_instruments\_given\_horizons()}}
 
 where:
@@ -166,7 +166,7 @@ and triples. *Ideally* false alarm probabilities for all doubles would be
 higher than all triples, but this is not a requirement since noise and
 especially glitches can cause a triple to be ranked below a double.  The plot
 below shows that at least the trend is correct.  NOTE we are not currently
-computing doubles and triples and picking the best. 
+computing doubles and triples and picking the best.
 
 |O2_O3_LR_double_vs_triple|
 
@@ -200,7 +200,7 @@ code with the previous implementation of additional dt and dphi terms (green)
 and finally the current implementation (blue).  The improvement of the present
 implementation is consistent with the above injection results and this further
 demonstrates that the reimplementation has "done no harm" to the O2
-configuration. 
+configuration.
 
 |O2_O3_LR_ROC|
 
@@ -210,7 +210,7 @@ Review Status
 Do no harm check of O2 results (Complete)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-- Comparing runs before and after (done) 
+- Comparing runs before and after (done)
 - Checking the probabilities returned by new code and old code to show consistent results (done)
 
 Check of error assumptions (For O3)
@@ -1060,9 +1060,9 @@ class TimePhaseSNR(object):
 	e.g.,
 
 	.. math::
-			P(\\vec{D_{\mathrm{eff}}} / D_{\mathrm{eff}\,0}, \\vec{t} - t_0, \\vec{\phi} - \phi_0 | \\vec{O}, s) 
+			P(\\vec{D_{\mathrm{eff}}} / D_{\mathrm{eff}\,0}, \\vec{t} - t_0, \\vec{\phi} - \phi_0 | \\vec{O}, s)
 		\\times
-			|\\vec{\\rho}|^{-4} 
+			|\\vec{\\rho}|^{-4}
 		\equiv
 			P(\\vec\lambda|\\vec{O}, s)
 		\\times
@@ -1089,8 +1089,8 @@ class TimePhaseSNR(object):
 	.. math::
 
 		P(\\vec{\lambda} | \\vec{O}, \\vec{\lambda_{mi}})
-		= 
-			\\frac{1}{\sqrt{(2\pi)^k |\pmb{\Sigma}|}} 
+		=
+			\\frac{1}{\sqrt{(2\pi)^k |\pmb{\Sigma}|}}
 			\exp{ \left[ -\\frac{1}{2} \\vec{\Delta\lambda}^T \, \pmb{\Sigma}^{-1} \, \\vec{\Delta\lambda} \\right] }
 
 	where :math:`\\vec{\Delta\lambda_i} = \\vec{\lambda} -
@@ -1473,7 +1473,7 @@ class p_of_instruments_given_horizons(object):
 			self.histograms = histograms
 			# NOTE we end up pushing any value outside of our
 			# histogram to just be the value in the last(first)
-			# bin, so we track those center values here.  
+			# bin, so we track those center values here.
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
 		else:
@@ -1489,7 +1489,7 @@ class p_of_instruments_given_horizons(object):
 
 			# NOTE we end up pushing any value outside of our
 			# histogram to just be the value in the last(first)
-			# bin, so we track those center values here.  
+			# bin, so we track those center values here.
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
 			# The sky tile resolution here is lower than the
@@ -1629,7 +1629,7 @@ class InspiralExtrinsics(object):
 	data files with :py:class:`TimePhaseSNR` and :py:class:`p_of_instruments_given_horizons`.
 
 	This class is used to compute p_of_instruments_given_horizons
-	and the probability of getting time phase and snrs from 
+	and the probability of getting time phase and snrs from
 	a given instrument combination.  The argument min_instruments will be
 	used to normalize the p_of_instruments_given_horizons to set the probability of
 	a combination with fewer than min_instruments to be 0.

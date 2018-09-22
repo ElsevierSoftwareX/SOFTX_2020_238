@@ -61,9 +61,9 @@ __version__ = "$Revision$" #FIXME
 def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
 	out = which.stdout.read().strip()
-	if not out: 
+	if not out:
 		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and sourced the proper environment scripts?" % (prog,prog)
-		raise ValueError 
+		raise ValueError
 	return out
 
 
@@ -199,7 +199,7 @@ def breakupsegs(seglist, maxextent, overlap):
 	for bigseg in seglist:
 		newseglist.extend(breakupseg(bigseg, maxextent, overlap))
 	return newseglist
-	
+
 
 def breakupseglists(seglists, maxextent, overlap):
 	for instrument, seglist in seglists.iteritems():

@@ -26,7 +26,7 @@
 #
 # #### Actions
 # - Consider a study of how to supply the svd / time slice boundaries
-# 
+#
 
 ## @package svd_bank
 
@@ -165,7 +165,7 @@ class Bank(object):
 			time_slices,
 			autocorrelation_length = autocorrelation_length,
 			verbose = verbose)
-		
+
 		# Include signal inspiral table
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 		self.sngl_inspiral_table = sngl_inspiral_table.copy()
@@ -273,7 +273,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = F
 		# FIXME FIXME FIXME move this clipping stuff to the Bank class
 		# set the right clipping index
 		clipright = len(bank.sngl_inspiral_table) - clipright
-		
+
 		# Apply clipping option to sngl inspiral table
 		# put the bank table into the output document
 		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable, bank.sngl_inspiral_table.columnnames)
@@ -352,14 +352,14 @@ def read_banks(filename, contenthandler, verbose = False):
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one in the file for now
 	# FIXME, right now there is only one instrument so we just pull out the
-	# only psd there is 
+	# only psd there is
 	# FIXME enable this again in the future, but right now we don't use it,
 	# and it makes the files very slow to read
 	#processed_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
 	processed_psd = None
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
-	
+
 		# Create new SVD bank object
 		bank = Bank.__new__(Bank)
 

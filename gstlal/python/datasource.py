@@ -106,7 +106,7 @@ def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "ch
 	that encodes the other instances of the option.
 
 	- override --channel-name with a different option by setting opt.
-	- restrict the ifo keys to a subset of the channel_dict by 
+	- restrict the ifo keys to a subset of the channel_dict by
 	  setting ifos
 
 	Examples:
@@ -188,7 +188,7 @@ def injection_dict_from_channel_list_with_node_range(injection_list):
 ## #### Default dictionary of state vector on/off bits by ifo
 # Used as the default argument to state_vector_on_off_dict_from_bit_lists()
 state_vector_on_off_dict = {
-	"H1" : [0x7, 0x160], 
+	"H1" : [0x7, 0x160],
 	"H2" : [0x7, 0x160],
 	"L1" : [0x7, 0x160],
 	"V1" : [0x67, 0x100]
@@ -249,7 +249,7 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 	"""
 	Produce a tuple of useful command lines from a dictionary of on / off state
 	vector bits keyed by detector
-	
+
 	FIXME: This function exists to work around pipeline.py's inability to
 	give the same option more than once by producing a string to pass as an argument
 	that encodes the other instances of the option.
@@ -278,8 +278,8 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 # Look-up table to map instrument name to framexmit multicast address and
 # port
 #
-# used in mkbasicsrc() 
-# 
+# used in mkbasicsrc()
+#
 # FIXME:  this is only here temporarily while we test this approach to data
 # aquisition.  obviously we can't hard-code this stuff
 #
@@ -336,7 +336,7 @@ def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "frame
 def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.SeekFlags.FLUSH):
 	"""
 	Create a new seek event, i.e., Gst.Event.new_seek()  for a given
-	gps_start_time and gps_end_time, with optional flags.  
+	gps_start_time and gps_end_time, with optional flags.
 
 	@param gps_start_time start time as LIGOTimeGPS, double or float
 	@param gps_end_time start time as LIGOTimeGPS, double or float
@@ -419,7 +419,7 @@ class GWDataSourceInfo(object):
 	def __init__(self, options):
 		"""!
 		Initialize a GWDataSourceInfo class instance from command line options specified by append_options()
-		""" 
+		"""
 
 		## A list of possible, valid data sources ("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO")
 		self.data_sources = set(("frames", "framexmit", "lvshm", "nds", "white", "silence", "AdvVirgo", "LIGO", "AdvLIGO"))
@@ -508,11 +508,11 @@ class GWDataSourceInfo(object):
 			dq_channel_dict_from_options = channel_dict_from_channel_list( options.dq_channel_name )
 			instrument = dq_channel_dict_from_options.keys()[0]
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
-	
+
 		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits, state_vector_on_off_dict)
 		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits, dq_vector_on_off_dict)
-		
+
 		## frame cache file
 		self.frame_cache = options.frame_cache
 		## block size in bytes to read data from disk
@@ -536,7 +536,7 @@ def append_options(parser):
 	Append generic data source options to an OptionParser object in order
 	to have consistent an unified command lines and parsing throughout the project
 	for applications that read GW data.
-	
+
 -	--data-source [string]
 		Set the data source from [frames|framexmit|lvshm|nds|silence|white|AdvVirgo|LIGO|AdvLIGO].
 
@@ -554,7 +554,7 @@ def append_options(parser):
 		Required unless --data-source is lvshm or framexmit
 
 -	--gps-end-time  [int] (seconds)
-		Set the end time of the segment to analyze in GPS seconds.  
+		Set the end time of the segment to analyze in GPS seconds.
 		Required unless --data-source in lvshm,framexmit
 
 -	--injections [filename]
@@ -639,7 +639,7 @@ def append_options(parser):
 		--frame-segments-name=datasegments
 
 	2. Reading data from a fake LIGO source::
-		
+
 		--data-source=LIGO --gps-start-time=999999000 --gps-end-time=999999999 \\
 		--channel-name=H1=FAIKE-STRAIN
 
@@ -659,7 +659,7 @@ def append_options(parser):
 	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-port", metavar = "portnumber", type=int, default=31200, help = "Set the port of the remote host that serves nds data. This is required iff --data-source=nds")
-	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")	
+	group.add_option("--nds-channel-type", metavar = "type", default = "online", help = "Set the port of the remote host that serves nds data. This is required only if --data-source=nds. default==online")
 	group.add_option("--framexmit-addr", metavar = "name", action = "append", help = "Set the address of the framexmit service.  Can be given multiple times as --framexmit-addr=IFO=xxx.xxx.xxx.xxx:port")
 	group.add_option("--framexmit-iface", metavar = "name", help = "Set the multicast interface address of the framexmit service.")
 	group.add_option("--state-channel-name", metavar = "name", action = "append", help = "Set the name of the state vector channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")

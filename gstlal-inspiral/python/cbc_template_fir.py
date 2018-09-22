@@ -227,14 +227,14 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	kmax = int(minfs[1] / newdeltaF)
 	psddata[:kmin] = float('Inf')
 	psddata[kmin:kmax] /= numpy.sin(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
-	
+
 	kmin = int(maxfs[0] / newdeltaF)
 	kmax = int(maxfs[1] / newdeltaF)
 	psddata[kmax:] = float('Inf')
 	psddata[kmin:kmax] /= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
 
 	psd.data.data = psddata
-	
+
 	#
 	# compute the psd horizon after conditioning and renormalize
 	#

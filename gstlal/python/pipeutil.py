@@ -47,7 +47,7 @@ def gstlal_element_register(clazz):
 		@gstlal_element_register
 		class foo(Gst.Element):
 			...
-	
+
 	Until then, you have to do::
 
 		class foo(Gst.Element):
@@ -61,7 +61,7 @@ def gstlal_element_register(clazz):
 
 
 def mkelem(elemname, props={}):
-	"""Instantiate an element named elemname and optionally set some of its 
+	"""Instantiate an element named elemname and optionally set some of its
 	properties from the dictionary props."""
 	elem = Gst.ElementFactory.make(elemname, None)
 	for (k, v) in props.iteritems():
@@ -72,11 +72,11 @@ def mkelem(elemname, props={}):
 def mkelems_in_bin(bin, *pipedesc):
 	"""Create an array of elements from a list of tuples, add them to a bin,
 	link them sequentially, and return the list.  Example:
-	
+
 	mkelem(bin, ('audiotestsrc', {'wave':9}), ('audioresample',))
-	
+
 	is equivalent to
-	
+
 	audiotestsrc wave=9 ! audioresample
 	"""
 	elems = [mkelem(*elemdesc) for elemdesc in pipedesc]

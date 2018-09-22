@@ -163,7 +163,7 @@ def get_min_far_inspiral_injections(connection, segments = None, table_name = "c
 	# now actually remove the missed injections
 	for k in found_injections:
 		del missed_injections[k]
-		
+
 
 	return found_injections.values(), total_injections.values(), missed_injections.values()
 

@@ -36,7 +36,7 @@ class tabs(elem):
 		except TypeError:
 			self.content += [content]
 		return self
-	
+
 
 class tab(elem):
 	def __init__(self, href, div, text, charts=[], active = False):
@@ -45,7 +45,7 @@ class tab(elem):
 			elem.__init__(self, tag="li", content = [elem("a", [text], """ href=#%s class="tablinks" onclick="openGstlalTab(event, '%s',%s)" """ % (href, div, ",".join(charts)) )], attributes = "")
 		else:
 			elem.__init__(self, tag="li", content = [elem("a", [text], """ href=#%s class="tablinks" onclick="openGstlalTab(event, '%s')" """ % (href, div) )], attributes = "")
-	
+
 	def __call__(self, content=[]):
 		return elem("div", content, """ id="%s" class="tabcontent" """ % self.div)
 
@@ -59,15 +59,15 @@ class image_glob(elem):
 		for img in sorted(glob.glob(globpat)):
 			td += [elem("a", [elem("img", [], """ src="%s" width=500 """ % img)], """ class="fancybox" href="%s" rel="group" """ % img)]
 		self.content = [cap, tr]
-			
+
 class page(object):
 	def __init__(self, title="cbc web page", path='./',
 		css=["https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.css"
-			], 
+			],
 		script=["https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.1/jquery.min.js",
 			"https://cdnjs.cloudflare.com/ajax/libs/fancybox/2.1.5/jquery.fancybox.js",
 			"https://www.gstatic.com/charts/loader.js"
-			], 
+			],
 		content = None, header_content = None, verbose=False):
 		if content is None:
 			content = []

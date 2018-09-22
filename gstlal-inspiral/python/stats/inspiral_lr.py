@@ -409,7 +409,7 @@ class LnSignalDensity(LnLRDensity):
 		"""
 		# FIXME:  this is still busted since the rewrite
 
-		# FIXME need to add dt and dphi 
+		# FIXME need to add dt and dphi
 		#
 		# retrieve horizon distance from history if not given
 		# explicitly.  retrieve SNR threshold from class attribute

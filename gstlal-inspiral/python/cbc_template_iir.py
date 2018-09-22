@@ -76,8 +76,8 @@ def waveform(m1, m2, fLow, fhigh, sampleRate):
         deltaT = 1.0 / sampleRate
         T = spawaveform.chirptime(m1, m2 , 4, fLow, fhigh)
         tc = -spawaveform.chirptime(m1, m2 , 4, fhigh)
-	# the last sampling point of any waveform is always set 
-	# at abs(t) >= delta. this is to avoid ill-condition of 
+	# the last sampling point of any waveform is always set
+	# at abs(t) >= delta. this is to avoid ill-condition of
 	# frequency when abs(t) < 1e-5
 	n_start = math.floor((tc-T) / deltaT + 0.5)
 	n_end = min(math.floor(tc/deltaT), -1)
@@ -349,7 +349,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		root.appendChild(array.from_array('autocorrelation_bank_real', autocorrelation_bank.real))
 		root.appendChild(array.from_array('autocorrelation_bank_imag', -autocorrelation_bank.imag))
 		root.appendChild(array.from_array('autocorrelation_mask', autocorrelation_mask))
-	
+
         return A, B, D, snrvec
 
 def crosscorr(a, b, autocorrelation_length = 201):

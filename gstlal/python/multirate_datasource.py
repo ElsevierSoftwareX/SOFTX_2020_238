@@ -71,7 +71,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	Build pipeline stage to whiten and downsample h(t).
 
 	* pipeline: the gstreamer pipeline to add this to
-	* src: the gstreamer element that will be providing data to this 
+	* src: the gstreamer element that will be providing data to this
 	* rates: a list of the requested sample rates, e.g., [512,1024].
 	* instrument: the instrument to process
 	* psd: a psd frequency series

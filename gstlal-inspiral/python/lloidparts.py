@@ -14,7 +14,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## 
+##
 # @file
 #
 # A file that contains the lloidparts module code; Roughly speaking it
@@ -44,7 +44,7 @@
 #
 #
 # #### Functions/classes not reviewed since they will be moved
-# - DetectorData 
+# - DetectorData
 # - mkSPIIRmulti
 # - mkSPIIRhoftToSnrSlices
 # - mkLLOIDSnrSlicesToTimeSliceChisq
@@ -93,7 +93,7 @@ from gstlal import pipeparts
 
 ##
 # A "sum-of-squares" aggregator
-# 
+#
 # _Gstreamer graph describing this function:_
 #
 # @dot
@@ -132,7 +132,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, control_peak
 	@param rate An integer representing the target sample rate of the resulting src
 	@param verbose Make verbose
 	@param suffix Log name for verbosity
-	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal. 
+	@param control_peak_samples If nonzero, this would do peakfinding on the control signal with the window specified by this parameter.  The peak finding would give a single sample of "on" state at the peak.   This will cause far less CPU to be used if you only want to reconstruct SNR around the peak of the control signal.
 	"""
 	#
 	# start with an adder and caps filter to select a sample rate
@@ -205,8 +205,8 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, control_peak
 #	"mkcontrolsnksrc()" [URL="\ref mkcontrolsnksrc()"];
 #	lal_sumsquares [URL="\ref pipeparts.mksumsquares()"];
 #	audioresample [URL="\ref pipeparts.mkresample()"];
-#	
-#	
+#
+#
 #	lal_checktimestamps1 -> tee [label="iff control_snk, control_src are not None"];
 #	tee -> lal_sumsquares -> queue2;
 #	queue2 -> lal_checktimestamps3;
@@ -232,7 +232,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 
 	Specifically this implements the filtering of multirate svd basis and
 	(conditional) resampling and reconstruction of the physical SNR
-	
+
 	@param pipeline The gstreamer pipeline in which to place this graph
 	@param src The source of data for this graph provided by a gstreamer element
 	@param bank The template bank class

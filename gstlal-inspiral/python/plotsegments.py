@@ -53,13 +53,13 @@ lsctables.use_in(ligolwcontenthandler)
 def parse_segments_xml(path):
 	llwsegments = ligolw_segments.LigolwSegments(ligolw_utils.load_filename(path,contenthandler=ligolwcontenthandler))
 	seglistdicts = { #'frame gate': llwsegments.get_by_name(u'framesegments')}
-	'h(t) gate': llwsegments.get_by_name(u'whitehtsegments'), 
-	'state vector': llwsegments.get_by_name(u'statevectorsegments'), 
+	'h(t) gate': llwsegments.get_by_name(u'whitehtsegments'),
+	'state vector': llwsegments.get_by_name(u'statevectorsegments'),
 	'trigger buffers': llwsegments.get_by_name(u'triggersegments') }
 	# FIXME This needs to be generalized to more than two IFOs
 	seglistdicts['joint segments'] = {'H1L1': seglistdicts['state vector'].intersection(['H1','L1'])}
 	return seglistdicts
-	
+
 
 def plot_segments_history(seglistdicts, segments_to_plot = ['trigger buffers', 'h(t) gate', 'state vector'], t_max = None, length = 86400., labelspacing = 10800., colors = {'H1': numpy.array((1.0, 0.0, 0.0)), 'L1':  numpy.array((0.0, 0.8, 0.0)), 'V1':  numpy.array((1.0, 0.0, 1.0)), 'H1L1': numpy.array((.5, .5, .5))}, fig = None, axes = None):
 	if fig is None:

@@ -116,10 +116,10 @@ def now():
 
 def parse_svdbank_string(bank_string):
 	"""
-	parses strings of form 
-	
+	parses strings of form
+
 	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml
-	
+
 	into a dictionary of lists of bank files.
 	"""
 	out = {}
@@ -135,10 +135,10 @@ def parse_svdbank_string(bank_string):
 
 def parse_iirbank_string(bank_string):
 	"""
-	parses strings of form 
-	
-	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,... 
-	
+	parses strings of form
+
+	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml,H2:bank4.xml,...
+
 	into a dictionary of lists of bank files.
 	"""
 	out = {}

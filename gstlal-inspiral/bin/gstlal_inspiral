@@ -367,7 +367,7 @@ def parse_command_line():
 		options.ranking_stat_output = [None] * len(options.output)
 
 	required_urls = [options.time_slide_file]
-	for svd_bank_set in svd_banks: 
+	for svd_bank_set in svd_banks:
 		required_urls += svd_bank_set.values()
 	for filename in (options.veto_segments_file, options.injections, options.blind_injections, options.reference_psd):
 		if filename:
@@ -719,7 +719,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 	pipeline = Gst.Pipeline(name="gstlal_inspiral")
 	mainloop = GObject.MainLoop()
-		
+
 	triggersrc = lloidparts.mkLLOIDmulti(
 		pipeline,
 		detectors = detectors,
@@ -736,7 +736,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		fir_stride = options.fir_stride,
 		reconstruction_segment_list = reconstruction_segment_list
 	)
-	
+
 
 	if options.verbose:
 		print >>sys.stderr, "done"
@@ -874,7 +874,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	if options.verbose:
 		print >>sys.stderr, "running pipeline ..."
 	mainloop.run()
-	
+
 
 	#
 	# write output file

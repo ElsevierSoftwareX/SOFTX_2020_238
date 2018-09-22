@@ -26,7 +26,7 @@
 # #### Actions
 #
 # - Performance of time slices could be improved by e.g., not using powers of 2 for time slice sample size. This might also simplify the code
-# 
+#
 
 ## @package templates
 
@@ -222,7 +222,7 @@ def normalized_autocorrelation(fseries, revplan):
 	data = tseries.data.data
 	tseries.data.data = data / data[0]
 	return tseries
-	
+
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -317,7 +317,7 @@ def time_slices(
 			segment_samples_max = samples_max_64
 		else:
 			segment_samples_max = samples_max
-	
+
 		if segment_samples_min > segment_samples_max:
 			raise ValueError("The input template bank must have fewer than %d templates, but had %d." % (segment_samples_max, 2 * len(sngl_inspiral_rows)))
 

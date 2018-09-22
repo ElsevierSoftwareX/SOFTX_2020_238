@@ -16,7 +16,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
-## 
+##
 # @file
 #
 # A file that contains some generic plotting module code
@@ -35,7 +35,7 @@ import numpy
 import re
 
 
-golden_ratio = (1. + math.sqrt(5.)) / 2. 
+golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 
 def colour_from_instruments(instruments, colours = {

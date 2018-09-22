@@ -14,7 +14,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-## 
+##
 # @file
 #
 # A file that contains the inspiral_pipe module code; used to construct condor dags
@@ -290,7 +290,7 @@ def pipeline_dot_py_append_opts_hack(opt, vals):
 
 	>>> pipeline_dot_py_append_opts_hack("my-favorite-option", [1,2,3])
 	'1 --my-favorite-option 2 --my-favorite-option 3'
-	"""	
+	"""
 	out = str(vals[0])
 	for v in vals[1:]:
 		out += " --%s %s" % (opt, str(v))
@@ -311,7 +311,7 @@ def group(inlist, parts):
 	>>> B = [2,3]
 	>>> for g in group(A,B):
 	...     print g
-	... 
+	...
 	[0, 1]
 	[2, 3]
 	[4, 5]
@@ -424,7 +424,7 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 	the same IFO, for example the template bank cache could contain template bank
 	files from H1 and template bank files from L1.
 	"""
-	# Check that every file has same observatory. 
+	# Check that every file has same observatory.
 	observatories = [cache_entries[0].observatory]
 	for entry in cache_entries[1:]:
 		if entry.observatory == observatories[0]:
