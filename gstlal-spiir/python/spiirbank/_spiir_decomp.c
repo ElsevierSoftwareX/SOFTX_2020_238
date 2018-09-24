@@ -92,7 +92,7 @@ static PyObject *PyIIR(PyObject *self, PyObject *args)
 	npy_intp delay_length[] = {0};
 	PyObject *out;
 
-	if (!PyArg_ParseTuple(args, "OOddddk", &amp, &phase, &eps, &alpha, &beta, &padding)) return NULL;
+	if (!PyArg_ParseTuple(args, "OOdddd", &amp, &phase, &eps, &alpha, &beta, &padding)) return NULL;
 	amp_array = PyArray_FROM_OTF(amp, NPY_DOUBLE, NPY_IN_ARRAY);
 	phase_array = PyArray_FROM_OTF(phase, NPY_DOUBLE, NPY_IN_ARRAY);
 
@@ -203,7 +203,7 @@ static struct PyMethodDef methods[] = {
 	{"iir", PyIIR, METH_VARARGS,
 	 "This function calculates the a set of single pole IIR filters corresponding to a complex\n"
 	 "time series\n\n"
-	 "iir(amplitude, phase, epsilion, alpha, beta, a1, b0, delay\n\n"
+	 "iir(amplitude, phase, epsilion, alpha, beta, padding\n\n"
 	},
 	{"iirresponse", PyIIRResponse, METH_VARARGS,
 	 "This function produces a truncated Impulse response function for a given delay of IIR filters with a1, b0 and delays.\n\n"

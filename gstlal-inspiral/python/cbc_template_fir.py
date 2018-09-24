@@ -95,7 +95,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	 (3) has an IFFT which is sampled at sample_rate Hz
 	"""
 	if approximant not in templates.gstlal_approximants:
-		raise ValueError("Unsupported approximant given %s" % approximant)
+		print("Unsupported approximant given %s" % approximant)
 
 	# FIXME use hcross somday?
 	# We don't here because it is not guaranteed to be orthogonal
