@@ -490,7 +490,6 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     # need to devide the time domain whitened waveform by \sqrt{2 \Delta f}
     amp /= numpy.sqrt(2./working_state["working_duration"])
 
-    iir_type_flag = 1
     spiir_match = -1
     n_filters = 0
     nround = 1
@@ -693,9 +692,9 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
 
     return amp_lalwhiten, phase_lalwhiten, data, data_full
 
-def gen_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
+def gen_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201):
         # make the iir filter coeffs
-        a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
+        a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 
         # get the chirptime (nearest power of two)
         length = templates.ceil_pow_2(data_full_len+autocorrelation_length)
@@ -718,9 +717,9 @@ def gen_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, a
         return a1, b0, delay, u_rev_pad, h_pad
 
 
-def gen_norm_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201, iir_type_flag = 1):
+def gen_norm_spiir_coeffs(amp, phase, data_full_len, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201):
         # make the iir filter coeffs
-        a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding, iir_type_flag)
+        a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 
         # pad the iir response to be nearest power of 2 of:
         length = templates.ceil_pow_2(data_full_len + autocorrelation_length)
@@ -852,12 +851,11 @@ class Bank(object):
 
             amp, phase, data, data_full = gen_whitened_amp_phase(psd, 'IMRPhenomB', waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
 
-            iir_type_flag = 1
             nround = 1
 
             while(spiir_match < req_min_match and epsilon > epsilon_min and n_filters < 2000):
 
-                a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, len(data_full), epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, iir_type_flag = iir_type_flag, autocorrelation_length = autocorrelation_length)
+                a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, len(data_full), epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, autocorrelation_length = autocorrelation_length)
 
                 # compute the SNR
                 # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
