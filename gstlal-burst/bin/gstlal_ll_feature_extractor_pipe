@@ -32,6 +32,7 @@ import optparse
 import os
 
 from gstlal import aggregator
+from gstlal import dagparts
 from gstlal import inspiral_pipe
 
 from gstlal.fxtools import feature_extractor
@@ -134,6 +135,84 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 
 	return feature_extractor_nodes
 
+
+# =============================
+#
+#           classes
+#
+# =============================
+
+
+class zookeeper_job(inspiral_pipe.generic_job):
+	"""
+	A zookeeper job
+	"""
+	def __init__(self, program = "zookeeper-server-start.sh", datadir = os.path.join(dagparts.log_path(), "zookeeper"), port = 2271, maxclients = 0, condor_commands = {}):
+		"""
+		"""
+		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+
+		try:
+			os.mkdir(datadir)
+		except OSError:
+			pass
+		f = open("zookeeper.properties", "w")
+		f.write("""
+# the directory where the snapshot is stored.
+dataDir=%s
+# the port at which the clients will connect
+clientPort=%d
+# disable the per-ip limit on the number of connections since this is a non-production config
+maxClientCnxns=%d
+		""" % (datadir, port, maxclients))
+
+		f.close()
+
+
+class kafka_job(inspiral_pipe.generic_job):
+	"""
+	A kafka job
+	"""
+	def __init__(self, program = "kafka-server-start.sh", logdir = os.path.join(dagparts.log_path(), "kafka"), host = "10.14.0.112:9182", zookeeperaddr = "localhost:2271", condor_commands = {}):
+		"""
+		"""
+		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+
+		try:
+			os.mkdir(logdir)
+		except OSError:
+			pass
+		f = open("kafka.properties", "w")
+		f.write("""
+broker.id=0
+listeners = PLAINTEXT://%s
+background.threads=100
+num.network.threads=50
+num.io.threads=80
+log.cleaner.threads=10
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+queued.max.requests=10000
+log.dirs=%s
+num.partitions=1
+num.recovery.threads.per.data.dir=1
+auto.create.topics.enable=true
+offsets.topic.replication.factor=1
+transaction.state.log.replication.factor=1
+transaction.state.log.min.isr=1
+log.flush.interval.ms=300000
+log.retention.ms=100000
+log.roll.ms = 1000000
+log.segment.bytes=1073741824
+log.retention.check.interval.ms=300000
+zookeeper.connect=%s
+zookeeper.connection.timeout.ms=6000
+group.initial.rebalance.delay.ms=0
+		""" % (host, logdir, zookeeperaddr))
+
+		f.close()
+
 # =============================
 #
 #     command line parser
@@ -163,6 +242,7 @@ def parse_command_line():
 	parser.add_option("--request-timeout", type = "float", default = 0.2, help = "Timeout for requesting messages from a topic. Default = 0.2 seconds.")
 	parser.add_option("--latency-timeout", type = "float", default = 5, help = "Maximum time before incoming data is dropped for a given timestamp. Default = 5 seconds.")
 	parser.add_option_group(group)
+
 
 	options, filenames = parser.parse_args()
 
@@ -209,6 +289,12 @@ if options.save_format == 'kafka':
 	auxiliary_condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, auxiliary_condor_options)
 	synchronizer_job = inspiral_pipe.generic_job("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands)
 	hdf5_sink_job = inspiral_pipe.generic_job("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands)
+
+	# kafka/zookeeper jobs
+	local_condor_options = {"want_graceful_removal":"True", "kill_sig":"15"}
+	local_condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, local_condor_options)
+	zoo_job = zookeeper_job(condor_commands = local_condor_commands)
+	kafka_job = kafka_job(condor_commands = local_condor_commands, host = options.kafka_server)
 
 	#
 	# set up options for auxiliary jobs
@@ -263,6 +349,8 @@ if options.save_format == 'kafka':
 	synchronizer_options.update({"num-topics": len(feature_extractor_nodes)})
 	synchronizer_node = inspiral_pipe.generic_node(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_synchronizer")})
 	hdf5_sink_node = inspiral_pipe.generic_node(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_hdf5_sink")})
+	zoo_node = inspiral_pipe.generic_node(zoo_job, dag, [], opts = {"":"zookeeper.properties"})
+	kafka_node = inspiral_pipe.generic_node(kafka_job, dag, [], opts = {"":"kafka.properties"})
 
 #
 # write out dag and sub files
