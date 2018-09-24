@@ -539,17 +539,17 @@ def make_horizon_distance_func(banks, sngl_inspiral_table):
 	# find the Nyquist frequency for the PSD to be used for each
 	# instrument.  require them to all match
 	nyquists = set(max(rate for bank in banklist for rate in bank.get_rates()) // 2 for instrument, banklist in banks.items())
-	assert len(nyquists) == 1
+	assert len(nyquists) == 1, "all banks must have the same Nyquist frequency to define a consistent horizon distance function (got %s)" % ", ".join("%g" % rate for rate in sorted(nyquists))
 	# assume default 32 s PSD.  this is not required to be correct, but
 	# for best accuracy it should not be larger than the true value and
 	# for best performance it should not be smaller than the true
 	# value.
 	deltaF = 1. / 32.
-	# pick (m1, m2) from the median template ranked by horizon distance
-	# to provide the canonical waveform model
-	# FIXME:  look up the mass function on which the horizon distance
-	# depends
-	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mtotal)[len(sngl_inspiral_table) // 2]
+	# pick (m1, m2) from the median template ranked by Mchirp^(5/3)
+	# to provide the canonical waveform model.  See Maggiore equation
+	# (4.3).
+	assert len(sngl_inspiral_table) > 0, "no templates:  must have templates to define horizon distance function"
+	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mchirp^(5./3.))[len(sngl_inspiral_table) // 2]
 	return reference_psd.HorizonDistance(10.0, 0.85 * max(nyquists), deltaF, median_row.mass1, median_row.mass2)
 
 
