@@ -191,14 +191,9 @@ static struct injection_document *load_injection_document(const char *filename, 
 		new->sim_burst_table_head = NULL;
 		success = 0;
 	} else if(new->has_sim_burst_table) {
-		XLALClearErrno();
-		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
-		if(XLALGetBaseErrno()) {
-			XLALPrintError("%s(): failure reading sim_burst table from \"%s\"\n", __func__, filename);
-			success = 0;
-		} else
-			XLALPrintInfo("%s(): found sim_burst table\n", __func__);
-		XLALSortSimBurst(&new->sim_burst_table_head, XLALCompareSimBurstByGeocentTimeGPS);
+		XLALPrintInfo("%s(): found sim_burst table; WARNING, no longer supported and ignored\n", __func__);
+		new->has_sim_burst_table = 0;
+		new->sim_burst_table_head = NULL;
 	} else
 		new->sim_burst_table_head = NULL;
 
@@ -478,43 +473,6 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 			element->injection_document->sim_inspiral_table_head = thisSimInspiral;
 		XLALFree(tmpSimInspiral);
 		}
-	}
-
-	/*
-	 * add burst injections to simulation_series
-	 */
-
-	if(element->injection_document->sim_burst_table_head) {
-		/*
-		 * We follow the procedure in here so we don't end up adding the same burst injection to the data multiple times.
-		 * The burst_series buffer essentially windows the injections to those that are currently relevant.
-		 */
-
-		/*
-		 * create a buffer to store burst injections
-		 */
-
-		REAL8TimeSeries *burst_series = XLALCreateREAL8TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h->data->length);
-		if(!burst_series)
-			XLAL_ERROR(XLAL_EFUNC);
-		memset(burst_series->data->data, 0, burst_series->data->length * sizeof(*burst_series->data->data));
-
-		/*
-		 * inject waveforms into that buffer
-		 */
-
-		if(XLALBurstInjectSignals(burst_series, element->injection_document->sim_burst_table_head, element->injection_document->time_slide_table_head, response))
-			XLAL_ERROR(XLAL_EFUNC);
-
-		/*
-		 * add waveforms buffer into simulation_series
-		 */
-
-		if(!XLALAddREAL8TimeSeries(element->simulation_series, burst_series)) {
-			XLALDestroyREAL8TimeSeries(burst_series);
-			XLAL_ERROR(XLAL_EFUNC);
-		}
-		XLALDestroyREAL8TimeSeries(burst_series);		
 	}
 
 	return 0;
