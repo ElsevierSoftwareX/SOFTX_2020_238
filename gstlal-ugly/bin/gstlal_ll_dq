@@ -41,8 +41,8 @@ class PSDHandler(simplehandler.Handler):
 		del kwargs["instrument"]
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 		self.horizon_distance_func = reference_psd.HorizonDistance(20., 2048., 1./16., 1.4, 1.4)
-		self.horizon_history = deque(maxlen = 10000)
-		self.horizon_history_time = deque(maxlen = 10000)
+		self.range_history = deque(maxlen = 10000)
+		self.range_history_time = deque(maxlen = 10000)
 		self.noisedeq = deque(maxlen = 10000)
 		self.timedeq = deque(maxlen = 10000)
 		self.last_reduce_time = None
@@ -70,7 +70,7 @@ class PSDHandler(simplehandler.Handler):
 			self.noisedeq.append(data[ix,1])
 
 			# Then range
-			self.horizon_history.append(self.horizon_distance_func(self.psd, 8)[0])
+			self.range_history.append(self.horizon_distance_func(self.psd, 8)[0] / 2.25)
 
 			# The PSD
 			psd_freq = numpy.arange(self.psd.data.length / 4) * self.psd.deltaF * 4
@@ -86,7 +86,7 @@ class PSDHandler(simplehandler.Handler):
 		# write out all of the file types
 		for typ in ("min", "median", "max"):
 			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "noise.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.noisedeq)})
-			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "horizon_history.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.horizon_history)})
+			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "range_history.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.range_history)})
 
 		#
 		# FIXME do data reduction by levels here.
@@ -97,7 +97,7 @@ class PSDHandler(simplehandler.Handler):
 			logging.info("reducing data and writing PSD snaphot for %d @ %d" % (buftime, int(aggregator.now()))) 
 			self.last_reduce_time = int(round(buftime,-2))
 			for typ, func in (("min", min), ("median", aggregator.median), ("max", max)):
-				for route in ("noise", "horizon_history"):
+				for route in ("noise", "range_history"):
 					for level in range(0, aggregator.DIRS-1):
 						thisdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level)), self.instrument), typ)
 						nextdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level+1)), self.instrument), typ)
