@@ -30,6 +30,8 @@ AC_CONFIG_FILES([ \
 	python/Makefile \
 	python/stats/Makefile \
 	share/Makefile \
+	share/population_models/Makefile \
+	share/population_models/O2/Makefile \
 	tests/Makefile
 ])
 

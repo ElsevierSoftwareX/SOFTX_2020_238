@@ -1,3 +1,5 @@
+SUBDIRS = population_models
+
 dist_pkgdata_DATA = \
 	de_calc_likelihood.sql \
 	H1L1_p_of_instruments_given_H_d.h5 \
