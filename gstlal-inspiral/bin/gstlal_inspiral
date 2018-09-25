@@ -549,7 +549,7 @@ def make_horizon_distance_func(banks, sngl_inspiral_table):
 	# to provide the canonical waveform model.  See Maggiore equation
 	# (4.3).
 	assert len(sngl_inspiral_table) > 0, "no templates:  must have templates to define horizon distance function"
-	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mchirp^(5./3.))[len(sngl_inspiral_table) // 2]
+	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mchirp**(5./3.))[len(sngl_inspiral_table) // 2]
 	return reference_psd.HorizonDistance(10.0, 0.85 * max(nyquists), deltaF, median_row.mass1, median_row.mass2)
 
 
