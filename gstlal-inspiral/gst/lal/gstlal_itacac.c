@@ -255,7 +255,6 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 
 }
 
-//static gboolean sink_event(GstPad *pad, GstObject *parent, GstEvent *event)
 static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *event)
 {
 	// Right now no memory is allocated in the class instance structure for GSTLALItacacPads, so we dont need a custom finalize function
@@ -748,7 +747,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		triggers = FALSE;
 
 		// FIXME Currently assumes n is the same for all detectors
-		//while( samples_left_in_window > 0 && ( gst_audioadapter_available_samples(itacacpad->adapter) > samples_left_in_window + 2 * itacacpad->maxdata->pad || (itacac->EOS && gst_audioadapter_available_samples(itacacpad->adapter)) ) ) {
 		while( samples_left_in_window > 0 && ( !itacac->EOS || (itacac->EOS && gst_audioadapter_available_samples(itacacpad->adapter)) ) ) {
 
 			// Check how many gap samples there are until a nongap
@@ -961,16 +959,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					}
 				}
 
-				// Check if we have enough samples to compute chisq for every potential trigger, otherwise we'll need to knock padding off of whats available
-				//copysamps = nongapsamps > (samples_left_in_window + 2 * itacacpad->maxdata->pad) ? samples_left_in_window + 2*itacacpad->maxdata->pad : nongapsamps;
-
-				//
-				//copysamps = nongapsamps > (samples_left_in_window + 2 * itacacpad->maxdata->pad) ? samples_left_in_window + 2*itacacpad->maxdata->pad : nongapsamps;
-				//outsamps = copysamps == nongapsamps ? copysamps - 2 * itacacpad->maxdata->pad : samples_left_in_window;
-				//generate_trigger(itacac, itacacpad, copysamps, outsamps, itacacpad->n - samples_left_in_window, triggers);
-
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
-				//samples_left_in_window -= outsamps;
 				triggers = TRUE;
 			}
 		}
@@ -1083,6 +1072,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// If we dont have a valid first timestamp yet take this one
 		// The aggregator keeps everything in sync, so it should be
 		// fine to just take this one
+		// FIXME This probably doesnt work
 		if(itacac->next_output_timestamp == GST_CLOCK_TIME_NONE) {
 			itacac->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);
 		}
