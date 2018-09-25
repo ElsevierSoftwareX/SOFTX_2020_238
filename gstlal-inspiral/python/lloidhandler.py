@@ -167,6 +167,7 @@ class EyeCandy(object):
 			name = "%s_dq_vector" % instrument
 			elem = pipeline.get_by_name(name)
 			self.dqvectors[instrument] = elem
+		self.time_since_last_state = None
 
 		#
 		# setup bottle routes
@@ -243,10 +244,13 @@ class EyeCandy(object):
 				if self.producer is not None:
 					self.producer.send(self.tag, {"far_history": "%s\t%s" % (self.far_history[-1][0], self.far_history[-1][1])})
 
-		if self.producer is not None:
+		t = inspiral.now()
+		if self.time_since_last_state is None:
+			self.time_since_last_state = t
+		if self.producer is not None and (t - self.time_since_last_state) > 1:
+			self.time_since_last_state = t
 			self.producer.send(self.tag, {"ram_history": "%s\t%s" % (self.ram_history[-1][0], self.ram_history[-1][1])})
 			# send the state vector and dq vector information to kafka
-			t = inspiral.now()
 			for instrument, elem in self.dqvectors.items():
 				self.producer.send(self.tag, {"%s/dqvector_on" % instrument: "%s\t%s" % (t, elem.get_property("on-samples"))})
 				self.producer.send(self.tag, {"%s/dqvector_off" % instrument: "%s\t%s" % (t, elem.get_property("off-samples"))})
