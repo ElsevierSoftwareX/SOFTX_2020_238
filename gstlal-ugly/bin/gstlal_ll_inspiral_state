@@ -121,6 +121,9 @@ if __name__ == '__main__':
 			logging.info("getting data from kafka")
 			timedata, datadata = aggregator.get_data_from_kafka(jobs, routes, consumer, req_all = True)
 			for (job,route) in timedata:
+				if "L1" in route or "H1" in route:
+					# FIXME hack to adjust for 16 Hz sample rate of ALIGO vs 1 Hz of Virgo
+					datadata[(job,route)] /= 16
 				path = "%s/by_job/%s" % (options.base_dir, job)
 				fname = aggregator.create_new_dataset(path, route.replace("/","_"), timedata = timedata[(job,route)], data = datadata[(job,route)], tmp = True)
 				shutil.move(fname, fname.replace(".tmp", ""))
