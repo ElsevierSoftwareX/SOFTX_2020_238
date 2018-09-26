@@ -1,0 +1,70 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Duncan Meacher, Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+from glue import dagfile
+from optparse import OptionParser
+
+# Print out progress of reading in dag
+def progress(f, n, done):
+	print "%s: %d lines\r" % (f.name, n),
+	if done:
+		print
+
+# Parse command line options
+parser = OptionParser(description = __doc__)
+parser.add_option("--dag", metavar = "filename", help = "The input dag file (required)")
+parser.add_option("--rescue", metavar = "filename", help = "The dag rescue file")
+parser.add_option("--set-retry", metavar = "value", type = "float", help = "Set number of retys")
+parser.add_option("--reduce-name", action = "store_true", help = "Remove 'gstlal' and 'gstlal_inspiral' from node names")
+parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+options, filenames = parser.parse_args()
+
+if options.dag is None:
+	print >>sys.stderr, "No dag file specified."
+	exit()
+
+# Reading in dag file
+print >>sys.stderr, "... dag file"
+dag = dagfile.DAG.parse(open(options.dag), progress = progress)
+print >>sys.stderr, "dag file read"
+
+# Reading in resuce file
+if options.rescue:
+	print >>sys.stderr, "... resuce file"
+	dag.load_rescue(open(options.rescue), progress = progress)
+
+# Remove job reties
+if options.set_retry:
+	for node in dag.nodes.values():
+		node.retry = options.set_retry
+		node.retry_unless_exit_value = options.set_retry
+
+# Reduce job names
+if options.reduce_name:
+	for node in dag.nodes.values():
+		node.name = node.name.replace("gstlal_inspiral_", "").replace("gstlal_", "")
+	dag.reindex()
+
+# Write out dag and rescure files
+print >>sys.stderr, "writing ..."
+if options.rescue:
+	dag.write(open(options.dag, "w"), rescue = open(options.rescue, "w"), progress = progress)
+else:
+	dag.write(open(options.dag, "w"), progress = progress)
+
