@@ -1,0 +1,258 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Duncan Meacher
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import sys
+import os
+import urlparse
+from gstlal import plotutil
+from glue import markup
+from optparse import OptionParser
+from datetime import datetime
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.dates as md
+import matplotlib.pyplot as plt
+
+matplotlib.rcParams.update({
+    "font.size": 10.0,
+    "axes.titlesize": 10.0,
+    "axes.labelsize": 10.0,
+    "xtick.labelsize": 8.0,
+    "ytick.labelsize": 8.0,
+    "legend.fontsize": 8.0,
+    "figure.dpi": 300,
+    "savefig.dpi": 300,
+    "text.usetex": False,
+    "path.simplify": True
+})
+
+cluster_urls = {'CIT': 'https://ldas-jobs.ligo.caltech.edu/',
+                'LHO': 'https://ldas-jobs.ligo-wa.caltech.edu/',
+                'LLO': 'https://ldas-jobs.ligo-la.caltech.edu/',
+                'UWM': 'https://ldas-jobs.cgca.uwm.edu/',
+		'ATLAS': 'https://www.atlas.aei.uni-hannover.de/'
+               }
+
+color_scheme = ['#332288', '#88CCEE', '#44AA99', '#117733', '#999933', '#DDCC77', '#CC6677', '#882255', '#AA4499']
+
+def generic_hist_plot(durations,jobname):
+	max_t = max(durations)
+
+	if max_t > (3600. * 4.): # if max duration is > 4 hour, use tick marks of 1 hours
+		denom  = 3600.
+		x_bins = np.arange(0,np.ceil(max_t/denom)+1,1)
+		if max_t > (3600. * 60.):
+			x_tick = np.arange(0,np.ceil(max_t/denom)+1,12)
+		else:
+			x_tick = np.arange(0,np.ceil(max_t/denom)+1,1)
+		xlabel = "time (hours)"
+	else:
+		denom  = 60.
+		if max_t > (3600. * 2.) and max_t < (3600. * 4.): # if max_t is between 2 and 4 hours
+			x_bins = np.arange(0,np.ceil(max_t/denom)+1,10)
+			x_tick = np.arange(0,np.ceil(max_t/denom)+1,10)
+		elif max_t > 3600 and max_t < (3600. * 2.): # if max_t is between 1 and 2 hours
+			x_bins = np.arange(0,np.ceil(max_t/denom)+1,2)
+			x_tick = np.arange(0,np.ceil(max_t/denom)+1,10)
+		else: # if max_t < 1 hours, use tick marks of 1 minute
+			x_bins = np.arange(0,np.ceil(max_t/denom)+1,1)
+			x_tick = np.arange(0,np.ceil(max_t/denom)+1,1)
+		xlabel = "time (minutes)"
+	
+	fig = plt.figure(figsize=(20,10))
+	plt.hist(np.array(durations)/denom, bins = x_bins)
+	ax = fig.gca()
+	ymin, ymax = ax.get_ylim()
+	plt.plot([np.mean(durations)/denom, np.mean(durations)/denom],[0, ymax], color='black',linestyle='--', label='mean duration')
+	plt.plot([max_t/denom, max_t/denom],[0, ymax], color='black',linestyle='-', label='max duration')
+	plt.title("%s durations" % jobname, fontsize=20)
+	plt.xlabel("%s"%xlabel, fontsize=16)
+	plt.ylabel("Frequency", fontsize=16)
+	plt.xticks(x_tick)
+	plt.xlim([0, np.ceil(max_t/denom)])
+	plt.legend(loc='upper right', fontsize=16)
+	ax.yaxis.grid(True)
+	plotName = '%s/%s_runtime_hist.png' % (options.output_dir,jobname)
+	plt.savefig(plotName)
+	plt.close(fig)
+
+def inspiral_hist_plot(gstlal_inspiral_dur, gstlal_inspiral_inj_dur):
+	max_t = max(max(gstlal_inspiral_dur), max(gstlal_inspiral_inj_dur))
+	
+	denom = 3600.
+	x_bins = np.arange(0,np.ceil(max_t/denom)+1,1)
+	if max_t > (3600. * 60.):
+		x_tick = np.arange(0,np.ceil(max_t/denom)+1,12)
+	else:
+		x_tick = np.arange(0,np.ceil(max_t/denom)+1,1)
+	
+	fig = plt.figure(figsize=(20,10))
+	ax = fig.gca()
+	plt.hist(np.array(gstlal_inspiral_dur)/denom, bins = x_bins, alpha=0.5, label='inspiral', color='blue')
+	plt.hist(np.array(gstlal_inspiral_inj_dur)/denom, bins = x_bins, alpha=0.5, label='inspiral_inj', color='red')
+	ymin, ymax = ax.get_ylim()
+	plt.plot([np.mean(gstlal_inspiral_dur)/denom, np.mean(gstlal_inspiral_dur)/denom],[0, ymax], color='black',linestyle='-.', label='inspiral mean duration')
+	plt.plot([np.mean(gstlal_inspiral_inj_dur)/denom, np.mean(gstlal_inspiral_inj_dur)/denom],[0, ymax], color='black',linestyle='--', label='inspiral_inj mean duration')
+	plt.plot([max(gstlal_inspiral_dur)/denom, max(gstlal_inspiral_dur)/denom],[0, ymax], color='black',linestyle='-', label='max duration')
+	plt.plot([max(gstlal_inspiral_inj_dur)/denom, max(gstlal_inspiral_inj_dur)/denom],[0, ymax], color='black',linestyle='-')
+	plt.title("gstlal_inspiral durations comparison", fontsize=20)
+	plt.xlabel("time (hours)", fontsize=16)
+	plt.ylabel("Frequency", fontsize=16)
+	plt.xticks(x_tick)
+	plt.xlim([0, np.ceil(max_t/3600.)])
+	plt.legend(loc='upper right', fontsize=16)
+	ax.yaxis.grid(True)
+	plotName = '%s/gstlal_inspiral_runtime_comparison_hist.png' %(options.output_dir)
+	plt.savefig(plotName)
+	plt.close(fig)
+
+def to_output_url(output_dir):
+	username = os.getlogin()
+	basepath = os.path.join(os.path.join('/home/', username), 'public_html')
+	extension_url = os.path.relpath(os.path.abspath(output_dir), basepath)
+	base_url = urlparse.urljoin(cluster_urls[options.cluster], '~' + username)
+	return base_url + '/' + extension_url
+
+def generate_html_file(plot_paths):
+	#
+	### head
+	#
+	title = "dag job durations"
+	metainfo = {'charset': 'utf-8', 'name': 'viewport', 'content': 'width=device-width, initial-scale=1'}
+	doctype = '<!DOCTYPE html>'
+	css = 'https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css'
+	bootstrap = ['https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js']
+
+	page = markup.page()
+	page.init(title = title, metainfo = metainfo, doctype = doctype, css = css, script = bootstrap)
+
+	#
+	### body
+	#
+	page.div(class_ = 'container')
+
+	# header
+	page.h2('Duration Results')
+	page.p('Histograms of durations various job types of the pipeline')
+	
+	# plots
+	plot_paths.sort()
+	for plot in plot_paths:
+		plot_url = to_output_url(options.output_dir) + '/' + plot
+		page.div(_class = 'col-md-12')
+		page.div(_class = 'thumbnail')
+		page.a(markup.oneliner.img(src = plot_url, alt = '', style = 'width:100%'), href = plot_url, target = '_blank')
+		page.div.close()
+		page.div.close()
+	#
+	### generate page   
+	#
+	page.div.close()
+	with open(os.path.join(options.output_dir, 'report.html'), 'w') as f:
+		print >> f, page
+
+def parse_command_line():
+	parser = OptionParser()
+
+	parser.add_option("--output-dir", metavar = "filename", help = "Set the directory to output figures to.")
+	parser.add_option("--input-file", metavar = "filename", default = "trigger_pipe.dag.dagman.out", help = "input file to read dag information from.")
+	parser.add_option("--cluster", metavar = "string", help = "Set the current cluster you're in")
+	parser.add_option("--make-webpage", action = "store_true", help = "Produce a html webpage to display plots.")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+
+	options, filenames = parser.parse_args()
+
+	if not options.output_dir:
+		options.output_dir = "plots_hist"
+
+	if not os.path.isdir(options.output_dir):
+		os.mkdir(options.output_dir)
+	
+
+	return options, filenames
+
+
+options, filenames = parse_command_line()
+
+# Collect two dictionaries of all job start and stop times
+jobstartdict = {}
+jobstopdict = {}
+for line in open(options.input_file):
+	# 09/20/16 22:11:04 Event: ULOG_SUBMIT for HTCondor Node gstlal_inspiral_0001 (472899.0.0) {09/20/16 22:09:49}
+	if "ULOG_SUBMIT" in line:
+		if "[recovery mode]" in line:
+			continue
+		date, time, _, _, _, _, _, jobname, _, _, _ = line.split() 
+		jobstartdict[jobname] = datetime.strptime("%s %s" % (date, time), "%x %X")
+	# 09/20/16 22:12:45 Node gstlal_inspiral_0001 job proc (472945.0.0) completed successfully. 
+	if "completed successfully" in line:
+		date, time, _, jobname, _, _, _, _, _ = line.split()
+		if jobname in jobstopdict:
+			continue
+		jobstopdict[jobname] = datetime.strptime("%s %s" % (date, time), "%x %X")
+
+# Collect jobs that have both start and stop times
+correctKeys = set(jobstartdict.keys()) & set(jobstopdict.keys())
+
+# Calculate each job duration
+duration = {}
+for k in correctKeys:
+	duration[k] = (jobstopdict[k] - jobstartdict[k]).total_seconds()
+
+# print any jobs that takes longer than 24 hours
+if options.verbose:
+	print "gstlal_inspiral_inj jobs with runtimes > 86400s"
+	for k,v in sorted(duration.items()):
+		if "gstlal_inspiral_inj_0" in k and v > 86400:
+			print k, v
+
+# Create dictinaries, keyed by job type
+jobtypes = dict([(k[:-5],[]) for k in duration])
+jobdurs  = dict([(k[:-5],[]) for k in duration])
+
+for k,v in duration.items():
+	jobtypes[k[:-5]].append((v, k))
+	jobdurs[k[:-5]].append(v)
+
+plot_paths = []
+
+# Produce histograms for each job type
+for k, v in jobdurs.items():
+	if len(v) < 5:
+		continue
+	generic_hist_plot(v,k)
+	plot_path = '%s_runtime_hist.png' % (k)
+	plot_paths.append(plot_path)
+
+# print average and top N job durations for each jobs type
+for k,v in sorted(jobtypes.items()):
+	print "\n", k, len(v), np.mean([x[0] for x in v])
+	for s in sorted(v, reverse=True)[:5]:
+		print "\t", s
+
+if 'gstlal_inspiral' in jobtypes and 'gstlal_inspiral_inj' in jobtypes:
+	gstlal_inspiral_dur = [line[0] for line in jobtypes['gstlal_inspiral']]
+	gstlal_inspiral_inj_dur = [line[0] for line in jobtypes['gstlal_inspiral_inj']]
+	inspiral_hist_plot(gstlal_inspiral_dur, gstlal_inspiral_inj_dur)
+	plot_path = 'gstlal_inspiral_runtime_comparison_hist.png'
+	plot_paths.append(plot_path)
+
+if options.make_webpage:
+	generate_html_file(plot_paths)
+
