@@ -617,8 +617,7 @@ class Handler(simplehandler.Handler):
 		# FIXME:   detangle this
 		self.gracedbwrapper.lock = self.lock
 
-		self.kafka_server = kafka_server
-		self.eye_candy = EyeCandy(rankingstat.instruments, self.kafka_server, self.tag, pipeline)
+		self.eye_candy = EyeCandy(rankingstat.instruments, kafka_server, self.tag, pipeline)
 		# FIXME:   detangle this
 		self.eye_candy.lock = self.lock
 
