@@ -72,6 +72,10 @@ __all__ = [
 
 
 class UniformInTemplatePopulationModel(object):
+	# FIXME:  this needs to learn the template chirp masses so it can
+	# take out the factor of mchirp**(5./3.) factor on which the
+	# horizon distance depends (which appears in a volume factor in the
+	# numerator of the likelihood ratio)
 	def __init__(self, template_ids):
 		"""
 		Assumes uniform in template population model, no
@@ -87,7 +91,8 @@ class UniformInTemplatePopulationModel(object):
 
 
 class SourcePopulationModel(object):
-	DEFAULT_FILENAME = os.path.join(gstlal_config_paths["pkgdatadir"], "lnP_template_signal_BNS_gaussian_lowspin_Ozel.hdf5")
+	POPULATION_MODELS_PATH = os.path.join(gstlal_config_paths["pkgdatadir"], "population_models")
+	DEFAULT_FILENAME = os.path.join(POPULATION_MODELS_PATH, "O2/lnP_template_signal_BBH_logm_reweighted_mchirp.hdf5")
 
 
 	def __init__(self, template_ids, filename = None):
