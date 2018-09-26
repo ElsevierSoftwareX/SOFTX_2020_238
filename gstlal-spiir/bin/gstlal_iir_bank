@@ -50,6 +50,8 @@ from glue.ligolw import utils, lsctables
 from lal.series import read_psd_xmldoc
 from gstlal.spiirbank.cbc_template_iir import Bank
 
+import json
+
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
@@ -66,6 +68,7 @@ parser.add_option("--waveform-domain", default = "TD", help = "Set the domain ch
 parser.add_option("--approximant", default = "SpinTaylorT4", help = "Set the approximant (default = SpinTaylorT4).")
 parser.add_option("--output", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
 parser.add_option("--downsample", action = "store_true", help = "Choose if you want to downsample IIR bank (recommended)")
+parser.add_option("--optimizer-options", default="{}", help = "Pass dictionary of options to the optimizer (parsed using json.loads).")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
@@ -94,6 +97,7 @@ bank.build_from_tmpltbank(
 		padding=options.padding, 
 		flower=options.flow, 
 		downsample = options.downsample, 
+		optimizer_options = json.loads(options.optimizer_options),
 		waveform_domain = options.waveform_domain, 
 		approximant = options.approximant,
 		epsilon = options.epsilon, 

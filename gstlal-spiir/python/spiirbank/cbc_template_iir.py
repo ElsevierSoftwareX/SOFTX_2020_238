@@ -37,7 +37,7 @@ from gstlal import chirptime
 from gstlal import templates
 import random
 import pdb
-from gstlal.spiirbank.optimize_mf import OptimizerIIR
+from gstlal.spiirbank.optimizer import optimize_a1
 
 Attributes = ligolw.sax.xmlreader.AttributesImpl
 
@@ -755,7 +755,7 @@ class Bank(object):
         self.flower = None
         self.epsilon = None
 
-    def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, req_min_match = 0.0, verbose = False, contenthandler = DefaultContentHandler):
+    def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, req_min_match = 0.0, verbose = False, contenthandler = DefaultContentHandler):
         """
             Build SPIIR template bank from physical parameters, e.g. mass, spin.
             """
@@ -837,10 +837,13 @@ class Bank(object):
                 a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, data_full, epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, autocorrelation_length = autocorrelation_length)
 
                 # compute the SNR
-                spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0 # still need to use the spiir template
+                if optimizer_options is not None:
+                    # optimizer uses convention that template is normalized to 1 not 2
+                    a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), **optimizer_options)
+                    b0 *= numpy.sqrt(2)
+                else:
+                    spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0
 
-                # normalize b0 so that the SNR would match the expected SNR
-                b0 *= spiir_match
 
                 if(nround == 1):
                     original_match = spiir_match
