@@ -26,7 +26,6 @@
 
 import itertools
 import numpy
-import sys
 from gstlal import pipeparts
 import cmp_nxydumps
 import test_common
