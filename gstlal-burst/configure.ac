@@ -257,12 +257,12 @@ AC_SUBST([LAL_LIBS])
 
 
 #
-# Check for glue and pylal
+# Check for glue, et al.
 #
 
 
 AC_SUBST([MIN_GLUE_VERSION], [1.58.0])
-AX_PYTHON_GLUE()
+AX_PYTHON_GLUE([$MIN_GLUE_VERSION])
 
 
 #
