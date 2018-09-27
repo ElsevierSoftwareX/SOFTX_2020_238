@@ -4,22 +4,22 @@
 #################################
 
 # which interferometer (H or L)
-IFO = L
+IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O2
 
-START = 1183248000
-END = 1183252096
+START = 1186099392
+END = 1186101248
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 220
 PLOT_COOLDOWN_TIME = 64
 
-GDSCONFIGS = ../../config_files/O2/L1/tests/L1GDS_1222058826_frames.ini
+GDSCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_frames.ini
 DCSCONFIGS = ../../config_files/O2/L1/tests/L1DCS_AllCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/O2/H1/tests/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
-GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_TestLatency_AllCorrections_Cleaning.ini
+GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
 all: GDS_pcal2darm_plots GDS_over_C02
 
@@ -99,5 +99,5 @@ framesdir:
 	mkdir -p Frames/$(OBSRUN)/$(IFO)1/DCS
 
 clean:
-	rm *.gwf *.cache *.png
+	rm *.gwf *.cache *.png *.txt
 
