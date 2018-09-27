@@ -270,6 +270,7 @@ witness_frequency_resolution = float(DataCleaningConfigs["witnessfrequencyresolu
 witness_tf_update_time = float(DataCleaningConfigs["witnesstfupdatetime"])
 critical_lock_loss_time = float(DataCleaningConfigs["criticallocklosstime"])
 witness_filter_taper_time = float(DataCleaningConfigs["witnessfiltertapertime"])
+witness_tf_filename = DataCleaningConfigs["witnesstffilename"] if DataCleaningConfigs["witnesstffilename"] != "None" else None
 
 expected_kappatst_real = float(TDCFConfigs["expectedkappatstreal"])
 expected_kappatst_imag = float(TDCFConfigs["expectedkappatstimag"])
@@ -2176,7 +2177,7 @@ if witness_channel_list is not None:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
 			print "WARNING: Not all requested witness channels are being used"
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, notch_frequencies = witness_notch_frequencies[i], obsready = obsreadytee, delay_time = witness_delay_time, wait_time = witness_wait_time, critical_lock_loss_time = critical_lock_loss_time, filename = "transfer_functions_%d.txt" % i)
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, notch_frequencies = witness_notch_frequencies[i], obsready = obsreadytee, delay_time = witness_delay_time, wait_time = witness_wait_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
 		witness_delay_time += witness_delay_increment
 		witness_wait_time += witness_wait_increment
 
