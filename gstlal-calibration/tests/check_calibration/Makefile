@@ -15,13 +15,13 @@ SHMRUNTIME = 400
 PLOT_WARMUP_TIME = 220
 PLOT_COOLDOWN_TIME = 64
 
-GDSCONFIGS = ../../config_files/L1GDS_LowLatency_AllCorrections_Cleaning.ini
+GDSCONFIGS = ../../config_files/O2/L1/tests/L1GDS_1222058826_frames.ini
 DCSCONFIGS = ../../config_files/L1DCS_AllCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSTESTCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
 GDSSHMCONFIGS = ../../config_files/H1GDS_TestLatency_AllCorrections_Cleaning.ini
 
-all: DCS_pcal2darm_plots DCS_over_C02
+all: GDS_pcal2darm_plots GDS_over_C02
 
 ################################################
 ### These commands should change less often ###
@@ -74,6 +74,9 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 
 latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
+
+GDS_over_C02: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_C02_frames.cache
+	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_hoft_GDS_frames.cache --denominator-frame-cache $(IFO)1_C02_frames.cache --numerator-channel-name GDS-CALIB_STRAIN --denominator-channel-name DCS-CALIB_STRAIN_C02 --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --plot-title 'GDS Test / C02 Transfer Function'
 
 DCS_over_C02: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C02_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-frame-cache $(IFO)1_C02_frames.cache --numerator-channel-name DCS-CALIB_STRAIN --denominator-channel-name DCS-CALIB_STRAIN_C02 --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --plot-title 'DCS Test / C02 Transfer Function'
