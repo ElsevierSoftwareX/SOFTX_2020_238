@@ -535,7 +535,7 @@ class OneTimeSignalHandler(object):
 
 
 def make_horizon_distance_func(banks, sngl_inspiral_table):
-	# span is [10 Hz, 0.85 * Nyquist frequency]
+	# span is [15 Hz, 0.85 * Nyquist frequency]
 	# find the Nyquist frequency for the PSD to be used for each
 	# instrument.  require them to all match
 	nyquists = set(max(rate for bank in banklist for rate in bank.get_rates()) // 2 for instrument, banklist in banks.items())
@@ -550,7 +550,7 @@ def make_horizon_distance_func(banks, sngl_inspiral_table):
 	# (4.3).
 	assert len(sngl_inspiral_table) > 0, "no templates:  must have templates to define horizon distance function"
 	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mchirp**(5./3.))[len(sngl_inspiral_table) // 2]
-	return reference_psd.HorizonDistance(10.0, 0.85 * max(nyquists), deltaF, median_row.mass1, median_row.mass2)
+	return reference_psd.HorizonDistance(15.0, 0.85 * max(nyquists), deltaF, median_row.mass1, median_row.mass2)
 
 
 #
