@@ -1,3 +1,13 @@
+gstlal-calibration (1.2.0-1) unstable; urgency=low
+
+  * Incorporate corrections for SRC detuning parameters
+  * Allow for application of complex kappas
+  * Incorporate line subtraction and cleaning methods
+  * Allow for split of kappa_pu into kappa_p and kappa_u
+  * Switch gstlal_compute_strain to configuration file format
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thurs, 27 Sept 2018 11:29:00 -0500
+
 gstlal-calibration (1.1.8-1) unstable; urgency=low
 
   * Update the cavity pole FIR filter with time
