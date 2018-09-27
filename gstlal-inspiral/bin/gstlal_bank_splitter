@@ -87,7 +87,7 @@ def group_templates(templates, n, overlap = 0):
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
-	parser.add_option("--output-full-bank-file-with-ids", metavar = "path", default = "gstlal_bank.xml.gz", help = "Set the path to output the bank fil with ids assigned.  Default is gstlal_bank.xml.gz")
+	parser.add_option("--output-full-bank-file", metavar = "path", default = "gstlal_bank.xml.gz", help = "Set the path to output the bank.  Default is gstlal_bank.xml.gz")
 	parser.add_option("--output-cache", metavar = "file", help = "Set the file name for the output cache.")
 	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
 	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
@@ -100,7 +100,6 @@ def parse_command_line():
 	parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
 	parser.add_option("--write-svd-caches", action = "store_true", help = "output a cache file of cache files, each of which correspond to the banks meant to be in a single SVD bank (disabled by default)")
 	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per SVD bank. can be given as a list like 1,2,3,4 then it will split up the bank into N groups with M banks each. (required if --write-svd-caches invoked)") # FIXME The second half of this help message is incomprehensible
-	parser.add_option("--template-id-start-index", metavar = "int", type = "int", default = 0, help = "Starting index for template ID. Default 0")
 	options, filenames = parser.parse_args()
 
 	required_options = ("n", "instrument", "sort_by", "output_cache", "approximant", "f_low")
@@ -143,12 +142,9 @@ outputrows = []
 xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
-# assign ids and write out the full template bank with ids assigned
-for nrow, row in enumerate(sngl_inspiral_table):
-	row.template_id = nrow + options.template_id_start_index
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
-ligolw_utils.write_filename(xmldoc, options.output_full_bank_file_with_ids, gz = options.output_full_bank_file_with_ids.endswith('gz'), verbose = options.verbose)
+ligolw_utils.write_filename(xmldoc, options.output_full_bank_file, gz = options.output_full_bank_file.endswith('gz'), verbose = options.verbose)
 
 # Bin by Chi
 sngl_inspiral_table.sort(key = lambda row: spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z))
