@@ -11,7 +11,7 @@ Requires: avahi-glib
 Requires: avahi-ui-tools
 Requires: fftw >= 3
 Requires: glue >= @MIN_GLUE_VERSION@
-Requires: glue-segments >= @MIN_GLUE_VERSION@
+Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 Requires: gsl
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@

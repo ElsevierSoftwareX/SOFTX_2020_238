@@ -51,8 +51,8 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python (>= @MIN_PYTHON_VERSION@),
  python-gi,
  python-glue (>= @MIN_GLUE_VERSION@),
- python-glue-segments (>= @MIN_GLUE_VERSION@),
  python-gst-1.0,
+ python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
  python-numpy,
  python-scipy
 Description: GStreamer for GW data analysis (in-development parts)

@@ -61,8 +61,8 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-avahi,
  python-gi (>= @MIN_PYGOBJECT_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
- python-glue-segments (>= @MIN_GLUE_VERSION@),
  python-gst-1.0,
+ python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
  python-numpy,
  python-scipy
 # FIXME:  gstreamer1.0-python3-plugin-loader is *in fact* a dependency, but

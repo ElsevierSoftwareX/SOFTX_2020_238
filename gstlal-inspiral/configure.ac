@@ -257,12 +257,14 @@ AX_PYTHON_MODULE([lal], fatal)
 
 
 #
-# Check for glue
+# Check for glue, et al.
 #
 
 
 AC_SUBST([MIN_GLUE_VERSION], [1.59.2])
 AX_PYTHON_GLUE()
+AC_SUBST([MIN_LIGO_SEGMENTS_VERSION], [1.0.0])
+AX_PYTHON_LIGO_SEGMENTS()
 
 
 #
