@@ -113,7 +113,6 @@ typedef struct {
 	GstAggregatorClass parent_class;
 } GSTLALItacacClass;
 
-
 typedef struct {
 	// Required by base class
 	GstAggregator aggregator;
@@ -131,14 +130,9 @@ typedef struct {
 
 } GSTLALItacac;
 
-
-
-
 GType gstlal_itacac_get_type(void);
 GType gstlal_itacac_pad_get_type(void);
 
-
 G_END_DECLS
-
 
 #endif	/* __GSTLAL_ITACAC_H__ */

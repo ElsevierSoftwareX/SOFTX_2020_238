@@ -257,8 +257,6 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 
 static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *event)
 {
-	// Right now no memory is allocated in the class instance structure for GSTLALItacacPads, so we dont need a custom finalize function
-	// If anything is added to the class structure, we will need a custom finalize function that chains up to the AggregatorPad's finalize function
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(aggpad);
 	gboolean result = TRUE;
@@ -569,10 +567,21 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 		this_maxdata = itacacpad->maxdata_array[1];
 		this_snr_mat = itacacpad->snr_mat_array[1];
 		this_chi2 = itacacpad->chi2_array[1];
+		// FIXME At the moment, empty triggers are added to inform the
+		// "how many instruments were on test", the correct thing to do
+		// is probably to add metadata to the buffer containing
+		// information about which instruments were on
+		this_maxdata->no_peaks_past_threshold = itacacpad->maxdata_array[0]->no_peaks_past_threshold;
 	} else {
 		this_maxdata = itacacpad->maxdata_array[0];
 		this_snr_mat = itacacpad->snr_mat_array[0];
 		this_chi2 = itacacpad->chi2_array[0];
+		// This boolean will be set to false if we find any peaks above threshold
+		// FIXME At the moment, empty triggers are added to inform the
+		// "how many instruments were on test", the correct thing to do
+		// is probably to add metadata to the buffer containing
+		// information about which instruments were on
+		this_maxdata->no_peaks_past_threshold = TRUE;
 	}
 
 	// Update the snr threshold
@@ -589,12 +598,36 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
                 dataptr.as_complex = ((float complex *) itacacpad->data) + this_maxdata->pad * this_maxdata->channels;
                 // Find the peak 
                 gstlal_float_complex_peak_over_window_interp(this_maxdata, dataptr.as_complex, peak_finding_length);
-                }
+		//FIXME At the moment, empty triggers are added to inform the
+		//"how many instruments were on test", the correct thing to do
+		//is probably to add metadata to the buffer containing
+		//information about which instruments were on
+		if(this_maxdata->no_peaks_past_threshold) {
+			for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
+				if((itacacpad->maxdata->interpvalues).as_float_complex[channel] != (float complex) 0) {
+					this_maxdata->no_peaks_past_threshold = FALSE;
+					break;
+				}
+			}
+		}
+	}
         else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
                 dataptr.as_double_complex = ((double complex *) itacacpad->data) + this_maxdata->pad * this_maxdata->channels;
                 // Find the peak 
                 gstlal_double_complex_peak_over_window_interp(this_maxdata, dataptr.as_double_complex, peak_finding_length);
-                }
+		//FIXME At the moment, empty triggers are added to inform the
+		//"how many instruments were on test", the correct thing to do
+		//is probably to add metadata to the buffer containing
+		//information about which instruments were on
+		if(this_maxdata->no_peaks_past_threshold) {
+			for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
+				if((itacacpad->maxdata->interpvalues).as_double_complex[channel] != (double complex) 0) {
+					this_maxdata->no_peaks_past_threshold = FALSE;
+					break;
+				}
+			}
+		}
+	}
         else
                 g_assert_not_reached();
 
@@ -602,7 +635,7 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
         gsl_set_error_handler(old_gsl_error_handler);
 
 	// Compute \chi^2 values if we can
-	if(itacacpad->autocorrelation_matrix) {
+	if(itacacpad->autocorrelation_matrix && !this_maxdata->no_peaks_past_threshold) {
 		// Compute the chisq norm if it doesn't exist
 		if(!itacacpad->autocorrelation_norm)
 			itacacpad->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(itacacpad->autocorrelation_matrix, NULL);
@@ -623,7 +656,7 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 	} 
 
 	// Adjust the location of the peak by the number of samples processed in this window before this function call
-	if(processed_samples > 0) {
+	if(processed_samples > 0 && !this_maxdata->no_peaks_past_threshold) {
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			for(channel=0; channel < this_maxdata->channels; channel++) {
 				if(cabs( (double complex) (this_maxdata->values).as_double_complex[channel]) > 0) {
@@ -642,7 +675,7 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 	}
 
 	// Combine with previous peaks found if any
-	if(numerous_peaks_in_window) {
+	if(numerous_peaks_in_window && !this_maxdata->no_peaks_past_threshold) {
 		// replace an original peak with a second peak, we need to...
 		// Replace maxdata->interpvalues.as_float_complex, maxdata->interpvalues.as_double_complex etc with whichever of the two is larger
 		// // Do same as above, but with maxdata->values instead of maxdata->interpvalues
@@ -1047,7 +1080,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			GST_ERROR_OBJECT(GST_ELEMENT(aggregator), "error in input stream: buffer has invalid timestamp and/or offset");
 			result = GST_FLOW_ERROR;
 			return result;
-        }
+		}
 
 		// Check for instrument and channel name tags
 		if(!itacacpad->instrument || !itacacpad->channel_name) {
@@ -1174,20 +1207,8 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 		itacacpad->tmp_chi2 = NULL;
 	}
 
-	//G_OBJECT_CLASS(gstlal_itacac_pad_parent_class)->finalize(object);
 	G_OBJECT_CLASS(gstlal_itacac_pad_parent_class)->dispose(object);
 }
-
-/*
-static void gstlal_itacac_finalize(GObject *object)
-{
-	guint i;
-	GSTLALItacac *itacac = GSTLAL_ITACAC(object);
-
-	//g_mutex_clear(&(GSTLAL_ITACAC_PAD_GET_CLASS(GSTLAL_ITACAC_PAD(element->sinkpads->data))->padlock)); FIXME Why doesnt this work?
-	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
-}
-*/
 
 
 /*
@@ -1321,6 +1342,8 @@ static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 {
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstAggregatorClass *aggregator_class = GST_AGGREGATOR_CLASS(klass); 
+	// Right now no memory is allocated in the class instance structure for GSTLALItacac, so we dont need a custom finalize function
+	// If anything is added to the class structure, we will need a custom finalize function that chains up to the Aggregator's finalize function
 
 	gst_element_class_set_metadata(
 		element_class,
