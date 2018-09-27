@@ -4,7 +4,7 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O2
 
@@ -15,7 +15,7 @@ SHMRUNTIME = 400
 PLOT_WARMUP_TIME = 220
 PLOT_COOLDOWN_TIME = 64
 
-GDSCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_frames.ini
+GDSCONFIGS = ../../config_files/PreER13/L1/tests/L1GDS_1222058826_frames.ini
 DCSCONFIGS = ../../config_files/O2/L1/tests/L1DCS_AllCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/O2/H1/tests/H1GDS_LowLatency_AllCorrections_Cleaning.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
