@@ -27,6 +27,7 @@ Build-Depends:
  pkg-config,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
+ python-glue-ligolw-tools,
  python-gobject-dev
 
 Package: gstlal-inspiral
@@ -46,6 +47,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python (>= @MIN_PYTHON_VERSION@),
  python-gi,
  python-glue (>= @MIN_GLUE_VERSION@),
+ python-glue-ligolw-tools,
  python-gobject,
  python-gst-1.0,
  python-h5py,
