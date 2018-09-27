@@ -16,10 +16,10 @@ PLOT_WARMUP_TIME = 220
 PLOT_COOLDOWN_TIME = 64
 
 GDSCONFIGS = ../../config_files/O2/L1/tests/L1GDS_1222058826_frames.ini
-DCSCONFIGS = ../../config_files/L1DCS_AllCorrections_Cleaning.ini
-GDSTESTCONFIGS = ../../config_files/H1GDS_LowLatency_AllCorrections_Cleaning.ini
-DCSTESTCONFIGS = ../../config_files/H1DCS_AllCorrections_Cleaning.ini
-GDSSHMCONFIGS = ../../config_files/H1GDS_TestLatency_AllCorrections_Cleaning.ini
+DCSCONFIGS = ../../config_files/O2/L1/tests/L1DCS_AllCorrections_Cleaning.ini
+GDSTESTCONFIGS = ../../config_files/O2/H1/tests/H1GDS_LowLatency_AllCorrections_Cleaning.ini
+DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
+GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_TestLatency_AllCorrections_Cleaning.ini
 
 all: GDS_pcal2darm_plots GDS_over_C02
 
@@ -64,7 +64,7 @@ $(IFO)1_hoft_GDS_SHM_frames.cache: filters framesdir
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_SHM*.gwf | lalapps_path2cache > $@
 
 GDS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
-	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_GDS_frames.cache --config-file '$(GDSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --calibrated-channel-list='GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
+	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_GDS_frames.cache --config-file '$(GDSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --calibrated-channel-list='GDS-CALIB_STRAIN'
 
 DCS_pcal2darm_plots: $(IFO)1_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache
 	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_raw_frames.cache --calibrated-frame-cache $(IFO)1_hoft_DCS_frames.cache --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --calibrated-channel-list='DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN'
