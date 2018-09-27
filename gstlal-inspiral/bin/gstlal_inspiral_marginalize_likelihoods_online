@@ -68,7 +68,7 @@ ZEROLAG_COUNTS_PATH="zerolag_rankingstatpdf.xml"
 # pause for each iteration (seconds)
 #
 
-SLEEP="60"
+SLEEP="600"
 
 #
 # loop forever
