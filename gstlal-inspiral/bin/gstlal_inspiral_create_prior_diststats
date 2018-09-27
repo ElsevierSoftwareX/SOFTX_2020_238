@@ -32,12 +32,21 @@ from optparse import OptionParser
 
 
 from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 
 
 from gstlal import far
+from gstlal import svd_bank
 
+@ligolw_array.use_in
+@ligolw_param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
 
 __author__ = "Chad Hanna <chad.hanna@ligo.org>"
 __version__ = "git id %s" % ""	# FIXME
@@ -66,6 +75,7 @@ def parse_command_line():
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
+	parser.add_option("--svd-file", metavar = "filename", help = "The SVD file to read the template ids from")
 	options, filenames = parser.parse_args()
 
 	process_params = dict(options.__dict__)
@@ -82,7 +92,11 @@ def parse_command_line():
 	if filenames:
 		raise ValueError("unrecognized arguments after options: %s" % " ".join(filenames))
 
-	return options, process_params, filenames
+	template_ids = []
+	for n, bank in enumerate(svd_bank.read_banks(options.svd_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)):
+		template_ids += [row.template_id for row in bank.sngl_inspiral_table]
+
+	return options, process_params, filenames, template_ids
 
 
 #
@@ -99,7 +113,7 @@ def parse_command_line():
 #
 
 
-options, process_params, filenames = parse_command_line()
+options, process_params, filenames, template_ids = parse_command_line()
 
 
 #
@@ -117,7 +131,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 #
 
 
-rankingstat = far.RankingStat(instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
 
 if options.background_prior > 0:
 	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior)
