@@ -222,7 +222,7 @@ def pcal2darm(pipeline, name):
 			# Interleave
 			magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
 			# Write to file
-			pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i]))
+			pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i], options.gps_start_time))
 
 	#
 	# done
@@ -245,7 +245,7 @@ colors = ['r.', 'g.', 'y.', 'c.', 'm.', 'b.'] # Hopefully the user will not want
 channels = calcs_channels
 channels.extend(calibrated_channels)
 for i in range(0, len(frequencies)):
-	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channels[0], options.pcal_channel_name, frequencies[i]))
+	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, channels[0], options.pcal_channel_name, frequencies[i], options.gps_start_time))
 	t_start = data[0][0]
 	dur = data[len(data) - 1][0] - t_start
 	t_unit = 'seconds'
@@ -290,7 +290,7 @@ for i in range(0, len(frequencies)):
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
 	plt.grid(True)
 	for j in range(1, len(channels)):
-		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz.txt" % (ifo, channels[j], options.pcal_channel_name, frequencies[i]))
+		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, channels[j], options.pcal_channel_name, frequencies[i], options.gps_start_time))
 		magnitudes.append([])
 		phases.append([])
 		for k in range(0, len(data)):
@@ -304,6 +304,6 @@ for i in range(0, len(frequencies)):
 		plt.plot(times, phases[j], colors[j], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
-	plt.savefig("deltal_over_pcal_at_%0.1fHz.png" % frequencies[i])
+	plt.savefig("deltal_over_pcal_at_%0.1fHz_%d.png" % (frequencies[i], options.gps_start_time))
 
 
