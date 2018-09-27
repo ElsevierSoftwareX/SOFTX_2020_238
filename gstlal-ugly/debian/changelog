@@ -1,3 +1,11 @@
+gstlal-ugly (1.5.2-1) unstable; urgency=low
+
+  * October 2018 open public alerts test run
+  * update for python-ligo-lw deployment
+  * updates to web support infrastructure
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Thu, 27 Sep 2018 14:42:30 +0900
+
 gstlal-ugly (1.5.1-1) unstable; urgency=low
 
   * packaging fixes for removal of libgstlalugly.so

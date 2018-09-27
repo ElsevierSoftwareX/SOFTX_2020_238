@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-ugly],[1.5.1],[gstlal-discuss@ligo.org],[gstlal-ugly])
-AC_COPYRIGHT([Copyright (C) 2008--2017 Kipp Cannon])
+AC_INIT([gstlal-ugly],[1.5.2],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -299,7 +299,7 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_FRAMECPP_VERSION], [2.5.8])
+AC_SUBST([MIN_FRAMECPP_VERSION], [2.6.2])
 AC_ARG_WITH([framecpp],
 	[AS_HELP_STRING([--with-framecpp], [include framecpp plugin @<:@default=check@:>@])],
 	[],
@@ -385,8 +385,8 @@ AC_SUBST([gds_framexmit_LIBS])
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.18.0])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.3.1])
+AC_SUBST([MIN_LAL_VERSION], [6.19.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [1.4.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -399,7 +399,7 @@ AX_PYTHON_MODULE([lal], fatal)
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.58.0])
+AC_SUBST([MIN_GLUE_VERSION], [1.59.2])
 AX_PYTHON_GLUE()
 
 
@@ -408,7 +408,7 @@ AX_PYTHON_GLUE()
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.3.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.4.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
