@@ -32,13 +32,12 @@
  */
 
 
+#include <Python.h>
+
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasesrc.h>
-
-
-#include <Python.h>
 
 
 G_BEGIN_DECLS

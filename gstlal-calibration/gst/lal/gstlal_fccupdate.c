@@ -382,7 +382,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 			//continuously updated the average fcc_filter value
                         FindAverage(element,*data,i);
 			i++;
-			*data++;
+			data++;
 
 		}
 		else if(GCD - avg_t == 0) {
@@ -398,9 +398,8 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 			}
 			
 			//sends a signal that the fir-matrix has been updated
-			int messagesent;
                         g_object_notify(G_OBJECT(element), "fir-matrix");
-                        messagesent=gst_element_post_message(
+                        gst_element_post_message(
 				GST_ELEMENT(element), 
 				gstlal_fcc_update_message_fir_new(element,filtlength)
 				);

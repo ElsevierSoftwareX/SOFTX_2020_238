@@ -28,6 +28,9 @@
  */
 
 
+#include <Python.h>
+
+
 /*
  * Stuff from GStreamer
  */

@@ -28,6 +28,8 @@
  */
 
 
+#include <Python.h>
+
 /* FIXME:  only used for dlopen(), is this really how to do this? */
 #include <dlfcn.h>
 
@@ -35,9 +37,6 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/base/gstbasesrc.h>
-
-
-#include <Python.h>
 
 
 #include <gstlal/gstlal_audio_info.h>
