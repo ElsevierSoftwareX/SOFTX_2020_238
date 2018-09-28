@@ -1,3 +1,9 @@
+gstlal (1.4.1-1) unstable; urgency=low
+
+  * Adjust dependencies
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Fri, 28 Sep 2018 14:55:27 +0900
+
 gstlal (1.4.0-1) unstable; urgency=low
 
   * October 2018 open public alerts test.
