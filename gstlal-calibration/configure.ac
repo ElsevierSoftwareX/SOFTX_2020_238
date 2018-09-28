@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-calibration],[1.1.8],[gstlal-discuss@ligo.org],[gstlal-calibration])
-AC_COPYRIGHT([Copyright (C) 2008--2017 Madeline Wade, Aaron Viets])
+AC_INIT([gstlal-calibration],[1.2.0],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_COPYRIGHT([Copyright (C) 2008-2018 Madeline Wade, Aaron Viets])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -23,7 +23,6 @@ AC_CONFIG_FILES([ \
 	gst/cmath/Makefile \
 	gst/splitcounter/Makefile \
 	python/Makefile \
-	tests/Makefile \
 ])
 
 
