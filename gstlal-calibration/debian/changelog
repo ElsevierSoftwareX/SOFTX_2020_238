@@ -1,3 +1,9 @@
+gstlal-calibration (1.2.1-1) unstable; urgency=low
+
+  * Minor fix so tests/ directory builds
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 28 Sept 2018 17:03:00 -0500
+
 gstlal-calibration (1.2.0-1) unstable; urgency=low
 
   * Incorporate corrections for SRC detuning parameters
