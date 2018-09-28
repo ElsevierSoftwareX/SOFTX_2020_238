@@ -483,7 +483,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set):
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set):
 
 	likelihood_nodes = {}
 	rankpdf_nodes = []
@@ -491,6 +491,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 	outnodes = {}
 	instruments = "".join(sorted(instrument_set))
 	margnodes = {}
+
+	# NOTE! we rely on there being identical templates in each instrument, so we just take one of the values of the svd_nodes which are a dictionary
+	svd_bank_files = [node.output_files["write-svd"] for node in svd_nodes.values()[0]]
 	# Here n counts the bins
 	# first non-injections, which will get skipped if this is an injections-only run
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
@@ -499,10 +502,11 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		[parents.extend(o[1]) for o in outputs]
 		# FIXME we keep this here in case we someday want to have a
 		# mass bin dependent prior, but it really doesn't matter for
-		# the time being.   
+		# the time being.
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
 				parent_nodes = [],
 				opts = {"instrument":instrument_set, "background-prior":1, "min-instruments":options.min_instruments},
+				input_files = {"svd-file":svd_bank_files[n]},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
@@ -658,7 +662,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 				noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 				# merge all of the dbs from the same subbank
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":dbs},
 					output_files = {"database":noninjdb},
 					input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -679,7 +683,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 					injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 					# merge all of the dbs from the same subbank
 					sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-						opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+						opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 						input_cache_files = {"input-cache":dbs},
 						output_files = {"database":injdb},
 						input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -705,7 +709,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 			# merge all of the dbs from the same subbank
 			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 				input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
 				output_files = {"database":noninjdb},
 				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -725,7 +729,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 				# merge all of the dbs from the same subbank
 				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
 					output_files = {"database":injdb},
 					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -767,7 +771,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		# Merge the final non injection database into chunks
 		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 			input_cache_files = {"input-cache": dbs},
 			output_files = {"database":noninjdb},
 			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -791,7 +795,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	else:
 		noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
 		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 			input_files = {"": (vetoes + [options.frame_segments_file])},
 			input_cache_files = {"input-cache": [node.input_files[""] for node in chunk_nodes]},
 			output_files = {"database":noninjdb},
@@ -835,7 +839,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 			# merge
 			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
-				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space()},
+				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
 				input_cache_files = {"input-cache":dbs},
 				output_files = {"database":injdb},
 				input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -1378,7 +1382,7 @@ if not options.lloid_cache:
 	# Setup likelihood jobs, clustering and/or merging
 	#
 
-	rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set)
+	rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set)
 
 else:
 	#
