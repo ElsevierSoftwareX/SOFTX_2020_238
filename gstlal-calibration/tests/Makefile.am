@@ -7,12 +7,6 @@ pkgpythondir = $(pkgpyexecdir)
 pkgpython_PYTHON = \
 	test_common.py
 
-EXTRA_DIST = \
-	L-L1_TEST_FRAME-10-10.gwf \
-	lal_logical_undersampler_test_01.py
-
-#TESTS = lal_logical_undersampler_test_01.py
-
 clean-local :
 	rm -f *.dump
 	rm -f *.avi
