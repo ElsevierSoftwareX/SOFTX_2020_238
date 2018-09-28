@@ -658,7 +658,7 @@ def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 	"""
 
 	if data_source_info.data_source == "white":
-		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(gw_data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
+		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
 	elif data_source_info.data_source == "silence":
 		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
 	elif data_source_info.data_source == "white_live":
