@@ -8,5 +8,5 @@ stats_PYTHON = \
 	inspiral_lr.py \
 	trigger_rate.py
 
-noinst_DATA = \
+EXTRA_DIST = \
 	__init__.py
