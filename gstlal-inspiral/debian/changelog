@@ -1,3 +1,9 @@
+gstlal-inspiral (1.5.2-1) unstable; urgency=low
+
+  * packaging fixes
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Sun, 30 Sep 2018 17:37:05 +0900
+
 gstlal-inspiral (1.5.1-1) unstable; urgency=low
 
   * Adjust dependencies
