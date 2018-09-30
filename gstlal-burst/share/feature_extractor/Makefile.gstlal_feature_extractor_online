@@ -203,6 +203,8 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--disable-kafka-jobs \
+			--condor-universe local \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
@@ -225,6 +227,8 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--disable-kafka-jobs \
+			--condor-universe local \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
@@ -254,6 +258,8 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--disable-kafka-jobs \
+			--condor-universe local \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
@@ -281,6 +287,8 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--disable-kafka-jobs \
+			--condor-universe local \
 			--request-cpu 2 \
 			--request-memory 15GB \
 			--verbose \
