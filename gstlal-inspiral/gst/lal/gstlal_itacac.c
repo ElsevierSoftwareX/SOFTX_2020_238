@@ -34,6 +34,7 @@
 
 
 #include <glib.h>
+#include <gmodule.h>
 #include <gst/gst.h>
 #include <gst/base/gstadapter.h>
 #include <gst/base/gstaggregator.h>
@@ -56,6 +57,10 @@
 #include <gstlal/gstlal_tags.h>
 #include <gstlal/gstlal_autocorrelation_chi2.h>
 #include <gstlal_snglinspiral.h>
+#include <lal/LIGOMetadataTables.h>
+#include <lal/LIGOMetadataUtils.h>
+#include <lal/LALDatatypes.h>
+#include <lal/TimeDelay.h>
 
 /*
  * ============================================================================
@@ -109,6 +114,7 @@ static GstStaticPadTemplate sink_templ = GST_STATIC_PAD_TEMPLATE(
 );
 
 #define DEFAULT_SNR_THRESH 5.5
+#define DEFAULT_COINC_THRESH 5
 
 /*
  * ========================================================================
@@ -157,25 +163,42 @@ static void free_bank(GSTLALItacacPad *itacacpad) {
 
 static void update_peak_info_from_autocorrelation_properties(GSTLALItacacPad *itacacpad) {
 	// FIXME Need to make sure that itacac can run without autocorrelation matrix
-	if (itacacpad->maxdata && itacacpad->tmp_maxdata && itacacpad->autocorrelation_matrix) {
-		itacacpad->maxdata->pad = itacacpad->tmp_maxdata->pad = autocorrelation_length(itacacpad) / 2;
-		if (itacacpad->snr_mat)
-			free(itacacpad->snr_mat);
-		if (itacacpad->tmp_snr_mat)
-			free(itacacpad->tmp_snr_mat);
+	if (itacacpad->maxdata_list->data && itacacpad->autocorrelation_matrix) {
+		GList *maxdata_list_element;
+		GList *snr_mat_list_element = itacacpad->snr_mat_list;
+		GList *snr_matrix_view_list_element = itacacpad->snr_matrix_view_list;
+		struct gstlal_peak_state *maxdata;
+		void *new_snr_mat;
+		for(maxdata_list_element = itacacpad->maxdata_list; maxdata_list_element != NULL; maxdata_list_element = itacacpad->maxdata_list->next) {
+			maxdata = maxdata_list_element->data;
+			maxdata_list->data->pad = autocorrelation_length(itacacpad) / 2;
 
-		itacacpad->snr_mat = calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), itacacpad->maxdata->unit);
-		itacacpad->tmp_snr_mat = calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), itacacpad->tmp_maxdata->unit);
-		itacacpad->snr_mat_array[0] = itacacpad->snr_mat;
-		itacacpad->snr_mat_array[1] = itacacpad->tmp_snr_mat;
+			new_snr_mat = calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), maxdata_list->data->unit);
+			if(snr_mat_list_element != NULL) {
+				// Want to replace current element with a new one, so we'll insert a new element after this one and then remove this one
+				g_list_insert(itacacpad->snr_mat_list, new_snr_mat, g_list_index(itacacpad->snr_mat_list, snr_mat_list_element->data) + 1);
+				itacacpad->snr_mat_list = g_list_remove(itacacpad->snr_mat_list, snr_mat_list_element->data);
+				snr_mat_list_element = g_list_find(itacacpad->snr_mat_list, new_snr_mat);
+			} else
+				itacacpad->snr_mat_list = g_list_append(itacacpad->snr_mat_list, new_snr_mat);
 
-		//
-		// Each row is one sample point of the snr time series with N
-		// columns for N channels. Assumes proper packing to go from real to complex.
-		// FIXME assumes single precision
-		//
-		itacacpad->snr_matrix_view = gsl_matrix_complex_float_view_array((float *) itacacpad->snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
-		itacacpad->tmp_snr_matrix_view = gsl_matrix_complex_float_view_array((float *) itacacpad->tmp_snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
+			//
+			// Each row is one sample point of the snr time series with N
+			// columns for N channels. Assumes proper packing to go from real to complex.
+			// FIXME assumes single precision
+			//
+			gsl_matrix_complex_float_view new_snr_matrix_view = gsl_matrix_complex_float_view_array((float *) new_snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
+			if(snr_matrix_view_list_element != NULL) {
+				// Want to replace current element with a new one, so we'll insert a new element after this one and then remove this one
+				g_list_insert(itacacpad->snr_matrix_view_list, &new_snr_matrix_view, g_list_index(itacacpad->snr_matrix_view_list, snr_matrix_view_list_element->data) + 1);
+				itacacpad->snr_matrix_view_list = g_list_remove(itacacpad->snr_matrix_view_list, snr_matrix_view_list_element->data);
+				snr_matrix_view_list_element = g_list_find(itacacpad->snr_matrix_view_list, &new_snr_matrix_view);
+			} else
+				itacacpad->snr_matrix_view_list = g_list_append(itacac->snr_matrix_view_list, &new_snr_matrix_view)
+
+			snr_mat_list_element = snr_mat_list_element->next;
+			snr_matrix_view_list_element = snr_matrix_view_list_element->next;
+		}
         }
 }
 
@@ -205,6 +228,8 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(aggpad);
 	GstCaps *caps;
 	guint width = 0; 
+	GList *maxdata_list_element;
+	struct gstlal_peak_state *new_maxdata;
 
 	//
 	// Update element metadata
@@ -224,21 +249,18 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 		GST_ERROR_OBJECT(itacac, "unsupported format %s", format);
 
 	g_object_set(itacacpad->adapter, "unit-size", itacacpad->channels * width, NULL); 
-	itacacpad->chi2 = calloc(itacacpad->channels, width);
-	itacacpad->tmp_chi2 = calloc(itacacpad->channels, width);
-	itacacpad->chi2_array[0] = itacacpad->chi2;
-	itacacpad->chi2_array[1] = itacacpad->tmp_chi2;
+	itacacpad->chi2_list = g_list_append(itacacpad->chi2_list, calloc(itacacpad->channels, width));
 
-	if (itacacpad->maxdata)
-		gstlal_peak_state_free(itacacpad->maxdata);
-	
-	if (itacacpad->tmp_maxdata)
-		gstlal_peak_state_free(itacacpad->tmp_maxdata);
-
-	itacacpad->maxdata = gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type);
-	itacacpad->tmp_maxdata = gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type);
-	itacacpad->maxdata_array[0] = itacacpad->maxdata;
-	itacacpad->maxdata_array[1] = itacacpad->tmp_maxdata;
+	// FIXME Can we assume maxdata_list wont be set yet? Only reason this logic exists is because of something similar in itac
+	if(itacacpad->maxdata_list != NULL) {
+		for(maxdata_list_element = itacacpad->maxdata_list; maxdata_list_element != NULL; maxdata_list_element = maxdata_list_element->next) {
+			new_maxdata = gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type)
+			g_list_insert(itacacpad->maxdata_list, new_maxdata, g_list_index(itacacpad->maxdata_list, maxdata_list_element->data) + 1);
+			itacacpad->maxdata_list = g_list_remove(itacacpad->maxdata_list, maxdata_list_element->data);
+			maxdata_list_element = g_list_find(itacacpad->maxdata_list, new_maxdata);
+		}
+	} else 
+		itacacpad->maxdata_list = g_list_append(itacacpad->maxdata_list, gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type));
 
 	// This should be called any time the autocorrelation property is updated 
 	update_peak_info_from_autocorrelation_properties(itacacpad);
@@ -246,7 +268,7 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	// The max size to copy from an adapter is the typical output size plus
 	// the padding. we should never try to copy from an adapter with a
 	// larger buffer than this
-	itacacpad->data = malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * itacacpad->maxdata->pad * 2);
+	itacacpad->data = malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * itacacpad->maxdata_list->data->pad * 2);
 
 	// Done
 
@@ -321,6 +343,10 @@ enum padproperty {
 	ARG_SIGMASQ,
 	ARG_AUTOCORRELATION_MATRIX,
 	ARG_AUTOCORRELATION_MASK
+};
+
+enum itacacproperty {
+	ARG_COINC_THRESH = 1
 };
 
 static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id, const GValue *value, GParamSpec *pspec)
@@ -482,6 +508,45 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 	GST_OBJECT_UNLOCK(itacacpad);
 }
 
+static void gstlal_itacac_set_property(GObject *object, enum itacacproperty id, const GValue *value, GParamSpec *pspec)
+{
+	GSTLALItacac *itacac = GSTLAL_ITACAC(object);
+
+	GST_OBJECT_LOCK(itacac);
+
+	switch(id) {
+	case ARG_COINC_THRESH:
+		itacac->coinc_thresh = g_value_get_double(value);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(itacac);
+}
+
+
+static void gstlal_itacac_get_property(GObject *object, enum itacacproperty id, GValue *value, GParamSpec *pspec)
+{
+	GSTLALItacac *itacac = GSTLAL_ITACAC_PAD(object);
+
+	GST_OBJECT_LOCK(itacac);
+
+	switch(id) {
+	case ARG_COINC_THRESH:
+		g_value_set_double(value, itacac->coinc_thresh);
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(itacac);
+}
+
 /*
  * aggregate()
 */ 
@@ -525,10 +590,32 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 
 }
 
-static void check_sinkpad_compatibility(GSTLALItacac *itacac) {
+// FIXME Is there a better way to do this? 
+// NOTE Will need to add new IFOs as we start using them
+InterferometerNumber get_interferometer_number(GSTLALItacac *itacac, char *ifo) {
+	InterferometerNumber result;
+	if(strcmp(ifo, "H1") == 0) 
+		result = LAL_IFO_H1;
+	else if(strcmp(ifo, "L1") == 0)
+		result = LAL_IFO_L1;
+	else if(strcmp(ifo, "V1") == 0)
+		result = LAL_IFO_V1;
+	else
+		GST_ERROR_OBJECT(GST_ELEMENT(itacac), "no support for ifo %s", ifo);
+
+	return result;
+}
+
+static void final_setup(GSTLALItacac *itacac) {
+	// FIXME Need to add logic to finish initializing GLists. Make sure to ensure there always at least two elements in the GList, even in the case of only having one sinkpad
 	GstElement *element = GST_ELEMENT(itacac);
-	GSTLALItacacPad *itacacpad;
-	GList *padlist;
+	GSTLALItacacPad *itacacpad, *itacacpad2;
+	GList *padlist, *padlist2;
+	guint16 n_ifos = element->numsinkpads;
+	guint16 i;
+	guint16 num_pairwise_combinations = 1;
+	LALDetector *ifo1, *ifo2;
+	gdouble *coincidence_window = malloc(sizeof(gdouble));
 
 	// Ensure all of the pads have the same channels and rate, and set them on itacac for easy access
 	for(padlist = element->sinkpads; padlist !=NULL; padlist = padlist->next) {
@@ -547,6 +634,55 @@ static void check_sinkpad_compatibility(GSTLALItacac *itacac) {
 		}
 
 	}
+
+	// Compute number of cominbations, n_ifos choose 2
+	for(i=n_ifos; i > n_ifos - 2; i--) 
+		num_pairwise_combinations *= i;
+
+	num_pairwise_combinations /= 2;
+
+	// Set-up hash table with g_hash_table_insert
+	for(padlist = element->sinkpads; padlist !=NULL; padlist = padlist->next) {
+		itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		// Get a LALDetector struct describing the ifo we care about, we need this to compute the light travel time
+		XLALReturnDetector(ifo1, get_interferometer_number(itacac, itacacpad->instrument));
+		// Set up IFO1IFO2 string, copy IFO1 into it
+		memcpy(itacac->ifo_pair_str, itacacpad->instrument, 2*sizeof(gchar));
+
+		for(padlist2 = padlist->next; padlist2 != NULL; padlist2 = padlist2->next) {
+			itacacpad2 = GSTLAL_ITACAC_PAD(padlist2->data);
+			// Get a LALDetector struct describing the ifo we care about, we need this to compute the light travel time
+			XLALReturnDetector(ifo2, get_interferometer_number(itacac, itacacpad2->instrument));
+			// Set up IFO1IFO2 string, copy IFO2 into it
+			memcpy(itacac->ifo_pair_str + 2, itacacpad2->instrument, 2*sizeof(gchar));
+
+			// Get light travel time and add coincidence threshold to it. Coincidence threshold is in milliseconds, light travel time is in nanoseconds
+			*coincidence_window = itacac->coinc_thresh*1000000 + (gdouble) XLALLightTravelTime(ifo1, ifo2);
+
+			g_hash_table_insert(itacac->coinc_window_hashtable, (gpointer) itacac->ifo_pair_str, (gpointer) coincidence_window);
+		}
+
+		if(GST_ELEMENT(itacac)->numsinkpads == 1) {
+			// Make sure we have two entries in the list so we have somewhere to store information 
+			// when we see multiple peaks passing the snr threshold in a single trigger window
+			void *new_snr_mat = calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), maxdata_list->data->unit);
+
+			gsl_matrix_complex_float_view new_snr_matrix_view = gsl_matrix_complex_float_view_array((float *) new_snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
+			g_list_append(itacacpad->maxdata_list, gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type));
+			g_list_append(itacacpad->snr_mat_list, calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), maxdata_list->data->unit));
+			g_list_append(itacacpad->snr_matrix_view_list, &new_snr_matrix_view);
+		} else {
+			for(i=0; i < GST_ELEMENT(itacac)->numsinkpads; i++) {
+				// Add one entry to the glist per ifo
+				void *new_snr_mat = calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), maxdata_list->data->unit);
+
+				gsl_matrix_complex_float_view new_snr_matrix_view = gsl_matrix_complex_float_view_array((float *) new_snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
+				g_list_append(itacacpad->maxdata_list, gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type));
+				g_list_append(itacacpad->snr_mat_list, calloc(autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad), maxdata_list->data->unit));
+				g_list_append(itacacpad->snr_matrix_view_list, &new_snr_matrix_view);
+			}
+		}
+	}
 }
 
 static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, guint copysamps, guint peak_finding_length, guint processed_samples, gboolean numerous_peaks_in_window) {
@@ -564,28 +700,28 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 
 	// Need to use our tmp_chi2 and tmp_maxdata struct and its corresponding snr_mat if we've already found a peak in this window
 	if(numerous_peaks_in_window) {
-		this_maxdata = itacacpad->maxdata_array[1];
-		this_snr_mat = itacacpad->snr_mat_array[1];
-		this_chi2 = itacacpad->chi2_array[1];
+		this_maxdata = itacacpad->maxdata_list->next->data;
+		this_snr_mat = itacacpad->snr_mat_list->next->data;
+		this_chi2 = itacacpad->chi2_list->next->data;
 		// FIXME At the moment, empty triggers are added to inform the
 		// "how many instruments were on test", the correct thing to do
 		// is probably to add metadata to the buffer containing
 		// information about which instruments were on
-		this_maxdata->no_peaks_past_threshold = itacacpad->maxdata_array[0]->no_peaks_past_threshold;
+		this_maxdata_list->data->no_peaks_past_threshold = itacacpad->maxdata_array[0]->no_peaks_past_threshold;
 	} else {
-		this_maxdata = itacacpad->maxdata_array[0];
-		this_snr_mat = itacacpad->snr_mat_array[0];
-		this_chi2 = itacacpad->chi2_array[0];
+		this_maxdata = itacacpad->maxdata_list->data;
+		this_snr_mat = itacacpad->snr_mat_list->data;
+		this_chi2 = itacacpad->chi2_list->data;
 		// This boolean will be set to false if we find any peaks above threshold
 		// FIXME At the moment, empty triggers are added to inform the
 		// "how many instruments were on test", the correct thing to do
 		// is probably to add metadata to the buffer containing
 		// information about which instruments were on
-		this_maxdata->no_peaks_past_threshold = TRUE;
+		this_maxdata_list->data->no_peaks_past_threshold = TRUE;
 	}
 
 	// Update the snr threshold
-	this_maxdata->thresh = itacacpad->snr_thresh;
+	this_maxdata_list->data->thresh = itacacpad->snr_thresh;
 	
 	// call the peak finding library on a buffer from the adapter if no events are found the result will be a GAP
 	gst_audioadapter_copy_samples(itacacpad->adapter, itacacpad->data, copysamps, NULL, NULL);
@@ -595,34 +731,34 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 
         // put the data pointer one pad length in 
         if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
-                dataptr.as_complex = ((float complex *) itacacpad->data) + this_maxdata->pad * this_maxdata->channels;
+                dataptr.as_complex = ((float complex *) itacacpad->data) + this_maxdata_list->data->pad * this_maxdata_list->data->channels;
                 // Find the peak 
                 gstlal_float_complex_peak_over_window_interp(this_maxdata, dataptr.as_complex, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
 		//"how many instruments were on test", the correct thing to do
 		//is probably to add metadata to the buffer containing
 		//information about which instruments were on
-		if(this_maxdata->no_peaks_past_threshold) {
-			for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
-				if((itacacpad->maxdata->interpvalues).as_float_complex[channel] != (float complex) 0) {
-					this_maxdata->no_peaks_past_threshold = FALSE;
+		if(this_maxdata_list->data->no_peaks_past_threshold) {
+			for(channel = 0; channel < this_maxdata_list->data->channels; channel++) {
+				if((this_maxdata_list->data->interpvalues).as_float_complex[channel] != (float complex) 0) {
+					this_maxdata_list->data->no_peaks_past_threshold = FALSE;
 					break;
 				}
 			}
 		}
 	}
         else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
-                dataptr.as_double_complex = ((double complex *) itacacpad->data) + this_maxdata->pad * this_maxdata->channels;
+                dataptr.as_double_complex = ((double complex *) itacacpad->data) + this_maxdata_list->data->pad * this_maxdata_list->data->channels;
                 // Find the peak 
                 gstlal_double_complex_peak_over_window_interp(this_maxdata, dataptr.as_double_complex, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
 		//"how many instruments were on test", the correct thing to do
 		//is probably to add metadata to the buffer containing
 		//information about which instruments were on
-		if(this_maxdata->no_peaks_past_threshold) {
-			for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
-				if((itacacpad->maxdata->interpvalues).as_double_complex[channel] != (double complex) 0) {
-					this_maxdata->no_peaks_past_threshold = FALSE;
+		if(this_maxdata_list->data->no_peaks_past_threshold) {
+			for(channel = 0; channel < this_maxdata_list->data->channels; channel++) {
+				if((this_maxdata_list->data->interpvalues).as_double_complex[channel] != (double complex) 0) {
+					this_maxdata_list->data->no_peaks_past_threshold = FALSE;
 					break;
 				}
 			}
@@ -635,7 +771,7 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
         gsl_set_error_handler(old_gsl_error_handler);
 
 	// Compute \chi^2 values if we can
-	if(itacacpad->autocorrelation_matrix && !this_maxdata->no_peaks_past_threshold) {
+	if(itacacpad->autocorrelation_matrix && !this_maxdata_list->data->no_peaks_past_threshold) {
 		// Compute the chisq norm if it doesn't exist
 		if(!itacacpad->autocorrelation_norm)
 			itacacpad->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(itacacpad->autocorrelation_matrix, NULL);
@@ -644,103 +780,103 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			/* extract data around peak for chisq calculation */
-			gstlal_double_complex_series_around_peak(this_maxdata, dataptr.as_double_complex, (double complex *) this_snr_mat, this_maxdata->pad);
+			gstlal_double_complex_series_around_peak(this_maxdata, dataptr.as_double_complex, (double complex *) this_snr_mat, this_maxdata_list->data->pad);
 			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, 0.0, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 
 		} else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
-			gstlal_float_complex_series_around_peak(this_maxdata, dataptr.as_complex, (float complex *) this_snr_mat, this_maxdata->pad);
+			gstlal_float_complex_series_around_peak(this_maxdata, dataptr.as_complex, (float complex *) this_snr_mat, this_maxdata_list->data->pad);
 			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, 0.0, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 		} else
 			g_assert_not_reached();
 	} 
 
 	// Adjust the location of the peak by the number of samples processed in this window before this function call
-	if(processed_samples > 0 && !this_maxdata->no_peaks_past_threshold) {
+	if(processed_samples > 0 && !this_maxdata_list->data->no_peaks_past_threshold) {
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
-			for(channel=0; channel < this_maxdata->channels; channel++) {
-				if(cabs( (double complex) (this_maxdata->values).as_double_complex[channel]) > 0) {
-					this_maxdata->samples[channel] += processed_samples;
-					this_maxdata->interpsamples[channel] += (double) processed_samples;
+			for(channel=0; channel < this_maxdata_list->data->channels; channel++) {
+				if(cabs( (double complex) (this_maxdata_list->data->values).as_double_complex[channel]) > 0) {
+					this_maxdata_list->data->samples[channel] += processed_samples;
+					this_maxdata_list->data->interpsamples[channel] += (double) processed_samples;
 				}
 			}
 		} else {
-			for(channel=0; channel < this_maxdata->channels; channel++) {
-				if(cabs( (double complex) (this_maxdata->values).as_float_complex[channel]) > 0) {
-					this_maxdata->samples[channel] += processed_samples;
-					this_maxdata->interpsamples[channel] += (double) processed_samples;
+			for(channel=0; channel < this_maxdata_list->data->channels; channel++) {
+				if(cabs( (double complex) (this_maxdata_list->data->values).as_float_complex[channel]) > 0) {
+					this_maxdata_list->data->samples[channel] += processed_samples;
+					this_maxdata_list->data->interpsamples[channel] += (double) processed_samples;
 				}
 			}
 		}
 	}
 
 	// Combine with previous peaks found if any
-	if(numerous_peaks_in_window && !this_maxdata->no_peaks_past_threshold) {
+	if(numerous_peaks_in_window && !this_maxdata_list->data->no_peaks_past_threshold) {
 		// replace an original peak with a second peak, we need to...
-		// Replace maxdata->interpvalues.as_float_complex, maxdata->interpvalues.as_double_complex etc with whichever of the two is larger
-		// // Do same as above, but with maxdata->values instead of maxdata->interpvalues
+		// Replace maxdata_list->data->interpvalues.as_float_complex, maxdata_list->data->interpvalues.as_double_complex etc with whichever of the two is larger
+		// // Do same as above, but with maxdata_list->data->values instead of maxdata_list->data->interpvalues
 		// // Make sure to replace samples and interpsamples too
 		gsl_vector_complex_float_view old_snr_vector_view, new_snr_vector_view;
 		double old_snr, new_snr;
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
-			double *old_chi2 = (double *) itacacpad->chi2;
-			double *new_chi2 = (double *) itacacpad->tmp_chi2;
-			for(channel=0; channel < itacacpad->maxdata->channels; channel++) {
+			double *old_chi2 = (double *) itacacpad->chi2_list->data;
+			double *new_chi2 = (double *) itacacpad->chi2_list->next->data;
+			for(channel=0; channel < this_maxdata_list->data->channels; channel++) {
 				// Possible cases
 				// itacacpad->maxdata has a peak but itacacpad->tmp_maxdata does not <--No change required
 				// itacacpad->tmp_maxdata has a peak but itacacpad->maxdata does not <--Swap out peaks
 				// Both have peaks and itacacpad->maxdata's is higher <--No change required
 				// Both have peaks and itacacpad->tmp_maxdata's is higher <--Swap out peaks
-				old_snr = cabs( (double complex) (itacacpad->maxdata->interpvalues).as_double_complex[channel]);
-				new_snr = cabs( (double complex) (itacacpad->tmp_maxdata->interpvalues).as_double_complex[channel]);
+				old_snr = cabs( (double complex) (itacacpad->maxdata_list->data->interpvalues).as_double_complex[channel]);
+				new_snr = cabs( (double complex) (itacacpad->maxdata_list->next->data->interpvalues).as_double_complex[channel]);
 
 				if(new_snr > old_snr) {
 					// The previous peak found was larger than the current peak. If there was a peak before but not now, increment itacacpad->maxdata's num_events
 					if(old_snr == 0)
 						// FIXME confirm that this isnt affected by floating point error
-						itacacpad->maxdata->num_events++;
+						itacacpad->maxdata_list->data->num_events++;
 
-					(itacacpad->maxdata->values).as_double_complex[channel] = (itacacpad->tmp_maxdata->values).as_double_complex[channel];
-					(itacacpad->maxdata->interpvalues).as_double_complex[channel] = (itacacpad->tmp_maxdata->interpvalues).as_double_complex[channel];
-					itacacpad->maxdata->samples[channel] = itacacpad->tmp_maxdata->samples[channel];
-					itacacpad->maxdata->interpsamples[channel] = itacacpad->tmp_maxdata->interpsamples[channel];
+					(itacacpad->maxdata_list->data->values).as_double_complex[channel] = (itacacpad->maxdata_list->next->data->values).as_double_complex[channel];
+					(itacacpad->maxdata_list->data->interpvalues).as_double_complex[channel] = (itacacpad->maxdata_list->next->data->interpvalues).as_double_complex[channel];
+					itacacpad->maxdata_list->data->samples[channel] = itacacpad->maxdata_list->next->data->samples[channel];
+					itacacpad->maxdata_list->data->interpsamples[channel] = itacacpad->maxdata_list->next->data->interpsamples[channel];
 					old_chi2[channel] = new_chi2[channel];
 
 					if(itacacpad->autocorrelation_matrix) {
 						// Replace the snr time series around the peak with the new one
-						old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view.matrix), channel);
-						new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->tmp_snr_matrix_view.matrix), channel);
+						old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view_list->data->matrix), channel);
+						new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view_list->next->data->matrix), channel);
 						old_snr_vector_view.vector = new_snr_vector_view.vector;
 					}
 				}
 			}
 		} else {
-			float *old_chi2 = (float *) itacacpad->chi2;
-			float *new_chi2 = (float *) itacacpad->tmp_chi2;
-			for(channel=0; channel < itacacpad->maxdata->channels; channel++) {
+			float *old_chi2 = (float *) itacacpad->chi2_list->data;
+			float *new_chi2 = (float *) itacacpad->chi2_list->next->data;
+			for(channel=0; channel < itacacpad->maxdata_list->data->channels; channel++) {
 				// Possible cases
 				// itacacpad->maxdata has a peak but itacacpad->tmp_maxdata does not <--No change required
 				// itacacpad->tmp_maxdata has a peak but itacacpad->maxdata does not <--Swap out peaks
 				// Both have peaks and itacacpad->maxdata's is higher <--No change required 
 				// Both have peaks and itacacpad->tmp_maxdata's is higher <--Swap out peaks
-				old_snr = cabs( (double complex) (itacacpad->maxdata->interpvalues).as_float_complex[channel]);
-				new_snr = cabs( (double complex) (itacacpad->tmp_maxdata->interpvalues).as_float_complex[channel]);
+				old_snr = cabs( (double complex) (itacacpad->maxdata_list->data->interpvalues).as_float_complex[channel]);
+				new_snr = cabs( (double complex) (itacacpad->maxdata_list->next->data->interpvalues).as_float_complex[channel]);
 				if(new_snr > old_snr) {
 					// The previous peak found was larger than the current peak. If there was a peak before but not now, increment itacacpad->maxdata's num_events
 					if(old_snr == 0)
 						// FIXME confirm that this isnt affected by floating point error
-						itacacpad->maxdata->num_events++;
+						itacacpad->maxdata_list->data->num_events++;
 
-					(itacacpad->maxdata->values).as_float_complex[channel] = (itacacpad->tmp_maxdata->values).as_float_complex[channel];
-					(itacacpad->maxdata->interpvalues).as_float_complex[channel] = (itacacpad->tmp_maxdata->interpvalues).as_float_complex[channel];
-					itacacpad->maxdata->samples[channel] = itacacpad->tmp_maxdata->samples[channel];
-					itacacpad->maxdata->interpsamples[channel] = itacacpad->tmp_maxdata->interpsamples[channel];
+					(itacacpad->maxdata_list->data->values).as_float_complex[channel] = (itacacpad->maxdata_list->next->data->values).as_float_complex[channel];
+					(itacacpad->maxdata_list->data->interpvalues).as_float_complex[channel] = (itacacpad->maxdata_list->next->data->interpvalues).as_float_complex[channel];
+					itacacpad->maxdata_list->data->samples[channel] = itacacpad->maxdata_list->next->data->samples[channel];
+					itacacpad->maxdata_list->data->interpsamples[channel] = itacacpad->maxdata_list->next->data->interpsamples[channel];
 					old_chi2[channel] = new_chi2[channel];
 
 					if(itacacpad->autocorrelation_matrix) {
 						// Replace the snr time series around the peak with the new one
-						old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view.matrix), channel);
-						new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->tmp_snr_matrix_view.matrix), channel);
+						old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view_list->data->matrix), channel);
+						new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view_list->next->data->matrix), channel);
 						old_snr_vector_view.vector = new_snr_vector_view.vector;
 					}
 				}
@@ -748,6 +884,70 @@ static void generate_trigger(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 		}
 	}
 
+}
+
+static void find_coincident_triggers(GSTLALItacac *itacac) {
+	// Iterate through triggers already recovered, checking for
+	// coincidence. If a trigger exists in one detector and does not have a
+	// coincident trigger in another detector, we will find the highest
+	// peak the second detector that is in coincidence with the original
+	// trigger, and output that along with the surrounding snr time series
+	glist *padlist, *padlist2;
+	GSTLALItacacPad *itacacpad, *itacacpad2;
+	//struct gstlal_peak_state *maxdata;
+	GList *maxdata_list_element;
+	// FIXME Allocate in advance
+	LIGOTimeGPS trigger_end[GST_ELEMENT(itacac)->numsinkpads];
+	guint16 i;
+
+	// First clear the maxdata structs after the first in each pad's list so we can use them to store new triggers
+	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) 
+		if(element->numsinkpads == 1)
+			gstlal_peak_state_clear(GSTLAL_ITACAC_PAD(padlist->data)->maxdata_list->next->data);
+		else {
+			for(maxdata_list_element = GSTLAL_ITACAC_PAD(padlist->data)->maxdata_list->next; maxdata_list_element != NULL; maxdata_list_element = maxdata_list_element->next)
+				gstlal_peak_state_clear(maxdata_list_element->data);
+		}
+	
+	// steps
+	// 1) get trigger time for first pad
+	// 2) Check if coincident trigger in other pads (should look at python coincidence code for how to do coincidence for 3+ ifos)
+	// 3a) if coincident triggers in all pads, we're done here
+	// 3b) If no coincident trigger in another pad, look for peak in coincidence window around this trigger in that ifo
+	// 3c) figure out what to do when there are coincident triggers only in a subset of the total set 
+
+	//
+	// Ordering of maxdata structs in maxdata list
+	//
+	// After first entry in each list, which is the maxdata struct containing the original trigger from that ifo, order is same as order of itacacpads
+	// e.g. if element->sinkpads is H1, element->sinkpads->next is L1, and element->sinkpads->next->next is V1, then the order of maxdata structs for 
+	// the H1 pad is H1,L1,V1, the order of maxdata structs for the L1 pad is L1,H1,V1 and the order for the V1 pad is V1,H1,L1
+	//
+
+	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
+		itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		
+		memcpy(itacac->ifo_pair_str, itacacpad->instrument, 2*sizeof(gchar));
+		// FIXME Should the pad be subtracted from this? not sure based on gstlal_snglinspiral...
+		for(channel = 0; channel < itacacpad->maxdata_list->data->channels; channel++) {
+			if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+				// FIXME Should make sure that values is used elsewhere instead of interpvalues as well for this check (specifically for no_peaks_past_threshold)
+				if((itacacpad->maxdata_list->data->values).as_float_complex[channel] != (float complex) 0) {
+					XLALINT8NSToGPS(trigger_end, itacac->next_output_timestamp + itacac->difftime);
+					XLALGPSAdd(trigger_end, (double) itacacpad->maxdata_list->data->interpsamples[channel] / itacac->rate);
+					padlist2 = padlist->next;
+					i = 1;
+					while(i < GST_ELEMENT(itacac)->numsinkpads) {
+						itacacpad2 = GSTLAL_ITACAC_PAD(padlist2->data);
+						if((itacacpad2->maxdata_list->data->values).as_float_complex[channel] != (float complex) 0) {
+							// Check if trigger is coincident, if so go to next pad, if not, create new trigger without snr threshold
+							// Only search data in coincident window around original trigger
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 static GstFlowReturn process(GSTLALItacac *itacac) {
@@ -769,7 +969,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 	// All of the sinkpads should have the same number of samples, so we'll just check the first one FIXME this is probably not true
 	// FIXME Currently assumes every pad has the same n
 	itacacpad = GSTLAL_ITACAC_PAD(element->sinkpads->data);
-	if(gst_audioadapter_available_samples( itacacpad->adapter ) <= itacacpad->n + 2*itacacpad->maxdata->pad && !itacac->EOS)
+	if(gst_audioadapter_available_samples( itacacpad->adapter ) <= itacacpad->n + 2*itacacpad->maxdata_list->data->pad && !itacac->EOS)
 		return result;
 
 
@@ -800,8 +1000,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			}
 			// Check if we have enough nongap samples to compute chisq for a potential trigger, and if not, check if we should flush the samples or 
 			// if theres a possibility we could get more nongapsamples in the future
-			else if(nongapsamps <= 2 * itacacpad->maxdata->pad) {
-				if(samples_left_in_window >= itacacpad->maxdata->pad) {
+			else if(nongapsamps <= 2 * itacacpad->maxdata_list->data->pad) {
+				if(samples_left_in_window >= itacacpad->maxdata_list->data->pad) {
 					// We are guarenteed to have at least one sample more than a pad worth of samples past the end of the 
 					// trigger window, thus we know there must be a gap sample after these, and can ditch them, though we 
 					// need to make sure we aren't flushing any samples from the next trigger window
@@ -815,7 +1015,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					if(!itacacpad->last_gap && itacacpad->adjust_window == 0 && samples_left_in_window == itacacpad->n) {
 						// We are at the beginning of the window, and did not just come off a gap, thus the first pad 
 						// worth of samples we flushed came from the previous window
-						samples_left_in_window -= outsamps - itacacpad->maxdata->pad;
+						samples_left_in_window -= outsamps - itacacpad->maxdata_list->data->pad;
 					} else 
 						samples_left_in_window -= outsamps - itacacpad->adjust_window;
 
@@ -841,31 +1041,31 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				}
 			}
 			// Not enough samples left in the window to produce a trigger or possibly even fill up a pad for a trigger in the next window
-			else if(samples_left_in_window <= itacacpad->maxdata->pad) {
+			else if(samples_left_in_window <= itacacpad->maxdata_list->data->pad) {
 				// Need to just zero out samples_left_in_window and set itacacpad->adjust_window for next iteration
-				if(samples_left_in_window < itacacpad->maxdata->pad)
+				if(samples_left_in_window < itacacpad->maxdata_list->data->pad)
 					itacacpad->adjust_window = samples_left_in_window;
 
 				samples_left_in_window = 0;
 				itacacpad->last_gap = FALSE;
 			}
-			// Previous window had fewer than maxdata->pad samples, which needs to be accounted for when generating a trigger and flushing samples.
+			// Previous window had fewer than maxdata_list->data->pad samples, which needs to be accounted for when generating a trigger and flushing samples.
 			// This conditional will only ever return TRUE at the beginning of a window since itacacpad->adjust_window is only set to nonzero values
 			// at the end of a window
 			else if(itacacpad->adjust_window > 0) {
 				// This should only ever happen at the beginning of a window, so we use itacacpad->n instead of samples_left_in_window for conditionals
 				g_assert(samples_left_in_window == itacacpad->n);
 				g_assert(itacacpad->last_gap == FALSE);
-				copysamps = nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad ? itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad : nongapsamps;
-				if(nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad) {
+				copysamps = nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata_list->data->pad ? itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata_list->data->pad : nongapsamps;
+				if(nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata_list->data->pad) {
 					// We have enough nongaps to cover this entire trigger window and a pad worth of samples in the next trigger window
 					// We want to copy all of the samples up to a pad past the end of the window, and we want to flush 
 					// all of the samples up until a pad worth of samples before the end of the window (leaving samples for a pad in the next window)
 					// We want the peak finding length to be the length from the first sample after a pad worth of samples to the last sample in the window.
-					// copysamps = itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad
-					// outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad
-					// peak_finding_length = itacacpad->n - itacacpad->maxdata->pad + itacacpad->adjust_window = outsamps
-					outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad;
+					// copysamps = itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata_list->data->pad
+					// outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata_list->data->pad
+					// peak_finding_length = itacacpad->n - itacacpad->maxdata_list->data->pad + itacacpad->adjust_window = outsamps
+					outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata_list->data->pad;
 					generate_trigger(itacac, itacacpad, copysamps, outsamps, 0, triggers);
 					itacacpad->last_gap = FALSE;
 				} else if(nongapsamps >= itacacpad->n + itacacpad->adjust_window) {
@@ -875,10 +1075,10 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// we want the peak finding length to be from the first sample after a pad worth of samples to the last sample that preceeds a pad worth of samples
 					// copysamps = nongapsamps
 					// outsamps = itacacpad->n + itacacpad->adjust_window
-					// peak_finding_length = itacacpad->n + itacacpad->adjust_window - 2 * itacacpad->maxdata->pad = outsamps - 2 * itacacpad->maxdata->pad
+					// peak_finding_length = itacacpad->n + itacacpad->adjust_window - 2 * itacacpad->maxdata_list->data->pad = outsamps - 2 * itacacpad->maxdata_list->data->pad
 					g_assert(availablesamps > nongapsamps);
 					outsamps = itacacpad->n + itacacpad->adjust_window;
-					generate_trigger(itacac, itacacpad, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, triggers);
+					generate_trigger(itacac, itacacpad, copysamps, outsamps - 2 * itacacpad->maxdata_list->data->pad, 0, triggers);
 					itacacpad->last_gap = TRUE;
 				} else {
 					// There's a gap in the middle of this window or we've hit EOS
@@ -886,10 +1086,10 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// We want the peak finding length to be the length from the first sample
 					// after a pad worth of samples to the last sample that preceeds a pad worth of samples
 					// copysamps = outsamps = nongapsamps
-					// peak_finding_length = nongapsamps - 2*itacacpad->maxdata->pad
+					// peak_finding_length = nongapsamps - 2*itacacpad->maxdata_list->data->pad
 					g_assert(availablesamps > nongapsamps || itacac->EOS);
 					outsamps = copysamps = nongapsamps;
-					generate_trigger(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, triggers);
+					generate_trigger(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata_list->data->pad, 0, triggers);
 					//itacacpad->last_gap = TRUE;
 				}
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
@@ -918,8 +1118,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// Want to flush up to a pad worth of samples before the next window
 					// Want peak finding length of samples_left_in_window
 					// samples_left_in_window will be zero after this
-					if(nongapsamps >= samples_left_in_window + 2*itacacpad->maxdata->pad) {
-						copysamps = samples_left_in_window + 2*itacacpad->maxdata->pad;
+					if(nongapsamps >= samples_left_in_window + 2*itacacpad->maxdata_list->data->pad) {
+						copysamps = samples_left_in_window + 2*itacacpad->maxdata_list->data->pad;
 						outsamps = samples_left_in_window;
 						generate_trigger(itacac, itacacpad, copysamps, outsamps, itacacpad->n - samples_left_in_window, triggers);
 						samples_left_in_window = 0;
@@ -931,11 +1131,11 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// We want outsamps to go to the window boundary
 					// The peak findiong length will be nongaps - 2*pad
 					// samples_left_in_window will be zero after this
-					else if(nongapsamps >= samples_left_in_window + itacacpad->maxdata->pad) {
+					else if(nongapsamps >= samples_left_in_window + itacacpad->maxdata_list->data->pad) {
 						g_assert(availablesamps > nongapsamps || itacac->EOS);
 						copysamps = nongapsamps;
-						outsamps = samples_left_in_window + itacacpad->maxdata->pad;
-						generate_trigger(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, triggers);
+						outsamps = samples_left_in_window + itacacpad->maxdata_list->data->pad;
+						generate_trigger(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata_list->data->pad, itacacpad->n - samples_left_in_window, triggers);
 						samples_left_in_window = 0;
 						itacacpad->last_gap = TRUE;
 					}
@@ -946,8 +1146,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// Note that nothing changes if nongaps < samples_left_in_window
 					else {
 						copysamps = outsamps = nongapsamps;
-						generate_trigger(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, triggers);
-						samples_left_in_window -= nongapsamps - itacacpad->maxdata->pad;
+						generate_trigger(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata_list->data->pad, itacacpad->n - samples_left_in_window, triggers);
+						samples_left_in_window -= nongapsamps - itacacpad->maxdata_list->data->pad;
 						//itacacpad->last_gap = TRUE;
 					}
 				} else {
@@ -958,9 +1158,9 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// want to flush all samples up to pad before the window boundary
 					// want peak finding length to go from a pad into the nongapsamps to the end of the window, so samples_left_in_window - pad
 					// samples_left_in_window will be zero after this
-					if(nongapsamps >= samples_left_in_window + itacacpad->maxdata->pad) {
-						copysamps = samples_left_in_window + itacacpad->maxdata->pad;
-						outsamps = samples_left_in_window - itacacpad->maxdata->pad;
+					if(nongapsamps >= samples_left_in_window + itacacpad->maxdata_list->data->pad) {
+						copysamps = samples_left_in_window + itacacpad->maxdata_list->data->pad;
+						outsamps = samples_left_in_window - itacacpad->maxdata_list->data->pad;
 						generate_trigger(itacac, itacacpad, copysamps, outsamps, itacacpad->n - samples_left_in_window, triggers);
 						samples_left_in_window = 0;
 						itacacpad->last_gap = FALSE;
@@ -975,7 +1175,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 						g_assert(availablesamps > nongapsamps || itacac->EOS);
 						copysamps = nongapsamps;
 						outsamps = samples_left_in_window;
-						generate_trigger(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, triggers);
+						generate_trigger(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata_list->data->pad, itacacpad->n - samples_left_in_window, triggers);
 						samples_left_in_window = 0;
 						itacacpad->last_gap = TRUE;
 					}
@@ -986,7 +1186,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// samples_left_in_window -= nongaps
 					else {
 						copysamps = outsamps = nongapsamps;
-						generate_trigger(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, triggers);
+						generate_trigger(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata_list->data->pad, itacacpad->n - samples_left_in_window, triggers);
 						samples_left_in_window -= nongapsamps;
 						itacacpad->last_gap = FALSE;
 					}
@@ -1000,15 +1200,15 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		// FIXME Assumes n is the same for all detectors
 		if(triggers && itacacpad->autocorrelation_matrix) {
 			if(!srcbuf) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata_list->data, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2_list->data, itacacpad->snr_matrix_view_list->data, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view));
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata_list->data, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2_list->data, itacacpad->snr_matrix_view_list->data);
 			}
 		} else if(triggers) {
 			if(!srcbuf)
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata_list->data, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2_list->data, NULL, itacac->difftime);
 			else
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata_list->data, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2_list->data, NULL);
 		}
 
 	}
@@ -1035,11 +1235,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			result = GST_FLOW_EOS;
 	}
 
-	
-
 	return result;
-
-	
 }
 
 static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
@@ -1051,9 +1247,9 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 	GstFlowReturn result;
 
 
-	// Make sure the pads caps are compatible with each other if we're just starting
+	// Calculate the coincidence windows and make sure the pads caps are compatible with each other if we're just starting
 	if(itacac->rate == 0)
-		check_sinkpad_compatibility(itacac);
+		final_setup(itacac);
 
 	if(itacac->EOS) {
 		result = process(itacac);
@@ -1139,6 +1335,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 static void gstlal_itacac_pad_dispose(GObject *object)
 {
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(object);
+	GList *glist_element;
 
 	gst_audioadapter_clear(itacacpad->adapter);
 	g_object_unref(itacacpad->adapter);
@@ -1156,14 +1353,10 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 		itacacpad->channel_name = NULL;
 	}
 
-	if(itacacpad->maxdata) {
-		gstlal_peak_state_free(itacacpad->maxdata);
-		itacacpad->maxdata = NULL;
-	}
-
-	if(itacacpad->tmp_maxdata) {
-		gstlal_peak_state_free(itacacpad->tmp_maxdata);
-		itacacpad->tmp_maxdata = NULL;
+	if(itacacpad->maxdata_list) {
+		for(glist = chi2_list; glist != NULL; glist = glist->next)
+			gstlal_peak_state_free(glist->data);
+		g_list_free(itacacpad->maxdata_list);
 	}
 
 	if(itacacpad->data) {
@@ -1171,16 +1364,14 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 		itacacpad->data = NULL;
 	}
 
-	if(itacacpad->snr_mat) {
-		//memset(itacacpad->snr_mat, 0, sizeof(*itacacpad->snr_mat)); <-- Remove after confirming its not needed
-		free(itacacpad->snr_mat);
-		itacacpad->snr_mat = NULL;
+	if(itacacpad->snr_mat_list) {
+		for(glist = chi2_list; glist != NULL; glist = glist->next)
+			free(glist->data);
+		g_list_free(itacacpad->snr_mat_list);
 	}
 
-	if(itacacpad->tmp_snr_mat) {
-		free(itacacpad->tmp_snr_mat);
-		itacacpad->tmp_snr_mat = NULL;
-	}
+	if(itacacpad->snr_matrix_view_list)
+		g_list_free(itacacpad->snr_matrix_view_list);
 
 	if(itacacpad->autocorrelation_matrix) {
 		free(itacacpad->autocorrelation_matrix);
@@ -1197,19 +1388,23 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 		itacacpad->autocorrelation_norm = NULL;
 	}
 
-	if(itacacpad->chi2) {
-		free(itacacpad->chi2);
-		itacacpad->chi2 = NULL;
-	}
-
-	if(itacacpad->tmp_chi2) {
-		free(itacacpad->tmp_chi2);
-		itacacpad->tmp_chi2 = NULL;
+	if(itacacpad->chi2_list) {
+		for(glist = chi2_list; glist != NULL; glist = glist->next)
+			free(glist->data);
+		g_list_free(itacacpad->chi2_list);
 	}
 
 	G_OBJECT_CLASS(gstlal_itacac_pad_parent_class)->dispose(object);
 }
 
+static void gstlal_itacac_finalize(GObject *object)
+{
+	GSTLALItacac *itacac = GSTLAL_ITACAC(object);
+
+	g_hash_table_destroy(itacac->coinc_window_hashtable);
+
+	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
+}
 
 /*
  * Class init function.  See
@@ -1340,10 +1535,9 @@ static void gstlal_itacac_pad_class_init(GSTLALItacacPadClass *klass)
 
 static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 {
+	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstAggregatorClass *aggregator_class = GST_AGGREGATOR_CLASS(klass); 
-	// Right now no memory is allocated in the class instance structure for GSTLALItacac, so we dont need a custom finalize function
-	// If anything is added to the class structure, we will need a custom finalize function that chains up to the Aggregator's finalize function
 
 	gst_element_class_set_metadata(
 		element_class,
@@ -1359,6 +1553,10 @@ static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 
 	aggregator_class->aggregate = GST_DEBUG_FUNCPTR(aggregate);
 	aggregator_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(gstlal_itacac_set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(gstlal_itacac_get_property);
+	gobject_class->finalize = GST_DEBUG_FUNCPTR(gstlal_itacac_finalize);
+
 
 	//
 	// static pad templates
@@ -1379,6 +1577,19 @@ static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 	//
 	// Properties
 	//
+
+        g_object_class_install_property(
+		gobject_class,
+		ARG_COINC_THRESH,
+		g_param_spec_double(
+			"coinc-thresh",
+			"Coincidence Threshold",
+			"Time, in milliseconds, added to light-travel time between detectors to define the coincidence window.",
+			0, G_MAXDOUBLE, DEFAULT_COINC_THRESH,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+
 }
 
 
@@ -1400,8 +1611,7 @@ static void gstlal_itacac_pad_init(GSTLALItacacPad *itacacpad)
 	itacacpad->instrument = NULL;
 	itacacpad->channel_name = NULL;
 	itacacpad->difftime = 0;
-	itacacpad->maxdata = NULL;
-	itacacpad->tmp_maxdata = NULL;
+	itacacpad->maxdata_list = NULL;
 	itacacpad->snr_thresh = 0;
 	g_mutex_init(&itacacpad->bank_lock);
 
@@ -1423,9 +1633,9 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 {
 	itacac->rate = 0;
 	itacac->channels = 0;
-	itacac->n_ifos = 0; 
 
 	itacac->difftime = 0;
+	itacac->coinc_window_hashtable = g_hash_table_new(g_str_hash, g_str_equal);
 	
 	reset_time_and_offset(itacac);
 

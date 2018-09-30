@@ -83,25 +83,21 @@ typedef struct {
 	void *chi2;
 	void *tmp_chi2;
 	void *chi2_array[2];
+	GList *chi2_list;
 	char *bank_filename;
 	char *instrument;
 	char *channel_name;
 	GstClockTimeDiff difftime;
 	GMutex bank_lock;
 	guint n;
-	struct gstlal_peak_state *maxdata;
-	struct gstlal_peak_state *tmp_maxdata;
-	struct gstlal_peak_state *maxdata_array[2];
+	GList *maxdata_list;
 	gstlal_peak_type_specifier peak_type;
 	gdouble snr_thresh;
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
-	void *snr_mat;
-	void *tmp_snr_mat;
-	void *snr_mat_array[2];
-	gsl_matrix_complex_float_view snr_matrix_view;
-	gsl_matrix_complex_float_view tmp_snr_matrix_view;
+	GList *snr_mat_list;
+	GList *snr_matrix_view_list;
 	SnglInspiralTable *bankarray;
 	gboolean last_gap;
 
@@ -120,12 +116,14 @@ typedef struct {
 	// itacac's members
 	gint rate;
 	guint channels;
-	guint n_ifos; // write static function to pull nsinkpads from element
 	gstlal_peak_type_specifier peak_type;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	GstClockTimeDiff difftime;
 	gboolean EOS;
+	gdouble coinc_thresh;
+	GHashTable *coinc_window_hashtable;
+	gchar ifo_pair_str[5];
 	//guint samples_in_last_short_window;
 
 } GSTLALItacac;
