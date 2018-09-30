@@ -187,7 +187,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		return self
 
 	def copy(self):
-		new = type(self)(instruments = self.denominator.instruments, min_instruments = self.denominator.min_instruments, delta_t = self.denominator.delta_t)
+		new = type(self)(template_ids = self.denominator.template_ids, instruments = self.denominator.instruments, min_instruments = self.denominator.min_instruments, delta_t = self.denominator.delta_t)
 		new.numerator = self.numerator.copy()
 		new.denominator = self.denominator.copy()
 		new.zerolag = self.zerolag.copy()
