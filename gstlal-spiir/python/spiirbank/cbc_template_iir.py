@@ -1015,6 +1015,8 @@ class Bank(object):
                     a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), **optimizer_options)
                     b0 *= numpy.sqrt(2)
 
+            u_rev_pad = gen_spiir_response(len(h_pad), a1, b0, delay)
+
             #
             # sigmasq = 2 \sum_{k=0}^{N-1} |\tilde{h}_{k}|^2 / S_{k} \Delta f
             #

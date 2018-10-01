@@ -54,6 +54,7 @@ import json
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+parser.add_option("--snr-cut", type = "float", default = 0.998, help = "Set the SNR contribution kept for filter placement (default = 0.998).")
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.3, help = "Fractional amount to pad time slices.")
 parser.add_option("--autocorrelation-length", metavar = "len", type = "int", default = 201, help = "Autocorrelation length for chisq.")
@@ -103,6 +104,7 @@ bank.build_from_tmpltbank(
 		verbose=options.verbose, 
 		padding=options.padding, 
 		flower=options.flow, 
+		snr_cut=options.snr_cut,
 		downsample = options.downsample, 
 		optimizer_options = json.loads(options.optimizer_options),
 		waveform_domain = options.waveform_domain, 
