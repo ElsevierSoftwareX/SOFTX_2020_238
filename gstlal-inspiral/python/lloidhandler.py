@@ -1037,7 +1037,8 @@ class Handler(simplehandler.Handler):
 			# so that the "how many instruments were on test"
 			# is aware of this buffer.
 			if not buf_is_gap:
-				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len(events))
+				snr_min = self.rankingstat.snr_min
+				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len([event for event in events if event.snr >= snr_min]))
 
 			# extract times when instruments were producing
 			# SNR.  used to define "on instruments" for coinc

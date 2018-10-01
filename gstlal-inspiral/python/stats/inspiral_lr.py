@@ -142,6 +142,27 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		# that they are for the correct templates.
 		if event.template_id not in self.template_ids:
 			raise ValueError("event from wrong template")
+		# ignore events below threshold.  the trigger generation
+		# mechanism now produces sub-threshold triggers to
+		# facilitiate the construction of sky maps in the online
+		# search.  it's therefore now our responsibility to exclude
+		# them from the PDFs in the ranking statistic here.
+		#
+		# FIXME:  this creates an inconsistency.  we exclude events
+		# from the PDFs, but we don't exclude them from the
+		# evaluation of those PDFs in the .__call__() method,
+		# instead we'll report that the candidate is impossible
+		# because it contains a trigger in a "forbidden" region of
+		# the parameter space (forbidden because we've ensured
+		# nothing populates those bins).  the .__call__() methods
+		# should probably be modified to exclude triggers with
+		# sub-threshold SNRs just as we've excluded them here, but
+		# I'm not yet sure.  instead, for the time being, we
+		# resolve the problem by excluding sub-threshold triggers
+		# from the "-from-triggers" method in far.py.  there is a
+		# FIXME related to this same issue in that code.
+		if event.snr < self.snr_min:
+			return
 		self.densities["%s_snr_chi" % event.ifo].count[event.snr, event.chisq / event.snr**2.] += 1.0
 
 	def copy(self):

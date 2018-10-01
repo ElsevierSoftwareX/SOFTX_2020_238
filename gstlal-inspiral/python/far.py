@@ -200,6 +200,21 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 	def ln_lr_from_triggers(self, events, offsetvector):
 		#
+		# exclude triggers that are below the SNR threshold
+		#
+		# FIXME:  this alters the mapping from triggers to ln L
+		# density parameters.  it does not alter the definition of
+		# ln L for candidates with SNRs below the threshold.  that
+		# would perhaps be a more sound approach but would have to
+		# be done more carefully, to ensure the behaviour it
+		# introduces maintains the numerator and denominator as
+		# proper probability densities.  think about this some
+		# more.
+
+		events = tuple(event for event in events if event.snr > self.snr_min)
+		assert len(events) >= self.min_instruments, "coincidence engine failed to respect minimum instrument count requirement for candidates:  found candidate with %d < %d instruments" % (len(events), self.min_instruments)
+
+		#
 		# pick a random, but reproducible, trigger to provide a
 		# reference timestamp for, e.g, the \Delta t's between
 		# instruments and the time spanned by the candidate.
