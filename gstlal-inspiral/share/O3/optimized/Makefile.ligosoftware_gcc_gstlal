@@ -1,0 +1,508 @@
+SHELL := /bin/bash # Use bash syntax
+#
+# To run: make env.sh, then source the resulting environment file and run: make
+#
+# example command:
+# make env.sh -f Makefile.ligosoftware_gcc_gstlal
+# source env.sh
+# time make gstlal -f Makefile.ligosoftware_gcc_gstlal 1> make.out 2> make.err
+#
+# If you would like to rebuild only part of the software stack, such as lalsuite
+# or gstlal up, but it starts from the beginning if using the above command,
+# then use the touch (-t) option on the previous package.
+#
+# To rebuild gstlal:
+# make glue -f Makefile.ligosoftware_gcc_gstlal -t
+# make gstlal -f Makefile.ligosoftware_gcc_gstlal
+
+# Determine cluster
+CLUSTER:=$(shell hostname -d)
+
+# Set directories and paths
+SRC_DIR:=${PWD}/src
+TAR_DIR:=tarball
+LOGS_DIR:=logs
+PATCH_DIR:=${PWD}/patches
+INSTALL_DIR:=${LAL_PATH}
+
+GSTLAL_REPO:=${PWD}/git/gstlal
+GLUE_REPO:=${PWD}/git/glue
+LALSUITE_REPO:=${PWD}/git/lalsuite
+
+# Set the dependency directory:
+DEPS_DIR:=/path/to/deps/dir
+
+# Set to build from git (0 = tarball, 1 = git)
+GSTLAL_GIT=1
+GLUE_GIT=1
+LALSUITE_GIT=1
+
+# Define which branch from git to build. Defaults to 'master', but the user can 
+# set the variable below. The git clone and compilation should fail if this is set to
+# an unknown branch.
+#
+GSTLAL_GIT_BRANCH="master"
+GLUE_GIT_BRANCH="master"
+LALSUITE_GIT_BRANCH="master"
+
+# Set package release versions
+GSTLALINSPIRAL=gstlal-inspiral-1.4.2
+GSTLALCALIBRATION=gstlal-calibration-1.1.9
+GSTLALBURST=gstlal-burst-0.0.5
+GSTLALUGLY=gstlal-ugly-1.5.1
+GSTLAL=gstlal-1.3.0
+GLUE=lscsoft-glue-1.60.0
+LALAPPS=lalapps-6.21.0
+LALINFERENCE=lalinference-1.9.2
+LALPULSAR=lalpulsar-1.16.0
+LALINSPIRAL=lalinspiral-1.7.7
+LALBURST=lalburst-1.4.4
+LALSIMULATION=lalsimulation-1.7.3
+LALMETAIO=lalmetaio-1.3.1
+LALFRAME=lalframe-1.4.3
+LAL=lal-6.18.0
+
+# Specify target/dependency files
+GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
+GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
+GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
+GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
+GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
+GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
+LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
+LALINFER_TARGET=$(INSTALL_DIR)/lib/liblalinference.so
+LALPULSAR_TARGET=$(INSTALL_DIR)/lib/liblalpulsar.so
+LALINSPIRAL_TARGET=$(INSTALL_DIR)/lib/liblalinspiral.so
+LALBURST_TARGET=$(INSTALL_DIR)/lib/liblalburst.so
+LALSIM_TARGET=$(INSTALL_DIR)/lib/liblalsimulation.so
+LALMETAIO_TARGET=$(INSTALL_DIR)/lib/liblalmetaio.so
+LALFRAME_TARGET=$(INSTALL_DIR)/lib/liblalframe.so
+LAL_TARGET=$(INSTALL_DIR)/lib/liblal.so
+
+# tarballs
+GSTLALINSPIRAL_TAR_TARGET=$(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz
+GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
+GSTLALBURST_TAR_TARGET=$(TAR_DIR)/$(GSTLALBURST).tar.gz
+GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
+GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
+GLUE_TAR_TARGET=$(TAR_DIR)/$(GLUE).tar.gz
+LALAPPS_TAR_TARGET=$(TAR_DIR)/$(LALAPPS).tar.xz
+LALINFER_TAR_TARGET=$(TAR_DIR)/$(LALINFERENCE).tar.xz
+LALPULSAR_TAR_TARGET=$(TAR_DIR)/$(LALPULSAR).tar.xz
+LALINSPIRAL_TAR_TARGET=$(TAR_DIR)/$(LALINSPIRAL).tar.xz
+LALBURST_TAR_TARGET=$(TAR_DIR)/$(LALBURST).tar.xz
+LALSIM_TAR_TARGET=$(TAR_DIR)/$(LALSIMULATION).tar.xz
+LALMETAIO_TAR_TARGET=$(TAR_DIR)/$(LALMETAIO).tar.xz
+LALFRAME_TAR_TARGET=$(TAR_DIR)/$(LALFRAME).tar.xz
+LAL_TAR_TARGET=$(TAR_DIR)/$(LAL).tar.xz
+
+# git repos
+GSTLAL_GIT_TARGET=$(GSTLAL_REPO)/TODO.md
+GLUE_GIT_TARGET=$(GLUE_REPO)/README
+LALSUITE_GIT_TARGET=$(LALSUITE_REPO)/lal/README
+
+# Specify how many processors to run on
+#CORES:=$(shell echo `nproc --all`"-2" | bc -l)
+CORES:=8
+
+# Escape code
+esc=`echo -en "\033"`
+
+# Set colors
+RED="${esc}[0;31m"
+GREEN="${esc}[0;32m"
+YELLOW="${esc}[0;33m"
+BLUE="${esc}[0;34m"
+WHITE="${esc}[m"
+
+# icc compiler locations
+ICC_CIT:=/ldcg/intel/2018u3/bin/compilervars.sh
+ICC_LHO:=/ldcg/intel/2018u3/bin/compilervars.sh
+ICC_LLO:=/ldcg/intel/2018u3/bin/compilervars.sh
+ICC_UWM:=/opt/intel/2018u3/bin/compilervars.sh
+ICC_PSU:=/ligo/apps/intel/2017u4/bin/compilervars.sh
+
+all : $(GSTINSPIRAL_TARGET) $(LOGS_DIR)/gstlal.txt
+
+#####################
+# Environment setup #
+#####################
+
+env.sh :
+	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
+	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
+	@echo 'source ${DEPS_DIR}/deps_env.sh' >> $@
+	@echo 'LAL_PATH=${PWD}/opt' >> $@
+	@echo 'export CFLAGS="$${CFLAGS} -I$${LAL_PATH}/include"' >> $@
+	@echo 'export LD_LIBRARY_PATH=$${LAL_PATH}/lib:$${LD_LIBRARY_PATH}' >> $@
+	@echo 'export LIBRARY_PATH=$${LAL_PATH}/lib:$${LIBRARY_PATH}' >> $@
+	@echo '# Force explicit linking of optimized FFTW libraries:' >> $@
+	@echo 'LDFLAGS="$${LDFLAGS} -L${PWD}/opt/lib "' >> $@
+	@echo '# These are environment variables that do get exported' >> $@
+	@echo 'PATH=$${LAL_PATH}/bin:$${PATH}' >> $@
+	@echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages:$${PYTHONPATH}' >> $@
+	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
+	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0:$${GST_PLUGIN_PATH}' >> $@
+	@echo 'GST_REGISTRY_1_0=$${LAL_PATH}/registry.bin' >> $@
+	@echo 'GI_TYPELIB_PATH=$${LAL_PATH}/lib/girepository-1.0:$${GI_TYPELIB_PATH}' >> $@
+	@echo 'KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"' >> $@
+	@echo 'KAFKA_HEAP_OPTS="-Xms8G -Xmx8G"' >> $@
+	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH KAFKA_PATH LAL_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0 GI_TYPELIB_PATH KAKFA_JVM_PERFORMANCE_OPTS KAFKA_HEAP_OPTS' >> $@
+
+
+#####################
+# Check time stamps #
+#####################
+
+check :
+	@if [ -f logs/all.txt ] ; then rm logs/all.txt ; fi ;
+	@cat logs/* | uniq > logs/all.txt
+	@if [ -f logs/gstlal.txt ] ; then ls logs/gstlal.txt >> logs/all.txt ; fi ;
+	@ls -ltrh $$(cat logs/all.txt)
+
+###########
+# Install #
+###########
+
+# gstlal (all)
+gstlal : logs/gstlal.txt
+
+logs/gstlal.txt : $(LOGS_DIR)/glue.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALBURST_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+# gstlal-inspiral
+$(GSTINSPIRAL_TARGET) : $(GSTLALCALIB_TARGET)
+	@echo $(GREEN)gstlal-inspiral$(WHITE) 1>&2
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzkf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# gstlal-calibration
+$(GSTLALCALIB_TARGET) : $(GSTLALBURST_TARGET)
+	@echo $(GREEN)gstlal-calibration$(WHITE) 1>&2
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-calibration && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-calibration && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-calibration && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzkf $(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALCALIBRATION) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# gstlal-burst
+$(GSTLALBURST_TARGET) : $(GSTLALUGLY_TARGET)
+	@echo $(GREEN)gstlal-burst$(WHITE) 1>&2
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-burst && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-burst && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-burst && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzkf $(TAR_DIR)/$(GSTLALBURST).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALBURST) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALBURST) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# gstlal-ugly
+$(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
+	@echo $(GREEN)gstlal-ugly$(WHITE) 1>&2
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal-ugly && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzkf $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALUGLY) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALUGLY) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# gstlal
+$(GSTLAL_TARGET) : $(GLUE_TARGET)
+	@echo $(GREEN)gstlal$(WHITE) 1>&2
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh ; \
+		cd $(GSTLAL_REPO)/gstlal && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xzkf $(TAR_DIR)/$(GSTLAL).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLAL) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# glue
+glue : logs/glue.txt
+
+logs/glue.txt : $(LOGS_DIR)/lalsuite.txt $(GLUE_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(GLUE_TARGET) : $(LALAPPS_TARGET)
+	@echo $(GREEN)glue$(WHITE) 1>&2
+	if [ "${GLUE_GIT}" = "1" ]; then \
+		cd $(GLUE_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(GLUE).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/lscsoft-$(GLUE) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+	fi ;
+
+# lalsuite
+lalsuite : logs/lalsuite.txt
+
+logs/lalsuite.txt : $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALDETCHAR_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALSTOCH_TARGET) $(LALAPPS_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+# lalapps
+# FIXME --enable-gcc-flags set to no on lalapps configure as work around to avoid warnings stopping install process
+# FIXME : Commenting out the explicit linking to gslcblas
+# Not sure what causes the warnings
+$(LALAPPS_TARGET) : $(LALINFER_TARGET)
+	@echo $(GREEN)lalapps$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalapps && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalapps && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalapps && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALAPPS).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALAPPS) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALAPPS) && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALAPPS) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalinference
+$(LALINFER_TARGET) : $(LALPULSAR_TARGET)
+	@echo $(GREEN)lalinference$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalinference && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalinference && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalinference && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALINFERENCE).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR)  ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalpulsar
+$(LALPULSAR_TARGET) : $(LALINSPIRAL_TARGET)
+	@echo $(GREEN)lalpulsar$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalpulsar && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalpulsar && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalpulsar && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALPULSAR).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalinspiral
+$(LALINSPIRAL_TARGET) : $(LALBURST_TARGET)
+	@echo $(GREEN)lalinspiral$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalinspiral && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalinspiral && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalinspiral && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalinspiral && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALINSPIRAL).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalburst
+$(LALBURST_TARGET) : $(LALSIM_TARGET)
+	@echo $(GREEN)lalburst$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalburst && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalburst && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalburst && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalburst && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALBURST).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALBURST) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALBURST) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALBURST) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalsimulation
+$(LALSIM_TARGET) : $(LALMETAIO_TARGET)
+	@echo $(GREEN)lalsimulation$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalsimulation && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalsimulation && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalsimulation && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalsimulation && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalmetaio
+$(LALMETAIO_TARGET) : $(LALFRAME_TARGET)
+	@echo $(GREEN)lalmetaio$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalmetaio && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalmetaio && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalmetaio && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalmetaio && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALMETAIO).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lalframe
+$(LALFRAME_TARGET) : $(LAL_TARGET)
+	@echo $(GREEN)lalframe$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lalframe && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lalframe && ./00boot ; \
+		cd $(LALSUITE_REPO)/lalframe && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalframe && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LALFRAME).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LALFRAME) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LALFRAME) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALFRAME) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+# lal
+$(LAL_TARGET) : $(LOGS_DIR)/patch.txt
+	@echo $(GREEN)lal$(WHITE) 1>&2
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
+		cd $(LALSUITE_REPO)/lal && ./00boot ; \
+		cd $(LALSUITE_REPO)/lal && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lal && make -j$(CORES) && make install -j$(CORES) ; \
+	else \
+		tar -xf $(TAR_DIR)/$(LAL).tar.xz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
+		cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES) ; \
+	fi ;
+
+
+#########################
+# Download the software #
+#########################
+
+# patches
+patch : logs/patch.txt
+
+logs/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_DIR)/gst1.14.patch
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(PATCH_DIR)/gst1.14.patch : $(LOGS_DIR)/tar.txt
+	@echo $(GREEN)patches$(WHITE) 1>&2
+	cp $(GSTLAL_REPO)/gstlal-inspiral/share/O3/optimized/gst1.14.patch $(PATCH_DIR)
+	cd $(GSTLAL_REPO) && patch -p1 < $(PATCH_DIR)/gst1.14.patch
+
+#tarballs
+logs/tar.txt : $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALBURST_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc
+
+$(GSTLALCALIB_TAR_TARGET) : $(GSTLALBURST_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSTLALBURST_TAR_TARGET) : $(GSTLAUGLYL_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALBURST).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	
+$(GSTLALUGLY_TAR_TARGET) : $(GSTLAL_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSTLAL_TAR_TARGET) : $(GLUE_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(GLUE_TAR_TARGET) : $(LALAPPS_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALAPPS_TAR_TARGET) : $(LALINFER_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALINFER_TAR_TARGET) : $(LALPULSAR_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALPULSAR_TAR_TARGET) : $(LALINSPIRAL_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALINSPIRAL_TAR_TARGET) : $(LALBURST_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALBURST_TAR_TARGET) : $(LALSIM_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALSIM_TAR_TARGET) : $(LALMETAIO_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALMETAIO_TAR_TARGET) : $(LALFRAME_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LALFRAME_TAR_TARGET) : $(LAL_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(LAL_TAR_TARGET) : $(LOGS_DIR)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+# git repos
+$(LOGS_DIR) :
+	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR)
+	if [ "${LALSUITE_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Lalsuite git repo exists" ; \
+		else \
+			mkdir -p $(LALSUITE_REPO) ; \
+			git clone -b $(LALSUITE_GIT_BRANCH) https://git.ligo.org/lscsoft/lalsuite.git $(LALSUITE_REPO) ; \
+		fi ; \
+	fi ;
+	if [ "${GLUE_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Glue git repo exists" ; \
+		else \
+			mkdir -p $(GLUE_REPO) ; \
+			git clone -b $(GLUE_GIT_BRANCH) https://git.ligo.org/lscsoft/glue.git $(GLUE_REPO) ; \
+		fi ; \
+	fi ;
+	if [ "${GSTLAL_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Gstlal git repo exists" ; \
+		else \
+			mkdir -p $(GSTLAL_REPO) ; \
+			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
+		fi ; \
+	fi ;
+	mkdir -p $(LOGS_DIR)
+
+############
+# Clean up #
+############
+
+clean-all :
+	rm -rvf $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(LOGS_DIR)
+	rm -rvf opt git
+	rm -rf *.txt
+
+clean-install :
+	rm -rf opt/* logs/* src/*
+
+clean-gstlal :
+	rm -rf logs/gstlal.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTLALINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
+
+clean-lalsuite :
+	rm -rf logs/lalsuite.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET)
