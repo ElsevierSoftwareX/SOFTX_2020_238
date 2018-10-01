@@ -76,7 +76,7 @@ struct {
 		void *as_void;
 	} dataptr;
 
-	gsl_matrix *offset_trigwindowoffset_duration_matrix;
+	gsl_matrix *duration_dataoffset_trigwindowoffset_peakfindinglength_matrix;
 	void *data;
 } data_container;
 
@@ -93,21 +93,24 @@ typedef struct {
 	//void *data;
 	struct data_container *data;
 	void *chi2;
-	GList *chi2_list;
+	void *tmp_chi2;
 	char *bank_filename;
 	char *instrument;
 	char *channel_name;
 	GstClockTimeDiff difftime;
 	GMutex bank_lock;
 	guint n;
-	GList *maxdata_list;
+	struct gstlal_peak_state *maxdata;
+	struct gstlal_peak_state *tmp_maxdata;
 	gstlal_peak_type_specifier peak_type;
 	gdouble snr_thresh;
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
-	GList *snr_mat_list;
-	GList *snr_matrix_view_list;
+	void *snr_mat;
+	void *tmp_snr_mat;
+	gsl_matrix_complex_float_view snr_matrix_view;
+	gsl_matrix_complex_float_view tmp_snr_matrix_view;
 	SnglInspiralTable *bankarray;
 	gboolean last_gap;
 
