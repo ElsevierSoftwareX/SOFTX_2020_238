@@ -98,7 +98,7 @@ idq_env.sh :
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${IDQ_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${IDQ_PATH}/lib/pkgconfig:$${IDQ_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
-	@echo 'PYTHONPATH=$${IDQ_PATH}/lib/python2.7/site-packages:$${IDQ_PATH}/lib64/python2.7/site-packages' >> $@
+	@echo 'PYTHONPATH=$${IDQ_PATH}/lib/python2.7/site-packages:$${IDQ_PATH}/lib64/python2.7/site-packages:$${PYTHONPATH}' >> $@
 	@echo '' >> $@
 	@echo 'GSTLAL_FIR_WHITEN=1' >> $@
 	@echo 'KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"' >> $@
