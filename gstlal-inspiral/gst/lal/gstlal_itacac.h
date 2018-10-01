@@ -69,6 +69,17 @@ G_BEGIN_DECLS
 #define GST_IS_GSTLAL_ITACAC_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_ITACAC_TYPE))
 
+struct {
+	union {
+		float complex *as_complex;
+		double complex *as_double_complex
+		void *as_void;
+	} dataptr;
+
+	gsl_matrix *offset_trigwindowoffset_duration_matrix;
+	void *data;
+} data_container;
+
 typedef struct {
 	GstAggregatorPadClass parent_class;
 } GSTLALItacacPadClass;
@@ -79,10 +90,9 @@ typedef struct {
 	GstAudioAdapter *adapter;
 	gint rate;
 	guint channels;
-	void *data;
+	//void *data;
+	struct data_container *data;
 	void *chi2;
-	void *tmp_chi2;
-	void *chi2_array[2];
 	GList *chi2_list;
 	char *bank_filename;
 	char *instrument;
@@ -102,6 +112,7 @@ typedef struct {
 	gboolean last_gap;
 
 	guint adjust_window;
+	GList *next_in_coinc_order;
 
 } GSTLALItacacPad;
 
@@ -123,7 +134,8 @@ typedef struct {
 	gboolean EOS;
 	gdouble coinc_thresh;
 	GHashTable *coinc_window_hashtable;
-	gchar ifo_pair_str[5];
+	guint max_coinc_window_samps;
+	gchar ifo_pair[3];
 	//guint samples_in_last_short_window;
 
 } GSTLALItacac;
