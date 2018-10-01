@@ -1,0 +1,251 @@
+SHELL := /bin/bash # Use bash syntax
+#
+# To run: make env.sh, then source the resulting environment file and run: make
+#
+# example command:
+# make env.sh -f Makefile.gstlal_idq_icc
+# source env.sh
+# time make gstlal -f Makefile.gstlal_idq_icc 1> make.out 2> make.err
+#
+# If you would like to rebuild only part of the software stack, such as lalsuite
+# or gstlal up, but it starts from the beginning if using the above command,
+# then use the touch (-t) option on the previous package.
+#
+# To rebuild iDQ:
+# make kafka -f Makefile.gstlal_idq_icc -t
+# make idq -f Makefile.gstlal_idq_icc
+
+# Determine cluster
+CLUSTER:=$(shell hostname -d)
+
+# Set directories and paths
+SRC_DIR:=${PWD}/src
+TAR_DIR:=tarball
+LOGS_DIR:=logs
+PATCH_DIR:=${PWD}/patches
+INSTALL_DIR:=${IDQ_PATH}
+ifeq ($(findstring debian,$(shell cat /etc/os-release | grep ID=)),debian)
+	PYTHON_DIR:=${IDQ_PATH}/lib/python2.7/site-packages
+else
+	PYTHON_DIR:=${IDQ_PATH}/lib64/python2.7/site-packages
+endif
+
+IDQ_REPO:=${PWD}/git/iDQ
+
+# Set the dependency directory:
+DEPS_DIR:=/path/to/deps/dir
+
+# Set to build from git (0 = tarball, 1 = git)
+IDQ_GIT=1
+
+# Define which branch from git to build. Defaults to 'master', but the user can 
+# set the variable below. The git clone and compilation should fail if this is set to
+# an unknown branch.
+IDQ_GIT_BRANCH="master"
+
+# Set package release versions
+IDQ=idq-2.0.0
+KAFKA_PYTHON=0.11.5
+LIBRDKAFKA=0.11.5
+SKLEARN=scikit-learn-0.18.2
+CYTHON=Cython-0.25.2
+
+# Specify target/dependency files
+IDQ_TARGET=$(INSTALL_DIR)/bin/idq-train
+KAFKA_PYTHON_TARGET=$(PYTHON_DIR)/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg/confluent_kafka/cimpl.so
+LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
+SKLEARN_TARGET=$(PYTHON_DIR)/sklearn/_isotonic.so
+CYTHON_TARGET=$(INSTALL_DIR)/bin/cython
+
+# tarballs
+KAFKA_PYTHON_TAR_TARGET=$(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz
+LIBRDKAFKA_TAR_TARGET=$(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz
+SKLEARN_TAR_TARGET=$(TAR_DIR)/$(SKLEARN).tar.gz
+CYTHON_TAR_TARGET=$(TAR_DIR)/$(CYTHON).tar.gz
+
+# git repos
+IDQ_GIT_TARGET=$(IDQ_REPO)/README.md
+
+# Specify how many processors to run on
+#CORES:=$(shell echo `nproc --all`"-2" | bc -l)
+CORES:=8
+
+# Escape code
+esc=`echo -en "\033"`
+
+# Set colors
+RED="${esc}[0;31m"
+GREEN="${esc}[0;32m"
+YELLOW="${esc}[0;33m"
+BLUE="${esc}[0;34m"
+WHITE="${esc}[m"
+
+all : $(IDQ_TARGET) $(LOGS_DIR)/idq.txt
+
+#####################
+# Environment setup #
+#####################
+
+idq_env.sh :
+	@echo 'source ${DEPS_DIR}/env.sh' >> $@
+	@echo 'IDQ_PATH=${PWD}/opt' >> $@
+	@echo 'export GCCFLAGS="-fPIC -O3 -march=native"' >> $@
+	@echo 'export CFLAGS="$${CFLAGS} -I$${IDQ_PATH}/include"' >> $@
+	@echo 'export LD_LIBRARY_PATH=$${IDQ_PATH}/lib:$${LD_LIBRARY_PATH}' >> $@
+	@echo 'export LIBRARY_PATH=$${IDQ_PATH}/lib:$${LIBRARY_PATH}' >> $@
+	@echo 'export CC="icc"' >> $@
+	@echo 'export CXX="icpc"' >> $@
+	@echo '# These are environment variables that do get exported' >> $@
+	@echo 'PATH=$${IDQ_PATH}/bin:$${PATH}' >> $@
+	@echo 'PKG_CONFIG_PATH=$${IDQ_PATH}/lib/pkgconfig:$${IDQ_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	@echo 'PYTHONPATH=$${IDQ_PATH}/lib/python2.7/site-packages:$${IDQ_PATH}/lib64/python2.7/site-packages' >> $@
+	@echo '' >> $@
+	@echo 'GSTLAL_FIR_WHITEN=1' >> $@
+	@echo 'KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"' >> $@
+	@echo 'KAFKA_HEAP_OPTS="-Xms8G -Xmx8G"' >> $@
+	@echo '' >> $@
+	@echo 'export PATH IDQ_PATH PKG_CONFIG_PATH PYTHONPATH GSTLAL_FIR_WHITEN KAFKA_JVM_PERFORMANCE_OPTS KAFKA_HEAP_OPTS' >> $@
+
+#####################
+# Check time stamps #
+#####################
+
+check :
+	@if [ -f logs/all.txt ] ; then rm logs/all.txt ; fi ;
+	@cat logs/* | uniq > logs/all.txt
+	@if [ -f logs/idq.txt ] ; then ls logs/idq.txt >> logs/all.txt ; fi ;
+	@ls -ltrh $$(cat logs/all.txt)
+
+###########
+# Install #
+###########
+
+# iDQ
+idq : logs/idq.txt
+
+logs/idq.txt : $(LOGS_DIR)/kafka-python.txt $(IDQ_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(IDQ_TARGET) : $(KAFKA_PYTHON_TARGET)
+	@echo $(GREEN)iDQ$(WHITE) 1>&2
+	if [ "$(IDQ_GIT)" = "1" ]; then \
+		cd $(IDQ_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(IDQ).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(IDQ) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+	fi ;
+	# fix to make python-eggs not world writable (raises UserWarnings if not done)
+	# not tied solely to iDQ install, but should be done at the end of all python installs
+	chmod og-w $(HOME)/.python-eggs
+
+# confluent-kafka-python
+kafka-python : logs/kafka-python.txt
+
+logs/kafka-python.txt : $(LOGS_DIR)/librdkafka.txt $(KAFKA_PYTHON_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(KAFKA_PYTHON_TARGET) : $(LIBRDKAFKA_TARGET)
+	@echo $(GREEN)kafka-python$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -C $(SRC_DIR) ; \
+	cd $(SRC_DIR)/confluent-kafka-python-$(KAFKA_PYTHON) && CFLAGS="$(GCCFLAGS)" C_INCLUDE_PATH=$(INSTALL_DIR)/include LIBRARY_PATH=$(INSTALL_DIR)/lib python setup.py install --prefix=$(INSTALL_DIR) ; \
+
+# librdkafka
+librdkafka : logs/librdkafka.txt
+
+logs/librdkafka.txt : $(LOGS_DIR)/sklearn.txt $(LIBRDKAFKA_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(LIBRDKAFKA_TARGET) : $(SKLEARN_TARGET)
+	@echo $(GREEN)librdkafka$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -C $(SRC_DIR) ; \
+	cd $(SRC_DIR)/librdkafka-$(LIBRDKAFKA) && ./configure --prefix=$(INSTALL_DIR) ; \
+	cd $(SRC_DIR)/librdkafka-$(LIBRDKAFKA) && make -j$(CORES) && make install -j$(CORES) ; \
+#
+# scikit-learn
+sklearn : logs/sklearn.txt
+
+logs/sklearn.txt : $(LOGS_DIR)/cython.txt $(SKLEARN_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(SKLEARN_TARGET) : $(CYTHON_TARGET)
+	@echo $(GREEN)scikit-learn$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/$(SKLEARN).tar.gz -C $(SRC_DIR) ; \
+	cd $(SRC_DIR)/$(SKLEARN) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+
+# cython
+cython : logs/cython.txt
+
+logs/cython.txt : $(CYTHON_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(CYTHON_TARGET) : $(LOGS_DIR)/patch.txt
+	@echo $(GREEN)cython$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/$(CYTHON).tar.gz -C $(SRC_DIR) ; \
+	cd $(SRC_DIR)/$(CYTHON) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+
+#########################
+# Download the software #
+#########################
+
+# patches
+patch : logs/patch.txt
+
+logs/patch.txt : $(LOGS_DIR)/tar.txt
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+#tarballs
+logs/tar.txt : $(CYTHON_TAR_TARGET) $(SKLEARN_TAR_TARGET) $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(KAFKA_PYTHON_TAR_TARGET) : $(LIBRDKAFKA_TAR_TARGET)
+	wget --no-check-certificate https://github.com/confluentinc/confluent-kafka-python/archive/v$(KAFKA_PYTHON).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -nc
+
+
+$(LIBRDKAFKA_TAR_TARGET) : $(SKLEARN_TAR_TARGET)
+	wget --no-check-certificate https://github.com/edenhill/librdkafka/archive/v$(LIBRDKAFKA).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -nc
+
+$(SKLEARN_TAR_TARGET) : $(CYTHON_TAR_TARGET)
+	wget --no-check-certificate https://pypi.python.org/packages/26/c2/21c612f3a1b1ba97b7b4bbd1fcdc59b475a09e25efad13fec4565ab9d563/$(SKLEARN).tar.gz --directory-prefix=$(TAR_DIR)  -nc
+
+$(CYTHON_TAR_TARGET) : $(LOGS_DIR)
+	wget --no-check-certificate https://pypi.python.org/packages/b7/67/7e2a817f9e9c773ee3995c1e15204f5d01c8da71882016cac10342ef031b/$(CYTHON).tar.gz --directory-prefix=$(TAR_DIR)  -nc
+
+# git repos
+$(LOGS_DIR) :
+	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(PYTHON_DIR)
+	if [ "${IDQ_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "iDQ git repo exists" ; \
+		else \
+			mkdir -p $(IDQ_REPO) ; \
+			git clone -b $(IDQ_GIT_BRANCH) https://git.ligo.org/reed.essick/iDQ.git $(IDQ_REPO) ; \
+		fi ; \
+	fi ;
+	mkdir -p $(LOGS_DIR)
+
+############
+# Clean up #
+############
+
+clean-all :
+	rm -rvf $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(LOGS_DIR)
+	rm -rvf opt git
+	rm -rf *.txt
+
+clean-install :
+	rm -rf opt/* logs/* src/*
+
+clean-idq :
+	rm -rf logs/idq.txt $(IDQ_TARGET)
+
+clean-kafka-python :
+	rm -rf logs/kafka-python.txt $(KAFKA_PYTHON_TARGET)
+
+clean-librdkafka :
+	rm -rf logs/librdkafka.txt $(LIBRDKAFKA_TARGET)
+
+clean-sklearn :
+	rm -rf logs/sklearn.txt $(SKLEARN_TARGET)
+
+clean-cython :
+	rm -rf logs/cython.txt $(CYTHON_TARGET)
