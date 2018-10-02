@@ -268,7 +268,8 @@ class EyeCandy(object):
 				# comes from the "add" property. that is
 				# because audiorate has to "add" samples when
 				# data is dropped.
-				self.producer.send(self.tag, {"%s/strain_dropped" % instrument: "%s\t%s" % (t, elem.get_property("add"))})
+				# FIXME don't hard code the rate
+				self.producer.send(self.tag, {"%s/strain_dropped" % instrument: "%s\t%s" % (t, elem.get_property("add") / 16384.)})
 
 			# Actually flush all of the kafka messages
 			self.producer.flush()
