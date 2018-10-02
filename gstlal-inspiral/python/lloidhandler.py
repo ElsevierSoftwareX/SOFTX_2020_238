@@ -160,6 +160,7 @@ class EyeCandy(object):
 		self.ifo_snr_history = dict((instrument, deque(maxlen = 300)) for instrument in instruments)
 		self.dqvectors = {}
 		self.statevectors = {}
+		self.strain = {}
 		for instrument in instruments:
 			name = "%s_state_vector" % instrument
 			elem = pipeline.get_by_name(name)
@@ -167,6 +168,9 @@ class EyeCandy(object):
 			name = "%s_dq_vector" % instrument
 			elem = pipeline.get_by_name(name)
 			self.dqvectors[instrument] = elem
+			name = "%s_strain_audiorate" % instrument
+			elem = pipeline.get_by_name(name)
+			self.strain[instrument] = elem
 		self.time_since_last_state = None
 
 		#
@@ -206,7 +210,7 @@ class EyeCandy(object):
 		if last_coincs:
 			latency_val = None
 			snr_val = (0,0)
-			like_val = (0,0)
+			like_val = (0,float("-inf"))
 			far_val = (0,0)
 			coinc_inspiral_index = last_coincs.coinc_inspiral_index
 			coinc_event_index = last_coincs.coinc_event_index
@@ -259,6 +263,12 @@ class EyeCandy(object):
 				self.producer.send(self.tag, {"%s/statevector_on" % instrument: "%s\t%s" % (t, elem.get_property("on-samples"))})
 				self.producer.send(self.tag, {"%s/statevector_off" % instrument: "%s\t%s" % (t, elem.get_property("off-samples"))})
 				self.producer.send(self.tag, {"%s/statevector_gap" % instrument: "%s\t%s" % (t, elem.get_property("gap-samples"))})
+			for instrument, elem in self.strain.items():
+				# I know the name is strain_drop even though it
+				# comes from the "add" property. that is
+				# because audiorate has to "add" samples when
+				# data is dropped.
+				self.producer.send(self.tag, {"%s/strain_dropped" % instrument: "%s\t%s" % (t, elem.get_property("add"))})
 
 			# Actually flush all of the kafka messages
 			self.producer.flush()
