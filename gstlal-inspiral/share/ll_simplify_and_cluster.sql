@@ -206,20 +206,20 @@ WHERE
 --
 -- delete all events with LR < 4
 --
-DELETE FROM
-	coinc_event
-WHERE
-	EXISTS (
-		SELECT
-			*
-		FROM
-			_cluster_info_ AS _cluster_info_a_
-		WHERE
-			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id AND _cluster_info_a_.ranking_stat < 4.0
-	);
-DROP INDEX tmpindex1;
-DROP INDEX tmpindex2;
-DROP TABLE _cluster_info_;
+--DELETE FROM
+--	coinc_event
+--WHERE
+--	EXISTS (
+--		SELECT
+--			*
+--		FROM
+--			_cluster_info_ AS _cluster_info_a_
+--		WHERE
+--			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id AND _cluster_info_a_.ranking_stat < 4.0
+--	);
+--DROP INDEX tmpindex1;
+--DROP INDEX tmpindex2;
+--DROP TABLE _cluster_info_;
 
 SELECT
 	"Number of coincs after clustering: " || count(*)
