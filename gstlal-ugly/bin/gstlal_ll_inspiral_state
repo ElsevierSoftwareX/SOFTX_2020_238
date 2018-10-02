@@ -35,9 +35,6 @@ from multiprocessing import Pool
 from gstlal import aggregator
 import json
 
-MIN_TIME_QUANTA = 10000
-DIRS = 6
-
 
 #
 # =============================================================================
@@ -100,6 +97,7 @@ if __name__ == '__main__':
 		routes.append("%s/dqvector_on" % ifo)
 		routes.append("%s/dqvector_off" % ifo)
 		routes.append("%s/dqvector_gap" % ifo)
+		routes.append("%s/strain_dropped" % ifo)
 
 	for job in jobs: aggregator.makedir("%s/by_job/%s" % (options.base_dir, job))
 
