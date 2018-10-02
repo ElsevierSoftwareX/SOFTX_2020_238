@@ -688,7 +688,7 @@ def mksegmentsrcgate(pipeline, src, segment_list, seekevent = None, invert_outpu
 #
 #
 
-def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
+def mkbasicsrc(pipeline, gw_data_source_info, instrument, nxydump_segment = None, nxydump_directory = '.', verbose = False):
 	"""!
 	All the conditionals and stupid pet tricks for reading real or
 	simulated h(t) data in one place.
@@ -707,6 +707,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, volume = 1.0)
 	elif gw_data_source_info.data_source == "silence":
 		src = pipeparts.mkfakesrc(pipeline, instrument, gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size, wave = 4)
+		if nxydump_segment is not None:
+			print nxydump_segment
+			src = pipeparts.mktee(pipeline, src)
+			pipeparts.mknxydumpsink(pipeline, src, "%s/demux_strain_%d_%s.dump" %(nxydump_directory, nxydump_segment[0], instrument), segment = nxydump_segment)
+
 	elif gw_data_source_info.data_source == "LIGO":
 		src = pipeparts.mkfakeLIGOsrc(pipeline, instrument = instrument, channel_name = gw_data_source_info.channel_dict[instrument], blocksize = gw_data_source_info.block_size)
 	elif gw_data_source_info.data_source == "AdvLIGO":
@@ -725,6 +730,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# thread
 		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
 		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_static_pad("sink"))
+		if nxydump_segment is not None:
+			print nxydump_segment
+			src = pipeparts.mktee(pipeline, src)
+			pipeparts.mknxydumpsink(pipeline, src, "%s/demux_strain_%d_%s.dump" %(nxydump_directory, nxydump_segment[0], instrument), segment = nxydump_segment)
+
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
@@ -755,6 +765,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# State vector and DQ vector
 		# FIXME:  don't hard-code channel name
 		statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+	
 		if gw_data_source_info.dq_channel_dict[instrument] is not None:
                         dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
