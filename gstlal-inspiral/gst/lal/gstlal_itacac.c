@@ -57,9 +57,9 @@
 #include <gstlal/gstlal_tags.h>
 #include <gstlal/gstlal_autocorrelation_chi2.h>
 #include <gstlal_snglinspiral.h>
-#include <lal/LIGOMetadataTables.h>
+//#include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOMetadataUtils.h>
-#include <lal/LALDatatypes.h>
+//#include <lal/LALDatatypes.h> 
 #include <lal/TimeDelay.h>
 
 /*
@@ -721,6 +721,8 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	// to copy from an adapter with a larger buffer than this. 
 	itacacpad->data->data = malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * (2 * itacacpad->maxdata->pad + itacac->max_coinc_window_samps));
 
+	itacac->trigger_end = malloc(element->numsinkpads*sizeof(LIGOTimeGPS));
+
 	return result;
 }
 
@@ -752,22 +754,13 @@ static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 
 }
 
-static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, void *data, guint peak_finding_start, guint peak_finding_length, gboolean numerous_peaks_in_window) {
+static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, void *data, guint peak_finding_start, guint peak_finding_length, guint samples_previously_searched, gboolean numerous_peaks_in_window) {
 	gsl_error_handler_t *old_gsl_error_handler;
 
 	struct gstlal_peak_state *this_maxdata;
 	void *this_snr_mat;
 	void *this_chi2;
-	guint channel, processed_samples_copy;
-	guint data_container_index = 0;
-	guint offset_from_copied_data = 0;
-	guint offset_from_this_data;
-
-	// Check if we have samples from the previous window that we may check for coincident triggers but dont want in our peakfinding or chisq calculations
-	if(abs(offset_from_trigwindow) >= itacacpad->maxdata->pad)
-		offset_from_this_data = (guint) abs(offset_from_trigwindow);
-	else
-		offset_from_this_data = itacacpad->maxdata->pad;
+	guint channel;
 
 	// Need to use our tmp_chi2 and tmp_maxdata struct and its corresponding snr_mat if we've already found a peak in this window
 	if(numerous_peaks_in_window) {
@@ -797,10 +790,9 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 	// AEP- 180417 Turning XLAL Errors off
 	old_gsl_error_handler=gsl_set_error_handler_off();
 
-	// FIXME FIXME FIXME SAVEMORE Will need to occasionally (maybe always?) also account for having a max_coinc_window_samps worth of data being copied as well
         if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
-		// put the data pointer one pad length in (after accounting for offset from beginning of memory block)
-                itacacpad->data->dataptr.as_complex = ((float complex *) itacacpad->data->data) + (offset_from_this_data + offset_from_copied_data) * this_maxdata->channels;
+		// put the data pointer at the start of the interval we care about
+                itacacpad->data->dataptr.as_complex = ((float complex *) itacacpad->data->data) + peak_finding_start * this_maxdata->channels;
                 // Find the peak 
                 gstlal_float_complex_peak_over_window_interp(this_maxdata, itacacpad->data->dataptr.as_complex, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
@@ -817,7 +809,8 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 		}
 	}
         else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
-                itacacpad->data->dataptr.as_double_complex = ((double complex *) itacacpad->data->data) + (offset_from_this_data + offset_from_copied_data) * this_maxdata->channels;
+		// put the data pointer at the start of the interval we care about
+                itacacpad->data->dataptr.as_double_complex = ((double complex *) itacacpad->data->data) + peak_finding_start * this_maxdata->channels;
                 // Find the peak 
                 gstlal_double_complex_peak_over_window_interp(this_maxdata, itacacpad->data->dataptr.as_double_complex, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
@@ -861,19 +854,19 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 	} 
 
 	// Adjust the location of the peak by the number of samples processed in this window before this function call
-	if(processed_samples > 0 && !this_maxdata->no_peaks_past_threshold) {
+	if(samples_previously_searched > 0 && !this_maxdata->no_peaks_past_threshold) {
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			for(channel=0; channel < this_maxdata->channels; channel++) {
 				if(cabs( (double complex) (this_maxdata->values).as_double_complex[channel]) > 0) {
-					this_maxdata->samples[channel] += processed_samples;
-					this_maxdata->interpsamples[channel] += (double) processed_samples;
+					this_maxdata->samples[channel] += samples_previously_searched;
+					this_maxdata->interpsamples[channel] += (double) samples_previously_searched;
 				}
 			}
 		} else {
 			for(channel=0; channel < this_maxdata->channels; channel++) {
 				if(cabs( (double complex) (this_maxdata->values).as_float_complex[channel]) > 0) {
-					this_maxdata->samples[channel] += processed_samples;
-					this_maxdata->interpsamples[channel] += (double) processed_samples;
+					this_maxdata->samples[channel] += samples_previously_searched;
+					this_maxdata->interpsamples[channel] += (double) samples_previously_searched;
 				}
 			}
 		}
@@ -955,20 +948,22 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 
 }
 
-static void find_coincident_triggers(GSTLALItacac *itacac) {
-	// FIXME Make sure that this function is only ever called if you have more than 1 sinkpad
+static void find_coincident_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad) {
 	// Iterate through triggers already recovered, checking for
 	// coincidence. If a trigger exists in one detector and does not have a
 	// coincident trigger in another detector, we will find the highest
 	// peak the second detector that is in coincidence with the original
 	// trigger, and output that along with the surrounding snr time series
-	glist *padlist, *padlist2;
-	GSTLALItacacPad *itacacpad, *itacacpad2;
-	//struct gstlal_peak_state *maxdata;
+
+	glist *padlist;
+	GSTLALItacacPad *other_itacacpad;
 	// FIXME Allocate in advance
-	LIGOTimeGPS trigger_end[GST_ELEMENT(itacac)->numsinkpads];
 	guint16 i;
 	gdouble *coincidence_window, dt;
+	guint channel;
+
+	// NOTE this assume all detectors follow A1 convention (e.g. H1, L1, V1)
+	itacac->ifo_pair[0] = itacacpad->instrument[0];
 
 	
 	// steps
@@ -986,44 +981,39 @@ static void find_coincident_triggers(GSTLALItacac *itacac) {
 	// the H1 pad is H1,L1,V1, the order of maxdata structs for the L1 pad is L1,H1,V1 and the order for the V1 pad is V1,H1,L1
 	//
 
-	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
-		itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		
-		//memcpy(itacac->ifo_pair, itacacpad->instrument, 2*sizeof(gchar));
-		// FIXME Make sure this method has replaced memcpy everywhere
-		// NOTE this assume all detectors follow A1 convention (e.g. H1, L1, V1)
-		itacac->ifo_pair[0] = itacacpad->instrument[0];
-		if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
-			for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
-				// FIXME Should make sure that values is used elsewhere instead of interpvalues as well for this check (specifically for no_peaks_past_threshold)
+	if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+		for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
+			// FIXME Should make sure that values is used elsewhere instead of interpvalues as well for this check (specifically for no_peaks_past_threshold)
+			if((itacacpad->maxdata->values).as_float_complex[channel] != (float complex) 0) {
+				XLALINT8NSToGPS(itacac->trigger_end, itacac->next_output_timestamp + itacac->difftime);
+				XLALGPSAdd(itacac->trigger_end, (double) itacacpad->maxdata->interpsamples[channel] / itacac->rate);
+
+				// FIXME designed for 3 or less detectors right now
+				padlist = itacacpad->next_in_coinc_order;
+				itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+				itacac->ifo_pair[1] = itacacpad->instrument[0];
+				coincidence_window = g_hash_table_lookup(itacac->coinc_window_hashtable, itacac->ifo_pair);
+				// If trigger was found and its coincident, we dont need to worry
+				// If trigger was found and its not coincident, we need to find a coincident subthreshold trigger
+				// If not trigger was found, we need to find a coincident subthreshold trigger
+				/*
 				if((itacacpad->maxdata->values).as_float_complex[channel] != (float complex) 0) {
-					XLALINT8NSToGPS(trigger_end, itacac->next_output_timestamp + itacac->difftime);
-					XLALGPSAdd(trigger_end, (double) itacacpad->maxdata->interpsamples[channel] / itacac->rate);
+					// No trigger above threshold was found
+					XLALINT8NSToGPS(trigger_end + 1, itacac->next_output_timestamp + itacac->difftime);
+					XLALGPSAdd(trigger_end + 1, (double) itacacpad->maxdata->interpsamples[channel] / itacac->rate);
+				} else
+					XLALINT8NSToGPS(trigger_end + 1, 0);
+				*/
+				
+				dt = fabs(1000000000 * XLALGPSDiff(trigger_end[0], trigger_end[1]));
+				if(dt > *coincidence_window) {
+					// Need to find a subthreshold trigger
+					// First figure out the range of samples that we're going to search
+					// Then use that and duration_dataoffset_trigwindowoffset_peakfindinglength_matrix to figure out where the data we need is
+					// Grab largest peak in window we care about
+					// Compute chisq
 
-					// FIXME designed for 3 or less detectors right now
-					padlist2 = itacacpad->next_in_coinc_order;
-					itacacpad2 = GSTLAL_ITACAC_PAD(padlist2->data);
-					itacac->ifo_pair[1] = itacacpad2->instrument[0];
-					coincidence_window = g_hash_table_lookup(itacac->coinc_window_hashtable, itacac->ifo_pair);
-					// If trigger was found and its coincident, we dont need to worry
-					// If trigger was found and its not coincident, we need to find a coincident subthreshold trigger
-					// If not trigger was found, we need to find a coincident subthreshold trigger
-					if((itacacpad2->maxdata->values).as_float_complex[channel] != (float complex) 0) {
-						// No trigger above threshold was found
-						XLALINT8NSToGPS(trigger_end + 1, itacac->next_output_timestamp + itacac->difftime);
-						XLALGPSAdd(trigger_end + 1, (double) itacacpad2->maxdata->interpsamples[channel] / itacac->rate);
-					} else
-						XLALINT8NSToGPS(trigger_end + 1, 0);
-					
-					dt = fabs(1000000000 * XLALGPSDiff(trigger_end[0], trigger_end[1]));
-					if(dt > *coincidence_window) {
-						// Need to find a subthreshold trigger
-						// First figure out the range of samples that we're going to search
-						// Then use that and duration_dataoffset_trigwindowoffset_peakfindinglength_matrix to figure out where the data we need is
-						// Grab largest peak in window we care about
-						// Compute chisq
-
-					}
+				}
 				}
 			}
 		}
@@ -1487,14 +1477,19 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			duration = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, ++data_container_index, 2);
 		}
 
+		if(triggers_generated && element->numsinkpads > 1) {
+			// FIXME save identifying information about coincident triggers so that we can avoid sending duplicates to python
+			find_coincident_triggers
+		}
+
 		if(triggers_generated && itacacpad->autocorrelation_matrix) {
-			if(!srcbuf) {
+			if(srcbuf == NULL) {
 				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), itacac->difftime);
 			} else {
 				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view));
 			}
 		} else if(triggers_generated) {
-			if(!srcbuf)
+			if(srcbuf == NULL)
 				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, itacac->difftime);
 			else
 				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL);
@@ -1943,6 +1938,7 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 	itacac->difftime = 0;
 	itacac->coinc_window_hashtable = g_hash_table_new(g_str_hash, g_str_equal);
 	itacac->max_coinc_window_samps = 0;
+	itacac->trigger_end = NULL;
 	
 	reset_time_and_offset(itacac);
 

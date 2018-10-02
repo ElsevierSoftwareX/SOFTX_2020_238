@@ -37,6 +37,7 @@
 #include <gstlal/gstlal_peakfinder.h>
 #include <gstlal/gstaudioadapter.h>
 #include <lal/LIGOMetadataTables.h>
+#include <lal/LALDatatypes.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_matrix_float.h>
 
@@ -139,6 +140,7 @@ typedef struct {
 	GHashTable *coinc_window_hashtable;
 	guint max_coinc_window_samps;
 	gchar ifo_pair[3];
+	LIGOTimeGPS *trigger_end;
 	//guint samples_in_last_short_window;
 
 } GSTLALItacac;
