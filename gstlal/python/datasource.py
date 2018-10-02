@@ -876,14 +876,17 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# fill in holes, skip duplicate data
 		statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
 		dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
-		src = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
-		@bottle.route("/%s/strain_add_drop.txt" % instrument)
+		src = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False, name = "%s_strain_audiorate" % instrument)
+		@bottle.route("/%s/strain_dropped.txt" % instrument)
 		# FIXME don't hard code the sample rate
 		def strain_add(elem = src, rate = 16384):
 			t = float(lal.UTCToGPS(time.gmtime()))
+			# yes I realize we are reading the "add" property for a
+			# route called dropped. That is because the data which
+			# is "dropped" on route is "added" by the audiorate
+			# element
 			add = elem.get_property("add")
-			drop = elem.get_property("drop")
-			return "%.9f %d %d" % (t, add // rate, drop // rate)
+			return "%.9f %d" % (t, add // rate)
 
 		# use state vector and DQ vector to gate strain.  the sizes
 		# of the queues on the control inputs are not important.
