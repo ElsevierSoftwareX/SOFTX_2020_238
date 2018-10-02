@@ -35,7 +35,6 @@ from glue.ligolw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 from gstlal import cbc_template_fir
 from gstlal import chirptime
-from gstlal import templates
 import random
 import pdb
 from gstlal.spiirbank.optimizer import optimize_a1
@@ -55,6 +54,96 @@ lsctables.use_in(DefaultContentHandler)
 
 class XMLContentHandler(ligolw.LIGOLWContentHandler):
     pass
+
+# copied from gstlal-inspiral/ templates.py
+gstlal_IMR_approximants = set((
+    'EOBNRv2',
+    'IMRPhenomC',
+    'SEOBNRv4_ROM',
+    'SEOBNRv2_ROM_DoubleSpin'
+))
+
+def normalized_autocorrelation(fseries, revplan):
+    data = fseries.data.data
+    fseries = lal.CreateCOMPLEX16FrequencySeries(
+        name = fseries.name,
+        epoch = fseries.epoch,
+        f0 = fseries.f0,
+        deltaF = fseries.deltaF,
+        sampleUnits = fseries.sampleUnits,
+        length = len(data)
+    )
+    fseries.data.data = data * numpy.conj(data)
+    tseries = lal.CreateCOMPLEX16TimeSeries(
+        name = "timeseries",
+        epoch = fseries.epoch,
+        f0 = fseries.f0,
+        deltaT = 1. / (len(data)*fseries.deltaF),
+        length = len(data),
+        sampleUnits = lal.DimensionlessUnit
+    )
+    tseries.data.data = numpy.empty((len(data),), dtype = "cdouble")
+    lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
+    data = tseries.data.data
+    tseries.data.data = data / data[0]
+    return tseries
+    
+
+# Round a number up to the nearest power of 2
+def ceil_pow_2(x):
+    x = int(math.ceil(x))
+    x -= 1
+    n = 1
+    while n and (x & (x + 1)):
+        x |= x >> n
+        n *= 2
+    return x + 1
+
+
+def add_quadrature_phase(fseries, n):
+    """
+    From the Fourier transform of a real-valued function of
+    time, compute and return the Fourier transform of the
+    complex-valued function of time whose real component is the
+    original time series and whose imaginary component is the
+    quadrature phase of the real part.  fseries is a LAL
+    COMPLEX16FrequencySeries and n is the number of samples in
+    the original time series.
+    """
+    #
+    # positive frequencies include Nyquist if n is even
+    #
+
+    have_nyquist = not (n % 2)
+
+    #
+    # shuffle frequency bins
+    #
+
+    positive_frequencies = numpy.array(fseries.data.data) # work with copy
+    positive_frequencies[0] = 0    # set DC to zero
+    zeros = numpy.zeros((len(positive_frequencies),), dtype = "cdouble")
+    if have_nyquist:
+        # complex transform never includes positive Nyquist
+        positive_frequencies = positive_frequencies[:-1]
+
+    #
+    # prepare output frequency series
+    #
+
+    out_fseries = lal.CreateCOMPLEX16FrequencySeries(
+        name = fseries.name,
+        epoch = fseries.epoch,
+        f0 = fseries.f0,    # caution: only 0 is supported
+        deltaF = fseries.deltaF,
+        sampleUnits = fseries.sampleUnits,
+        length = len(zeros) + len(positive_frequencies) - 1
+    )
+    out_fseries.data.data = numpy.concatenate((zeros, 2 * positive_frequencies[1:]))
+
+    return out_fseries
+
+# end of copy
 
 def tukeywindow(data, samps = 200.):
     assert (len(data) >= 2 * samps) # make sure that the user is requesting something sane
@@ -182,7 +271,6 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     snr_time = 2 * numpy.fft.ifft(snr_fft) * fs # times df then the unit is dimensionless, default ifft has the output scaled by 1/N
     sigmasq = (template_fft * template_fft.conjugate()).sum() * df
     sigma = numpy.sqrt(abs(sigmasq))
-    #pdb.set_trace()
     # normalize snr
     snr_time /= sigma
     # need to shift the SNR because cross-correlation FFT plays integration on cyclic template_pad,
@@ -196,8 +284,9 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     try:
         timemax = time[indmax]
     except:
-            raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
-    return SNR, sigma, indmax, timemax
+        raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
+    f_ticks = numpy.linspace(1, working_length + 1, working_length) * df
+    return SNR, sigma, indmax, timemax, f_ticks, data_fft, template_fft
 
 def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 2048.):
     # Some input checking to avoid incomprehensible error messages
@@ -224,7 +313,7 @@ def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 20
 
     # Add 32 seconds to template length for PSD ringing, round up to power of 2 count of samples, this is for psd length to whiten the template later.
     # Multiply by two so that we can later take only half to get rid of wraparound in time domain.
-    working_length = 2*templates.ceil_pow_2(length_max + round((16.0 + working_f_low_extra_time) * sampleRate))
+    working_length = 2*ceil_pow_2(length_max + round((16.0 + working_f_low_extra_time) * sampleRate))
     working_duration = float(working_length) / sampleRate
 
     working_state = {}
@@ -268,7 +357,7 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
 
     if psd is not None:
         lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
-    fseries = templates.add_quadrature_phase(fseries, working_state["working_length"])
+    fseries = add_quadrature_phase(fseries, working_state["working_length"])
 
     #
     # transform template to time domain
@@ -321,7 +410,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     working_f_low = lalsimulation.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
     # Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
-    working_length = templates.ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
+    working_length = ceil_pow_2(length_max + round(1./psd.deltaF * sample_rate_max))
     working_duration = float(working_length) / sample_rate_max
 
     # Smooth the PSD and interpolate to required resolution
@@ -385,14 +474,14 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
 
     if psd is not None:
         lal.WhitenCOMPLEX16FrequencySeries(fseries, psd)
-    fseries = templates.add_quadrature_phase(fseries, working_length)
+    fseries = add_quadrature_phase(fseries, working_length)
 
     #
     # compute time-domain autocorrelation function
     #
 
     if autocorrelation_bank is not None:
-        autocorrelation = templates.normalized_autocorrelation(fseries, revplan).data
+        autocorrelation = normalized_autocorrelation(fseries, revplan).data.data
         autocorrelation_bank[::-1] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
 
     #
@@ -402,7 +491,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
     data = tseries.data.data
-    epoch_time = fseries.epoch.seconds + fseries.epoch.nanoseconds*1.e-9
+    epoch_time = fseries.epoch.gpsSeconds + fseries.epoch.gpsNanoSeconds*1.e-9
     #
     # extract the portion to be used for filtering
     #
@@ -413,7 +502,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     # waveforms by peak amplitude)
     #
 
-    if approximant in templates.gstlal_IMR_approximants:
+    if approximant in gstlal_IMR_approximants:
         data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
         # record the new end times for the waveforms (since we performed the shifts)
         row.end = lal.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
@@ -499,6 +588,7 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
         # the following definition is more close to the reality
         norm_u = abs(numpy.dot(u_rev_pad, numpy.conj(u_rev_pad)))
         norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
+        norm_data_full = abs(numpy.dot(data_full, numpy.conj(data_full)))
 
         # overlap of spiir reconstructed waveform with template (spiir_template)
         spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad))/numpy.sqrt(norm_u * norm_h))
@@ -528,23 +618,32 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
 
 def gen_lalsim_waveform(row, flower, sampleRate, approximant_string):
     # NOTE: There is also ChooseFDWaveform. IMRPhenomB is FD
-    hp,hc = lalsimulation.SimInspiralChooseTDWaveform(0,                # reference phase, phi ref
-                                1./sampleRate,            # delta T
-                            row.mass1*lal.MSUN_SI,            # mass 1 in kg
-                            row.mass2*lal.MSUN_SI,            # mass 2 in kg
-                            row.spin1x, row.spin1y, row.spin1z,        # Spin 1 x, y, z
-                            row.spin2x, row.spin2y, row.spin2z,        # Spin 2 x, y, z
-                            flower,                # Lower frequency
-                            0,                    # Reference frequency 40?
-                            1.e6*lal.PC_SI,            # r - distance in M (convert to MPc)
-                            0,                    # inclination
-                            0,0,                # Lambda1, lambda2
-                            None,                # Waveflags
-                            None,                # Non GR parameters
-                            0,7,                # Amplitude and phase order 2N+1
-                            lalsimulation.GetApproximantFromString(approximant_string))
 
+    parameters = {}
+    parameters['m1'] = lal.MSUN_SI * row.mass1
+    parameters['m2'] = lal.MSUN_SI * row.mass2
+    parameters['S1x'] = row.spin1x
+    parameters['S1y'] = row.spin1y
+    parameters['S1z'] = row.spin1z
+    parameters['S2x'] = row.spin2x
+    parameters['S2y'] = row.spin2y
+    parameters['S2z'] = row.spin2z
+    parameters['distance'] = 1.e6 * lal.PC_SI
+    parameters['inclination'] = 0.
+    parameters['phiRef'] = 0.
+    parameters['longAscNodes'] = 0.
+    parameters['eccentricity'] = 0.
+    parameters['meanPerAno'] = 0.
+    parameters['deltaT'] = 1.0 / sampleRate
+    parameters['f_min'] = flower
+    parameters['f_ref'] = 0.
+    parameters['LALparams'] = None
+    parameters['approximant'] = lalsimulation.GetApproximantFromString(str(approximant_string))
 
+    hp, hc = lalsimulation.SimInspiralTD(**parameters)
+    return hp, hc
+    # NOTE assumes fhigh is the Nyquist frequency!!!
+    # assert len(hplus.data.data) == int(round(sample_rate * duration))//2 +1
     # The following code will plot the original autocorrelation function
     #ori_amp, ori_phase = calc_amp_phase(hc.data.data, hp.data.data)
     #ori_wave = ori_amp * numpy.exp(1j * ori_phase)
@@ -556,7 +655,6 @@ def gen_lalsim_waveform(row, flower, sampleRate, approximant_string):
     #axis_x = numpy.linspace(0, len(phase), len(phase))
     #plt.plot(axis_x, phase)
     #plt.show()
-    return hp, hc
 
 
 def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, snr_cut = 1.0, is_frequency_whiten = 1, verbose = False):
@@ -696,7 +794,7 @@ def gen_spiir_coeffs(amp, phase, data_full, padding = 1.3, epsilon = 0.02, alpha
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 
         # get the chirptime (nearest power of two)
-        length = templates.ceil_pow_2(len(data_full) + autocorrelation_length)
+        length = ceil_pow_2(len(data_full) + autocorrelation_length)
 
         # get the IIR response
         u_rev_pad = gen_spiir_response(length, a1, b0, delay)
@@ -714,7 +812,7 @@ def gen_norm_spiir_coeffs(amp, phase, data_full, padding = 1.3, epsilon = 0.02, 
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
 
         # pad the iir response to be nearest power of 2 of:
-        length = templates.ceil_pow_2(len(data_full) + autocorrelation_length)
+        length = ceil_pow_2(len(data_full) + autocorrelation_length)
 
         # get the IIR response
         u_rev_pad = gen_spiir_response(length, a1, b0, delay)
@@ -756,7 +854,7 @@ class Bank(object):
         self.flower = None
         self.epsilon = None
 
-    def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon_start = 0.02, epsilon_min = 0.001, epsilon_max = None, filters_min = 0, filters_max = None, filters_per_loglen_min = 0, filters_per_loglen_max = None, initial_overlap_min = 0, b0_optimized_overlap_min = 0, final_overlap_min = 0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, verbose = False, contenthandler = DefaultContentHandler):
+    def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon_start = 0.02, epsilon_min = 0.001, epsilon_max = None, filters_min = 0, filters_max = None, filters_per_loglen_min = 0, filters_per_loglen_max = None, initial_overlap_min = 0, b0_optimized_overlap_min = 0, final_overlap_min = 0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 1.0, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, verbose = False, contenthandler = DefaultContentHandler):
         """
             Build SPIIR template bank from physical parameters, e.g. mass, spin.
             """
@@ -825,7 +923,7 @@ class Bank(object):
         Amat = {}
         Bmat = {}
         Dmat = {}
-
+ 
         for tmp, row in enumerate(sngl_inspiral_table):
             spiir_match = -1
             epsilon = epsilon_start
@@ -1089,14 +1187,21 @@ class Bank(object):
 
         # Open template bank file
         tmpltbank_xmldoc = utils.load_filename(self.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+        sngl_inspiral_columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
 
         # Get sngl inspiral table
         sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
 
         # put the bank table into the output document
-        new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
+        new_sngl_table = lsctables.New(lsctables.SnglInspiralTable, columns = sngl_inspiral_columns)
         for row in sngl_inspiral_table:
-            new_sngl_table.append(row)
+            new_row = new_sngl_table.RowType()
+            for column in sngl_inspiral_columns:
+                if hasattr(row, column):
+                    setattr(new_row, column, getattr(row, column))
+                else:
+                    setattr(new_row, column, 0)
+            new_sngl_table.append(new_row)
 
         root.appendChild(new_sngl_table)
 
