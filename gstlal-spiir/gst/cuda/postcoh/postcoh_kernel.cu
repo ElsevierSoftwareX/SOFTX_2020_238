@@ -299,8 +299,9 @@ __global__ void ker_coh_skymap
                 imag = 0.0f;
                 for (int k = 0; k < nifo; ++k)
                 {
-                    real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
-                    imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
+					// transpose of u
+                    real += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].re;
+                    imag += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].im;
                 }
                 (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
             }   
@@ -404,6 +405,7 @@ __global__ void ker_coh_max_and_chisq_versatile
             {
                 /* this is a simplified algorithm to get map_idx */
                 map_idx = iifo * nifo + j;
+
                 NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
                 NtOff = (j == iifo ? 0 : NtOff);
                 // dk[j] = snr[j][((start_exe + len_cur + NtOff + len) % len) * ntmplt + tmplt_cur ];  
@@ -423,8 +425,9 @@ __global__ void ker_coh_max_and_chisq_versatile
 	                imag = 0.0f;
 	                for (int k = 0; k < nifo; ++k)
 	                {
-	                    real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
-	                    imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
+						// transpose of u_map
+	                    real += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].re;
+	                    imag += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].im;
 	                }
 	                (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
 	            }   
@@ -503,6 +506,7 @@ __global__ void ker_coh_max_and_chisq_versatile
             laneChi2 = 0.0f;
             /* this is a simplified algorithm to get map_idx */
             map_idx = iifo * nifo + j;
+
             NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
             peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff + len);
             tmp_maxsnr = snr[j][len * tmplt_cur + ((peak_pos_tmp + len) % len)];
@@ -603,8 +607,10 @@ __global__ void ker_coh_max_and_chisq_versatile
 	                imag = 0.0f;
 	                for (int k = 0; k < nifo; ++k)
 	                {
-	                    real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
-	                    imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
+						// transpose of u_map
+	                    real += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].re;
+	                    imag += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].im;
+
 	                }
 	                (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
 	            }   
@@ -869,10 +875,10 @@ __global__ void ker_coh_max_and_chisq
                 imag = 0.0f;
                 for (int k = 0; k < nifo; ++k)
                 {
-                    // real += mu[j * nifo + k] * dk[k].x;
-                    // imag += mu[j * nifo + k] * dk[k].y;
-                    real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
-                    imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
+					// transpose of u_map
+                    real += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].re;
+	                imag += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].im;
+
                 }
                 (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
             }   
@@ -952,6 +958,7 @@ __global__ void ker_coh_max_and_chisq
             laneChi2 = 0.0f;
             /* this is a simplified algorithm to get map_idx */
             map_idx = iifo * nifo + j;
+
             NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx[peak_cur]] / dt);
             peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff + len);
 
@@ -1043,8 +1050,10 @@ __global__ void ker_coh_max_and_chisq
                 imag = 0.0f;
                 for (int k = 0; k < nifo; ++k)
                 {
-                    real += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].re;
-                    imag += u_map[(j * nifo + k) * num_sky_directions + ipix] * dk[k].im;
+					// transpose of u_map
+                    real += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].re;
+	                imag += u_map[(k * nifo + j) * num_sky_directions + ipix] * dk[k].im;
+
                 }
                 (j < 2 ? snr_tmp: al_all) += real * real + imag * imag;   
             }   
@@ -1112,6 +1121,7 @@ __global__ void ker_coh_max_and_chisq
             laneChi2 = 0.0f;
             /* this is a simplified algorithm to get map_idx */
             map_idx = iifo * nifo + j;
+
             NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx_bg[output_offset]] / dt);
 
             peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff - trial_offset + len);
@@ -1360,7 +1370,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	CUDA_CHECK(cudaStreamSynchronize(stream));
 	CUDA_CHECK(cudaPeekAtLastError());
 
-	if(output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR)
+	if(output_skymap && state->snglsnr_max[iifo] > MIN_OUTPUT_SKYMAP_SNR)
 	{
 		ker_coh_skymap<<<1, threads, sharedsize, stream>>>(
 									pklist->d_cohsnr_skymap,

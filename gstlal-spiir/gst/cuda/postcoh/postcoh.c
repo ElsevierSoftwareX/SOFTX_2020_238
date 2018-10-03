@@ -1294,7 +1294,7 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
 			output->event_id = postcoh->cur_event_id++;
-			if (postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR && state->skymap_peakcur[iifo] == peak_cur) {
+			if (postcoh->output_skymap && state->snglsnr_max[iifo] > MIN_OUTPUT_SKYMAP_SNR && state->skymap_peakcur[iifo] == peak_cur) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(IFOComboMap[get_icombo(output->ifos)].name);
@@ -1525,8 +1525,8 @@ static int peaks_over_thresh(COMPLEX_F *snglsnr, PostcohState *state, int cur_if
 
         /* keep track of the maximum single snr in this snr chunk */
 	for (ilen=0; ilen<exe_len; ilen++) {
-	  if (tmp_maxsnr[ilen] > state->snglsnr_max)
-	    state->snglsnr_max = tmp_maxsnr[ilen];
+	  if (tmp_maxsnr[ilen] > state->snglsnr_max[cur_ifo])
+	    state->snglsnr_max[cur_ifo] = tmp_maxsnr[ilen];
 	}
 
 	/* do clustering every PEAKFINDER_CLUSTER_WINDOW samples, FIXME: if set to 0, the size of output will be ten times */
@@ -1597,7 +1597,6 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 	GstClockTime ts_exe_end ;
 	while (common_size >= one_take_size) {
 		GST_DEBUG_OBJECT(postcoh, "cur time %" GST_TIME_FORMAT ", gps %d, common_size %d, one_take_size %d, exe_size %d\n", GST_TIME_ARGS(ts), ligo_time.gpsSeconds, common_size, one_take_size, exe_size);
-		state->snglsnr_max = 0;
 		/* expected end time for the run */
 		ts_exe_end = postcoh->t0 + gst_util_uint64_scale_int_round(postcoh->samples_out + postcoh->exe_len, GST_SECOND,
 		       	postcoh->rate);
@@ -1610,6 +1609,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 			data = collectlist->data;
 			cur_ifo = state->input_ifo_mapping[i];
 			state->cur_ifo_is_gap[cur_ifo] = need_flag_gap(data, postcoh->next_exe_t, ts_exe_end);
+			state->snglsnr_max[cur_ifo] = 0;
 			PeakList *pklist = state->peak_list[cur_ifo];
 
 			if (!state->cur_ifo_is_gap[cur_ifo]) {
@@ -1625,7 +1625,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 #endif
 			c_npeak = peaks_over_thresh(snglsnr, state, cur_ifo, postcoh->stream);
 
-			GST_DEBUG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max);
+			GST_DEBUG_OBJECT(postcoh, "gps %d, ifo %d, c_npeak %d, max_snglsnr %f\n", ligo_time.gpsSeconds, cur_ifo, c_npeak, state->snglsnr_max[cur_ifo]);
 
 			/* 
 			// because you use new postcoh kernel optimized by Xiaoyang Guo now, you cannot use 
@@ -1681,8 +1681,8 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 			cur_ifo = state->input_ifo_mapping[i];
 
 			if ( state->cur_nifo >= 2 && (!state->cur_ifo_is_gap[cur_ifo])) {
-				if (state->peak_list[cur_ifo]->npeak[0] > 0) {
-					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
+				if (state->peak_list[cur_ifo]->npeak[0] > 0 && ligo_time.gpsSeconds == 1186624818 ) {
+					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max[cur_ifo] > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 				}
 

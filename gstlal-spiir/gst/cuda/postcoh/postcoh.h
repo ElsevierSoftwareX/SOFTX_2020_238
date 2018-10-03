@@ -234,7 +234,7 @@ typedef struct _PostcohState {
   char *all_ifos;
   gint ifo_combo_idx;
   gint is_member_init;
-  float snglsnr_max;
+  float snglsnr_max[MAX_NIFO];
   float *tmp_maxsnr;
   int *tmp_tmpltidx;
 } PostcohState;
