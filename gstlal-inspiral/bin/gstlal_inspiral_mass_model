@@ -1,0 +1,71 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017,2018  Heather Fong and Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import h5py
+import argparse
+import numpy
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables, param as ligolw_param, array as ligolw_array
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+import lal.series
+from gstlal.stats.inspiral_lr import TYPICAL_HORIZON_DISTANCE
+from gstlal import svd_bank
+
+@ligolw_array.use_in
+@ligolw_param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+parser = argparse.ArgumentParser(description = "Create analytic mass models for prior weighting of templates")
+parser.add_argument("--svd-bank", metavar='name', type=str, help='The input svd bank file name.  Can be specified multiple times', action="append", required = True)
+parser.add_argument("--reference-psd", metavar='name', type=str, help='The input psd file name', required = True)
+parser.add_argument("--instrument", metavar='name', type=str, help='The instrument to use, e.g., H1', required = True)
+parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
+options = parser.parse_args()
+
+# Read the PSD file
+psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))[options.instrument]
+
+ids = {}
+for svdbank in options.svd_bank:
+	banks = {options.instrument:[]}
+	sngl_inspiral_table = []
+	for n, bank in enumerate(svd_bank.read_banks(svdbank, contenthandler = LIGOLWContentHandler, verbose = True)):
+		banks[options.instrument].append(bank)
+		sngl_inspiral_table.extend(bank.sngl_inspiral_table)
+
+	horizon_distance_function = svd_bank.make_horizon_distance_func(banks)
+	horizon_distance = horizon_distance_function(psd)[0]
+	for row in sngl_inspiral_table:
+		# Salpeter IMF, cause why not?
+		# FIXME add in distance weighting
+		assert row.template_id not in ids
+		ids[row.template_id] = numpy.log(row.mass1**-2.35 * horizon_distance**3)
+
+coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
+for tid in ids:
+	coefficients[0,0,tid] = ids[tid]
+
+f = h5py.File(options.output, "w")
+print coefficients
+# put in a dummy interval for the piecewise polynomials in SNR
+f.create_dataset("SNR", data = numpy.array([0., 100.]))
+f.create_dataset("coefficients", data = coefficients)
+f.close()
