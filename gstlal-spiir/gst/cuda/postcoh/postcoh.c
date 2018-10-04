@@ -1681,7 +1681,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 			cur_ifo = state->input_ifo_mapping[i];
 
 			if ( state->cur_nifo >= 2 && (!state->cur_ifo_is_gap[cur_ifo])) {
-				if (state->peak_list[cur_ifo]->npeak[0] > 0 && ligo_time.gpsSeconds == 1186624818 ) {
+				if (state->peak_list[cur_ifo]->npeak[0] > 0) {
 					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max[cur_ifo] > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 				}
