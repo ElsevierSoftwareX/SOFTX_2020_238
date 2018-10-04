@@ -1237,9 +1237,11 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 			output->end_time = end_time;
 			XLALGPSAdd(&(end_time), (double) pklist->ntoff_H[peak_cur]/exe_len);
 			output->end_time_H = end_time;
-			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_L[peak_cur] - pklist->ntoff_H[peak_cur])/exe_len);
+			end_time = output->end_time;
+			XLALGPSAdd(&(end_time), (double) pklist->ntoff_L[peak_cur]/exe_len);
 			output->end_time_L = end_time;
-			XLALGPSAdd(&(end_time), (double) (pklist->ntoff_V[peak_cur] - pklist->ntoff_H[peak_cur])/exe_len);
+			end_time = output->end_time;
+			XLALGPSAdd(&(end_time), (double) pklist->ntoff_V[peak_cur]/exe_len);
 			output->end_time_V = end_time;
 			output->snglsnr_H = pklist->snglsnr_H[peak_cur];
 			output->snglsnr_L = pklist->snglsnr_L[peak_cur];
