@@ -26,7 +26,7 @@
 #include <cuda_debug.h>
 #include <cuda_runtime.h>
 
-#define __DEBUG__ 0
+// #define __DEBUG__ 0
 #define NSNGL_TMPLT_COLS 12
 
 void cuda_device_print(int deviceCount)
