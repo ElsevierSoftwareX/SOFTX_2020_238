@@ -65,6 +65,11 @@ __all__ = [
 ]
 
 
+# The typical horizon distance used to normalize such values in the likelihood
+# ratio. Units are Mpc
+TYPICAL_HORIZON_DISTANCE = 150.
+
+
 #
 # =============================================================================
 #
@@ -297,27 +302,26 @@ class LnSignalDensity(LnLRDensity):
 		assert all(segments.values()), "encountered trigger with duration = 0"
 		horizons = dict((instrument, (self.horizon_history[instrument].functional_integral(map(float, seg), lambda d: d**3.) / float(abs(seg)))**(1./3.)) for instrument, seg in segments.items())
 
-		# compute P(t).  P(t) \propto volume within which a signal
-		# will produce a candidate * number of trials \propto cube
-		# of distance to which the mininum required number of
-		# instruments can see (I think) * number of templates.  we
-		# measure the distance in multiples of 150 Mpc just to get
-		# a number that will be, typically, a little closer to 1,
+		# compute P(t).  P(t) \propto volume within which a signal will
+		# produce a candidate * number of trials \propto cube of
+		# distance to which the mininum required number of instruments
+		# can see (I think) * number of templates.  we measure the
+		# distance in multiples of TYPICAL_HORIZON_DISTANCE Mpc just to
+		# get a number that will be, typically, a little closer to 1,
 		# in lieu of properly normalizating this factor.  we can't
-		# normalize the factor because the normalization depends on
-		# the duration of the experiment, and that keeps changing
-		# when running online, combining offline chunks from
-		# different times, etc., and that would prevent us from
-		# being able to compare a ln L ranking statistic value
-		# defined during one period to ranking statistic values
-		# defined in other periods.  by removing the normalization,
-		# and leaving this be simply a factor that is proportional
-		# to the rate of signals, we can compare ranking statistics
-		# across analysis boundaries but we loose meaning in the
-		# overall scale:  ln L = 0 is not a special value, as it
-		# would be if the numerator and denominator were both
-		# normalized properly.
-		horizon = sorted(horizons.values())[-self.min_instruments] / 150.
+		# normalize the factor because the normalization depends on the
+		# duration of the experiment, and that keeps changing when
+		# running online, combining offline chunks from different
+		# times, etc., and that would prevent us from being able to
+		# compare a ln L ranking statistic value defined during one
+		# period to ranking statistic values defined in other periods.
+		# by removing the normalization, and leaving this be simply a
+		# factor that is proportional to the rate of signals, we can
+		# compare ranking statistics across analysis boundaries but we
+		# loose meaning in the overall scale:  ln L = 0 is not a
+		# special value, as it would be if the numerator and
+		# denominator were both normalized properly.
+		horizon = sorted(horizons.values())[-self.min_instruments] / TYPICAL_HORIZON_DISTANCE
 		if not horizon:
 			return float("-inf")
 		lnP = 3. * math.log(horizon) + math.log(len(self.template_ids))
