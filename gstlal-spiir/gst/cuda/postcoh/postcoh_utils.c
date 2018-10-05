@@ -26,7 +26,7 @@
 #include <cuda_debug.h>
 #include <cuda_runtime.h>
 
-#define __DEBUG__ 1
+#define __DEBUG__ 0
 #define NSNGL_TMPLT_COLS 12
 
 void cuda_device_print(int deviceCount)
@@ -156,7 +156,7 @@ void get_write_ifo_mapping(char *ifo_combo, int nifo, int *write_ifo_mapping)
 				break;
 
 			}
-#if 0
+#ifdef __DEBUG__
 	for (iifo=0; iifo<nifo; iifo++)
 		printf("write_ifo_mapping %d->%d\n", iifo, write_ifo_mapping[iifo]);
 #endif
@@ -166,7 +166,9 @@ PeakList *create_peak_list(PostcohState *state, cudaStream_t stream)
 		int hist_trials = state->hist_trials;
 		g_assert(hist_trials != -1);
 		int max_npeak = state->max_npeak;
+#ifdef __DEBUG__
 		printf("max_npeak %d\n", max_npeak);
+#endif
 		PeakList *pklist = (PeakList *)malloc(sizeof(PeakList));
 
 		int peak_intlen = (7 + hist_trials) * max_npeak + 1;
@@ -318,23 +320,24 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 	xns[0].data = &(array_sigmasq[0]);
 	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN+1);
 
-	printf("fname for all_ifos %s\n", fname_cpy);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
 	/* parsing for all_ifos */
 	int iifo = 0;
 	while (token != NULL) {
+		#ifdef __DEBUG__
 		printf("token for all_ifos %s, copy size %d, sizeof char %d, sizeof char %d\n", token, sizeof(char)*IFO_LEN, sizeof(char), sizeof(char));
+		#endif
 		strncpy(all_ifos+iifo*IFO_LEN, token, sizeof(char)*IFO_LEN);
 		token = strtok_r(NULL, ",", &end_ifo);
 		iifo++;
 	}
 
 	all_ifos[IFO_LEN*nifo] = '\0';
-	printf("all_ifos %s\n", all_ifos);
+	//printf("all_ifos %s\n", all_ifos);
 	int ifo_combo_idx = get_icombo(all_ifos);
 	/* overwrite all_ifos to be the same with the combo in the IFOComboMap */
 	strncpy(all_ifos, IFOComboMap[ifo_combo_idx].name, sizeof(IFOComboMap[ifo_combo_idx].name));
-	printf("all_ifos %s\n", all_ifos);
+	//printf("all_ifos %s\n", all_ifos);
 
 	strcpy(fname_cpy, fname);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
@@ -360,6 +363,9 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		}
 
 		ntmplt = array_sigmasq[0].dim[0];
+		#ifdef __DEBUG__
+		printf("ntmplt %d\n", ntmplt);
+		#endif
 		/* check if the lengths of sigmasq arrays are equal for all detectors */
 		if (last_dimension == -1){
 			/* allocate memory for sigmasq for all detectors upon the first detector ntmplt */
@@ -379,7 +385,9 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 		for (int j=0; j<ntmplt; j++) {
 			sigmasq[match_ifo][j] = (double)((double *)(array_sigmasq[0].data))[j];
-			//printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
+			#ifdef __DEBUG__
+			printf("match ifo %d, template %d: %f\n", match_ifo, j, sigmasq[match_ifo][j]);
+			#endif
 		}
 
 		freeArraydata(array_sigmasq);
@@ -396,6 +404,9 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 
 	}
 	/* free memory */
+	#ifdef __DEBUG__
+	printf("free fnamecpy %s\n", fname_cpy);
+	#endif
 	free(fname_cpy);
 	free(all_ifos);
 	free(xns);
@@ -520,7 +531,9 @@ cuda_postcoh_map_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 void
 cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t stream)
 {
+	#ifdef __DEBUG__
 	printf("read in autocorr from xml %s\n", fname);
+	#endif
 
 	int ntoken = 0;
 
@@ -549,7 +562,7 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 	end_ifo = NULL;
 	strcpy(fname_cpy, fname);
-	printf("fname_cpy %s\n", fname_cpy);
+
 	sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_autocorr[0]);
@@ -560,22 +573,21 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN+1);
 
-	printf("fname for all_ifos %s\n", fname_cpy);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
 	/* parsing for all_ifos */
 	int iifo = 0;
 	while (token != NULL) {
+		#ifdef __DEBUG__
 		printf("token for all_ifos %s, copy size %d, sizeof char %d, sizeof char %d\n", token, sizeof(char)*IFO_LEN, sizeof(char), sizeof(char));
+		#endif
 		strncpy(all_ifos+iifo*IFO_LEN, token, sizeof(char)*IFO_LEN);
 		token = strtok_r(NULL, ",", &end_ifo);
 		iifo++;
 	}
 	all_ifos[IFO_LEN*nifo] = '\0';
-	printf("all_ifos %s\n", all_ifos);
 	int ifo_combo_idx = get_icombo(all_ifos);
 	/* overwrite all_ifos to be the same with the combo in the IFOComboMap */
 	strncpy(all_ifos, IFOComboMap[ifo_combo_idx].name, sizeof(IFOComboMap[ifo_combo_idx].name));
-	printf("all_ifos %s\n", all_ifos);
 
 	strcpy(fname_cpy, fname);
 	token = strtok_r(fname_cpy, ",", &end_ifo);
@@ -599,7 +611,9 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 		ntmplt = array_autocorr[0].dim[1];
 		autochisq_len = array_autocorr[0].dim[0];
 
+		#ifdef __DEBUG__
 		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
+		#endif
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autochisq_len;
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt));
@@ -673,6 +687,9 @@ char * ColNames[] = {
 void
 cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 {
+	#ifdef __DEBUG__
+	printf("read in sngl tmplt from %s\n", fname);
+	#endif
 
 	XmlNodeStruct *xns = (XmlNodeStruct *) malloc(sizeof(XmlNodeStruct));
 	XmlTable *xtable = (XmlTable *) malloc(sizeof(XmlTable));
@@ -683,8 +700,7 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	strncpy((char *) xns->tag, "sngl_inspiral:table", XMLSTRMAXLEN);
 	xns->processPtr = readTable;
 	xns->data = xtable;
-	
-	printf("read in sngl_tmplt from xml %s\n", fname);
+
 	parseFile(fname, xns, 1);
 
     /*
@@ -755,8 +771,8 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 
 
 	/* free memory */
-	// FIXME: XmlTable destroy not implemented yet.	
-	// freeTable(xtable);
+	freeTable(xtable);
+	free(xtable);
 	free(xns);
 	for (icol=0; icol<NSNGL_TMPLT_COLS; icol++) 
 		g_string_free(col_names[icol], TRUE);
