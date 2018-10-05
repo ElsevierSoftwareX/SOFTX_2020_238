@@ -1,0 +1,41 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017,2018  Heather Fong and Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import h5py
+import argparse
+import numpy
+
+parser = argparse.ArgumentParser(description = "Add mass models for prior weighting of templates")
+parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
+parser.add_argument("modelfiles", nargs = "+")
+options = parser.parse_args()
+
+f = h5py.File(options.modelfiles[0], "r")
+SNR = numpy.zeros(f["SNR"].shape)
+coefficients = numpy.zeros(f["coefficients"].shape)
+f.close()
+
+for fname in options.modelfiles:
+	f = h5py.File(options.modelfiles[0], "r")
+	SNR += f["SNR"]
+	coefficients += f["coefficients"]
+	f.close()
+
+f = h5py.File(options.output, "w")
+f.create_dataset("SNR", data = SNR)
+f.create_dataset("coefficients", data = coefficients)
