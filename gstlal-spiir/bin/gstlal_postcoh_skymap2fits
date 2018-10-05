@@ -39,6 +39,7 @@ def find_closest_gps(event_time, start, gps_step):
 	days_from_start = np.floor((event_time - start)/86400.)
 	time_in_one_day = event_time - ( start + days_from_start * 86400)
 	idx = int( round( time_in_one_day/float(gps_step))) % gps_len
+	return idx
 
 
 def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
@@ -71,8 +72,11 @@ parser = OptionParser(
 		  help="Event GPS time"),
 	  Option("--cuda-postcoh-detrsp-fname", "-m",
 		  help="Detector response map used for postcoh"),
+	  Option("--verbose", "-v", action = "store_true",
+		  help="Be verbose"),
 	  Option("--event-id", "-e",
 		  help="Postcoh event ID")]
+
 )
 
 opts, args = parser.parse_args()
@@ -86,11 +90,13 @@ nullsnr_skymap = []
 allread_skymap = []
 input_fname = args[0]
 
-instruments = input_fname.split('/')[-1].split('_')[0]
+instruments = input_fname.split('/')[0].split('_')[0]
+nifo = len(instruments)/2 # ifo e.g. H1, L1, len is 2
 f = open(input_fname, 'rb')
 
 for chunk in iter(lambda: f.read(4), ''):
 	allread_skymap.append(struct.unpack('f', chunk)[0])
+f.close()
 
 npix = len(allread_skymap)/2
 cohsnr_skymap = allread_skymap[0:npix]
@@ -105,16 +111,33 @@ igps = find_closest_gps(event_time, detrsp_start_time, gps_step)
 
 Det_name = "Det_map_gps_%d" % igps
 Det_array = array_from_xml(opts.cuda_postcoh_detrsp_fname, Det_name)
+log_prob = np.zeros(npix)
+ndof = 2
 for i in range(npix):
 	null = nullsnr_skymap[i]
 	prob_null = 1 - sp.special.gammainc(ndof/2.0, null**2/2)
-	log_prob_null = np.log(prob_null)
-	log_prob_final = np.log(4*np.pi**2/det_array[i]) + cohsnr_skymap[i]**2 + log_prob_null
-	prob = sp.special.logsumexp(log_prob_final, axis = 0)
+	log_prob_null = np.log(prob_null) if prob_null > 0 else 0 # do not apply null_prob if nullsnr is zero
+	if nifo == 2:
+		log_prob[i] = cohsnr_skymap[i]/2.
+	else:
+		log_prob[i] = np.log(4*np.pi**2/Det_array[i]) + cohsnr_skymap[i]/2. + log_prob_null
 
-log.info("begin to write skymap in fits format")
+#log_prob_final = sp.special.logsumexp(log_prob, axis = 0)
+log_prob_final = log_prob
+log_den_prob = log_prob_final - max(log_prob_final)
+den_prob = np.exp(log_den_prob)
+#
+log.info("begin to write skymap in fits format, nifo %d" % nifo)
 #FIXME: gps_time/ runtime are not input
-fits.write_sky_map(opts.output, prob,
+fits.write_sky_map(opts.output, den_prob,
+			objid = str(opts.event_id), gps_time=event_time,
+			creator = 'postcoh', runtime = 0, 
+			instruments = instruments, nest = True)
+
+if opts.verbose:
+	#FIXME: gps_time/ runtime are not input
+	output = "cohsnr_%s" % opts.output
+	fits.write_sky_map(output, cohsnr_skymap,
 			objid = str(opts.event_id), gps_time=event_time,
 			creator = 'postcoh', runtime = 0, 
 			instruments = instruments, nest = True)
