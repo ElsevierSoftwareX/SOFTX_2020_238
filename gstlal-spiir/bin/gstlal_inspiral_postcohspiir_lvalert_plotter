@@ -163,7 +163,7 @@ input_stats_fname_short = assignfar_fnames[2]
 input_zerolag_fname = gen_zerolag_fname(path)
 
 def get_stats_duration_name(stats_fname):
-	return stats_fname.split('.')[0].split('_')[-1]
+	return os.path.split(stats_fname)[-1].split('.')[0].split('_')[-1]
 
 dur_long = get_stats_duration_name(input_stats_fname_long)
 dur_mid = get_stats_duration_name(input_stats_fname_mid)
