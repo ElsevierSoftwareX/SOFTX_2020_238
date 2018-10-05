@@ -38,6 +38,7 @@ parser.add_argument("--svd-bank", metavar='name', type=str, help='The input svd 
 parser.add_argument("--reference-psd", metavar='name', type=str, help='The input psd file name', required = True)
 parser.add_argument("--instrument", metavar='name', type=str, help='The instrument to use, e.g., H1', required = True)
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are salpeter, uniform-in-template')
 options = parser.parse_args()
 
 # Read the PSD file
@@ -54,10 +55,15 @@ for svdbank in options.svd_bank:
 	horizon_distance_function = svd_bank.make_horizon_distance_func(banks)
 	horizon_distance = horizon_distance_function(psd)[0]
 	for row in sngl_inspiral_table:
-		# Salpeter IMF, cause why not?
-		# FIXME add in distance weighting
 		assert row.template_id not in ids
-		ids[row.template_id] = numpy.log(row.mass1**-2.35 * horizon_distance**3)
+		if options.model == "salpeter":
+			ids[row.template_id] = numpy.log(row.mass1**-2.35)
+		elif options.model == "uniform-in-template":
+			# the LR code has a horizon distance term to make each
+			# template uniform you have to undo it.
+			ids[row.template_id] = numpy.log((horizon_distance / TYPICAL_HORIZON_DISTANCE)**3)
+		else:
+			raise ValueError("Invalid mass model")
 
 coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
