@@ -510,10 +510,7 @@ class LnSignalDensity(LnLRDensity):
 		# stored.  whatever would allow the correct model to be
 		# re-initialized
 		if self.template_ids:
-			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel(self.template_ids)
-			# FIXME:  switch to this when a model file becomes
-			# available
-			#self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids)
+			self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids)
 		else:
 			# default lnP = 1/len(templates) = 0
 			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel([0])
