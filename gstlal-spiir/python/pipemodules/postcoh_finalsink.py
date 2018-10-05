@@ -28,6 +28,7 @@ import time
 import numpy
 import os
 import fcntl
+import logging
 import pdb
 
 # The following snippet is taken from http://gstreamer.freedesktop.org/wiki/FAQ#Mypygstprogramismysteriouslycoredumping.2Chowtofixthis.3F
@@ -162,7 +163,7 @@ class OnlinePerformer(object):
 				yield "%f %e\n" % (time, latency)
 
 	def update_eye_candy(self, candidate):
-		latency_val = (float(candidate.end), float(lal.UTCToGPS(time.gmtime()) - candidate.end))
+		latency_val = (float(candidate.end), float(lal.UTCToGPS(time.gmtime()) - candidate.end), candidate.cohsnr, candidate.cmbchisq)
 		self.latency_history.append(latency_val)
 
 
@@ -184,6 +185,15 @@ class FAPUpdater(object):
 			for itime in times:
 				self.collect_walltime.append(int(itime))
 
+		self.combine_duration = 86400*2
+		self.max_nstats_perbank = 3
+		# FIXME: fixed number of banks per job
+		self.max_nbank_perjob = 10
+		# set the limit for maximum input string length
+		# when the number of banks reaches 140, it will give you a signal 7 error in OPA2
+		# FIXME: hard-codede, the first entry in collect_walltime is the longest
+		self.max_nstats_formargi = (self.collect_walltime[0]/self.combine_duration + self.max_nstats_perbank + 1)* self.max_nbank_perjob
+
 		if self.output and len(self.output) != len(self.collect_walltime):
 			raise ValueError("number of input walltimes does match the number of input filenames: %s does not match %s" % (collect_walltime_string, output_list_string))
 
@@ -203,6 +213,7 @@ class FAPUpdater(object):
 		# both update_fap_stats and combine_stats need to access latest cleaned
 		# uped stats files
 		# make sure need-to-remove files have been removed
+
 		self.wait_last_process_finish(self.procs_combine_stats)
 		# remove files that have been combined from last process
 		map(lambda x: os.remove(x), self.rm_fnames)
@@ -221,7 +232,18 @@ class FAPUpdater(object):
 		valid_fnames = [one_fname for one_fname in ls_fnames if not re.search("next", one_fname)]
 		return valid_fnames
 
+	def get_valid_bankstats(self, ls_fnames, boundary):
+		valid_fnames = []
+		for ifname in ls_fnames:
+			ifname_split = ifname.split("_")
+			# FIXME: hard coded the stats name e.g. bank16_stats_1187008882_1800.xml.gz
+			if len(ifname_split)> 1 and ifname[-4:] != "next" and ifname_split[-2].isdigit() and int(ifname_split[-2]) > boundary:
+				valid_fnames.append("%s/%s" % (self.path, ifname))
+		return valid_fnames
+
 	def update_fap_stats(self, cur_buftime):
+
+		logging.info("update fap %d" % cur_buftime)
 		self.wait_last_process_finish(self.procs_update_fap_stats)
 		# list all the files in the path
 		#nprefix = len(self.input_prefix_list[0].split("_"))
@@ -233,12 +255,15 @@ class FAPUpdater(object):
 		for (i, collect_walltime) in enumerate(self.collect_walltime):
 			boundary = cur_buftime - collect_walltime
 			# find the files within the collection time
-			valid_fnames = []
-			for ifname in ls_fnames:
-				ifname_split = ifname.split("_")
-				# FIXME: hard coded the stats name e.g. bank16_stats_1187008882_1800.xml.gz
-				if len(ifname_split)> 1 and ifname[-4:] != "next" and ifname_split[-2].isdigit() and int(ifname_split[-2]) > boundary:
-					valid_fnames.append("%s/%s" % (self.path, ifname))
+			valid_fnames = self.get_valid_bankstats(ls_fnames, boundary)
+
+			# reach the limit for maximum input string length
+			# when the number of banks reaches 140, it will give you a signal 7 error in OPA2
+			while len(valid_fnames) > self.max_nstats_formargi:
+				logging.info("update fap: %d stats files for marignalization, over the input string length limit, combining" % len(valid_fnames))
+				self.combine_stats()
+				ls_fnames = self.get_fnames("stats")
+				valid_fnames = self.get_valid_bankstats(ls_fnames, boundary)
 
 			if len(valid_fnames) > 0:
 				input_for_cmd = ",".join(valid_fnames)
@@ -246,24 +271,24 @@ class FAPUpdater(object):
 				proc = self.call_calcfap(self.output[i], input_for_cmd, self.ifos, collect_walltime, verbose = self.verbose)
 				self.procs_update_fap_stats.append(proc)
 
-	def call_calcfap(self, fout, fin, ifos, walltime, verbose = False):
+	def call_calcfap(self, fout, fin, ifos, walltime, update_pdf = True, verbose = False):
 		cmd = []
 		cmd += ["gstlal_cohfar_calc_fap"]
 		cmd += ["--input", fin]
 		cmd += ["--input-format", "stats"]
 		cmd += ["--output", fout]
 		cmd += ["--ifos", ifos]
-		if verbose:
-			print cmd
+		if update_pdf:
+			cmd += ["--update-pdf"]
+		logging.info("%s" % cmd)
 		proc = subprocess.Popen(cmd)
 		return proc
 
 	# combine stats every day
-	def combine_stats(self, combine_duration = 86400):
+	def combine_stats(self):
+
+		logging.info("combine_stats")
 		# max number of files to be combined
-		max_nfile_input = 6
-		if self.verbose:
-			print "combining %s" % self.path
 		ls_fnames = self.get_fnames("bank")
 		if ls_fnames is None:
 			return
@@ -284,15 +309,13 @@ class FAPUpdater(object):
 				this_walltime = int(one_bank_fname.split('.')[0].split('_')[-1])
 				collected_walltimes = list(map(lambda x: int(x.split('_')[-1].split('.')[0]), collected_fnames))
 				total_collected_walltime = sum(collected_walltimes)
-				if this_walltime >= combine_duration:
+				if this_walltime >= self.combine_duration:
 					continue
-				elif len(collected_fnames) >= max_nfile_input or total_collected_walltime >= combine_duration:
-					if self.verbose:
-						print "combining %s" % ','.join(collected_fnames)
+				elif len(collected_fnames) >= self.max_nstats_perbank or total_collected_walltime >= self.combine_duration:
 					start_banktime = int(collected_fnames[0].split('_')[2])
 					fout = "%s/bank%s_stats_%d_%d.xml.gz" % (self.path, bankid, start_banktime, total_collected_walltime)
 
-					proc = self.call_calcfap(fout, ','.join(collected_fnames), self.ifos, total_collected_walltime, self.verbose)
+					proc = self.call_calcfap(fout, ','.join(collected_fnames), self.ifos, total_collected_walltime, update_pdf = False, verbose = self.verbose)
 					self.procs_combine_stats.append(proc)
 					# mark to remove collected_fnames
 					for frm in collected_fnames:
@@ -361,6 +384,9 @@ class FinalSink(object):
 		self.thread_snapshot_segment = None
 		self.t_snapshot_start = None
 		self.snapshot_duration = None
+		# set logging to report status
+		self.log_fname = "%s/%s_log" % (path, path)
+		logging.basicConfig(filename=self.log_fname, format='%(asctime)s %(message)s', level = logging.DEBUG)
 
 		# background updater
 		self.total_duration = None
@@ -406,14 +432,13 @@ class FinalSink(object):
 		with self.lock:
 			buf = elem.emit("pull-buffer")
 			if buf.flag_is_set(gst.BUFFER_FLAG_GAP):
-				print "buf gap at %d" % buf.timestamp
+				logging.info("buf gap at %d" % buf.timestamp)
 				return
 			buf_timestamp = LIGOTimeGPS(0, buf.timestamp)
 			newevents = postcohtable.GSTLALPostcohInspiral.from_buffer(buf)
 			self.need_candidate_check = False
 
 			if len(newevents) == 0:
-				print "no event at %d" % buf.timestamp
 				return
 
 			# NOTE: the first entry is used to add to the segments, not a really event
@@ -431,7 +456,6 @@ class FinalSink(object):
 			newevents = newevents[1:]
 			nevent = len(newevents)
 
-			# print >> sys.stderr, "%f nevent %d" % (buf_timestamp, nevent)
 			# initialization
 			if self.is_first_buf:
 				self.t_snapshot_start = buf_timestamp
@@ -606,7 +630,7 @@ class FinalSink(object):
 		# if it is not one order of magnitude more significant than the last trigger 
 		# or if it not more significant the last submitted trigger
 		# FIXME: what if there are two adjacent significant events
-		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.5)) or (abs(float(trigger.end) - float(last_submitted_time)) < 3600 and trigger.far > last_submitted_far*0.5) :
+		if ((abs(float(trigger.end) - last_time) < 50 and abs(trigger.far/last_far) > 0.5)) or (abs(float(trigger.end) - float(last_submitted_time)) < 100 and trigger.far > last_submitted_far*0.5) :
 			print >> sys.stderr, "trigger controled, time %f, FAR %f, last_far %f, last_submitted time %f, last_submitted far %f" % (float(trigger.end), trigger.far, last_far, last_submitted_time, last_submitted_far)
 			self.last_trigger.append((trigger.end, trigger.far))
 			line = "%f,%e,%d\n" % (float(trigger.end), trigger.far, trigger_is_submitted)
@@ -755,6 +779,7 @@ class FinalSink(object):
 
 	def snapshot_segment_file(self, t_snapshot_start, duration, verbose = False):
 		filename = "%s/%s_SEGMENTS_%d_%d.xml.gz" % (self.path, self.ifos, t_snapshot_start, duration)
+		logging.info("snapshotting %s" % filename)
 		# make sure the last round of output dumping is finished 
 		if self.thread_snapshot_segment is not None and self.thread_snapshot_segment.isAlive():
 			self.thread_snapshot_segment.join()
@@ -777,6 +802,7 @@ class FinalSink(object):
 
 	def snapshot_output_file(self, filename, verbose = False):
 		# make sure the last round of output dumping is finished 
+		logging.info("snapshotting %s" % filename)
 		if self.thread_snapshot is not None and self.thread_snapshot.isAlive():
 			self.thread_snapshot.join()
 	
@@ -815,7 +841,10 @@ class FinalSink(object):
 			self.postcoh_document.set_filename(filename)
 		self.postcoh_document.write_output_file(verbose = verbose)
 		# FIXME: hard-coded segment filename
-		seg_filename = "%s/%s_SEGMENTS_%d_%d.xml.gz" % (self.path, self.ifos, self.t_snapshot_start, self.snapshot_duration)
+		if self.t_snapshot_start:
+			seg_filename = "%s/%s_SEGMENTS_%d_%d.xml.gz" % (self.path, self.ifos, self.t_snapshot_start, self.snapshot_duration)
+		else:
+			seg_filename = "%s/%s_SEGMENTS.xml.gz" % (self.path, self.ifos)
 		self.seg_document.set_filename(seg_filename)
 		self.seg_document.write_output_file(verbose = verbose)
 
