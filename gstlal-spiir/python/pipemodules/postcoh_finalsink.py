@@ -159,8 +159,8 @@ class OnlinePerformer(object):
 	def web_get_latency_history(self):
 		with self.parent_lock:
 			# first one in the list is sacrificed for a time stamp
-			for time, latency in self.latency_history:
-				yield "%f %e\n" % (time, latency)
+			for time, latency, cohsnr, cmbchisq in self.latency_history:
+				yield "%f %e %f %f\n" % (time, latency, cohsnr, cmbchisq)
 
 	def update_eye_candy(self, candidate):
 		latency_val = (float(candidate.end), float(lal.UTCToGPS(time.gmtime()) - candidate.end), candidate.cohsnr, candidate.cmbchisq)
