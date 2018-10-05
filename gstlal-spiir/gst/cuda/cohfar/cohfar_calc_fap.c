@@ -32,7 +32,7 @@
 #include <glib.h>
 #include <cohfar/background_stats_utils.h>
 
-#define __DEBUG__ 1
+#define __DEBUG__ 0
 
 static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pfmt, gchar **pout, gchar **pifos, gchar **ptype, int *update_pdf)
 {
