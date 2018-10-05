@@ -939,7 +939,7 @@ class Bank(object):
             nround_max = 10
 
             # Collate various requirements
-            spiir_match_min = max(final_overlap_min, b0_optimized_overlap_min, initial_overlap_min)
+            spiir_match_min = max(initial_overlap_min, b0_optimized_overlap_min, final_overlap_min)
             n_filters_min = max(filters_min, filters_per_loglen_min * numpy.log2(len(data)))
             n_filters_max = None
             if filters_per_loglen_max is not None:
@@ -955,18 +955,19 @@ class Bank(object):
 
                 # compute the SNR
                 spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0
+                optimizer_state = None
                 if verbose:
                     print >> sys.stderr, "Pass -1, overlap %f"%spiir_match
                 if(nround == 1):
                     original_match = spiir_match
                     original_filters = len(a1)
-                if final_overlap_min > 0:
+                if spiir_match >= initial_overlap_min and (b0_optimized_overlap_min > 0 or final_overlap_min > 0):
                     # optimizer uses convention that template is normalized to 1 not 2
-                    a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), **optimizer_options)
+                    a1,b0,spiir_match,optimizer_state = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), passes=0, verbose=verbose, return_state=True)
                     b0 *= numpy.sqrt(2)
-                elif b0_optimized_overlap_min > 0:
-                    a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), passes=0, verbose=verbose)
-                    b0 *= numpy.sqrt(2)
+                    if spiir_match >= b0_optimized_overlap_min and (final_overlap_min > 0):
+                        a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), state=optimizer_state, **optimizer_options)
+                        b0 *= numpy.sqrt(2)
 
                 n_filters = len(delay)
                 if verbose:
@@ -1010,9 +1011,9 @@ class Bank(object):
                     break
 
             # Once we have iterated to get the final filter delays, optimize if not already done
-            if not(final_overlap_min > 0) and optimizer_options is not None:
+            if optimizer_options is not None and (optimizer_state is None or not(spiir_match >= b0_optimized_overlap_min and final_overlap_min > 0)):
                     # optimizer uses convention that template is normalized to 1 not 2
-                    a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), **optimizer_options)
+                    a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), state=optimizer_state, **optimizer_options)
                     b0 *= numpy.sqrt(2)
 
             u_rev_pad = gen_spiir_response(len(h_pad), a1, b0, delay)

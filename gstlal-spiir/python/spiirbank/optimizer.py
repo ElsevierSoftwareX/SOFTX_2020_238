@@ -230,19 +230,27 @@ def saddle_free_newton(do,ddo,lam=0):
 ############
 ## a1 optimization
 
-def optimize_a1(a1, delay, template, passes=0, indv=True, greedy=False, hessian=True, f="o2", eps=1e-3, lam=1e-1, verbose=False):
+def optimize_a1(a1, delay, template, return_state=False, state=None, passes=0, indv=True, greedy=False, hessian=True, f="o2", eps=1e-3, lam=1e-1, verbose=False):
   calc_df = globals()['calc_d'+f]
   calc_df_indv = globals()['calc_d'+f+'_indv']
   calc_ddf_indv = globals()['calc_dd'+f+'_indv']
   calc_ddf = globals()['calc_dd'+f]
 
-  state = initialize_state(template,len(a1))
-  b0, overlap = optimize_b0(a1,delay,state)
   stop = False
   i = -1
-  for i in range(passes):
+  if state is None:
+    state = initialize_state(template,len(a1))
+    b0, overlap = optimize_b0(a1,delay,state)
     if verbose:
-      eprint("Pass %d, overlap %f"%(i,overlap))
+      eprint("Pass 0, overlap %f"%(overlap))
+  else:
+    #TODO: pass previous i, handle possibility of f changing or optimize_b0 not having been called yet
+    #TODO: need to track order to which state is valid (and only compute what is necessary)
+    (template, a1_conj, y, dy, ddy, Y, dY, ddY, ddYd, fact, b0, norm_a, overlap_a) = state
+    overlap = overlap_a[0]
+    pass
+
+  for i in range(passes):
     if indv:
       for tj in range(len(a1)):
         if greedy:
@@ -289,8 +297,10 @@ def optimize_a1(a1, delay, template, passes=0, indv=True, greedy=False, hessian=
         if(np.max(np.abs(da))<1e-9):
           a1[:] = a
           stop = True
+    if verbose:
+      eprint("Pass %d, overlap %f"%(i+1,overlap))
     if stop:
       break
-  if verbose:
-    eprint("Pass %d, overlap %f"%(i+1,overlap))
+  if return_state:
+    return a1,b0,overlap,state
   return a1,b0,overlap
