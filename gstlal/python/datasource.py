@@ -352,6 +352,10 @@ class GWDataSourceInfo(object):
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
 
+		## options for shared memory
+		self.shm_assumed_duration = options.shared_memory_assumed_duration
+		self.shm_block_size = options.shared_memory_block_size # NOTE: should this be incorporated into options.block_size? currently only used for offline data sources
+
 		## A dictionary of framexmit addresses
 		self.framexmit_addr = framexmit_ports["CIT"]
 		if options.framexmit_addr is not None:
@@ -512,6 +516,12 @@ def append_options(parser):
 		Set the name of the shared memory partition for a given instrument.
 		Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME
 
+-	--shared-memory-assumed-duration [int]
+		Set the assumed span of files in seconds. Default = 4 seconds.
+
+-	--shared-memory-block-size [int]
+		Set the byte size to read per buffer. Default = 4096 bytes.
+
 -	--frame-segments-file [filename]
 		Set the name of the LIGO light-weight XML file from which to load frame segments.
 		Optional iff --data-source is frames
@@ -572,6 +582,8 @@ def append_options(parser):
 	group.add_option("--state-channel-name", metavar = "name", action = "append", help = "Set the name of the state vector channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--dq-channel-name", metavar = "name", action = "append", help = "Set the name of the data quality channel.  This channel will be used to control the flow of data via the on/off bits.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--shared-memory-partition", metavar = "name", action = "append", help = "Set the name of the shared memory partition for a given instrument.  Can be given multiple times as --shared-memory-partition=IFO=PARTITION-NAME")
+	group.add_option("--shared-memory-assumed-duration", type = "int", default = 4, help = "Set the assumed span of files in seconds. Default = 4.")
+	group.add_option("--shared-memory-block-size", type = "int", default = 4096, help = "Set the byte size to read per buffer. Default = 4096.")
 	group.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	group.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
 	group.add_option("--state-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
@@ -749,7 +761,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, nxydump_segment = None
 
 		if gw_data_source_info.data_source == "lvshm":
 			# FIXME make wait_time adjustable through web interface or command line or both
-			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], wait_time = 120)
+			src = pipeparts.mklvshmsrc(pipeline, shm_name = gw_data_source_info.shm_part_dict[instrument], assumed_duration = gw_data_source_info.shm_assumed_duration, blocksize = gw_data_source_info.shm_block_size, wait_time = 120)
 		elif gw_data_source_info.data_source == "framexmit":
 			src = pipeparts.mkframexmitsrc(pipeline, multicast_iface = gw_data_source_info.framexmit_iface, multicast_group = gw_data_source_info.framexmit_addr[instrument][0], port = gw_data_source_info.framexmit_addr[instrument][1], wait_time = 120)
 		else:
