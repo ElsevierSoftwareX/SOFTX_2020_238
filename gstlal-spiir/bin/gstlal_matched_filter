@@ -19,7 +19,7 @@
 
 import numpy
 from optparse import OptionParser
-from gstlal.cbc_template_iir import matched_filt
+from gstlal.spiirbank.cbc_template_iir import matched_filt
 import pdb
 
 import matplotlib
@@ -35,19 +35,40 @@ parser.add_option("--template-fname", metavar = "filename", help = "Set the file
 parser.add_option("--data-fname", metavar = "filename", help = "Set the filename in which to save the data (required).")
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
 parser.add_option("--snr-prefix", metavar = "filename", default = None, help = "Set the filename in which to save the snr series plot, if not set, will not store the plot and snr txt series.")
+parser.add_option("--data-prefix", metavar = "filename", default = None, help = "Set the filename in which to save the snr series plot, if not set, will not store the plot and snr txt series.")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 options, filenames = parser.parse_args()
 
 template = numpy.loadtxt(options.template_fname).view(complex)
 data = numpy.loadtxt(options.data_fname, usecols = (0,1)) # gps_time, value
-snr, sigma, indmax, timemax = matched_filt(template, data, sampleRate = options.sampleRate)
+snr, sigma, indmax, timemax, f_ticks, data_fft, template_fft = matched_filt(template, data, sampleRate = options.sampleRate)
 if options.verbose:
-	print "max snr is %f, sigma %f, indmax %f, timemax %f" % (max(abs(snr)), sigma, indmax, timemax)
+	print "max snr is %f, sigma %f, indmax %f, timemax %.9f" % (max(abs(snr)), sigma, indmax, timemax)
 
 if options.snr_prefix:
 	pyplot.figure()
-	p1 = pyplot.plot(data[:,0] - timemax, snr[0:len(data[:,0])])
-	pyplot.xlabel("Time since {0:.4f}".format(timemax))
+	time = data[:,0] - timemax
+	idx_start = min(numpy.where((abs(snr)) >0)[0])
+	idx_end = min(max(numpy.where((abs(snr)) >0)[0]), len(time))
+	time = time[idx_start:idx_end]
+	snr = snr[idx_start:idx_end]
+	
+	p1 = pyplot.plot(time, snr)
+	pyplot.xlabel("Time since {0:.9f}".format(timemax))
 	pyplot.savefig("%s.svg" % options.snr_prefix, format = "svg", dpi = 1200)
 	numpy.savetxt("%s.txt" % options.snr_prefix, snr.view(float))
+
+	pyplot.figure()
+	fig, axs = pyplot.subplots(2, 1)
+	fig.subplots_adjust(hspace = .5)
+	axs[0].plot(f_ticks, abs(data_fft))
+	axs[0].set_ylabel("data f")
+	axs[0].set_xlabel("Hz")
+	axs[1].plot(f_ticks, abs(template_fft))
+	axs[1].set_ylabel("template f")
+	axs[1].set_xlabel("Hz")
+	pyplot.savefig("%s_fft.svg" % options.data_prefix, format = "svg", dpi = 1200)
+
+
+
 
