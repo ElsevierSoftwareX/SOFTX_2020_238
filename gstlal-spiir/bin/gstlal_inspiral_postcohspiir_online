@@ -326,7 +326,7 @@ def parse_command_line():
                 os.mkdir(skymap_path)
 
 	if options.finalsink_fapupdater_output_fname is None:
-		options.finaksink_fapupdater_output_fname = options.cohfar_assignfar_input_fname
+		options.finalsink_fapupdater_output_fname = options.cohfar_assignfar_input_fname
 
     return options, filenames, process_params, iir_banks, detectors
 ################################################################
