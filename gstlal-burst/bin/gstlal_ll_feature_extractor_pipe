@@ -105,6 +105,7 @@ def generate_options(options):
 
 def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, options, data_source_info):
 	feature_extractor_nodes = {}
+	channel_list = []
 
 	# generate common command line options
 	command_line_options = generate_options(options)
@@ -116,6 +117,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 			print("Creating node for channel subset %d"%ii)
 
 		# creates a list of channel names with entries of the form --channel-name=IFO:CHANNEL_NAME:RATE
+		channel_list.extend(channel_subset)
 		channels = [''.join(["--channel-name=",':'.join([channel, str(int(data_source_info.channel_dict[channel]['fsamp']))])]) for channel in channel_subset]
 		channels[0] = channels[0].split('=')[1] # this is done to peel off --channel-name option off first channel
 
@@ -132,6 +134,12 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 				opts = subset_options,
 				output_files = {"out-path": os.path.join(options.out_path, "gstlal_feature_extractor")}
 			)
+
+	print("Writing channel list of all channels processed")
+	listpath = os.path.join(options.out_path, "full_channel_list.txt")
+	with open(listpath, 'w') as f:
+		for channel in channel_list:
+			f.write(channel+'\n')
 
 	return feature_extractor_nodes
 
