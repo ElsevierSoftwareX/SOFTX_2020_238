@@ -1,3 +1,9 @@
+gstlal-burst (0.1.0) unstable; urgency=low
+
+  * Add feature extraction toolkit
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Sat, 6 Oct 2018 20:54:00 -0500
+
 gstlal-burst (0.0.3) unstable; urgency=low
 
   * Updates for lalburst compatibility
