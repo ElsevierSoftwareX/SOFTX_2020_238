@@ -196,15 +196,13 @@ static guint64 get_available_samples(GSTLALTDwhiten *element)
 
 static int push_zeros(GSTLALTDwhiten *element, unsigned samples)
 {
-	GstBuffer *zerobuf = gst_buffer_new_allocate(NULL, samples * sizeof(double), NULL);
-	GstMapInfo mapinfo;
+	int size = samples * element->bps;
+	GstBuffer *zerobuf = gst_buffer_new_and_alloc(samples * element->bps);
 	if(!zerobuf) {
 		GST_DEBUG_OBJECT(element, "failure allocating zero-pad buffer");
 		return -1;
 	}
-	gst_buffer_map(zerobuf, &mapinfo, GST_MAP_WRITE);
-	memset(mapinfo.data, 0, mapinfo.size);
-	gst_buffer_unmap(zerobuf, &mapinfo);
+	memset(GST_BUFFER_DATA(zerobuf), 0, size);
 	gst_audioadapter_push(element->adapter, zerobuf);
 	return 0;
 }
@@ -220,8 +218,8 @@ static void set_metadata(GSTLALTDwhiten *element, GstBuffer *buf, guint64 outsam
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
-	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(buf);
+	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
+	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -287,7 +285,7 @@ static double inner_product(const double *vec1, const double *vec2, gsize n)
  */
 
 
-static unsigned tddfilter(GSTLALTDwhiten *element, GstMapInfo *mapinfo, unsigned output_length)
+static unsigned tddfilter(GSTLALTDwhiten *element, GstBuffer *outbuf, unsigned output_length)
 {
 	struct kernelinfo_t *kernelinfo;
 	gsize longest_kernel_length = kernelinfo_longest(element->kernels);
@@ -298,13 +296,13 @@ static unsigned tddfilter(GSTLALTDwhiten *element, GstMapInfo *mapinfo, unsigned
 	double gain1;
 	unsigned poped_kernels;
 	double *input;
-	double *output = (double *) mapinfo->data;
+	double *output = (double *)GST_BUFFER_DATA(outbuf);
 
 	/*
 	 * clip number of output samples to buffer size
 	 */
 
-	output_length = MIN(output_length, mapinfo->size / sizeof(*output));
+	output_length = MIN(output_length, GST_BUFFER_SIZE(outbuf) / sizeof(*output));
 
 	/*
 	 * how many samples do we need from the adapter?
@@ -377,16 +375,10 @@ static unsigned filter(GSTLALTDwhiten *element, GstBuffer *buf)
 {
 	unsigned output_length;
 
-	GstMapInfo mapinfo;
-
 	output_length = get_output_length(element, get_available_samples(element));
 
-	gst_buffer_map(buf, &mapinfo, GST_MAP_WRITE);
-
 	if(output_length > 0)
-		output_length = tddfilter(element, &mapinfo, output_length);
-
-	gst_buffer_unmap(buf, &mapinfo);
+		output_length = tddfilter(element, buf, output_length);
 
 	/*
 	 * flush the data from the adapter
@@ -428,7 +420,7 @@ static GstFlowReturn filter_and_push(GSTLALTDwhiten *element, guint64 output_len
 	if(!output_length)
 		return GST_FLOW_OK;
 
-	buf = gst_buffer_new_allocate(NULL, output_length * GST_AUDIO_INFO_BPF(&element->audio_info), NULL);
+	buf = gst_buffer_new_and_alloc(output_length * element->bps);
 	if(!buf)
 		return GST_FLOW_ERROR;
 
@@ -495,13 +487,20 @@ G_DEFINE_TYPE(
 
 static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *size)
 {
-	GstAudioInfo info;
-	gboolean success = gst_audio_info_from_caps(&info, caps);
+	GstStructure *str;
+	gint width;
+	gboolean success = TRUE;
+
+	str = gst_caps_get_structure(caps, 0);
+	success &= gst_structure_get_int(str, "width", &width);
 
 	if(success)
-		*size = GST_AUDIO_INFO_BPF(&info);
+		*size = width / 8;
+	else
+		GST_WARNING_OBJECT(trans, "unable to parse width from %" GST_PTR_FORMAT, caps);
 
 	return success;
+
 }
 
 
@@ -571,10 +570,23 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outcaps)
 {
 	GSTLALTDwhiten *element = GSTLAL_TDWHITEN(trans);
-	gint old_rate = GST_AUDIO_INFO_RATE(&element->audio_info);
-	gboolean success = gst_audio_info_from_caps(&element->audio_info, incaps);
-	if(success && GST_AUDIO_INFO_RATE(&element->audio_info) != old_rate)
-		g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, GST_AUDIO_INFO_RATE(&element->audio_info), NULL);
+	GstStructure *s;
+	gint width;
+	gint rate;
+	gboolean success = TRUE;
+
+	s = gst_caps_get_structure(outcaps, 0);
+	success &= gst_structure_get_int(s, "width", &width);
+	success &= gst_structure_get_int(s, "rate", &rate);
+
+	if(success) {
+		element->width = width;
+		element->rate = rate;
+		element->bps = width /8 ;
+		if(element->rate != rate)
+			g_signal_emit(G_OBJECT(trans), signals[SIGNAL_RATE_CHANGED], 0, element->rate, NULL);
+	} else
+		GST_ERROR_OBJECT(element, "unable to parse and/or accept caps %" GST_PTR_FORMAT, outcaps);
 
 	return success;
 }
@@ -621,11 +633,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	GSTLALTDwhiten *element = GSTLAL_TDWHITEN(trans);
 	struct kernelinfo_t *kernelinfo;
 	gboolean history_is_gap, input_is_gap;
-	GstMapInfo mapinfo;
 	guint output_length, nonzero_output_length;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_TIMESTAMP_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
 	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
@@ -654,7 +665,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * (re)sync timestamp and offset book-keeping
 		 */
 
-		element->t0 = GST_BUFFER_PTS(inbuf);
+		element->t0 = GST_BUFFER_TIMESTAMP(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_out_offset = element->offset0 + kernelinfo_longest(element->kernels) - 1 - element->latency;
 
@@ -664,7 +675,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		element->need_discont = TRUE;
 	} else if(!gst_audioadapter_is_empty(element->adapter))
-		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
+		g_assert_cmpuint(GST_BUFFER_TIMESTAMP(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
@@ -677,7 +688,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	kernelinfo = g_queue_peek_tail(element->kernels);
 	if(kernelinfo->offset == GST_BUFFER_OFFSET_NONE) {
 		kernelinfo->offset = GST_BUFFER_OFFSET(inbuf);
-		kernelinfo->timestamp = GST_BUFFER_PTS(inbuf);
+		kernelinfo->timestamp = GST_BUFFER_TIMESTAMP(inbuf);
 	}
 
 	/*
@@ -720,9 +731,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, output_length);
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		memset(mapinfo.data, 0, mapinfo.size);
-		gst_buffer_unmap(outbuf, &mapinfo);
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, output_length, TRUE);
 		GST_LOG_OBJECT(element, "output is %u sample gap", output_length);
 	} else if(nonzero_output_length >= output_length) {
@@ -758,7 +767,6 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		result = filter_and_push(element, nonzero_output_length);
 		if(result != GST_FLOW_OK) {
-			gst_buffer_unmap(outbuf, &mapinfo);
 			goto done;
 		}
 
@@ -767,11 +775,10 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		gst_audioadapter_flush_samples(element->adapter, gap_length);
-		gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-		memset(mapinfo.data, 0, mapinfo.size);
-		gst_buffer_unmap(outbuf, &mapinfo);
+	
+		memset(GST_BUFFER_DATA(outbuf), 0, GST_BUFFER_SIZE(outbuf));
 		set_metadata(element, outbuf, gap_length, TRUE);
-		gst_buffer_set_size(outbuf, gap_length * GST_AUDIO_INFO_BPF(&element->audio_info));
+		GST_BUFFER_SIZE(outbuf) = gap_length * element->bps;
 	}
 
 	/*
@@ -905,8 +912,12 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 static void finalize(GObject *object)
 {
 	GSTLALTDwhiten *element = GSTLAL_TDWHITEN(object);
+	struct kernelinfo_t *this_kernelinfo = g_queue_pop_head(element->kernels);
+	while (this_kernelinfo)
+		kernelinfo_free(this_kernelinfo);
+		this_kernelinfo = g_queue_pop_head(element->kernels);
 
-	g_queue_free_full(element->kernels, (GDestroyNotify) kernelinfo_free);
+	//g_queue_free_full(element->kernels, (GDestroyNotify) kernelinfo_free);
 	element->kernels = NULL;
 	if(element->adapter) {
 		g_object_unref(element->adapter);
@@ -931,9 +942,11 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SINK,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE(GST_AUDIO_NE(F64)) ", " \
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"layout = (string) interleaved"
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64}"
 	)
 );
 
@@ -943,11 +956,14 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 	GST_PAD_SRC,
 	GST_PAD_ALWAYS,
 	GST_STATIC_CAPS(
-		GST_AUDIO_CAPS_MAKE(GST_AUDIO_NE(F64)) ", " \
+		"audio/x-raw-float, " \
+		"rate = (int) [1, MAX], " \
 		"channels = (int) 1, " \
-		"layout = (string) interleaved"
+		"endianness = (int) BYTE_ORDER, " \
+		"width = (int) {32, 64}"
 	)
 );
+
 
 
 static void gstlal_tdwhiten_class_init(GSTLALTDwhitenClass *klass)
@@ -1045,7 +1061,7 @@ static void gstlal_tdwhiten_class_init(GSTLALTDwhitenClass *klass)
 
 static void gstlal_tdwhiten_init(GSTLALTDwhiten *filter)
 {
-	filter->audio_info.bpf = 0;	/* impossible value */
+	filter->bps = 0;	/* impossible value */
 	filter->adapter = NULL;
 	filter->latency = 0;
 	filter->kernels = g_queue_new();

@@ -59,6 +59,7 @@
 #include <gstlal_trim.h>
 #include <gstlal_bitvectorgen.h>
 #include <audioratefaker.h>
+#include <gstlal_tdwhiten.h>
 
 
 /*
@@ -85,6 +86,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_trim", GST_TYPE_LALTRIM},
 		{"lal_bitvectorgen", GSTLAL_BITVECTORGEN_TYPE},
 		{"audioratefaker", GST_TYPE_AUDIO_RATE_FAKER},
+		{"lal_tdwhiten", GSTLAL_TDWHITEN_TYPE},
 		{NULL, 0},
 	};
 

@@ -53,8 +53,9 @@ typedef struct {
 	/*
 	 * input stream
 	 */
-
-	GstAudioInfo audio_info;
+	gint rate;
+	gint width;
+	gint bps;
 	GstAudioAdapter *adapter;
 
 	/*
