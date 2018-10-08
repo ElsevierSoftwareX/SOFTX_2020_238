@@ -692,7 +692,8 @@ class FinalSink(object):
 						print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
 						gracedb_ids.append(resp_json["graceid"])
 						break
-			except:
+			except Exception as e:
+                                print(e)
 				gracedb_upload_itrial += 1
 		#else:
 		#  proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
