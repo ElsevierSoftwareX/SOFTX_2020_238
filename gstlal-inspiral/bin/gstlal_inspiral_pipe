@@ -163,6 +163,31 @@ def inj_psd_node_gen(segsdict, options):
 	ref_psd_parent_nodes = []
 	return psd_nodes, ref_psd_parent_nodes
 
+def model_node_gen(modelJob, modelAddJob, dag, instruments, svd_nodes, psd, options, seg):
+	if options.mass_model_file is None:
+		# choose, arbitrarily, the lowest instrument in alphabetical order
+		instrument = min(svd_nodes)
+		model_nodes = []
+		for n,node in enumerate(svd_nodes[instrument]):
+			this_model_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MASS_MODEL' % (n,), seg, '.h5', path = modelJob.output_path)
+			model_node = inspiral_pipe.generic_node(modelJob, dag,
+				input_files = {"reference-psd":psd, "svd-bank":node.output_files["write-svd"]},
+				opts = {"instrument": instrument, "model":options.mass_model},
+				output_files = {"output": this_model_file_name},
+				parent_nodes = [node]
+			)
+			model_nodes.append(model_node)
+
+		model_file_name = inspiral_pipe.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = modelJob.output_path)
+		model_add_node = inspiral_pipe.generic_node(modelAddJob, dag,
+			input_files = {"": [n.output_files["output"] for n in model_nodes]},
+			output_files = {"output": model_file_name},
+			parent_nodes = model_nodes
+		)
+		return [model_add_node], model_file_name
+	else:
+		return [], options.mass_model_file
+
 def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, template_mchirp_dict):
 	svd_nodes = {}
 	new_template_mchirp_dict = {}
@@ -483,7 +508,7 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set):
+def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, mass_model_add_node, mass_model_file):
 
 	likelihood_nodes = {}
 	rankpdf_nodes = []
@@ -504,9 +529,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		# mass bin dependent prior, but it really doesn't matter for
 		# the time being.
 		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
-				parent_nodes = [one_ifo_svd_nodes[n]],
+				parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node,
 				opts = {"instrument":instrument_set, "background-prior":1, "min-instruments":options.min_instruments},
-				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"]},
+				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file},
 				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
@@ -1000,6 +1025,8 @@ def parse_command_line():
 
 	# Template bank
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
+	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'file', 'salpeter'")
+	parser.add_option("--mass-model-file", metavar = "filename", help = "Set the name of the mass model file, e.g., mass_model.h5.  Required if --mass-model=file")
 
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", action = "append", help = "set the factor that describes the overlap of the sub banks, must be even!")
@@ -1064,6 +1091,12 @@ def parse_command_line():
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
 	options, filenames = parser.parse_args()
+
+	if options.mass_model not in ("salpeter", "file"):
+		raise ValueError("--mass-model must be 'salpeter' or 'file'")
+	if options.mass_model == "file" and not options.mass_model_file:
+		raise ValueError("--mass-model-file must be provided if --mass-model=file")
+
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
@@ -1222,6 +1255,8 @@ else:
 	medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	plotBanksJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_banks", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	modelJob = inspiral_pipe.generic_job("gstlal_inspiral_mass_model", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	modelAddJob = inspiral_pipe.generic_job("gstlal_inspiral_add_mass_models", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 	gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
 	createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
@@ -1363,7 +1398,7 @@ if options.bank_cache:
 	#
 	#svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
 	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
-
+	model_add_node, model_file_name = model_node_gen(modelJob, modelAddJob, dag, instruments, svd_nodes, ref_psd, options, boundary_seg)
 
 if not options.lloid_cache:
 	#
@@ -1382,7 +1417,7 @@ if not options.lloid_cache:
 	# Setup likelihood jobs, clustering and/or merging
 	#
 
-	rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set)
+	rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_add_node, model_file_name)
 
 else:
 	#
