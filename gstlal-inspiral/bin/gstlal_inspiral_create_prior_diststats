@@ -76,6 +76,7 @@ def parse_command_line():
 	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
 	parser.add_option("--svd-file", metavar = "filename", help = "The SVD file to read the template ids from")
+	parser.add_option("--mass-model-file", metavar = "filename", help = "The mass model file to read from (hdf5 format)")
 	options, filenames = parser.parse_args()
 
 	process_params = dict(options.__dict__)
@@ -131,7 +132,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 #
 
 
-rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, mass_model_file = options.mass_model_file)
 
 if options.background_prior > 0:
 	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior)
