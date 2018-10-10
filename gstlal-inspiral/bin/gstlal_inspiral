@@ -180,6 +180,7 @@ from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import servicediscovery
 from gstlal import simulation
+from gstlal import svd_bank
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
