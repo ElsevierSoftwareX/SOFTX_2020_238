@@ -1,2 +1,3 @@
 usr/bin/*
-usr/lib/gstreamer-*/libgstlalcalibration.*
+usr/lib/gstreamer-*/lib*.a
+usr/lib/gstreamer-*/lib*.so
