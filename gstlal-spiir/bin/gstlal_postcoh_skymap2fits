@@ -39,7 +39,7 @@ def find_closest_gps(event_time, start, gps_step):
 	days_from_start = np.floor((event_time - start)/86400.)
 	time_in_one_day = event_time - ( start + days_from_start * 86400)
 	idx = int( round( time_in_one_day/float(gps_step))) % gps_len
-	return idx
+	return idx*gps_step
 
 
 def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
