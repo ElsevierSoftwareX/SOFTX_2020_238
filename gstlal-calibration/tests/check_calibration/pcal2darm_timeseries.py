@@ -69,13 +69,14 @@ parser.add_option("--gps-start-time", metavar = "seconds", type = int, help = "G
 parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS time at which to stop processing data")
 parser.add_option("--ifo", metavar = "name", help = "Name of the interferometer (IFO), e.g., H1, L1")
 parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
-parser.add_option("--calibrated-frame-cache", metavar = "name", help = "Calibrated frame cache file")
-parser.add_option("--config-file", metavar = "name", help = "Configurations file used to produce GDS/DCS calibrated frames, needed to get pcal line frequencies and correction factors")
+parser.add_option("--gstlal-frame-cache-list", metavar = "list", help = "Comma-separated list of gstlal calibrated frame cache files to read")
+parser.add_option("--config-file", metavar = "name", help = "Configurations file used to produce gstlal calibrated frames, needed to get pcal line frequencies and correction factors")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
-parser.add_option("--calibrated-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of calibrated channels to compare to pcal")
-parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of calibrated channels in the raw frames to compare to pcal")
+parser.add_option("--gstlal-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels to compare to pcal")
+parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels in the raw frames to compare to pcal")
 parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.97,1.03;0.95,1.05;0.8,1.2", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-1.0,1.0;-3.0,3.0;-10.0,10.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
+parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
 
 options, filenames = parser.parse_args()
 
@@ -121,21 +122,33 @@ filters = numpy.load(filters_paths[0])
 
 ifo = options.ifo
 
+# Set up gstlal frame cache list
+gstlal_frame_cache_list = options.gstlal_frame_cache_list.split(',')
+
 # Set up channel lists
 channel_list = []
 channel_list.append((ifo, options.pcal_channel_name))
-if options.calibrated_channel_list is not None:
-	calibrated_channels = options.calibrated_channel_list.split(',')
-	for channel in calibrated_channels:
+if options.gstlal_channel_list is not None:
+	gstlal_channels = options.gstlal_channel_list.split(',')
+	for channel in gstlal_channels:
 		channel_list.append((ifo, channel))
 else:
-	calibrated_channels = []
+	gstlal_channels = []
 if options.calcs_channel_list is not None:
 	calcs_channels = options.calcs_channel_list.split(',')
 	for channel in calcs_channels:
 		channel_list.append((ifo, channel))
 else:
 	calcs_channels = []
+
+# Set up list of labels to be used in plot legends and filenames
+labels = options.labels.split(',')
+
+# Checks
+if len(labels) != len(calcs_channels) + len(gstlal_channels):
+	raise ValueError('Number of labels must equal number of channels (including calcs and gstlal channels) being measured. %d != %d' % (len(labels), len(calcs_channels) + len(gstlal_channels)))
+if len(gstlal_frame_cache_list) != len(gstlal_channels):
+	raise ValueError('Number of gstlal frame caches must equal number of gstlal channels. %d != %d' % (len(gstlal_frame_cache_list), len(gstlal_channels)))
 
 # Read stuff we need from the filters file
 frequencies = [float(filters['ka_pcal_line_freq']), float(filters['kc_pcal_line_freq']), float(filters['high_pcal_line_freq'])]
@@ -182,9 +195,9 @@ def pcal2darm(pipeline, name):
 		demodulated_pcal_list.append(pipeparts.mktee(pipeline, demodulated_pcal))
 
 	# Check if we are taking pcal-to-darm ratios for CALCS data
-	for channel in calcs_channels:
+	for channel, label in zip(calcs_channels, labels[0 : len(calcs_channels)]):
 		calcs_deltal = calibration_parts.hook_up(pipeline, raw_data, channel, ifo, 1.0)
-		calcs_deltal = calibration_parts.caps_and_progress(pipeline, calcs_deltal, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", channel)
+		calcs_deltal = calibration_parts.caps_and_progress(pipeline, calcs_deltal, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", label)
 		calcs_deltal = pipeparts.mktee(pipeline, calcs_deltal)
 		for i in range(0, len(frequencies)):
 			# Demodulate DELTAL_EXTERNAL at each line
@@ -194,35 +207,35 @@ def pcal2darm(pipeline, name):
 			# Take a running average
 			deltaL_over_pcal = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time))
 			# Write to file
-			pipeparts.mknxydumpsink(pipeline, deltaL_over_pcal, "%s_%s_over_%s_at_line%d.txt" % (ifo, channel, options.pcal_channel_name, i + 1))
+			pipeparts.mknxydumpsink(pipeline, deltaL_over_pcal, "%s_%s_over_%s_at_line%d.txt" % (ifo, label, options.pcal_channel_name, i + 1))
 
 	# Check if we are taking pcal-to-darm ratios for gstlal calibrated data
-	if options.calibrated_channel_list is not None:
-		# Get calibrated channels from the calibrated frames
-		hoft_data = pipeparts.mklalcachesrc(pipeline, location = options.calibrated_frame_cache, cache_dsc_regex = ifo)
-		hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
-	for channel in calibrated_channels:
-		hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0)
-		hoft = calibration_parts.caps_and_progress(pipeline, hoft, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", channel)
-		deltal = pipeparts.mkaudioamplify(pipeline, hoft, arm_length)
-		deltal = pipeparts.mktee(pipeline, deltal)
-		for i in range(0, len(frequencies)):
-			# Demodulate \DeltaL at each line
-			demodulated_deltal = calibration_parts.demodulate(pipeline, deltal, frequencies[i], True, rate_out, filter_time, 0.5)
-			# Take ratio \DeltaL(f) / pcal(f)
-			deltaL_over_pcal = calibration_parts.complex_division(pipeline, demodulated_deltal, demodulated_pcal_list[i])
-			# Take a running average
-			deltaL_over_pcal = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time))
-			# Find the magnitude
-			deltaL_over_pcal = pipeparts.mktee(pipeline, deltaL_over_pcal)
-			magnitude = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "cabs")
-			# Find the phase
-			phase = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "carg")
-			phase = pipeparts.mkaudioamplify(pipeline, phase, 180.0 / numpy.pi)
-			# Interleave
-			magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
-			# Write to file
-			pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, channel, options.pcal_channel_name, frequencies[i], options.gps_start_time))
+	if options.gstlal_channel_list is not None:
+		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(channel_list)]):
+			# Get gstlal channels from the gstlal frames
+			hoft_data = pipeparts.mklalcachesrc(pipeline, location = cache, cache_dsc_regex = ifo)
+			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+			hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0)
+			hoft = calibration_parts.caps_and_progress(pipeline, hoft, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", label)
+			deltal = pipeparts.mkaudioamplify(pipeline, hoft, arm_length)
+			deltal = pipeparts.mktee(pipeline, deltal)
+			for i in range(0, len(frequencies)):
+				# Demodulate \DeltaL at each line
+				demodulated_deltal = calibration_parts.demodulate(pipeline, deltal, frequencies[i], True, rate_out, filter_time, 0.5)
+				# Take ratio \DeltaL(f) / pcal(f)
+				deltaL_over_pcal = calibration_parts.complex_division(pipeline, demodulated_deltal, demodulated_pcal_list[i])
+				# Take a running average
+				deltaL_over_pcal = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time))
+				# Find the magnitude
+				deltaL_over_pcal = pipeparts.mktee(pipeline, deltaL_over_pcal)
+				magnitude = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "cabs")
+				# Find the phase
+				phase = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "carg")
+				phase = pipeparts.mkaudioamplify(pipeline, phase, 180.0 / numpy.pi)
+				# Interleave
+				magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
+				# Write to file
+				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label, options.pcal_channel_name, frequencies[i], options.gps_start_time))
 
 	#
 	# done
@@ -243,9 +256,9 @@ test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LI
 # Read data from files and plot it
 colors = ['r.', 'g.', 'y.', 'c.', 'm.', 'b.'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
-channels.extend(calibrated_channels)
+channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):
-	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, channels[0], options.pcal_channel_name, frequencies[i], options.gps_start_time))
+	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[0], options.pcal_channel_name, frequencies[i], options.gps_start_time))
 	t_start = data[0][0]
 	dur = data[len(data) - 1][0] - t_start
 	t_unit = 'seconds'
@@ -262,17 +275,17 @@ for i in range(0, len(frequencies)):
 	times = []
 	magnitudes = [[]]
 	phases = [[]]
-	for k in range(0, len(data)):
-		times.append((data[k][0] - t_start) / sec_per_t_unit)
-		magnitudes[0].append(data[k][1])
-		phases[0].append(data[k][2])
-	markersize = 5000.0 / dur
-	markersize = min(markersize, 2.0)
+	for k in range(0, int(len(data) / filter_time)):
+		times.append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
+		magnitudes[0].append(data[filter_time * k][1])
+		phases[0].append(data[filter_time * k][2])
+	markersize = 150.0 * numpy.sqrt(float(filter_time / dur))
+	markersize = min(markersize, 10.0)
 	markersize = max(markersize, 0.2)
 	# Make plots
 	plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	plt.title(r'%s Delta $L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
 	plt.ylabel('Magnitude')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
@@ -281,7 +294,7 @@ for i in range(0, len(frequencies)):
 	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	plt.subplot(212)
-	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
 	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	plt.ylabel('Phase [deg]')
@@ -290,18 +303,18 @@ for i in range(0, len(frequencies)):
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
 	plt.grid(True)
 	for j in range(1, len(channels)):
-		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, channels[j], options.pcal_channel_name, frequencies[i], options.gps_start_time))
+		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j], options.pcal_channel_name, frequencies[i], options.gps_start_time))
 		magnitudes.append([])
 		phases.append([])
-		for k in range(0, len(data)):
-			magnitudes[j].append(data[k][1])
-			phases[j].append(data[k][2])
+		for k in range(0, int(len(data) / filter_time)):
+			magnitudes[j].append(data[filter_time * k][1])
+			phases[j].append(data[filter_time * k][2])
 		plt.subplot(211)
-		plt.plot(times, magnitudes[j], colors[j], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		plt.plot(times, magnitudes[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 		plt.subplot(212)
-		plt.plot(times, phases[j], colors[j], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (channels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 	plt.savefig("deltal_over_pcal_at_%0.1fHz_%d.png" % (frequencies[i], options.gps_start_time))
