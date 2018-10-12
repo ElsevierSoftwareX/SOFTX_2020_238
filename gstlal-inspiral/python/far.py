@@ -131,8 +131,8 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	# network SNR threshold
 	network_snrsq_threshold = 7.**2.
 
-	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 1, delta_t = 0.005):
-		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
+	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), population_model_file = None, min_instruments = 1, delta_t = 0.005):
+		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, population_model_file = population_model_file, min_instruments = min_instruments)
 		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 
@@ -174,6 +174,10 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	def delta_t(self):
 		return self.denominator.delta_t
 
+        @property
+        def population_model_file(self):
+                return self.numerator.population_model_file
+
 	@property
 	def segmentlists(self):
 		return self.denominator.segmentlists
@@ -187,7 +191,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		return self
 
 	def copy(self):
-		new = type(self)(template_ids = self.denominator.template_ids, instruments = self.denominator.instruments, min_instruments = self.denominator.min_instruments, delta_t = self.denominator.delta_t)
+		new = type(self)(template_ids = self.template_ids, instruments = self.instruments, population_model_file = self.population_model_file, min_instruments = self.min_instruments, delta_t = self.delta_t)
 		new.numerator = self.numerator.copy()
 		new.denominator = self.denominator.copy()
 		new.zerolag = self.zerolag.copy()
@@ -341,6 +345,7 @@ class DatalessRankingStat(RankingStat):
 	# operations
 	def __init__(self, *args, **kwargs):
 		self.numerator = inspiral_lr.DatalessLnSignalDensity(*args, **kwargs)
+                kwargs.pop("population_model_file", None)
 		self.denominator = inspiral_lr.DatalessLnNoiseDensity(*args, **kwargs)
 
 	def finish(self):

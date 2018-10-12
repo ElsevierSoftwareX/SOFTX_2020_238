@@ -275,6 +275,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 class LnSignalDensity(LnLRDensity):
 	def __init__(self, *args, **kwargs):
+                population_model_file = kwargs.pop("population_model_file", None)
 		super(LnSignalDensity, self).__init__(*args, **kwargs)
 
 		# install SNR, chi^2 PDF (one for all instruments)
@@ -285,10 +286,8 @@ class LnSignalDensity(LnLRDensity):
 		# record of horizon distances for all instruments in the
 		# network
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
-
-		# source population model
-		# FIXME:  introduce a mechanism for selecting the file
-		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids)
+                self.population_model_file = population_model_file
+		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 
@@ -359,6 +358,10 @@ class LnSignalDensity(LnLRDensity):
 	def copy(self):
 		new = super(LnSignalDensity, self).copy()
 		new.horizon_history = self.horizon_history.copy()
+                new.population_model_file = self.population_model_file
+                # okay to use references because read-only data
+                new.population_model = self.population_model
+                new.InspiralExtrinsics = self.InspiralExtrinsics
 		return new
 
 	def local_mean_horizon_distance(self, gps, window = segments.segment(-32., +2.)):
@@ -501,6 +504,7 @@ class LnSignalDensity(LnLRDensity):
 	def to_xml(self, name):
 		xml = super(LnSignalDensity, self).to_xml(name)
 		xml.appendChild(self.horizon_history.to_xml(u"horizon_history"))
+                xml.appendChild(ligolw_param.Param.from_pyvalue(u"population_model_file", self.population_model_file))
 		return xml
 
 	@classmethod
@@ -508,16 +512,8 @@ class LnSignalDensity(LnLRDensity):
 		xml = cls.get_xml_root(xml, name)
 		self = super(LnSignalDensity, cls).from_xml(xml, name)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, u"horizon_history")
-		# source population model
-		# FIXME:  this should probably be stored in the ranking
-		# statistic file somehow.  maybe the HDF5 filename could be
-		# stored.  whatever would allow the correct model to be
-		# re-initialized
-		if self.template_ids:
-			self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids)
-		else:
-			# default lnP = 1/len(templates) = 0
-			self.population_model = inspiral_intrinsics.UniformInTemplatePopulationModel([0])
+                self.population_model_file = ligolw_params.get_pyvalue(xml, u"population_model_file")
+                self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 		return self
 
 
@@ -536,7 +532,6 @@ class DatalessLnSignalDensity(LnSignalDensity):
 	"""
 	def __init__(self, *args, **kwargs):
 		super(DatalessLnSignalDensity, self).__init__(*args, **kwargs)
-		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 		# so we're ready to go!
 		self.add_signal_model()
 
@@ -608,7 +603,7 @@ class OnlineFrakensteinLnSignalDensity(LnSignalDensity):
 	"""
 	@classmethod
 	def splice(cls, src, Dh_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, src.min_instruments)
+		self = cls(src.template_ids, src.instruments, src.delta_t, src.population_model_file, src.min_instruments)
 		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
