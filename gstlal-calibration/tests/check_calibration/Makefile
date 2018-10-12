@@ -37,7 +37,7 @@ $(IFO)1_raw_frames.cache:
 $(IFO)1_easy_raw_frames.cache: $(IFO)1_raw_frames.cache framesdir
 	FrChannels $(shell sed -nr '0,/localhost/ s/.*localhost([^"]+).*/\1/p' $(IFO)1_raw_frames.cache) > frchannels.txt
 	python frame_manipulator.py --ifo $(IFO)1 --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_raw_frames.cache --frame-type $(IFO)1_R --output-path Frames/$(OBSRUN)/$(IFO)1/easy_raw/
-	ls Frames/$(OBSRUN)/$(IFO)1/easy_raw/$(IFO)-$(IFO)1_R*.gwf
+	ls Frames/$(OBSRUN)/$(IFO)1/easy_raw/$(IFO)-$(IFO)1_R*.gwf | lalapps_path2cache > $@
 	rm frchannels.txt
 
 $(IFO)1_C00_frames.cache:

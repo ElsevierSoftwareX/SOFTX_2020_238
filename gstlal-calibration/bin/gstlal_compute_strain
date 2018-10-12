@@ -2114,7 +2114,7 @@ if remove_cal_lines:
 			act_line_removal_dict[act_line_name][0] = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, act_line_removal_dict[act_line_name][0], act_line_removal_dict[act_line_name][7]))
 		elif act_line_removal_dict[act_line_name][6]:
 			# Apply the real part of a time-dependent correction factor
-			act_line_removal_dict[act_line_name][0] = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, act_line_removal_dict[act_line_name][0], pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, act_line_removal_dict[act_line_name][7]), matrix = [[1.0, 0.0]])))
+			act_line_removal_dict[act_line_name][0] = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, act_line_removal_dict[act_line_name][0], pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, act_line_removal_dict[act_line_name][7], matrix = [[1.0, 0.0]]))))
 
 		# Reconstruct a signal at only this actuation line
 		act_line_removal_dict[act_line_name][0] = calibration_parts.mkresample(pipeline, act_line_removal_dict[act_line_name][0], 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoft_sr)
