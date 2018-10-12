@@ -174,9 +174,9 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	def delta_t(self):
 		return self.denominator.delta_t
 
-        @property
-        def population_model_file(self):
-                return self.numerator.population_model_file
+	@property
+	def population_model_file(self):
+		return self.numerator.population_model_file
 
 	@property
 	def segmentlists(self):
@@ -345,7 +345,7 @@ class DatalessRankingStat(RankingStat):
 	# operations
 	def __init__(self, *args, **kwargs):
 		self.numerator = inspiral_lr.DatalessLnSignalDensity(*args, **kwargs)
-                kwargs.pop("population_model_file", None)
+		kwargs.pop("population_model_file", None)
 		self.denominator = inspiral_lr.DatalessLnNoiseDensity(*args, **kwargs)
 
 	def finish(self):
