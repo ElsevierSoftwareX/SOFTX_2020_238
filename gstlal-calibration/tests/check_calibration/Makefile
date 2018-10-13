@@ -24,9 +24,9 @@ GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.
 
 all: DCS_pcal2darm_plots
 
-################################################
+###############################################
 ### These commands should change less often ###
-################################################
+###############################################
 
 PLOT_START = $(shell echo $(START) + $(PLOT_WARMUP_TIME) | bc)
 PLOT_END = $(shell echo $(END) - $(PLOT_COOLDOWN_TIME) | bc)

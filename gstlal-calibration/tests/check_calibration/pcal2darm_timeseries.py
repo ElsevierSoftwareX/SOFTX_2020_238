@@ -33,6 +33,10 @@ import resource
 import datetime
 import time
 import matplotlib
+matplotlib.rcParams['font.family'] = 'Times New Roman'
+matplotlib.rcParams['font.size'] = 22
+matplotlib.rcParams['legend.fontsize'] = 18
+matplotlib.rcParams['mathtext.default'] = 'regular'
 matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
@@ -74,8 +78,9 @@ parser.add_option("--config-file", metavar = "name", help = "Configurations file
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
 parser.add_option("--gstlal-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels to compare to pcal")
 parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels in the raw frames to compare to pcal")
-parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.97,1.03;0.95,1.05;0.8,1.2", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
-parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-1.0,1.0;-3.0,3.0;-10.0,10.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
+parser.add_option("--demodulation-time", metavar = "seconds", type = int, default = 150, help = "Time in seconds of low-pass filter used for demodulation. (Default = 150)")
+parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.9,1.1;0.9,1.1;0.9,1.1", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
+parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.0,6.0;-6.0,6.0;-6.0,6.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
 
 options, filenames = parser.parse_args()
@@ -167,7 +172,7 @@ except:
 	arm_length = 3995.1
 
 # demodulation and averaging parameters
-filter_time = 20
+filter_time = options.demodulation_time
 average_time = 1
 rate_out = 1
 
@@ -283,21 +288,24 @@ for i in range(0, len(frequencies)):
 	markersize = min(markersize, 10.0)
 	markersize = max(markersize, 0.2)
 	# Make plots
-	plt.figure(figsize = (10, 10))
-	plt.subplot(211)
-	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
-	plt.title(r'%s Delta $L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
-	plt.ylabel('Magnitude')
+	if i == 0:
+		plt.figure(figsize = (25, 15))
+	plt.subplot(2, len(frequencies), i + 1)
+	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%s [avg = %0.3f, std = %0.3f]' % (labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	plt.title(r'%s $\Delta L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
+	if i == 0:
+		plt.ylabel('Magnitude')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
 	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
 	plt.grid(True)
 	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
-	plt.subplot(212)
-	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
+	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%s [avg = %0.3f$^{\circ}$, std = %0.3f$^{\circ}$]' % (labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
 	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
-	plt.ylabel('Phase [deg]')
+	if i == 0:
+		plt.ylabel('Phase [deg]')
 	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
@@ -309,14 +317,14 @@ for i in range(0, len(frequencies)):
 		for k in range(0, int(len(data) / filter_time)):
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
-		plt.subplot(211)
-		plt.plot(times, magnitudes[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		plt.subplot(2, len(frequencies), i + 1)
+		plt.plot(times, magnitudes[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.3f, std = %0.3f]' % (labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
-		plt.subplot(212)
-		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.5f, std = %0.5f]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
+		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.3f$^{\circ}$, std = %0.3f$^{\circ}$]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
-	plt.savefig("deltal_over_pcal_at_%0.1fHz_%d.png" % (frequencies[i], options.gps_start_time))
+plt.savefig("deltal_over_pcal_%d.png" % options.gps_start_time)
 
 
