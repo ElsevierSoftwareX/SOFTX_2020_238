@@ -212,7 +212,7 @@ def pcal2darm(pipeline, name):
 			# Take a running average
 			deltaL_over_pcal = pipeparts.mkgeneric(pipeline, deltaL_over_pcal, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time))
 			# Write to file
-			pipeparts.mknxydumpsink(pipeline, deltaL_over_pcal, "%s_%s_over_%s_at_line%d.txt" % (ifo, label, options.pcal_channel_name, i + 1))
+			pipeparts.mknxydumpsink(pipeline, deltaL_over_pcal, "%s_%s_over_%s_at_line%d.txt" % (ifo, label.replace(' ', '_'), options.pcal_channel_name, i + 1))
 
 	# Check if we are taking pcal-to-darm ratios for gstlal calibrated data
 	if options.gstlal_channel_list is not None:
@@ -240,7 +240,7 @@ def pcal2darm(pipeline, name):
 				# Interleave
 				magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
 				# Write to file
-				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label, options.pcal_channel_name, frequencies[i], options.gps_start_time))
+				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label.replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 
 	#
 	# done
@@ -263,7 +263,7 @@ colors = ['r.', 'g.', 'y.', 'c.', 'm.', 'b.'] # Hopefully the user will not want
 channels = calcs_channels
 channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):
-	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[0], options.pcal_channel_name, frequencies[i], options.gps_start_time))
+	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[0].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 	t_start = data[0][0]
 	dur = data[len(data) - 1][0] - t_start
 	t_unit = 'seconds'
@@ -291,7 +291,7 @@ for i in range(0, len(frequencies)):
 	if i == 0:
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
-	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%s [avg = %0.3f, std = %0.3f]' % (labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = r'%s [$\mu$ = %0.3f, $\sigma$ = %0.3f]' % (labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	plt.title(r'%s $\Delta L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
 	if i == 0:
 		plt.ylabel('Magnitude')
@@ -301,7 +301,7 @@ for i in range(0, len(frequencies)):
 	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
-	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%s [avg = %0.3f$^{\circ}$, std = %0.3f$^{\circ}$]' % (labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	plt.plot(times, phases[0], colors[0], markersize = markersize, label = r'%s [$\mu$ = %0.3f$^{\circ}$, $\sigma$ = %0.3f$^{\circ}$]' % (labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
 	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	if i == 0:
@@ -311,20 +311,20 @@ for i in range(0, len(frequencies)):
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
 	plt.grid(True)
 	for j in range(1, len(channels)):
-		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j], options.pcal_channel_name, frequencies[i], options.gps_start_time))
+		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 		magnitudes.append([])
 		phases.append([])
 		for k in range(0, int(len(data) / filter_time)):
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
-		plt.plot(times, magnitudes[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.3f, std = %0.3f]' % (labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		plt.plot(times, magnitudes[j], colors[j % 6], markersize = markersize, label = r'%s [$\mu$ = %0.3f, $\sigma$ = %0.3f]' % (labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
-		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = '%s [avg = %0.3f$^{\circ}$, std = %0.3f$^{\circ}$]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = r'%s [$\mu$ = %0.3f$^{\circ}$, $\sigma$ = %0.3f$^{\circ}$]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 plt.savefig("deltal_over_pcal_%d.png" % options.gps_start_time)
-
+plt.savefig("deltal_over_pcal_%d.pdf" % options.gps_start_time)
 
