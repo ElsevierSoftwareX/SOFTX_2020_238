@@ -16,9 +16,9 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import sys
-from glue import dagfile
+from gstlal import dagfile
 from optparse import OptionParser
+import sys
 
 # Print out progress of reading in dag
 def progress(f, n, done):

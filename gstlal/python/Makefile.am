@@ -12,6 +12,7 @@ pkgpython_PYTHON = \
 	__init__.py \
 	bottle.py \
 	coherent_null.py \
+	dagfile.py \
 	dagparts.py \
 	datasource.py \
 	elements.py \
