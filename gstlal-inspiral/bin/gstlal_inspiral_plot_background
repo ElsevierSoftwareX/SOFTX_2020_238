@@ -53,10 +53,10 @@ import sys
 
 from glue.ligolw import dbtables
 from glue.ligolw import lsctables
-from glue import segmentsUtils
 from glue.text_progress_bar import ProgressBar
 from lal.utils import CacheEntry
 from lalinspiral import thinca
+from ligo.segments import utils as segmentsUtils
 
 
 from gstlal import far

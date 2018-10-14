@@ -76,8 +76,6 @@ GObject.threads_init()
 Gst.init(None)
 
 
-from glue import segments
-from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
@@ -92,6 +90,8 @@ import lal
 from lal import LIGOTimeGPS
 from lal import rate
 from lal.utils import CacheEntry
+from ligo import segments
+from ligo.segments import utils as segmentsUtils
 
 
 #

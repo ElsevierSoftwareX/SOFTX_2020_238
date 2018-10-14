@@ -17,10 +17,10 @@
 import sys
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
-from ligo import segments
-from glue import segmentsUtils
 from glue.ligolw import table
 from lal import rate
+from ligo import segments
+from ligo.segments import utils as segmentsUtils
 import numpy
 import math
 import copy

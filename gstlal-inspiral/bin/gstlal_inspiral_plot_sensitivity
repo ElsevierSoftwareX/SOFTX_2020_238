@@ -35,14 +35,14 @@ import itertools
 from gstlal import inspiral_pipe
 from gstlal import plotutil
 
-from ligo import segments
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import array as ligolw_array
-from glue import segmentsUtils
 from glue import iterutils
+from ligo import segments
+from ligo.segments import utils as segmentsUtils
 
 import lal
 from lal import rate

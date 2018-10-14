@@ -31,8 +31,8 @@ sqlite3.enable_callback_tracebacks(True)
 
 from glue.ligolw import dbtables
 from glue.ligolw import utils as ligolw_utils
-from glue.segmentsUtils import vote
 from gstlal import far
+from ligo.segments.utils import vote
 
 
 def parse_command_line():

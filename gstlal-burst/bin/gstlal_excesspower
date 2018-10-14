@@ -65,8 +65,8 @@ from gstlal.excesspower import parts
 from gstlal.excesspower.scan import EPScan
 
 from glue import gpstime
-from glue.lal import LIGOTimeGPS
-from glue.segments import segment
+from lal import LIGOTimeGPS
+from ligo.segments import segment
 
 __author__ = "Chris Pankow <chris.pankow@ligo.org>"
 __version__ = "Defiant" # until we get proper versioning tags

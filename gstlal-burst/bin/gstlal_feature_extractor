@@ -147,7 +147,7 @@ Gst.init(None)
 from lal import LIGOTimeGPS
 
 from ligo import segments
-from glue import segmentsUtils
+from ligo.segments import utils as segmentsUtils
 
 from gstlal import aggregator
 from gstlal import bottle

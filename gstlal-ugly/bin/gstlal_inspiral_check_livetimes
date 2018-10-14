@@ -20,12 +20,12 @@ import sys
 import sqlite3
 from optparse import OptionParser
 from glue.ligolw import dbtables
-from ligo import segments
-from glue import segmentsUtils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import segments as ligolw_segments
+from ligo import segments
+from ligo.segments import utils as segmentsUtils
 
 from gstlal import far
 
