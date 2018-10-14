@@ -49,10 +49,10 @@ import sys
 import os
 
 
-from glue.lal import CacheEntry
 from glue.text_progress_bar import ProgressBar
 from glue.ligolw.lsctables import instrumentsproperty
 from gstlal import dagfile
+from lal.utils import CacheEntry
 from ligo import segments
 
 

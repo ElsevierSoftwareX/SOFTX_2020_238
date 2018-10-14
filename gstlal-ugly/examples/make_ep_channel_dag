@@ -11,9 +11,9 @@ from ConfigParser import SafeConfigParser
 from optparse import OptionParser
 
 from glue.ligolw import lsctables
-from glue.ligolw import utils
+from glue.ligolw import utils as ligolw_utils
 from ligo import segments
-from glue.lal import LIGOTimeGPS
+from lal import LIGOTimeGPS
 
 optp = OptionParser()
 
@@ -91,7 +91,7 @@ if( opts.segment_list ):
 	else:
 		xmlfile, segdef = xmlfile[0], None
 
-	xmldoc = utils.load_filename( xmlfile )
+	xmldoc = ligolw_utils.load_filename( xmlfile )
 
 slist = segments.segmentlist()
 if( segdef is not None ):
