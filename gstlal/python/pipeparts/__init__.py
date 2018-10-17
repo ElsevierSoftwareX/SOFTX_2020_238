@@ -498,6 +498,14 @@ def mkfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = No
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_firbank", **properties)
 
+def mktdwhiten(pipeline, src, latency = None, kernel = None, taper_length = None):
+	# a taper length of 1/4 kernel length mimics the default
+	# configuration of the FFT whitener
+	if taper_length is None and kernel is not None:
+		taper_length = len(kernel) // 4
+	properties = dict((name, value) for name, value in zip(("latency", "kernel", "taper_length"), (latency, kernel, taper_length)) if value is not None)
+	return mkgeneric(pipeline, src, "lal_tdwhiten", **properties)
+
 
 def mkiirbank(pipeline, src, a1, b0, delay, name = None):
 	properties = dict((name, value) for name, value in (("name", name), ("delay_matrix", delay)) if value is not None)
