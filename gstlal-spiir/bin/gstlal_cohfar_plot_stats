@@ -174,7 +174,7 @@ if options.input_zerolag is not None:
 	pyplot.legend((CM, CM2), ('spiir zerolags', 'this spiir event'), loc='lower right')
 else:
 	CM2 = pyplot.scatter(event_cohsnr, event_chisq, color = 'r', marker = 'x', s = 200, facecolors = 'none')
-	pyplot.legend((CM2), 'this spiir event', loc='lower right')
+	pyplot.legend((CM2), ('this spiir event'), loc='lower right')
 
 pyplot.ylim(-1,3)
 pyplot.xlim(0.2,2.2)
