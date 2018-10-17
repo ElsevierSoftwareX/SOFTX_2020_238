@@ -206,7 +206,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 
 	if fir_whitener:
 		head = pipeparts.mktee(pipeline, head)
-		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
@@ -214,6 +214,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		block_stride = block_duration * max_rate // gst.SECOND
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
 		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
+
 		# FIR filter for whitening kernel
 		head = pipeparts.mktdwhiten(pipeline, head, kernel = numpy.zeros(1 + max_rate * psd_fft_length, dtype=numpy.float64), latency = 0)
 		# compute whitening kernel from PSD
