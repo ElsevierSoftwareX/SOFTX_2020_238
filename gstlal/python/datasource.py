@@ -736,24 +736,65 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, nxydump_segment = None
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = "V")
 		else:
 			src = pipeparts.mklalcachesrc(pipeline, location = gw_data_source_info.frame_cache, cache_src_regex = instrument[0], cache_dsc_regex = instrument)
-		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, channel_list = map("%s:%s".__mod__, gw_data_source_info.channel_dict.items()))
-		pipeparts.framecpp_channeldemux_set_units(demux, dict.fromkeys(demux.get_property("channel-list"), "strain"))
+
+		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True)
+		pipeparts.framecpp_channeldemux_set_units(demux, {"%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]): "strain"})
 		# allow frame reading and decoding to occur in a diffrent
 		# thread
-		src = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
-		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), src.get_static_pad("sink"))
-		if nxydump_segment is not None:
-			print nxydump_segment
-			src = pipeparts.mktee(pipeline, src)
-			pipeparts.mknxydumpsink(pipeline, src, "%s/demux_strain_%d_%s.dump" %(nxydump_directory, nxydump_segment[0], instrument), segment = nxydump_segment)
+		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 8 * gst.SECOND)
+		pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
 
 		if gw_data_source_info.frame_segments[instrument] is not None:
 			# FIXME:  make segmentsrc generate segment samples at the sample rate of h(t)?
 			# FIXME:  make gate leaky when I'm certain that will work.
-			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % instrument)
-			pipeparts.framecpp_channeldemux_check_segments.set_probe(src.get_static_pad("src"), gw_data_source_info.frame_segments[instrument])
+			strain = pipeparts.mkgate(pipeline, strain, threshold = 1, control = pipeparts.mksegmentsrc(pipeline, gw_data_source_info.frame_segments[instrument]), name = "%s_frame_segments_gate" % instrument)
+			pipeparts.framecpp_channeldemux_check_segments.set_probe(strain.get_static_pad("src"), gw_data_source_info.frame_segments[instrument])
 		# FIXME:  remove this when pipeline can handle disconts
+		src = pipeparts.mkaudiorate(pipeline, strain, skip_to_first = True, silent = False)
+		# State vector and DQ vector
+		# FIXME:  don't hard-code channel name
+		if gw_data_source_info.state_channel_dict[instrument] is not None:
+			state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
+			statevector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+
+			dq_vector_on_bits, dq_vector_off_bits = gw_data_source_info.dq_vector_on_off_bits[instrument]
+			dqvector = pipeparts.mkqueue(pipeline, None, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 1) # 1 minutes of buffering
+			pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
+		if gw_data_source_info.state_channel_dict[instrument] is not None:
+			statevector = pipeparts.mkstatevector(pipeline, statevector, required_on = state_vector_on_bits, required_off = state_vector_off_bits)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+			dqvector = pipeparts.mkstatevector(pipeline, dqvector, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits)
+
+		# use state vector to gate strain
+		if gw_data_source_info.state_channel_dict[instrument] is not None:
+			statevector = pipeparts.mktee(pipeline, statevector)
+			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector), default_state = False, name = "%s_state_vector_gate" % instrument)
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+			dqvector = pipeparts.mktee(pipeline, dqvector)
+            # use dq vector to gate strain
+			src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector), default_state = False, name = "%s_dq_vector_gate" % instrument)
+
+		# fill in holes, skip duplicate data
 		src = pipeparts.mkaudiorate(pipeline, src, skip_to_first = True, silent = False)
+		@bottle.route("/%s/strain_add_drop.txt" % instrument)
+		def strain_add(elem = src):
+			t = float(lal.UTCToGPS(time.gmtime()))
+			add = elem.get_property("add")
+			drop = elem.get_property("drop")
+			# FIXME don't hard code the sample rate
+			return "%.9f %d %d" % (t, add / 16384., drop / 16384.)
+
+		# 10 minutes of buffering
+		if gw_data_source_info.dq_channel_dict[instrument] is not None:
+			dqvector = pipeparts.mkaudiorate(pipeline, dqvector, skip_to_first = True, silent = False)
+			dqvector = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
+		if gw_data_source_info.state_channel_dict[instrument] is not None:
+			statevector = pipeparts.mkaudiorate(pipeline, statevector, skip_to_first = True, silent = False)
+			statevector = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 12)
+		src = pipeparts.mkqueue(pipeline, src, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * 60 * 10)
+	
 	elif gw_data_source_info.data_source in ("framexmit", "lvshm"):
 		# See https://wiki.ligo.org/DAC/ER2DataDistributionPlan#LIGO_Online_DQ_Channel_Specifica
 		state_vector_on_bits, state_vector_off_bits = gw_data_source_info.state_vector_on_off_bits[instrument]
