@@ -131,7 +131,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		veto_segments = None, seekevent = None, nxydump_segment = None, nxydump_directory = '.',
 		track_psd = False, block_duration = 1 * gst.SECOND, zero_pad =
 		0, width = 64, fir_whitener = 0, statevector = None, dqvector =
-		None):
+		None, fir_whiten_reference_psd = None):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -146,6 +146,34 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	- track_psd: decide whether to dynamically track the spectrum or use the fixed spectrum provided
 	- width: type convert to either 32 or 64 bit float
 	"""
+	#
+	# input sanity checks
+	#
+
+	if psd is None and not track_psd:
+		raise ValueError("must enable track_psd when psd is None")
+	if int(psd_fft_length) != psd_fft_length:
+		raise ValueError("psd_fft_length must be an integer")
+	psd_fft_length = int(psd_fft_length)
+
+	#
+	# set default whitener zero-padding if needed
+	#
+
+	if zero_pad is None:
+		if fir_whitener:
+			# in this configuration we are not asking the
+			# whitener to reassemble an output time series
+			# (that we care about) so we disable zero-padding
+			# to get the most information from the whitener's
+			# FFT blocks.
+			zero_pad = 0
+		elif psd_fft_length % 4:
+			raise ValueError("default whitener zero-padding requires psd_fft_length to be multiple of 4")
+		else:
+			zero_pad = psd_fft_length // 4
+
+
 
 	#
 	# down-sample to highest of target sample rates.  we include a caps
@@ -167,53 +195,29 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max_rate))
 
-	#
-	# add a reblock element.  the whitener's gap support isn't 100% yet
-	# and giving it smaller input buffers works around the remaining
-	# weaknesses (namely that when it sees a gap buffer large enough to
-	# drain its internal history, it doesn't know enough to produce a
-	# short non-gap buffer to drain its history followed by a gap
-	# buffer, it just produces one huge non-gap buffer that's mostly
-	# zeros).
-	#
-
-	head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
 	head = pipeparts.mktee(pipeline, head)
 
 	if nxydump_segment is not None:
-                pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/before_whitened_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/before_whitened_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
 
 	#
 	# construct whitener.
 	#
 
 	if fir_whitener:
-		# For now just hard code these acceptable inputs until we have
-		# it working well in all situations or appropriate assertions
-		psd = None
 		head = pipeparts.mktee(pipeline, head)
-		psd_fft_length = 16
-		zero_pad = 0
-		# because we are not asking the whitener to reassemble an
-		# output time series (that we care about) we drop the
-		# zero-padding in this code path.  the psd_fft_length is
-		# reduced to account for the loss of the zero padding to
-		# keep the Hann window the same as implied by the
-		# user-supplied parameters.
 		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
 		kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff = 12)
+		block_stride = block_duration * max_rate // gst.SECOND
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
-		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = max_rate, time_domain = False, latency = (len(kernel) - 1) // 2)
-
-		# FIXME at some point build an initial kernel from a reference psd
-		psd_fir_kernel = reference_psd.PSDFirKernel()
-		fir_matrix = numpy.zeros((1, 1 + max_rate * psd_fft_length), dtype=numpy.float64)
-		head = pipeparts.mkfirbank(pipeline, head, fir_matrix = fir_matrix, block_stride = max_rate, time_domain = False, latency = 0)
-
-		def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
+		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
+		# FIR filter for whitening kernel
+		head = pipeparts.mktdwhiten(pipeline, head, kernel = numpy.zeros(1 + max_rate * psd_fft_length, dtype=numpy.float64), latency = 0)
+		# compute whitening kernel from PSD
+		def set_fir_psd(whiten, pspec, firelem, psd_fir_kernel):
 			psd_data = numpy.array(whiten.get_property("mean-psd"))
 			psd = lal.CreateREAL8FrequencySeries(
 				name = "psd",
@@ -225,37 +229,82 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 			)
 			psd.data.data = psd_data
 			kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
-			
+			kernel, phase = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
+			firelem.set_property("kernel", kernel)
+	
 			#kernel = psd_fir_kernel.min_phase(kernel)
 			#kernel = psd_fir_kernel.homomorphic(kernel, sample_rate)
-			kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
-			firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
-		whiten.connect_after("notify::mean-psd", set_fir_psd, head, psd_fir_kernel)
+		firkernel = reference_psd.PSDFirKernel()
+		if fir_whiten_reference_psd is not None:
+			assert fir_whiten_reference_psd.f0 == 0.
+			# interpolate the reference phase PSD if its
+			# resolution doesn't match what we'll eventually
+			# require it to be.
+			if psd_fft_length != round(1. / fir_whiten_reference_psd.deltaF):
+				fir_whiten_reference_psd = reference_psd.interpolate_psd(fir_whiten_reference_psd, 1. / psd_fft_length)
+			# confirm that the reference phase PSD's Nyquist is
+			# sufficiently high, then reduce it to the required
+			# Nyquist if needed.
+			assert (psd_fft_length * max(rates)) // 2 + 1 <= len(fir_whiten_reference_psd.data.data), "fir_whiten_reference_psd Nyquist too low"
+			if (psd_fft_length * max(rates)) // 2 + 1 < len(fir_whiten_reference_psd.data.data):
+				fir_whiten_reference_psd = lal.CutREAL8FrequencySeries(fir_whiten_reference_psd, 0, (psd_fft_length * max(rates)) // 2 + 1)
+			# set the reference phase PSD
+			firkernel.set_phase(fir_whiten_reference_psd)
 
-		# Gate after gaps
+		whiten.connect_after("notify::mean-psd", set_fir_psd, head, firkernel)
+		# Gate after gaps.  the queue sizes on the control inputs
+		# need only be large enough to hold the state vector
+		# streams until they are required.  the streams will be
+		# consumed immediately when needed, so there is no risk
+		# that these queues add to the latency, so make them
+		# generously large.
 		# FIXME the -max(rates) extra padding is for the high pass
 		# filter: NOTE it also needs to be big enough for the
 		# downsampling filter, but that is typically smaller than the
 		# HP filter (192 samples at Qual 9)
-		if statevector:
-			head = pipeparts.mkgate(pipeline, head, control = statevector, default_state = False, threshold = 1, hold_length = -max_rate, attack_length = -max_rate * (psd_fft_length + 1))
-		if dqvector:
-			head = pipeparts.mkgate(pipeline, head, control = dqvector, default_state = False, threshold = 1, hold_length = -max_rate, attack_length = -max_rate * (psd_fft_length + 1))
-		# Drop initial data to let the PSD settle
-		head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max_rate)
+		# FIXME: this first queue should not be needed.  what is
+		# going on!?
+		if statevector is not None or dqvector is not None:
+			head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * (psd_fft_length + 2))
+		if statevector is not None:
+			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1, hold_length = -max_rate, attack_length = -max_rate * (psd_fft_length + 1))
+		if dqvector is not None:
+			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1, hold_length = -max_rate, attack_length = -max_rate * (psd_fft_length + 1))
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
-		#head = pipeparts.mknxydumpsinktee(pipeline, head, filename = "after_mkfirbank.txt")
 	else:
-		if statevector:
-			pipeparts.mkfakesink(pipeline, statevector)
-		if dqvector:
-			pipeparts.mkfakesink(pipeline, dqvector)
-	
+		# FIXME:  we should require fir_whiten_reference_psd to be
+		# None in this code path for safety, but that's hard to do
+		# since the calling code would need to know what
+		# environment variable is being used to select the mode,
+		# and we don't want to be duplicating that code all over
+		# the place
+
+		#
+		# add a reblock element.  the whitener's gap support isn't
+		# 100% yet and giving it smaller input buffers works around
+		# the remaining weaknesses (namely that when it sees a gap
+		# buffer large enough to drain its internal history, it
+		# doesn't know enough to produce a short non-gap buffer to
+		# drain its history followed by a gap buffer, it just
+		# produces one huge non-gap buffer that's mostly zeros).
+		# this is not required in the FIR-whitener case because
+		# there we don't use the whitener's output time series for
+		# anything.
+		#
+
+		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+
 		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
 		# make the buffers going downstream smaller, this can
 		# really help with RAM
-		# add a reblock to reduce htgate latency when fft whitening 
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+
+
+	#
+	# enable/disable PSD tracking
+	#
+
+	whiten.set_property("psd-mode", 0 if track_psd else 1)
 
 	# export PSD in ascii text format
 	# FIXME:  also make them available in XML format as a single document
@@ -265,18 +314,6 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		yield "# frequency\tspectral density\n"
 		for i, value in enumerate(elem.get_property("mean-psd")):
 			yield "%.16g %.16g\n" % (i * delta_f, value)
-
-	if psd is None:
-		# use running average PSD
-		whiten.set_property("psd-mode", 0)
-	else:
-		if track_psd:
-			# use running psd
-			whiten.set_property("psd-mode", 0)
-		else:
-			# use fixed PSD
-			whiten.set_property("psd-mode", 1)
-
 		#
 		# install signal handler to retrieve \Delta f and
 		# f_{Nyquist} whenever they are known and/or change,
@@ -284,6 +321,13 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		# whitener.
 		#
 
+	#
+	# install signal handler to retrieve \Delta f and f_{Nyquist}
+	# whenever they are known and/or change, resample the user-supplied
+	# PSD, and install it into the whitener.
+	#
+
+	if psd is not None:
 		def psd_units_or_resolution_changed(elem, pspec, psd):
 			# make sure units are set, compute scale factor
 			units = lal.Unit(elem.get_property("psd-units"))
@@ -299,8 +343,6 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		whiten.connect_after("notify::f-nyquist", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::delta-f", psd_units_or_resolution_changed, psd)
 		whiten.connect_after("notify::psd-units", psd_units_or_resolution_changed, psd)
-
-
 
 	#
 	# convert to desired precision
