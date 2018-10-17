@@ -83,7 +83,7 @@ def mkSPIIRmulti(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_th
 
 	hoftdicts = {}
 	for instrument in detectors.channel_dict:
-		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose=verbose)
 		rates = set(rate for bank in banks[instrument] for rate in bank.get_rates()) # FIXME what happens if the rates are not the same?
 		if veto_segments is not None and instrument in veto_segments.keys():
 			hoftdicts[instrument] = multirate_datasource.mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
@@ -221,7 +221,7 @@ def mkBuildBossSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gat
 		for bank_name in banks[instrument]:
 			sngl_max_rate = max(spiir_utils.get_maxrate_from_xml(bank_name), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose=verbose)
 		if verbose:
 		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
 		if veto_segments is not None and instrument in veto_segments.keys():
@@ -346,7 +346,7 @@ def mkPostcohSPIIR(pipeline, detectors, banks, psd, psd_fft_length = 8, ht_gate_
 			if instrument_from_bank == instrument:
 				sngl_max_rate = max(spiir_utils.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose=verbose)
 		if veto_segments is not None:		
 			hoftdicts[instrument] = snglrate_datasource.mkwhitened_src(pipeline, src, sngl_max_rate, instrument, psd = psd[instrument], psd_fft_length = psd_fft_length, ht_gate_threshold = ht_gate_threshold, veto_segments = veto_segments[instrument], seekevent = detectors.seekevent, nxydump_segment = nxydump_segment, track_psd = track_psd, zero_pad = 0, width = 32)
 		else:
@@ -479,7 +479,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 			if instrument_from_bank == instrument:
 				sngl_max_rate = max(spiir_utils.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose=verbose)
 		if verbose:
 		  print "%s: max rate of all banks %d Hz" % (instrument, sngl_max_rate)
 		if veto_segments is not None and instrument in veto_segments.keys():
@@ -628,7 +628,7 @@ def mkPostcohSPIIROffline(pipeline, detectors, banks, psd, control_time_shift_st
 			if instrument_from_bank == instrument:
 				sngl_max_rate = max(spiir_utils.get_maxrate_from_xml(bank_list[0]), sngl_max_rate)
 		max_instru_rates[instrument] = sngl_max_rate
-		src, statevector, dqvector  = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose)
+		src, statevector, dqvector  = datasource.mkbasicsrc(pipeline, detectors, instrument, verbose=verbose)
 		if veto_segments is not None:		
 			hoftdicts[instrument] = \
 			snglrate_datasource.mkwhitened_src(pipeline, src,

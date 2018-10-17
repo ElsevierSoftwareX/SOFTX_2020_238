@@ -385,7 +385,7 @@ class FinalSink(object):
 		self.t_snapshot_start = None
 		self.snapshot_duration = None
 		# set logging to report status
-		self.log_fname = "%s/%s_log" % (path, path)
+		self.log_fname = "%s/finalsink_debug_log" % (path)
 		logging.basicConfig(filename=self.log_fname, format='%(asctime)s %(message)s', level = logging.DEBUG)
 
 		# background updater
@@ -692,7 +692,8 @@ class FinalSink(object):
 						print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
 						gracedb_ids.append(resp_json["graceid"])
 						break
-			except:
+			except Exception as e:
+                                print(e)
 				gracedb_upload_itrial += 1
 		#else:
 		#  proc = subprocess.Popen(("/bin/cp", "/dev/stdin", filename), stdin = subprocess.PIPE)
