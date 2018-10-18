@@ -132,7 +132,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 #
 
 
-rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, mass_model_filename = options.mass_model_file)
+rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, population_model_file = options.mass_model_file)
 
 if options.background_prior > 0:
 	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior)
