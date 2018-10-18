@@ -25,15 +25,24 @@ parser.add_argument("--output", metavar='name', type=str, help='The output file 
 parser.add_argument("modelfiles", nargs = "+")
 options = parser.parse_args()
 
-f = h5py.File(options.modelfiles[0], "r")
-SNR = numpy.zeros(f["SNR"].shape)
-coefficients = numpy.zeros(f["coefficients"].shape)
-f.close()
+SNRshape = (0,)
+coeffshape = (1,1,0)
 
 for fname in options.modelfiles:
-	f = h5py.File(options.modelfiles[0], "r")
+	f = h5py.File(fname, "r")
+	if f["SNR"].shape[0] > SNRshape[0]:
+		SNRshape = f["SNR"].shape
+	if f["coefficients"].shape[2] > coeffshape[2]:
+		coeffshape = f["coefficients"].shape
+	f.close()
+
+coefficients = numpy.zeros(coeffshape)
+SNR = numpy.zeros(SNRshape)
+
+for fname in options.modelfiles:
+	f = h5py.File(fname, "r")
 	SNR += f["SNR"]
-	coefficients += f["coefficients"]
+	coefficients[:,:,:f["coefficients"].shape[2]] += f["coefficients"]
 	f.close()
 
 f = h5py.File(options.output, "w")
