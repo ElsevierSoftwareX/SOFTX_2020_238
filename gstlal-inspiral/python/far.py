@@ -132,7 +132,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	network_snrsq_threshold = 7.**2.
 
 	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), population_model_file = None, min_instruments = 1, delta_t = 0.005):
-		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, population_model_file = population_model_file, min_instruments = min_instruments, mass_model_filename = mass_model_filename)
+		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, population_model_file = population_model_file, min_instruments = min_instruments)
 		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 
