@@ -101,20 +101,23 @@ class SourcePopulationModel(object):
 		SNR for a source population model, from which lnP is then
 		computed using PPoly.
 		"""
-		with h5py.File(filename if filename is not None else self.DEFAULT_FILENAME, 'r') as model:
-			coefficients = model['coefficients'].value
-			snr_bp = model['SNR'].value
-		# PPoly can construct an array of polynomials by just
-		# feeding it the coefficients array all in one go, but then
-		# it insists on evaluating all of them at once.  we don't
-		# want to suffer that cost, so we have to make an array of
-		# PPoly objects ourselves, and index into it to evaluate
-		# just one.  since we have to do this anyway, we use a
-		# dictionary to also solve the problem of mapping
-		# template_id to a specific polynomial
-		self.polys = dict((template_id, PPoly(coefficients[:,:,[template_id]], snr_bp)) for template_id in template_ids)
-		self.max_snr = snr_bp.max()
-
+		if filename is not None:
+			with h5py.File(filename, 'r') as model:
+				coefficients = model['coefficients'].value
+				snr_bp = model['SNR'].value
+			# PPoly can construct an array of polynomials by just
+			# feeding it the coefficients array all in one go, but then
+			# it insists on evaluating all of them at once.  we don't
+			# want to suffer that cost, so we have to make an array of
+			# PPoly objects ourselves, and index into it to evaluate
+			# just one.  since we have to do this anyway, we use a
+			# dictionary to also solve the problem of mapping
+			# template_id to a specific polynomial
+			self.polys = dict((template_id, PPoly(coefficients[:,:,[template_id]], snr_bp)) for template_id in template_ids)
+			self.max_snr = snr_bp.max()
+		else:
+			self.polys = None
+			self.max_snr = None
 
 	@gstlalstats.assert_ln_probability
 	def lnP_template_signal(self, template_id, snr):
