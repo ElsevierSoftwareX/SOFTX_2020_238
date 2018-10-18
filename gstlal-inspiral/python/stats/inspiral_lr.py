@@ -86,7 +86,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	# SNR, \chi^2 binning definition
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
 
-	def __init__(self, template_ids, instruments, delta_t, min_instruments = 2):
+	def __init__(self, template_ids, instruments, delta_t, min_instruments = 2, mass_model_filename = None):
 		#
 		# check input
 		#
@@ -105,6 +105,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		#
 
 		self.template_ids = frozenset(template_ids) if template_ids is not None else template_ids
+		self.mass_model_filename = mass_model_filename
 		self.instruments = frozenset(instruments)
 		self.min_instruments = min_instruments
 		self.delta_t = delta_t
@@ -120,6 +121,8 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		# that one or the other is None to make it possible to
 		# construct generic seed objects providing initialization
 		# data for the ranking statistics.
+		if self.mass_model_filename is not None and other.mass_model_filename is not None and other.mass_model_filename != self.mass_model_filename:
+			raise ValueError("incompatible mass model file names")
 		if self.template_ids is not None and other.template_ids is not None and self.template_ids != other.template_ids:
 			raise ValueError("incompatible template IDs")
 		if self.instruments != other.instruments:
@@ -131,6 +134,8 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 		if self.template_ids is None and other.template_ids is not None:
 			self.template_ids = frozenset(other.template_ids)
+		if self.mass_model_filename is None and other.mass_model_filename is not None:
+			self.mass_model_filename = other.mass_model_filename
 
 		for key, lnpdf in self.densities.items():
 			lnpdf += other.densities[key]
@@ -171,7 +176,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		self.densities["%s_snr_chi" % event.ifo].count[event.snr, event.chisq / event.snr**2.] += 1.0
 
 	def copy(self):
-		new = type(self)(self.template_ids, self.instruments, self.delta_t, self.min_instruments)
+		new = type(self)(self.template_ids, self.instruments, self.delta_t, self.min_instruments, self.mass_model_filename)
 		for key, lnpdf in self.densities.items():
 			new.densities[key] = lnpdf.copy()
 		return new
@@ -237,6 +242,9 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		xml = super(LnLRDensity, self).to_xml(name)
 		# FIXME:  switch to .from_pyvalue() when it can accept None
 		xml.appendChild(ligolw_param.Param.build(u"template_ids", u"lstring", ",".join("%d" % template_id for template_id in sorted(self.template_ids)) if self.template_ids is not None else None))
+		# FIXME this is not an ideal way to get only one into the file
+		if self.mass_model_filename is not None:
+			xml.appendChild(ligolw_param.Param.from_pyvalue(u"mass_model_filename", self.mass_model_filename))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
@@ -251,13 +259,25 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
 		template_ids = ligolw_param.get_pyvalue(xml, u"template_ids")
+		# FIXME find a better way to do this: Allow a file to not have
+		# a mass model filename.  This is can happen when e.g., gstlal
+		# inspiral produces a ranking stat file which just records but
+		# doesn't evaluate LRs.  Then you marginalize it in with a
+		# create prior diststats file which does have the mass model.
+		# The iadd method makes sure that the mass model is unique or
+		# that it doesn't exist.
+		try:
+			mass_model_filename = ligolw_param.get_pyvalue(xml, u"mass_model_filename")
+		except ValueError:
+			mass_model_filename = None
 		if template_ids is not None:
 			template_ids = frozenset(int(i) for i in template_ids.split(","))
 		self = cls(
 			template_ids = template_ids,
 			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
 			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t"),
-			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments")
+			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
+			mass_model_filename = mass_model_filename
 		)
 		for key in self.densities:
 			self.densities[key] = self.densities[key].from_xml(xml, key)
@@ -287,8 +307,10 @@ class LnSignalDensity(LnLRDensity):
 		# network
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
 		self.population_model_file = population_model_file
-		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 
+		# source population model
+		# FIXME:  introduce a mechanism for selecting the file
+		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.mass_model_filename)
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 
 	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
