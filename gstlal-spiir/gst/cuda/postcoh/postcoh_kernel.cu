@@ -247,6 +247,7 @@ __global__ void ker_coh_skymap
 	int		iifo,			/* INPUT, detector we are considering */
 	int		nifo,			/* INPUT, all detectors that are in this coherent analysis */
 	int		*peak_pos,	/* INPUT, place the location of the trigger */
+    float       *snglsnr_H,     /* INPUT, maximum single snr    */
 	int		npeak,		/* INPUT, number of triggers */
 	float		*u_map,				/* INPUT, u matrix map */
 	float		*toa_diff_map,		/* INPUT, time of arrival difference map */
@@ -259,16 +260,70 @@ __global__ void ker_coh_skymap
 )
 {
 
-    int     peak_cur, tmplt_cur, len_cur;
+    int     peak_cur, tmplt_cur, len_cur, ipeak_max;
     COMPLEX_F   dk[MAXIFOS];
     int     NtOff;
     int     map_idx, ipix, i;
     float   real, imag;
     float   snr_tmp, al_all = 0.0f;
+    float   *cohsnr = snglsnr_H + 9 * max_npeak;
+    extern __shared__ float smem[];
+
+	/* find maximum cohsnr and swope to the first pos */
+    volatile float *cohsnr_shared = &smem[0];
+    volatile float *ipeak_shared = &smem[blockDim.x];
+	float cohsnr_max = 0.0, cohsnr_cur;
+
+	if (npeak > 1) {
+		/* clean up smem history */
+		cohsnr_shared[threadIdx.x] = 0.0;
+		ipeak_shared[threadIdx.x] = 0;
+		__syncthreads();
+		/* load max cohsnr to smem for each thread in a block */
+	    for (i = threadIdx.x; i < npeak; i += blockDim.x) {
+			peak_cur = peak_pos[i];
+			cohsnr_cur = cohsnr[peak_cur];
+			if (cohsnr_cur > cohsnr_max) {
+				cohsnr_shared[threadIdx.x] = cohsnr_cur;
+				ipeak_shared[threadIdx.x] = i;
+				cohsnr_max = cohsnr_cur;
+			}
+		}
+		__syncthreads();
+
+		/* reduce the max snr to the first position */
+	    for (i = blockDim.x >> 1; i > 0; i = i >> 1)
+	    {
+	        if (threadIdx.x < i)
+	        {
+				cohsnr_cur = cohsnr_shared[threadIdx.x + i];
+	            cohsnr_max = cohsnr_shared[threadIdx.x];
+	
+	            if (cohsnr_cur > cohsnr_max)
+	            {
+	                cohsnr_shared[threadIdx.x] = cohsnr_cur;
+	                ipeak_shared[threadIdx.x] = ipeak_shared[threadIdx.x + i];
+	            }
+	
+	        }   
+	            __syncthreads();
+	    }
+	
+		/* swope the first and max peak_cur in peak_pos */
+	
+	    if (threadIdx.x == 0)
+	    {
+			ipeak_max = ipeak_shared[0];
+			peak_cur = peak_pos[ipeak_max];
+			peak_pos[ipeak_max] = peak_pos[0];
+			peak_pos[0] = peak_cur;
+	    }
 
 
-	if (npeak > 0)
-    {
+		__syncthreads();
+
+		/* cohsnr skymap generation */
+
         peak_cur = peak_pos[0];
         // find the len_cur from len_idx
         len_cur = peak_pos[peak_cur + max_npeak];
@@ -711,63 +766,17 @@ __global__ void ker_coh_max_and_chisq_versatile
                 // set d_chisq_bg_* from snglsnr_bg_H
                 snglsnr_bg_H[output_offset + (6 + write_ifo_mapping[j]) * hist_trials * max_npeak] = chisq_cur;
 				cmbchisq_bg[output_offset] += chisq_cur;
-				if (((1<<(j+1)) & cur_ifo_bits) == 0)
-					j++;
             }
+
+			if (((1<<(j+1)) & cur_ifo_bits) == 0)
+				j++;
+
             __syncthreads();
         }
 
         __syncthreads();
     }
-    }
-	/* find maximum cohsnr and swope to the first pos */
-    volatile float *cohsnr_shared = &smem[0];
-    volatile float *ipeak_shared = &smem[blockDim.x];
-	float cohsnr_max = 0.0, cohsnr_cur;
-
-	if (bid == 0 && npeak > 1) {
-		/* clean up smem history */
-		cohsnr_shared[threadIdx.x] = 0.0;
-		ipeak_shared[threadIdx.x] = 0;
-		__syncthreads();
-	    for (i = threadIdx.x; i < npeak; i += blockDim.x) {
-			peak_cur = peak_pos[i];
-			cohsnr_cur = cohsnr[peak_cur];
-			if (cohsnr_cur > cohsnr_max) {
-				cohsnr_shared[threadIdx.x] = cohsnr_cur;
-				ipeak_shared[threadIdx.x] = i;
-				cohsnr_max = cohsnr_cur;
-			}
-		}
-		__syncthreads();
-	    for (i = blockDim.x >> 1; i > 0; i = i >> 1)
-	    {
-	        if (threadIdx.x < i)
-	        {
-				cohsnr_cur = cohsnr_shared[threadIdx.x + i];
-	            cohsnr_max = cohsnr_shared[threadIdx.x];
-	
-	            if (cohsnr_cur > cohsnr_max)
-	            {
-	                cohsnr_shared[threadIdx.x] = cohsnr_cur;
-	                ipeak_shared[threadIdx.x] = ipeak_shared[threadIdx.x + i];
-	            }
-	
-	        }   
-	            __syncthreads();
-	    }
-	
-		/* swope the first and max peak_cur in peak_pos */
-	
-	    if (threadIdx.x == 0)
-	    {
-			ipeak_max = ipeak_shared[0];
-			peak_cur = peak_pos[ipeak_max];
-			peak_pos[ipeak_max] = peak_pos[0];
-			peak_pos[0] = peak_cur;
-	    }
-
-	} 
+	}
 
 }
 
@@ -1379,6 +1388,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 									iifo,	
 									state->nifo,
 									pklist->d_peak_pos,
+									pklist->d_snglsnr_H,
 									pklist->npeak[0],
 									state->d_U_map[gps_idx],
 									state->d_diff_map[gps_idx],
