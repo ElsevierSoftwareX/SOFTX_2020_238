@@ -163,28 +163,17 @@ def inj_psd_node_gen(segsdict, options):
 	ref_psd_parent_nodes = []
 	return psd_nodes, ref_psd_parent_nodes
 
-def model_node_gen(modelJob, modelAddJob, dag, instruments, svd_nodes, psd, options, seg):
+def model_node_gen(modelJob, dag, instruments, options, seg, template_bank):
 	if options.mass_model_file is None:
 		# choose, arbitrarily, the lowest instrument in alphabetical order
-		instrument = min(svd_nodes)
-		model_nodes = []
-		for n,node in enumerate(svd_nodes[instrument]):
-			this_model_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MASS_MODEL' % (n,), seg, '.h5', path = modelJob.output_path)
-			model_node = inspiral_pipe.generic_node(modelJob, dag,
-				input_files = {"reference-psd":psd, "svd-bank":node.output_files["write-svd"]},
-				opts = {"instrument": instrument, "model":options.mass_model},
-				output_files = {"output": this_model_file_name},
-				parent_nodes = [node]
-			)
-			model_nodes.append(model_node)
-
 		model_file_name = inspiral_pipe.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = modelJob.output_path)
-		model_add_node = inspiral_pipe.generic_node(modelAddJob, dag,
-			input_files = {"": [n.output_files["output"] for n in model_nodes]},
+		model_node = inspiral_pipe.generic_node(modelJob, dag,
+			input_files = {"template-bank": template_bank},
+			opts = {"model":options.mass_model},
 			output_files = {"output": model_file_name},
-			parent_nodes = model_nodes
+			parent_nodes = []
 		)
-		return [model_add_node], model_file_name
+		return [model_node], model_file_name
 	else:
 		return [], options.mass_model_file
 
@@ -1398,7 +1387,7 @@ if options.bank_cache:
 	#
 	#svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
 	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
-	model_add_node, model_file_name = model_node_gen(modelJob, modelAddJob, dag, instruments, svd_nodes, ref_psd, options, boundary_seg)
+	model_add_node, model_file_name = model_node_gen(modelJob, dag, instruments, options, boundary_seg, options.template_bank)
 
 if not options.lloid_cache:
 	#
