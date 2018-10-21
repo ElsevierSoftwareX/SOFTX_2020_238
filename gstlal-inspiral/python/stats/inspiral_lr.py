@@ -519,7 +519,7 @@ class LnSignalDensity(LnLRDensity):
 	def to_xml(self, name):
 		xml = super(LnSignalDensity, self).to_xml(name)
 		xml.appendChild(self.horizon_history.to_xml(u"horizon_history"))
-		xml.appendChild(ligolw_param.Param.from_pyvalue(u"population_model_file", self.population_model_file))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"population_model_file", self.population_model_file if self.population_model_file is not None else ""))
 		return xml
 
 	@classmethod
@@ -527,7 +527,9 @@ class LnSignalDensity(LnLRDensity):
 		xml = cls.get_xml_root(xml, name)
 		self = super(LnSignalDensity, cls).from_xml(xml, name)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, u"horizon_history")
-		self.population_model_file = ligolw_params.get_pyvalue(xml, u"population_model_file")
+		self.population_model_file = ligolw_param.get_pyvalue(xml, u"population_model_file")
+		if self.population_model_file == "":
+			self.population_model_file = None
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 		return self
 
