@@ -208,44 +208,29 @@ class EyeCandy(object):
 			if self.producer is not None:
 				self.producer.send(self.tag, {"%s_snr_history" % max_snr_event.ifo: "%s\t%s" % (self.ifo_snr_history[max_snr_event.ifo][-1][0], self.ifo_snr_history[max_snr_event.ifo][-1][1])})
 		if last_coincs:
-			latency_val = None
-			snr_val = (0,0)
-			like_val = (0,float("-inf"))
-			far_val = (0,0)
 			coinc_inspiral_index = last_coincs.coinc_inspiral_index
 			coinc_event_index = last_coincs.coinc_event_index
-			for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items():
+			for coinc_inspiral in coinc_inspiral_index.values():
+				# latency in .minimum_duration
 				# FIXME:  update when a proper column is available
-				latency = coinc_inspiral.minimum_duration
-				self.latency_histogram[latency,] += 1
-				if latency_val is None:
-					t = float(coinc_inspiral_index[coinc_event_id].end)
-					latency_val = (t, latency)
-				snr = coinc_inspiral_index[coinc_event_id].snr
-				if snr >= snr_val[1]:
-					t = float(coinc_inspiral_index[coinc_event_id].end)
-					snr_val = (t, snr)
-			for coinc_event_id, coinc_inspiral in coinc_event_index.items():
-				like = coinc_event_index[coinc_event_id].likelihood
-				if like >= like_val[1]:
-					t = float(coinc_inspiral_index[coinc_event_id].end)
-					like_val = (t, like)
-					far_val = (t, coinc_inspiral_index[coinc_event_id].combined_far)
-			if latency_val is not None:
-				self.latency_history.append(latency_val)
+				self.latency_histogram[coinc_inspiral.minimum_duration,] += 1
+			if coinc_event_index:
+				# latency in .minimum_duration
+				# FIXME:  update when a proper column is available
+				max_latency, max_latency_t = max((coinc_inspiral.minimum_duration, float(coinc_inspiral.end)) for coinc_inspiral in coinc_inspiral_index.values())
+				self.latency_history.append((max_latency_t, max_latency))
+
+				max_snr, max_snr_t = max((coinc_inspiral.snr, float(coinc_inspiral.end)) for coinc_inspiral in coinc_inspiral_index.values())
+				self.snr_history.append((max_snr_t, max_snr))
+
+				max_likelihood, max_likelihood_t, max_likelihood_far = max((coinc_event_index[coinc_event_id].likelihood, float(coinc_inspiral.end), coinc_inspiral.combined_far) for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items())
+				self.likelihood_history.append((max_likelihood_t, max_likelihood))
+				self.far_history.append((max_likelihood_t, max_likelihood_far))
+
 				if self.producer is not None:
 					self.producer.send(self.tag, {"latency_history": "%s\t%s" % (self.latency_history[-1][0], self.latency_history[-1][1])})
-			if snr_val != (0,0):
-				self.snr_history.append(snr_val)
-				if self.producer is not None:
 					self.producer.send(self.tag, {"snr_history": "%s\t%s" % (self.snr_history[-1][0], self.snr_history[-1][1])})
-			if like_val != (0,0):
-				self.likelihood_history.append(like_val)
-				if self.producer is not None:
 					self.producer.send(self.tag, {"likelihood_history": "%s\t%s" % (self.likelihood_history[-1][0], self.likelihood_history[-1][1])})
-			if far_val != (0,0):
-				self.far_history.append(far_val)
-				if self.producer is not None:
 					self.producer.send(self.tag, {"far_history": "%s\t%s" % (self.far_history[-1][0], self.far_history[-1][1])})
 
 		t = inspiral.now()
