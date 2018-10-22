@@ -235,8 +235,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 	def to_xml(self, name):
 		xml = super(LnLRDensity, self).to_xml(name)
-		# FIXME:  switch to .from_pyvalue() when it can accept None
-		xml.appendChild(ligolw_param.Param.build(u"template_ids", u"lstring", ",".join("%d" % template_id for template_id in sorted(self.template_ids)) if self.template_ids is not None else None))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"template_ids", ",".join("%d" % template_id for template_id in sorted(self.template_ids)) if self.template_ids is not None else None))
 		# FIXME this is not an ideal way to get only one into the file
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
