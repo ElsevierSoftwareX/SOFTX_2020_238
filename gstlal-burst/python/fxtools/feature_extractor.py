@@ -222,7 +222,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				# Save triggers once per cadence if saving to disk
 				if self.save_format == 'hdf5':
 					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.cadence) or (self.timestamp == self.feature_end_time):
-						self.logger.info("saving features to disk at timestamp = %d" % self.timestamp)
+						self.logger.info("saving features to disk at timestamp = %d, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
 						self.save_features()
 						self.last_save_time = self.timestamp
 
@@ -237,6 +237,7 @@ class MultiChannelHandler(simplehandler.Handler):
 				# add features to respective format specified
 				if self.save_format == 'kafka':
 					if self.data_transfer == 'table':
+						self.logger.info("pushing features to disk at timestamp = %.3f, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
 						self.producer.produce(timestamp = self.timestamp, topic = self.kafka_topic, value = json.dumps(feature_subset))
 					elif self.data_transfer == 'row':
 						for row in itertools.chain(*feature_subset['features'].values()):
