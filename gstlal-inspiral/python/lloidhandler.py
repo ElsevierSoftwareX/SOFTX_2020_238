@@ -214,24 +214,23 @@ class EyeCandy(object):
 				# latency in .minimum_duration
 				# FIXME:  update when a proper column is available
 				self.latency_histogram[coinc_inspiral.minimum_duration,] += 1
-			if coinc_event_index:
-				# latency in .minimum_duration
-				# FIXME:  update when a proper column is available
-				max_latency, max_latency_t = max((coinc_inspiral.minimum_duration, float(coinc_inspiral.end)) for coinc_inspiral in coinc_inspiral_index.values())
-				self.latency_history.append((max_latency_t, max_latency))
+			# latency in .minimum_duration
+			# FIXME:  update when a proper column is available
+			max_latency, max_latency_t = max((coinc_inspiral.minimum_duration, float(coinc_inspiral.end)) for coinc_inspiral in coinc_inspiral_index.values())
+			self.latency_history.append((max_latency_t, max_latency))
 
-				max_snr, max_snr_t = max((coinc_inspiral.snr, float(coinc_inspiral.end)) for coinc_inspiral in coinc_inspiral_index.values())
-				self.snr_history.append((max_snr_t, max_snr))
+			max_snr, max_snr_t = max((coinc_inspiral.snr, float(coinc_inspiral.end)) for coinc_inspiral in coinc_inspiral_index.values())
+			self.snr_history.append((max_snr_t, max_snr))
 
-				max_likelihood, max_likelihood_t, max_likelihood_far = max((coinc_event_index[coinc_event_id].likelihood, float(coinc_inspiral.end), coinc_inspiral.combined_far) for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items())
-				self.likelihood_history.append((max_likelihood_t, max_likelihood))
-				self.far_history.append((max_likelihood_t, max_likelihood_far))
+			max_likelihood, max_likelihood_t, max_likelihood_far = max((coinc_event_index[coinc_event_id].likelihood, float(coinc_inspiral.end), coinc_inspiral.combined_far) for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items())
+			self.likelihood_history.append((max_likelihood_t, max_likelihood))
+			self.far_history.append((max_likelihood_t, max_likelihood_far))
 
-				if self.producer is not None:
-					self.producer.send(self.tag, {"latency_history": "%s\t%s" % (self.latency_history[-1][0], self.latency_history[-1][1])})
-					self.producer.send(self.tag, {"snr_history": "%s\t%s" % (self.snr_history[-1][0], self.snr_history[-1][1])})
-					self.producer.send(self.tag, {"likelihood_history": "%s\t%s" % (self.likelihood_history[-1][0], self.likelihood_history[-1][1])})
-					self.producer.send(self.tag, {"far_history": "%s\t%s" % (self.far_history[-1][0], self.far_history[-1][1])})
+			if self.producer is not None:
+				self.producer.send(self.tag, {"latency_history": "%s\t%s" % (self.latency_history[-1][0], self.latency_history[-1][1])})
+				self.producer.send(self.tag, {"snr_history": "%s\t%s" % (self.snr_history[-1][0], self.snr_history[-1][1])})
+				self.producer.send(self.tag, {"likelihood_history": "%s\t%s" % (self.likelihood_history[-1][0], self.likelihood_history[-1][1])})
+				self.producer.send(self.tag, {"far_history": "%s\t%s" % (self.far_history[-1][0], self.far_history[-1][1])})
 
 		t = inspiral.now()
 		if self.time_since_last_state is None:
