@@ -439,6 +439,7 @@ class FinalSink(object):
 			self.need_candidate_check = False
 
 			if len(newevents) == 0:
+				logging.info("buf no event at %d" % buf.timestamp)
 				return
 
 			# NOTE: the first entry is used to add to the segments, not a really event
