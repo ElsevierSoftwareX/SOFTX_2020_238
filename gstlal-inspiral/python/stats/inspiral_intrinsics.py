@@ -91,8 +91,17 @@ class UniformInTemplatePopulationModel(object):
 
 
 class SourcePopulationModel(object):
-	POPULATION_MODELS_PATH = os.path.join(gstlal_config_paths["pkgdatadir"], "population_models")
-	DEFAULT_FILENAME = os.path.join(POPULATION_MODELS_PATH, "O2/lnP_template_signal_BBH_logm_reweighted_mchirp.hdf5")
+	#
+	# NOTE: This is no longer the default file used in the population
+	# model.  Various tools including the dag have been modified to allow
+	# the user to specify the mass model file at run time.  If you want to
+	# use this file, you should point the dag script to wherever it is on
+	# your filesystem.
+	#
+	# NOTE: future code will have this comment and these next two lines deleted.
+	#
+	#POPULATION_MODELS_PATH = os.path.join(gstlal_config_paths["pkgdatadir"], "population_models")
+	#DEFAULT_FILENAME = os.path.join(POPULATION_MODELS_PATH, "O2/lnP_template_signal_BBH_logm_reweighted_mchirp.hdf5")
 
 
 	def __init__(self, template_ids, filename = None):
