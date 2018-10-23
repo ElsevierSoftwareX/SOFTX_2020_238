@@ -49,7 +49,7 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_POSTCOH))
 
 #ifndef MIN_OUTPUT_SKYMAP_SNR
-#define MIN_OUTPUT_SKYMAP_SNR 10
+#define MIN_OUTPUT_SKYMAP_SNR 5
 #endif
 
 typedef struct _CudaPostcoh CudaPostcoh;
