@@ -70,10 +70,11 @@ while True:
 				this_gps_time =search_result.group()
 				if int(this_gps_time) < cut_gps_time:
 					rm_fnames.append("%s/%s" % (one_loc, this_file))
+				if len(rm_fnames) > 100:
+					if options.verbose:
+						print "cleaning ", rm_fnames
+					map(lambda x: os.remove(x), rm_fnames)
+					rm_fnames = []
 			except:
 				print "no gps time in this file %s, ignored" % this_file
-	if options.verbose:
-		print "cleaning ", rm_fnames
-
-	map(lambda x: os.remove(x), rm_fnames)
 	time.sleep(int(options.period))
