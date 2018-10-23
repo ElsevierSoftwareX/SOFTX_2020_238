@@ -1302,7 +1302,7 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 				filename = g_string_new(IFOComboMap[get_icombo(output->ifos)].name);
 				g_string_append_printf(filename, "_skymap/%s_%d_%d_%d_%d", output->pivotal_ifo, output->end_time.gpsSeconds, output->end_time.gpsNanoSeconds, output->bankid, output->tmplt_idx);
 				strcpy(output->skymap_fname, filename->str);
-				printf("file %s is written, skymap addr %p\n", output->skymap_fname, pklist->cohsnr_skymap);
+				GST_LOG("file %s is written, skymap addr %p\n", output->skymap_fname, pklist->cohsnr_skymap);
 				file = fopen(output->skymap_fname, "w");
 				fwrite(pklist->cohsnr_skymap, sizeof(float), state->npix, file);
 				fwrite(pklist->nullsnr_skymap, sizeof(float), state->npix, file);
