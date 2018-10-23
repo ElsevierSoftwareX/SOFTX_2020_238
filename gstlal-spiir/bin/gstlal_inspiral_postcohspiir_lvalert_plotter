@@ -32,6 +32,7 @@ import urllib
 import urlparse
 import httplib
 import subprocess
+from shutil import copyfile
 from ligo.gracedb import rest as gracedb
 import glob
 import json
@@ -251,6 +252,8 @@ if far < 1e-5:
 pipe_skymap_name = postcoh_table_row.skymap_fname
 end_time = postcoh_table_row.end_time
 outfname_skymap = 'gracedb/%s/%s_skymap.fits' % (gid, ifos)
+copied_name = 'gracedb/%s/%s' % (gid, ifos, os.path.split(pipe_skymap_name)[-1])
+copyfile(pipe_skymap_name, copied_name)
 try:
 	call_fits_skymap_func(outfname_skymap, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname)
 	if options.verbose:
