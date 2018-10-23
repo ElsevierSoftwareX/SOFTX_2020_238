@@ -268,9 +268,9 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		if statevector is not None or dqvector is not None:
 			head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * (psd_fft_length + 2))
 		if statevector is not None:
-			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1, hold_length = -max_rate, attack_length = -max_rate * (psd_fft_length + 1))
+			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1)
 		if dqvector is not None:
-			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1, hold_length = -max_rate, attack_length = -max_rate * (psd_fft_length + 1))
+			head = pipeparts.mkgate(pipeline, head, control = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, threshold = 1)
 		head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_fir" % instrument)
 	else:
 		# FIXME:  we should require fir_whiten_reference_psd to be
