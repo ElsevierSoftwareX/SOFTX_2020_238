@@ -1,4 +1,8 @@
-SUBDIRS = population_models
+if COND_MASSMODEL
+MASSMODELS = population_models
+else
+MASSMODELS =
+endif
 
 dist_pkgdata_DATA = \
 	de_calc_likelihood.sql \
@@ -23,3 +27,5 @@ inspiral_snr_pdf.xml.gz :
 		--horizon-distances H1=100,L1=0 \
 		--horizon-distances H1=100,L1=100 \
 		--min-instruments 1
+
+SUBDIRS = $(MASSMODELS)

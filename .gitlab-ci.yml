@@ -63,7 +63,6 @@ level0:gstlal:
   image: aepace/gstlal-dev:stretch-mkl
   stage: level0
   script:
-    #- echo "$PWD" > ./pwd_output.out
     - cd gstlal
     - ./00init.sh
     - ./configure --prefix=${GSTLAL_DIR}
@@ -73,7 +72,6 @@ level0:gstlal:
     expire_in: 3h
     paths:
       - ${GSTLAL_DIR}
-      - gstlal
     when: always
   only:
     - pushes
@@ -94,7 +92,6 @@ level1:gstlal-ugly:
     expire_in: 3h
     paths:
       - ${GSTLAL_DIR}
-      - gstlal-ugly
     when: always
   only:
     - pushes
@@ -115,7 +112,6 @@ level2:gstlal-calibration:
     expire_in: 3h
     paths:
       - ${GSTLAL_DIR}
-      - gstlal-calibration
     when: always
   only:
     - pushes
@@ -129,14 +125,13 @@ level2:gstlal-inspiral:
   script:
     - cd gstlal-inspiral
     - ./00init.sh
-    - ./configure --prefix=${GSTLAL_DIR}
+    - ./configure --prefix=${GSTLAL_DIR} --disable-massmodel
     - make
     - make install
   artifacts:
     expire_in: 3h
     paths:
       - ${GSTLAL_DIR}
-      - gstlal-inspiral
     when: always
   only:
     - pushes
@@ -157,7 +152,6 @@ level2:gstlal-burst:
     expire_in: 3h
     paths:
       - ${GSTLAL_DIR}
-      - gstlal-burst
     when: always
   only:
     - pushes
@@ -200,7 +194,7 @@ gstlal-verify:
     # -------------------------------------------------------------------
     - cd gstlal-inspiral
     - ./00init.sh
-    - ./configure --prefix=${GSTLAL_DIR}
+    - ./configure --prefix=${GSTLAL_DIR} --disable-massmodel
     - make
     - make install
     - cd ..

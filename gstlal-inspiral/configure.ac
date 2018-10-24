@@ -296,6 +296,28 @@ AC_SUBST([GSL_LIBS])
 
 
 #
+# Enable mass model data
+#
+
+
+AC_ARG_ENABLE(
+	[massmodel],
+	AS_HELP_STRING([--enable-massmodel], [enable/disable installation of hdf5 mass model data [default=yes]]),
+	[:],
+	[enable_massmodel=yes])
+
+AS_IF([test "x$enable_massmodel" != "xyes"], [
+    AC_MSG_WARN([Disabling copying of hdf5 mass model data])
+    HAVE_MASSMODEL="no"
+],[
+    AC_MSG_WARN([Copying hdf5 mass model data to $prefix/share])
+    HAVE_MASSMODEL="yes"
+])
+
+
+AM_CONDITIONAL([COND_MASSMODEL], [test "x$enable_massmodel" == "xyes"])
+
+#
 # Output configure information
 #
 
