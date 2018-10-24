@@ -30,7 +30,7 @@ class GSTLALPostcohInspiral(_postcohtable.GSTLALPostcohInspiral):
 	__slots__ = ()
 
 	process_id_type = ilwd.get_ilwdchar_class("process", "process_id")
-	event_id_type = ilwd.get_ilwdchar_class("sngl_inspiral", "event_id")
+	event_id_type = ilwd.get_ilwdchar_class("postcoh", "event_id")
 
 	end = lsctables.gpsproperty("end_time", "end_time_ns")
 
