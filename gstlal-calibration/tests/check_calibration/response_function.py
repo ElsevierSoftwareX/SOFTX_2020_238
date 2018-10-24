@@ -15,18 +15,20 @@ from optparse import OptionParser, Option
 
 parser = OptionParser()
 
-parser.add_option("--gps_start_time", metavar = "seconds", help = "Set the GPS start time.")
-parser.add_option("--gps_end_time", metavar = "seconds", help = "Set the GPS end time.")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time.")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the GPS end time.")
 parser.add_option("--dt", metavar = "seconds", help = "Sampling time interval.")
 parser.add_option("--ifo", metavar = "name", help = "Name of the IFO")
-parser.add_option("--c00_hoft_frames_cache", metavar = "name", help = "_")
-parser.add_option("--c01_hoft_frames_cache", metavar = "name", help = "_")
-parser.add_option("--raw_frames_cache", metavar = "name", help = "_")
-parser.add_option("--darm_err_channel_name", metavar = "name", help = "_")
-parser.add_option("--c00_hoft_channel_name", metavar = "name", help = "_")
-parser.add_option("--c01_hoft_channel_name", metavar = "name", help = "_")
-parser.add_option("--calcs_hoft_channel_name", metavar = "name", help = "_")
-parser.add_option("--response_file", metavar = "name", help = "_")
+parser.add_option("--hoft-frames-cache", metavar = "name", help = "Frame cache file for h(t) data to be analyzed")
+parser.add_option("--analyze-additional-hoft", action = "store_true", help = "Set this to analyze an additional h(t) channel.")
+parser.add_option("--additional-hoft-frames-cache", metavar = "name", help = "If desired, provide an additional frame cache for a secondary h(t) data stream to be analyzed.")
+parser.add_option("--raw-frames-cache", metavar = "name", help = "Frame cache for raw data.")
+parser.add_option("--darm-err-channel-name", metavar = "name", default = "CAL-DARM_ERR_WHITEN_OUT_DBL_DQ", help = "DARM_ERR channel name (default = CAL-DARM_ERR_WHITEN_OUT_DBL_DQ)")
+parser.add_option("--hoft-channel-name", metavar = "name", default = "GDS-CALIB_STRAIN", help = "h(t) channel name (default = GDS-CALIB_STRAIN")
+parser.add_option("--additional-hoft-channel-name", metavar = "name", help = "Additional h(t) channel name, if provided")
+parser.add_option("--analyze-calcs-hoft", action = "store_true", help = "Set this to analyze CALCS h(t) data")
+parser.add_option("--calcs-deltal-channel-name", metavar = "name", default = "CAL-DELTAL_EXTERNAL_DQ", help = "CALCS \delta L channel name (default = CAL-DELTAL_EXTERNAL_DQ)")
+parser.add_option("--response-file", metavar = "name", help = "Name of .npz file containing response as derived from DARM model.")
 
 options, filenames = parser.parse_args()
 
@@ -34,13 +36,15 @@ start = int(options.gps_start_time)
 end = int(options.gps_end_time)
 dt = float(options.dt)
 ifo = options.ifo
-C00_hoft_frames_cache = options.c00_hoft_frames_cache
-C01_hoft_frames_cache = options.c01_hoft_frames_cache
+hoft_frames_cache = options.hoft_frames_cache
+if options.analyze_additional_hoft:
+	additional_hoft_frames_cache = options.additional_hoft_frames_cache
+	additional_hoft_channel_name = options.additional_hoft_channel_name
 raw_frames_cache = options.raw_frames_cache
 DARM_ERR_channel_name = options.darm_err_channel_name
-C00_hoft_channel_name = options.c00_hoft_channel_name
-C01_hoft_channel_name = options.c01_hoft_channel_name
-CALCS_hoft_channel_name = options.calcs_hoft_channel_name
+hoft_channel_name = options.hoft_channel_name
+if options.analyze_calcs_hoft:
+	CALCS_deltal_channel_name = options.calcs_deltal_channel_name
 response_file = numpy.load(options.response_file)
 
 #response_real = response_file['response_real_function']
@@ -67,13 +71,15 @@ DARM_ERR_data = TimeSeries.read(raw_frames_cache, "%s:%s" % (ifo, DARM_ERR_chann
 #DARM_ERR_data = TimeSeriesDict.read(raw_frames_cache, "%s:%s" % (ifo, DARM_ERR_channel_name), start+dt, end+dt)
 # Read in CALCS data
 #CALCS_data = TimeSeriesDict.read(raw_frames_cache, channels = ["%s:%s" % (ifo, CALCS_hoft_channel_name)], start = start, end = end) 
-CALCS_data = TimeSeries.read(raw_frames_cache, "%s:%s" % (ifo, CALCS_hoft_channel_name), start = start, end = end)
-# Read in the C00 data without kappas applied
+if options.analyze_calcs_hoft:
+	CALCS_data = TimeSeries.read(raw_frames_cache, "%s:%s" % (ifo, CALCS_deltal_channel_name), start = start, end = end)
+# Read in the h(t) data without kappas applied
 #C00_data = TimeSeriesDict.read(C00_hoft_frames_cache, channels = ["%s:%s" % (ifo, C00_hoft_channel_name)], start = start, end = end)
-C00_data = TimeSeries.read(C00_hoft_frames_cache, "%s:%s" % (ifo, C00_hoft_channel_name), start = start, end = end)
-# Read in the C01 data without kappas applied
+hoft_data = TimeSeries.read(hoft_frames_cache, "%s:%s" % (ifo, hoft_channel_name), start = start, end = end)
+# If needed, read in the additional h(t) data without kappas applied
 #C01_data = TimeSeriesDict.read(C01_hoft_frames_cache, channels = ["%s:%s" % (ifo, C01_hoft_channel_name)], start = start, end = end)
-C01_data = TimeSeries.read(C01_hoft_frames_cache, "%s:%s" % (ifo, C01_hoft_channel_name), start = start, end = end)
+if options.analyze_additional_hoft:
+	additional_hoft_data = TimeSeries.read(additional_hoft_frames_cache, "%s:%s" % (ifo, additional_hoft_channel_name), start = start, end = end)
 
 # Pick out channel from dictionary
 #DARM_ERR_data = DARM_ERR_data["%s:%s" % (ifo, DARM_ERR_channel_name)]
@@ -89,9 +95,11 @@ averaging_time = 16
 chunk_start = start
 chunk_end = start + averaging_time
 
-CALCS_tf_data = numpy.zeros(len(response)) + 1j*numpy.zeros(len(response))
-C00_tf_data = numpy.zeros(len(response)) + 1j*numpy.zeros(len(response))
-C01_tf_data = numpy.zeros(len(response)) + 1j*numpy.zeros(len(response))
+if options.analyze_calcs_hoft:
+	CALCS_tf_data = numpy.zeros(len(response)) + 1j*numpy.zeros(len(response))
+hoft_tf_data = numpy.zeros(len(response)) + 1j*numpy.zeros(len(response))
+if options.analyze_additional_hoft:
+	additional_hoft_tf_data = numpy.zeros(len(response)) + 1j*numpy.zeros(len(response))
 
 N = 0
 
@@ -101,71 +109,86 @@ while (chunk_end <= end):
 	DARM_ERR_chunk = DARM_ERR_chunk.detrend()
 	DARM_ERR_chunk_fft = DARM_ERR_chunk.average_fft(4, 2, window = 'hann')
 
-	CALCS_chunk = CALCS_data.crop(chunk_start, chunk_end, True)
-	CALCS_chunk = CALCS_chunk.detrend()
-	CALCS_chunk_fft = CALCS_chunk.average_fft(4, 2, window = 'hann')
-	CALCS_chunk_fft = CALCS_chunk_fft.filter([30]*6, [0.3]*6, 1e-12)
+	hoft_chunk = hoft_data.crop(chunk_start, chunk_end, True)
+	hoft_chunk = hoft_chunk.detrend()
+	hoft_chunk_fft = hoft_chunk.average_fft(4, 2, window = 'hann')
+	
+	hoft_chunk_tf = hoft_chunk_fft / DARM_ERR_chunk_fft
+	hoft_tf_data += hoft_chunk_tf.value
 
-	C00_chunk = C00_data.crop(chunk_start, chunk_end, True)
-	C00_chunk = C00_chunk.detrend()
-	C00_chunk_fft = C00_chunk.average_fft(4, 2, window = 'hann')
+	if options.analyze_calcs_hoft:
+		CALCS_chunk = CALCS_data.crop(chunk_start, chunk_end, True)
+		CALCS_chunk = CALCS_chunk.detrend()
+		CALCS_chunk_fft = CALCS_chunk.average_fft(4, 2, window = 'hann')
+		CALCS_chunk_fft = CALCS_chunk_fft.filter([30]*6, [0.3]*6, 1e-12)
 
-	C01_chunk = C01_data.crop(chunk_start, chunk_end, True)
-	C01_chunk = C01_chunk.detrend()
-	C01_chunk_fft = C01_chunk.average_fft(4, 2, window = 'hann')
+		CALCS_chunk_tf = CALCS_chunk_fft / DARM_ERR_chunk_fft
+		CALCS_tf_data += CALCS_chunk_tf.value
 
-	CALCS_chunk_tf = CALCS_chunk_fft / DARM_ERR_chunk_fft
-	C00_chunk_tf = C00_chunk_fft / DARM_ERR_chunk_fft
-	C01_chunk_tf = C01_chunk_fft / DARM_ERR_chunk_fft
+	if options.analyze_additional_hoft:
+		additional_hoft_chunk = additional_hoft_data.crop(chunk_start, chunk_end, True)
+		additional_hoft_chunk = additional_hoft_chunk.detrend()
+		additional_hoft_chunk_fft = additional_hoft_chunk.average_fft(4, 2, window = 'hann')
 
-	CALCS_tf_data += CALCS_chunk_tf.value
-	C00_tf_data += C00_chunk_tf.value
-	C01_tf_data += C01_chunk_tf.value
+		additional_hoft_chunk_tf = additional_hoft_chunk_fft / DARM_ERR_chunk_fft
+		additional_hoft_tf_data += additional_hoft_chunk_tf.value
 
 	chunk_start += averaging_time
 	chunk_end += averaging_time
 	N += 1
 
+hoft_tf_data = hoft_tf_data / N
+hoft_tf = FrequencySeries(hoft_tf_data, f0=f0, df=df)
 
-CALCS_tf_data = CALCS_tf_data / N
-CALCS_tf = FrequencySeries(CALCS_tf_data, f0=f0, df=df)
-C00_tf_data = C00_tf_data / N
-C00_tf = FrequencySeries(C00_tf_data, f0=f0, df=df)
-C01_tf_data = C01_tf_data / N
-C01_tf = FrequencySeries(C01_tf_data, f0=f0, df=df)
+if options.analyze_calcs_hoft:
+	CALCS_tf_data = CALCS_tf_data / N
+	CALCS_tf = FrequencySeries(CALCS_tf_data, f0=f0, df=df)
+if options.analyze_additional_hoft:
+	additional_hoft_tf_data = additional_hoft_tf_data / N
+	additional_hoft_tf = FrequencySeries(additional_hoft_tf_data, f0=f0, df=df)
 
 # Make plot that compares all of the derived response functions and the model response
 plot = BodePlot(response_fs, frequencies=freqs, dB = False, linewidth=2)
-plot.add_frequencyseries(CALCS_tf, dB=False, color='#4ba6ff', linewidth=2)
-plot.add_frequencyseries(C00_tf*3995.1, dB = False, color='#ee0000',linewidth=2)
-plot.add_frequencyseries(C01_tf*3995.1, dB = False, color="#94ded7", linewidth=2)
-plot.add_legend([r'Reference model response function', r'Front-end response function', r'Low-latency \texttt{gstlal} response function', r'High-latency \texttt{gstlal} response function'], loc='upper right', fontsize='x-small')
+plot.add_frequencyseries(hoft_tf*3995.1, dB = False, color='#ee0000',linewidth=2)
+if options.analyze_calcs_hoft:
+	plot.add_frequencyseries(CALCS_tf, dB=False, color='#4ba6ff', linewidth=2)
+if options.analyze_additional_hoft:
+	plot.add_frequencyseries(additional_hoft_tf*3995.1, dB = False, color="#94ded7", linewidth=2)
+plot.add_legend([r'Reference model response function', r'h(t) derived response function'], loc='upper right', fontsize='x-small')
+# FIXME: Figure out how to make the legend and title appropriate and flexible
 plot.maxes.set_yscale('log')
 plot.paxes.set_yscale("linear")
-plot.save('%s_all_tf.pdf' % ifo)
+plot.save('%s_%s_%s_all_tf.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
 
 # Make a plot that compares the ratios of each derived response to the model
-ratio_CALCS = CALCS_tf / response_fs
-ratio_C00 = C00_tf / response_fs
-ratio_C01 = C01_tf / response_fs
-plot = BodePlot(ratio_CALCS, frequencies = freqs, dB = False, color='#4ba6ff', linewidth=2)
-plot.add_frequencyseries(ratio_C00*3995.1, dB = False, color='#ee0000',linewidth=2)
-plot.add_frequencyseries(ratio_C01*3995.1, dB = False, color="#94ded7", linewidth=2)
-plot.add_legend([r'Front-end response / Reference model response', r'Low-latency \texttt{gstlal} response / Reference model response', r'High-latency \texttt{gstlal} response / Reference model response'], loc='upper right', fontsize='small')
+ratio_hoft = hoft_tf / response_fs
+if options.analyze_calcs_hoft:
+	ratio_CALCS = CALCS_tf / response_fs
+if options.analyze_additional_hoft:
+	ratio_additional_hoft = additional_hoft_tf / response_fs
+
+plot = BodePlot(ratio_hoft*3995.1, frequencies = freqs, dB = False, color='#ee0000', linewidth=2)
+if options.analyze_calcs_hoft:
+	plot.add_frequencyseries(ratio_CALCS, dB = False, color='#4ba6ff',linewidth=2)
+if options.analyze_additional_hoft:
+	plot.add_frequencyseries(ratio_additional_hoft*3995.1, dB = False, color="#94ded7", linewidth=2)
+plot.add_legend([r'h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
 plot.maxes.set_yscale('linear')
 plot.paxes.set_yscale('linear')
-plot.save('%s_all_tf_ratio.pdf' % ifo)
+plot.save('%s_%s_%s_all_tf_ratio.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
 
-plot = BodePlot(ratio_CALCS, frequencies = freqs, dB = False, color='#4ba6ff', linewidth=2)
-plot.add_frequencyseries(ratio_C00*3995.1, dB = False, color='#ee0000',linewidth=2)
-plot.add_frequencyseries(ratio_C01*3995.1, dB = False, color="#94ded7", linewidth=2)
-plot.add_legend([r'Front-end response / Reference model response', r'Low-latency \texttt{gstlal} response / Reference model response', r'High-latency \texttt{gstlal} response / Reference model response'], loc='upper right', fontsize='small')
+plot = BodePlot(ratio_hoft*3995.1, frequencies = freqs, dB = False, color='#ee0000', linewidth=2)
+if options.analyze_calcs_hoft:
+	plot.add_frequencyseries(ratio_CALCS, dB = False, color='#4ba6ff',linewidth=2)
+if options.analyze_additional_hoft:
+	plot.add_frequencyseries(ratio_additional_hoft*3995.1, dB = False, color="#94ded7", linewidth=2)
+plot.add_legend([r'h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
 plot.maxes.set_yscale('linear')
 plot.paxes.set_yscale('linear')
 plot.maxes.set_ylim(.9, 1.1)
 plot.maxes.set_xlim(10, 5000)
 plot.paxes.set_ylim(-5, 5)
 plot.paxes.set_xlim(10, 5000)
-plot.save('%s_all_tf_ratio_zoomed.pdf' % ifo)
+plot.save('%s_%s_%s_all_tf_ratio_zoomed.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
 
 

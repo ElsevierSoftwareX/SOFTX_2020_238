@@ -2345,72 +2345,57 @@ if compute_srcq:
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
 #
 
-mux = pipeparts.mkframecppchannelmux(pipeline, None)
-
-mux.set_property("frame-duration", options.frame_duration)
-mux.set_property("frames-per-file", options.frames_per_file)
-mux.set_property("compression-scheme", int(OutputConfigs["compressionscheme"]))
-mux.set_property("compression-level", int(OutputConfigs["compressionscheme"]))
-
+channelmux_input_dict = {}
 # Link the output DQ vectors up to the muxer, if applicable
-if compute_calib_statevector:
-	calibration_parts.mkqueue(pipeline, calibstatevector).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STATE_VECTOR%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, odcstatevectortee).get_static_pad("src").link(mux.get_request_pad("%s:%s" % (instrument, ChannelNames["inputdqchannel"])))
-
+if compute_calib_statevector: 
+	channelmux_input_dict["%s:%sCALIB_STATE_VECTOR%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, calibstatevector) 
 # Link the strain branch to the muxer
-calibration_parts.mkqueue(pipeline, strain).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)))
-
+channelmux_input_dict["%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, strain)
 # Link the cleaned strain branch to the muxer if h(t) was cleaned in any way
 if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
-	calibration_parts.mkqueue(pipeline, clean_strain).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_STRAIN_CLEAN%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_STRAIN_CLEAN%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, clean_strain)
 # Link the real and imaginary parts of kappa_tst to the muxer
 if compute_kappatst:
-	calibration_parts.mkqueue(pipeline, ktstRout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_TST_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, ktstIout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_TST_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_ktstR_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_TST_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_ktstI_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_TST_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_KAPPA_TST_REAL%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, ktstRout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_TST_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, ktstIout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_TST_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_ktstR_nogate)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_TST_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_ktstI_nogate)
 # Link the real and imaginary parts of kappa_pum to the muxer
 if compute_kappapum:
-	calibration_parts.mkqueue(pipeline, kpumRout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PUM_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, kpumIout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PUM_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kpumR_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PUM_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kpumI_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PUM_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PUM_REAL%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kpumRout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PUM_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kpumIout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PUM_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kpumR_nogate)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PUM_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kpumI_nogate)
 # Link the real and imaginary parts of kappa_uim to the muxer
 if compute_kappauim:
-	calibration_parts.mkqueue(pipeline, kuimRout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_UIM_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, kuimIout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_UIM_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kuimR_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_UIM_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kuimI_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_UIM_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_KAPPA_UIM_REAL%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kuimRout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_UIM_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kuimIout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_UIM_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kuimR_nogate)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_UIM_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kuimI_nogate)
 # Link the real and imaginary parts of kappa_pu to the muxer
 if compute_kappapu:
-	calibration_parts.mkqueue(pipeline, kpuRout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PU_REAL%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, kpuIout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PU_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kpuR_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PU_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kpuI_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_PU_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PU_REAL%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kpuRout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PU_IMAGINARY%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kpuIout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PU_REAL_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kpuR_nogate)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_PU_IMAGINARY_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kpuI_nogate)
 # Link the \kappa_c to the muxer
 if compute_kappac:
-	calibration_parts.mkqueue(pipeline, kcout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_C%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_kc_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_KAPPA_C_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_KAPPA_C%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, kcout)
+	channelmux_input_dict["%s:%sCALIB_KAPPA_C_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_kc_nogate)
 # Link the f_cc to the muxer
 if compute_fcc:
-	calibration_parts.mkqueue(pipeline, fccout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_CC%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_fcc_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_CC_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_F_CC%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, fccout)
+	channelmux_input_dict["%s:%sCALIB_F_CC_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_fcc_nogate)
 # Link the f_s to the muxer
 if compute_fs:
-	calibration_parts.mkqueue(pipeline, fsout).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_S%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_fs_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_F_S_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
-
+	channelmux_input_dict["%s:%sCALIB_F_S%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, fsout)
+	channelmux_input_dict["%s:%sCALIB_F_S_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_fs_nogate)
 # Link the src_Q to the muxer
 if compute_srcq:
-	calibration_parts.mkqueue(pipeline, srcQ_inv_out).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_INVERSE%s" % (instrument, chan_prefix, chan_suffix)))
-	calibration_parts.mkqueue(pipeline, smooth_srcQ_inv_nogate).get_static_pad("src").link(mux.get_request_pad("%s:%sCALIB_SRC_Q_INVERSE_NOGATE%s" % (instrument, chan_prefix, chan_suffix)))
+	channelmux_input_dict["%s:%sCALIB_SRC_Q_INVERSE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, srcQ_inv_out)
+	channelmux_input_dict["%s:%sCALIB_SRC_Q_INVERSE_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_srcQ_inv_nogate)
+
+mux = pipeparts.mkframecppchannelmux(pipeline, channelmux_input_dict, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file, compression_scheme = int(OutputConfigs["compressionscheme"]), compression_level = int(OutputConfigs["compressionscheme"]))
 
 # Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
 def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):

@@ -46,21 +46,21 @@ GLUE_GIT_BRANCH="master"
 LALSUITE_GIT_BRANCH="master"
 
 # Set package release versions
-GSTLALINSPIRAL=gstlal-inspiral-1.4.2
-GSTLALCALIBRATION=gstlal-calibration-1.1.9
+GSTLALINSPIRAL=gstlal-inspiral-1.5.1
+GSTLALCALIBRATION=gstlal-calibration-1.2.1
 GSTLALBURST=gstlal-burst-0.0.5
-GSTLALUGLY=gstlal-ugly-1.5.1
-GSTLAL=gstlal-1.3.0
+GSTLALUGLY=gstlal-ugly-1.5.5
+GSTLAL=gstlal-1.4.1
 GLUE=lscsoft-glue-1.60.0
-LALAPPS=lalapps-6.21.0
-LALINFERENCE=lalinference-1.9.2
-LALPULSAR=lalpulsar-1.16.0
-LALINSPIRAL=lalinspiral-1.7.7
-LALBURST=lalburst-1.4.4
-LALSIMULATION=lalsimulation-1.7.3
-LALMETAIO=lalmetaio-1.3.1
-LALFRAME=lalframe-1.4.3
-LAL=lal-6.18.0
+LALAPPS=lalapps-6.22.0
+LALINFERENCE=lalinference-1.10.0
+LALPULSAR=lalpulsar-1.17.0
+LALINSPIRAL=lalinspiral-1.8.0
+LALBURST=lalburst-1.5.0
+LALSIMULATION=lalsimulation-1.8.0
+LALMETAIO=lalmetaio-1.4.0
+LALFRAME=lalframe-1.4.4
+LAL=lal-6.19.0
 
 # Specify target/dependency files
 GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
@@ -248,7 +248,7 @@ $(GLUE_TARGET) : $(LALAPPS_TARGET)
 		cd $(GLUE_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
 	else \
 		tar -xzf $(TAR_DIR)/$(GLUE).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/lscsoft-$(GLUE) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GLUE) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
 	fi ;
 
 # lalsuite
