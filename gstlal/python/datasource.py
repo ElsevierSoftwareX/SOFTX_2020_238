@@ -407,8 +407,11 @@ class GWDataSourceInfo(object):
 			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 
 		## DQ and state vector channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": None }
+#		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+#		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": None }
+
+		self.state_channel_dict = { "H1": None, "H2": "LLD-DQ_VECTOR","L1": None, "V1": None }
+		self.dq_channel_dict = { "H1": None, "H2": "DMT-DQ_VECTOR","L1": None, "V1": None }
 
 		if options.state_channel_name is not None:
 			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
@@ -427,11 +430,11 @@ class GWDataSourceInfo(object):
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits, state_vector_on_off_dict)
 		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits, dq_vector_on_off_dict)
 
-		# FIXME Virgo hack
-		if "V1" in self.dq_channel_dict:
-			self.dq_channel_dict["V1"] = None
-		if "V1" in self.dq_vector_on_off_bits:
-			self.dq_vector_on_off_bits["V1"] = (None, None)
+#		# FIXME Virgo hack
+#		if "V1" in self.dq_channel_dict:
+#			self.dq_channel_dict["V1"] = None
+#		if "V1" in self.dq_vector_on_off_bits:
+#			self.dq_vector_on_off_bits["V1"] = (None, None)
 		
 		## frame cache file
 		self.frame_cache = options.frame_cache
