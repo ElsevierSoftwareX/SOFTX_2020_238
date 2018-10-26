@@ -322,8 +322,11 @@ __global__ void ker_coh_skymap
 
 		__syncthreads();
 
+    }
+
 		/* cohsnr skymap generation */
 
+    if (npeak > 0) {
         peak_cur = peak_pos[0];
         // find the len_cur from len_idx
         len_cur = peak_pos[peak_cur + max_npeak];
