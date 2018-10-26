@@ -239,7 +239,7 @@ test:gstlal-inspiral:
   only:
     - pushes
     - schedules
-   allow_failure: true
+  allow_failure: true
 
 test:gstlal-burst:
   image: aepace/gstlal-dev:el7-mkl-1.14
@@ -252,7 +252,7 @@ test:gstlal-burst:
   only:
     - pushes
     - schedules
-   allow_failure: true
+  allow_failure: true
 
 test:offline:
   image: aepace/gstlal-dev:el7-mkl-1.14
