@@ -205,6 +205,7 @@ gstlal-verify:
     - cd ..
   only:
     - manual
+  allow_failure: true
 
 test:gstlal:
   image: aepace/gstlal-dev:el7-mkl-1.14
@@ -224,6 +225,7 @@ test:gstlal:
   only:
     - pushes
     - schedules
+  allow_failure: true
 
 test:gstlal-inspiral:
   image: aepace/gstlal-dev:el7-mkl-1.14
@@ -237,6 +239,7 @@ test:gstlal-inspiral:
   only:
     - pushes
     - schedules
+   allow_failure: true
 
 test:gstlal-burst:
   image: aepace/gstlal-dev:el7-mkl-1.14
@@ -249,6 +252,7 @@ test:gstlal-burst:
   only:
     - pushes
     - schedules
+   allow_failure: true
 
 test:offline:
   image: aepace/gstlal-dev:el7-mkl-1.14
@@ -264,9 +268,9 @@ test:offline:
     - export USER=gstlal_CI_test
     
     # Get documentation packages, and download lalsuite-extra data:
-    - yum -y install --assume-yes texlive-base texlive-dvipng
-    - yum -y install --assume-yes texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
-    - yum -y install --assume-yes texlive-pictures texlive-pstricks texlive-pstricks-doc
+    - yum -y install texlive-base texlive-dvipng
+    - yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
+    - yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc
 
     # Get the necessary ROM data:
     - git clone https://git.ligo.org/lscsoft/lalsuite-extra.git ${GSTLAL_DIR}/lalsuite-extra
@@ -284,6 +288,7 @@ test:offline:
   only:
     - pushes
     - schedules
+  allow_failure: true
   
 pages:
   image: aepace/gstlal-dev:el7-mkl-1.14l
@@ -294,9 +299,9 @@ pages:
     # since they don't need to be part of the dev container for running, only
     # for building documentation. This shaves ~600MB off the size of the gstlal-dev
     # container:
-    - yum -y install --assume-yes texlive-base texlive-dvipng python-sphinx
-    - yum -y install --assume-yes texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
-    - yum -y install --assume-yes texlive-pictures texlive-pstricks texlive-pstricks-doc
+    - yum -y install texlive-base texlive-dvipng python-sphinx
+    - yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
+    - yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
     - cd doc; make html
