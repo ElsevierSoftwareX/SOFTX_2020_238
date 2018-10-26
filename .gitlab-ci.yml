@@ -13,9 +13,6 @@ before_script:
     - mkdir public
     - mkdir -p ${GSTLAL_DIR}
     
-    # Update apt info
-    - apt update
-    
     # Define GstLAL build parameters:
     - export PATH="${GSTLAL_DIR}/bin:/usr/lib/ccache:/opt/local/libexec/ccache:${PATH}"
     - export LD_LIBRARY_PATH="${GSTLAL_DIR}/lib:${GSTLAL_DIR}/lib64:${LD_LIBRARY_PATH}"
@@ -37,8 +34,7 @@ before_script:
     
     # Define build and linking parameters:
     - export CFLAGS="-O3 -fPIC -DMKL_ILP64 -m64 -I${MKLROOT}/include -I${GSTLAL_DIR}/include"
-    - export LDFLAGS="-lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads -L${GSTLAL_DIR}/lib -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl"
-    - export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libfftw3.so:/usr/lib/x86_64-linux-gnu/libfftw3f.so"
+    - export LDFLAGS="-l:libfftw3.so -l:libfftw3f.so -l:libfftw3_threads.so -l:libfftw3f_threads.so -L${GSTLAL_DIR}/lib -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl"
     
     - export TMPDIR=/tmp
     
@@ -60,7 +56,7 @@ stages:
     - verify
 
 level0:gstlal:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: level0
   script:
     - cd gstlal
@@ -78,7 +74,7 @@ level0:gstlal:
     - schedules
     
 level1:gstlal-ugly:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: level1
   dependencies:
     - level0:gstlal
@@ -98,7 +94,7 @@ level1:gstlal-ugly:
     - schedules
 
 level2:gstlal-calibration:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: level2
   dependencies:
     - level1:gstlal-ugly
@@ -118,7 +114,7 @@ level2:gstlal-calibration:
     - schedules
 
 level2:gstlal-inspiral:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: level2
   dependencies:
     - level1:gstlal-ugly
@@ -158,7 +154,7 @@ level2:gstlal-burst:
     - schedules
   
 gstlal-verify:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: verify
   script:
     # -------------------------------------------------------------------
@@ -211,7 +207,7 @@ gstlal-verify:
     - manual
 
 test:gstlal:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: test-gstlal
   dependencies:
     - level0:gstlal
@@ -219,12 +215,10 @@ test:gstlal:
     - export GSTLAL_FIR_WHITEN=0
 
     # Get the necessary ROM data:
-    - git lfs install
     - git clone https://git.ligo.org/lscsoft/lalsuite-extra.git ${GSTLAL_DIR}/lalsuite-extra
     - export LAL_DATA_PATH=${GSTLAL_DIR}/lalsuite-extra/data/lalsimulation/
 
     # Run doctests
-    - apt-get install -y python-pytest
     - cd gstlal
     - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py
   only:
@@ -232,13 +226,12 @@ test:gstlal:
     - schedules
 
 test:gstlal-inspiral:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: test-inspiral
   dependencies:
     - level2:gstlal-inspiral
   script:
     - export GSTLAL_FIR_WHITEN=0
-    - apt-get install -y python-pytest
     - cd gstlal-inspiral
     - python -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/webpage.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py
   only:
@@ -246,12 +239,11 @@ test:gstlal-inspiral:
     - schedules
 
 test:gstlal-burst:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: test-burst
   dependencies:
     - level2:gstlal-burst
   script:
-    - apt-get install -y python-pytest
     - cd gstlal-burst
     - python -m pytest -v --doctest-modules --ignore python/excesspower --ignore tests/trigger_test_01.py
   only:
@@ -259,7 +251,7 @@ test:gstlal-burst:
     - schedules
 
 test:offline:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: test-offline
   dependencies:
     - level1:gstlal-ugly
@@ -272,12 +264,11 @@ test:offline:
     - export USER=gstlal_CI_test
     
     # Get documentation packages, and download lalsuite-extra data:
-    - apt-get install --assume-yes texlive-base texlive-binaries texlive-extra-utils texlive-font-utils texlive-fonts-extra texlive-fonts-extra-doc texlive-fonts-recommended dvipng
-    - apt-get install --assume-yes texlive-fonts-recommended-doc texlive-generic-extra texlive-generic-recommended texlive-latex-base texlive-latex-base-doc texlive-latex-extra
-    - apt-get install --assume-yes texlive-latex-extra-doc texlive-latex-recommended texlive-latex-recommended-doc texlive-pictures texlive-pictures-doc texlive-pstricks texlive-pstricks-doc texlive-science texlive-science-doc
+    - yum -y install --assume-yes texlive-base texlive-dvipng
+    - yum -y install --assume-yes texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
+    - yum -y install --assume-yes texlive-pictures texlive-pstricks texlive-pstricks-doc
 
     # Get the necessary ROM data:
-    - git lfs install
     - git clone https://git.ligo.org/lscsoft/lalsuite-extra.git ${GSTLAL_DIR}/lalsuite-extra
     - export LAL_DATA_PATH=${GSTLAL_DIR}/lalsuite-extra/data/lalsimulation/
 
@@ -295,7 +286,7 @@ test:offline:
     - schedules
   
 pages:
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14l
   stage: nightly-pages
   script:
     - echo "Building Documentation"
@@ -303,9 +294,9 @@ pages:
     # since they don't need to be part of the dev container for running, only
     # for building documentation. This shaves ~600MB off the size of the gstlal-dev
     # container:
-    - apt-get install --assume-yes python-sphinx texlive-base texlive-binaries texlive-extra-utils texlive-font-utils texlive-fonts-extra texlive-fonts-extra-doc texlive-fonts-recommended
-    - apt-get install --assume-yes texlive-fonts-recommended-doc texlive-generic-extra texlive-generic-recommended texlive-latex-base texlive-latex-base-doc texlive-latex-extra
-    - apt-get install --assume-yes texlive-latex-extra-doc texlive-latex-recommended texlive-latex-recommended-doc texlive-pictures texlive-pictures-doc texlive-pstricks texlive-pstricks-doc texlive-science texlive-science-doc
+    - yum -y install --assume-yes texlive-base texlive-dvipng python-sphinx
+    - yum -y install --assume-yes texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
+    - yum -y install --assume-yes texlive-pictures texlive-pstricks texlive-pstricks-doc
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
     - cd doc; make html
