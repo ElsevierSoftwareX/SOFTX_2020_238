@@ -365,7 +365,14 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	if channel_src_map is not None:
 		for channel, src in channel_src_map.items():
 			for srcpad in src.srcpads:
-				if srcpad.link(elem.get_request_pad(channel)) == Gst.PadLinkReturn.OK:
+				# FIXME FIXME FIXME. This should use the pad template from the element.  
+				# FIXME once a newer version of some library is available, then we should be able to switch to this
+				# if srcpad.link(elem.get_request_pad(channel)) == Gst.PadLinkReturn.OK
+				# Instead. Right now it fails due to the
+				# underscore in channel names.  When it fails
+				# it fails silently and returns None, which
+				# gives a cryptic error message
+				if srcpad.link(elem.request_pad(Gst.PadTemplate.new(channel, Gst.PadDirection.SINK, Gst.PadPresence.REQUEST, Gst.Caps("ANY")), channel)) == Gst.PadLinkReturn.OK:
 					break
 	if units is not None:
 		framecpp_channeldemux_set_units(elem, units)
