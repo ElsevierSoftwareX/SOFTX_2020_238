@@ -289,7 +289,7 @@ class StreamThinca(object):
 
 		# times when SNR was available.  used only for code
 		# correctness checks
-		
+
 		one_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 1)
 		# FIXME:  this is needed to work around rounding problems
 		# in safety checks below, trying to compare GPS trigger
