@@ -134,7 +134,7 @@ level2:gstlal-inspiral:
     - schedules
     
 level2:gstlal-burst:
-  image: aepace/gstlal-dev:stretch-mkl-1.14
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: level2
   dependencies:
     - level1:gstlal-ugly
