@@ -94,19 +94,22 @@ ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
 GROUP_USER=albert.einstein
 CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
 
+CONDOR_UNIVERSE=vanilla
+#CONDOR_UNIVERSE=local
+
 #########################
 # Online DAG Parameters #
 #########################
 
 TAG = online_test
 
-DATA_SOURCE = lvshm
-MAX_STREAMS = 200
-SAMPLE_RATE = 1
+DATA_SOURCE = framexmit
+MAX_STREAMS = 50
+SAMPLE_RATE = 16
 
 # Parameter space config of waveform
-WAVEFORM = sine_gaussian
-MISMATCH = 0.02
+WAVEFORM = tapered_sine_gaussian
+MISMATCH = 0.03
 QHIGH = 40
 
 # data transfer options
@@ -116,7 +119,7 @@ SAVE_FORMAT = kafka
 
 # save options
 SAVE_CADENCE = 20
-PERSIST_CADENCE = 200
+PERSIST_CADENCE = 20
 
 # kafka options
 KAFKA_TOPIC = gstlal_features
@@ -124,8 +127,8 @@ KAFKA_SERVER = localhost:9182
 KAFKA_GROUP = group_1
 
 # synchronizer/file sink options (kafka only)
-PROCESSING_CADENCE = 0.1
-REQUEST_TIMEOUT = 0.2
+PROCESSING_CADENCE = 0.01
+REQUEST_TIMEOUT = 0.05
 LATENCY_TIMEOUT = 12
 
 # cluster where analysis is run
@@ -138,7 +141,7 @@ CLUSTER:=$(shell hostname -d)
 IFO = H1
 #IFO = L1
 
-EPOCH = O2
+EPOCH = O3
 LEVEL = standard
 
 # if not using standard .ini file, comment and supply custom channel list instead
@@ -204,9 +207,10 @@ dag : plots $(CHANNEL_LIST)
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--disable-kafka-jobs \
-			--condor-universe local \
-			--request-cpu 2 \
-			--request-memory 15GB \
+			--no-drop \
+			--condor-universe $(CONDOR_UNIVERSE) \
+			--request-cpu 6 \
+			--request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	elif [[ $(DATA_SOURCE) == "framexmit" ]] && [[ $(SAVE_FORMAT) == "hdf5" ]] ; then \
@@ -228,9 +232,10 @@ dag : plots $(CHANNEL_LIST)
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--disable-kafka-jobs \
-			--condor-universe local \
-			--request-cpu 2 \
-			--request-memory 15GB \
+			--no-drop \
+			--condor-universe $(CONDOR_UNIVERSE) \
+			--request-cpu 6 \
+			--request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	elif [[ $(DATA_SOURCE) == "lvshm" ]] && [[ $(SAVE_FORMAT) == "kafka" ]] ; then \
@@ -239,6 +244,8 @@ dag : plots $(CHANNEL_LIST)
 			--shared-memory-partition H1=LHO_RedDtchr \
 			--shared-memory-assumed-duration 1 \
 			--sample-rate $(SAMPLE_RATE) \
+			--cadence $(SAVE_CADENCE) \
+			--persist-cadence $(PERSIST_CADENCE) \
 			--save-format $(SAVE_FORMAT) \
 			--kafka-topic $(KAFKA_TOPIC) \
 			--kafka-server $(KAFKA_SERVER) \
@@ -259,9 +266,10 @@ dag : plots $(CHANNEL_LIST)
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--disable-kafka-jobs \
-			--condor-universe local \
-			--request-cpu 2 \
-			--request-memory 15GB \
+			--no-drop \
+			--condor-universe $(CONDOR_UNIVERSE) \
+			--request-cpu 6 \
+			--request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	elif [[ $(DATA_SOURCE) == "framexmit" ]] && [[ $(SAVE_FORMAT) == "kafka" ]] ; then \
@@ -269,6 +277,8 @@ dag : plots $(CHANNEL_LIST)
 			--data-source $(DATA_SOURCE) \
 			--save-format $(SAVE_FORMAT) \
 			--sample-rate $(SAMPLE_RATE) \
+			--cadence $(SAVE_CADENCE) \
+			--persist-cadence $(PERSIST_CADENCE) \
 			--kafka-topic $(KAFKA_TOPIC) \
 			--kafka-server $(KAFKA_SERVER) \
 			--kafka-partition $(KAFKA_GROUP) \
@@ -288,16 +298,18 @@ dag : plots $(CHANNEL_LIST)
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 			--disable-kafka-jobs \
-			--condor-universe local \
-			--request-cpu 2 \
-			--request-memory 15GB \
+			--no-drop \
+			--condor-universe $(CONDOR_UNIVERSE) \
+			--request-cpu 6 \
+			--request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	fi ;
 
 # Pull latest channel list
 $(CHANNEL_LIST) : plots
-	wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$(CHANNEL_LIST)
+	#wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$(CHANNEL_LIST)
+	wget https://git.ligo.org/patrick.godwin/ligo-channel-lists/raw/lho_O3_updatelist/$(EPOCH)/$(CHANNEL_LIST)
 
 # FIXME Add webpages once we have output
 # Make webpage directory and copy files across
@@ -309,5 +321,11 @@ $(CHANNEL_LIST) : plots
 plots :
 	mkdir plots
 
+clean-lite :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.txt
+
 clean :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.ini
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.ini *.txt
+
+clean-all :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.ini *.txt gstlal_feature_*
