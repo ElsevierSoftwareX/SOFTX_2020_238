@@ -163,7 +163,7 @@ class upper_limit(object):
             if self.searched_instruments is None:
                 self.searched_instruments = inst[0].replace(",","")
             else:
-                if self.searched_instruments != inst:
+                if self.searched_instruments != inst[0].replace(",",""):
                     raise ValueError("Detected different searched instruments between databases")
 
 
