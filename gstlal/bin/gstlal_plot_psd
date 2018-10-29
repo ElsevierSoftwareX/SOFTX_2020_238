@@ -27,7 +27,7 @@ from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
 from glue.ligolw import utils
-from pylal import series as lalseries
+from lal.series import read_psd_xmldoc
 from gstlal import reference_psd
 
 ## @file
@@ -53,19 +53,24 @@ outname = sys.argv[1]
 minpsd = []
 
 for fname in sys.argv[2:]:
-	psds = lalseries.read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
-	for k,v in psds.items():
+	psds = read_psd_xmldoc(utils.load_filename(fname, verbose = True, contenthandler = ligolw.LIGOLWContentHandler))
+	for k,psd in psds.items():
 		# compute horizon up to 90% of nyquist to avoid roll off
-		h = reference_psd.horizon_distance(v, 1.4, 1.4, 8, 10, len(v.data) * v.deltaF * 0.90)
+		psd_data = psd.data.data
+		f = psd.f0 + numpy.arange(len(psd_data)) * psd.deltaF
+		hd = reference_psd.HorizonDistance(10., 0.9 * f[-1], psd.deltaF, 1.4, 1.4)
+		h, (D, model) = hd(psd)
+		print h
 		if len(sys.argv[2:]) > 1:
 			flabel = fname
 		else:
 			flabel = ""
-		minpsd.append(min(v.data))
-		pyplot.loglog(v.deltaF * numpy.arange(len(v.data)), v.data, label = '%s %s: %0.f Mpc' % (flabel, k, h), alpha=0.75)
+		minpsd.append(min(psd.data.data))
+		pyplot.loglog(psd.deltaF * numpy.arange(len(psd.data.data)), psd.data.data, label = '%s %s: %0.f Mpc' % (flabel, k, h), alpha=0.75)
 		pyplot.xlabel('Frequency (Hz)')
 		pyplot.ylabel('Strain^2/Hz')
 pyplot.legend()
 pyplot.grid()
-pyplot.ylim([min(minpsd), min(minpsd)*1e10])
+#pyplot.ylim([min(minpsd), min(minpsd)*1e10])
+pyplot.xlim([1, 8000])
 pyplot.savefig(outname)
