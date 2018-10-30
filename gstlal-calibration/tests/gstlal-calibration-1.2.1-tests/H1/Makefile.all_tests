@@ -35,8 +35,7 @@ export GDSSHMCONFIGS=H1GDSSHM_gstlal-calibration-1.2.1-testing.ini
 # Needed for writing pipeline graphs
 export GST_DEBUG_DUMP_DOT_DIR=.
 
-# FIXME: Need to fix timeserieskappas script to plot based on provided frame cache (or check if this is already option)
-all: response_function ASD_comparison pcal_to_darm calib_version_comparison timeserieskappas
+all: response_function ASD_comparison pcal_to_darm timeserieskappas
 
 # Create frame cache files for raw, C00, C01, and C02 frames
 $(IFO)1_raw_frames.cache:
@@ -53,22 +52,22 @@ $(IFO)1_C02_frames.cache:
 
 # Calibrate DCS data
 $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	gstlal_compute_strain --gps-start-time $(LONG_START) --gps-end-time $(LONG_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
+	#gstlal_compute_strain --gps-start-time $(LONG_START) --gps-end-time $(LONG_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST-*.gwf | lalapps_path2cache > $@
 
 # Calibrate DCS data with no kappas applied for response function test
 $(IFO)1_hoft_DCS_no_kappas_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGSNOKAPPAS)
+	#gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGSNOKAPPAS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST_NOKAPPAS*.gwf | lalapps_path2cache > $@
 
 # Calibrate GDS testing data
 $(IFO)1_hoft_GDS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	gstlal_compute_strain --gps-start-time $(LONG_START) --gps-end-time $(LONG_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
+	#gstlal_compute_strain --gps-start-time $(LONG_START) --gps-end-time $(LONG_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST-*.gwf | lalapps_path2cache > $@
 
 # Calibrate GDS testing data with no kappas applied for response function test
 $(IFO)1_hoft_GDS_no_kappas_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGSNOKAPPAS)
+	#gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGSNOKAPPAS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST_NOKAPPAS*.gwf | lalapps_path2cache > $@
 
 # Calibrate GDS data from shared memory to check latency
@@ -109,6 +108,7 @@ lines_ratio: $(IFO)1_hoft_DCS_frames.cache
 latency: $(IFO)1_hoft_GDS_SHM_frames.cache
 	make -f Makefile.latency
 
+# FIXME: This is seg faulting for me right now
 calib_version_comparison: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_C02_frames.cache $(IFO)1_hoft_DCS_frames.cache
 	make -f Makefile.calib_version_comparison
 
