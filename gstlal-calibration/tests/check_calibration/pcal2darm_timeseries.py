@@ -82,6 +82,7 @@ parser.add_option("--demodulation-time", metavar = "seconds", type = int, defaul
 parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.9,1.1;0.9,1.1;0.9,1.1", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.0,6.0;-6.0,6.0;-6.0,6.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
+parser.add_option("--file-name-prefix", metavar = "name", type = str, help = "Prefix for naming unique file.")
 
 options, filenames = parser.parse_args()
 
@@ -325,6 +326,6 @@ for i in range(0, len(frequencies)):
 		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = r'%s [$\mu$ = %0.3f$^{\circ}$, $\sigma$ = %0.3f$^{\circ}$]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
-plt.savefig("deltal_over_pcal_%d.png" % options.gps_start_time)
-plt.savefig("deltal_over_pcal_%d.pdf" % options.gps_start_time)
+plt.savefig("%s_%s_deltal_over_pcal_%d.png" % (options.file_name_prefix, ifo, options.gps_start_time))
+plt.savefig("%s_%s_deltal_over_pcal_%d.pdf" % (options.file_name_prefix, ifo, options.gps_start_time))
 
