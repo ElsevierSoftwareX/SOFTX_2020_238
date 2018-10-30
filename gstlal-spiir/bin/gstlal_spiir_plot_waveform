@@ -51,7 +51,7 @@ matplotlib.use('Agg')
 from matplotlib import pyplot
 
 
-from pylal.series import read_psd_xmldoc
+from lal.series import read_psd_xmldoc
 from gstlal import templates
 from gstlal import cbc_template_iir
 
