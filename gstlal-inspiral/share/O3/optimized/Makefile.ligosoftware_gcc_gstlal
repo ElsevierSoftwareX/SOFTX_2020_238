@@ -21,11 +21,13 @@ CLUSTER:=$(shell hostname -d)
 # Set directories and paths
 SRC_DIR:=${PWD}/src
 TAR_DIR:=tarball
-LOGS_DIR:=logs
+LOGS_DIR:=${PWD}/logs
 PATCH_DIR:=${PWD}/patches
 INSTALL_DIR:=${LAL_PATH}
 
 GSTLAL_REPO:=${PWD}/git/gstlal
+LIGOSEGMENTS_REPO:=${PWD}/git/ligo-segments
+PYTHONLIGOLW_REPO:=${PWD}/git/python-ligo-lw
 GLUE_REPO:=${PWD}/git/glue
 LALSUITE_REPO:=${PWD}/git/lalsuite
 
@@ -34,14 +36,18 @@ DEPS_DIR:=/path/to/deps/dir
 
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
-GLUE_GIT=1
-LALSUITE_GIT=1
+LIGOSEGMENTS_GIT=0
+PYTHONLIGOLW_GIT=0
+GLUE_GIT=0
+LALSUITE_GIT=0
 
-# Define which branch from git to build. Defaults to 'master', but the user can 
+# Define which branch from git to build. Defaults to 'master', but the user can
 # set the variable below. The git clone and compilation should fail if this is set to
 # an unknown branch.
 #
 GSTLAL_GIT_BRANCH="master"
+LIGOSEGMENTS_GIT_BRANCH="master"
+PYTHONLIGOLW_GIT_BRANCH="master"
 GLUE_GIT_BRANCH="master"
 LALSUITE_GIT_BRANCH="master"
 
@@ -51,6 +57,8 @@ GSTLALCALIBRATION=gstlal-calibration-1.2.1
 GSTLALBURST=gstlal-burst-0.0.5
 GSTLALUGLY=gstlal-ugly-1.5.5
 GSTLAL=gstlal-1.4.1
+LIGOSEGMENTS=ligo-segments-1.1.1
+PYTHONLIGOLW=python-ligo-lw-1.4.0
 GLUE=lscsoft-glue-1.60.0
 LALAPPS=lalapps-6.22.0
 LALINFERENCE=lalinference-1.10.0
@@ -68,6 +76,8 @@ GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
+LIGOSEGMENTS_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/ligo_segments-1.1.1-py2.7-linux-x86_64.egg
+PYTHONLIGOLW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/python_ligo_lw-1.4.0-py2.7.egg-info
 GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
 LALINFER_TARGET=$(INSTALL_DIR)/lib/liblalinference.so
@@ -85,6 +95,8 @@ GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
 GSTLALBURST_TAR_TARGET=$(TAR_DIR)/$(GSTLALBURST).tar.gz
 GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
 GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
+LIGOSEGMENTS_TAR_TARGET=$(TAR_DIR)/$(LIGOSEGMENTS).tar.gz
+PYTHONLIGOLW_TAR_TARGET=$(TAR_DIR)/$(PYTHONLIGOLW).tar.gz
 GLUE_TAR_TARGET=$(TAR_DIR)/$(GLUE).tar.gz
 LALAPPS_TAR_TARGET=$(TAR_DIR)/$(LALAPPS).tar.xz
 LALINFER_TAR_TARGET=$(TAR_DIR)/$(LALINFERENCE).tar.xz
@@ -98,6 +110,8 @@ LAL_TAR_TARGET=$(TAR_DIR)/$(LAL).tar.xz
 
 # git repos
 GSTLAL_GIT_TARGET=$(GSTLAL_REPO)/TODO.md
+LIGOSEGMENTS_GIT_TARGET=$(LIGOSEGMENTS_REPO)/README.rst
+PYTHONLIGOLW_GIT_TARGET=$(PYTHONLIGOLW_REPO)/MANIFEST.in
 GLUE_GIT_TARGET=$(GLUE_REPO)/README
 LALSUITE_GIT_TARGET=$(LALSUITE_REPO)/lal/README
 
@@ -129,9 +143,7 @@ all : $(GSTINSPIRAL_TARGET) $(LOGS_DIR)/gstlal.txt
 #####################
 
 env.sh :
-	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
-	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
-	@echo 'source ${DEPS_DIR}/deps_env.sh' >> $@
+	@echo 'source ${DEPS_DIR}/deps_env.sh' > $@
 	@echo 'LAL_PATH=${PWD}/opt' >> $@
 	@echo 'export CFLAGS="$${CFLAGS} -I$${LAL_PATH}/include"' >> $@
 	@echo 'export LD_LIBRARY_PATH=$${LAL_PATH}/lib:$${LD_LIBRARY_PATH}' >> $@
@@ -156,19 +168,19 @@ env.sh :
 #####################
 
 check :
-	@if [ -f logs/all.txt ] ; then rm logs/all.txt ; fi ;
-	@cat logs/* | uniq > logs/all.txt
-	@if [ -f logs/gstlal.txt ] ; then ls logs/gstlal.txt >> logs/all.txt ; fi ;
-	@ls -ltrh $$(cat logs/all.txt)
+	@if [ -f $(LOGS_DIR)/all.txt ] ; then rm $(LOGS_DIR)/all.txt ; fi ;
+	@cat $(LOGS_DIR)/* | uniq > $(LOGS_DIR)/all.txt
+	@if [ -f $(LOGS_DIR)/gstlal.txt ] ; then ls $(LOGS_DIR)/gstlal.txt >> $(LOGS_DIR)/all.txt ; fi ;
+	@ls -ltrh $$(cat $(LOGS_DIR)/all.txt)
 
 ###########
 # Install #
 ###########
 
 # gstlal (all)
-gstlal : logs/gstlal.txt
+gstlal : $(LOGS_DIR)/gstlal.txt
 
-logs/gstlal.txt : $(LOGS_DIR)/glue.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALBURST_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
+$(LOGS_DIR)/gstlal.txt : $(LOGS_DIR)/ligo-segments.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALBURST_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 # gstlal-inspiral
@@ -224,7 +236,7 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 	fi ;
 
 # gstlal
-$(GSTLAL_TARGET) : $(GLUE_TARGET)
+$(GSTLAL_TARGET) : $(LIGOSEGMENTS_TARGET)
 	@echo $(GREEN)gstlal$(WHITE) 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh ; \
@@ -236,10 +248,40 @@ $(GSTLAL_TARGET) : $(GLUE_TARGET)
 		cd $(SRC_DIR)/$(GSTLAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
-# glue
-glue : logs/glue.txt
+# ligo-segments
+ligo-segments : $(LOGS_DIR)/ligo-segments.txt
 
-logs/glue.txt : $(LOGS_DIR)/lalsuite.txt $(GLUE_TARGET)
+$(LOGS_DIR)/ligo-segments.txt : $(LOGS_DIR)/python-ligo-lw.txt $(LIGOSEGMENTS_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(LIGOSEGMENTS_TARGET) : $(PYTHONLIGOLW_TARGET)
+	@echo $(GREEN)ligo-segments$(WHITE) 1>&2
+	if [ "${LIGOSEGMENTS_GIT}" = "1" ]; then \
+		cd $(LIGOSEGMENTS_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(LIGOSEGMENTS).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LIGOSEGMENTS) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+	fi ;
+
+# python-ligo-lw
+python-ligo-lw : $(LOGS_DIR)/python-ligo-lw.txt
+
+$(LOGS_DIR)/python-ligo-lw.txt : $(LOGS_DIR)/glue.txt $(PYTHONLIGOLW_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(PYTHONLIGOLW_TARGET) : $(GLUE_TARGET)
+	@echo $(GREEN)python-ligo-lw$(WHITE) 1>&2
+	if [ "${PYTHONLIGOLW_GIT}" = "1" ]; then \
+		cd $(PYTHONLIGOLW_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+	else \
+		tar -xzf $(TAR_DIR)/$(PYTHONLIGOLW).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(PYTHONLIGOLW) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
+	fi ;
+
+# glue
+glue : $(LOGS_DIR)/glue.txt
+
+$(LOGS_DIR)/glue.txt : $(LOGS_DIR)/lalsuite.txt $(GLUE_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GLUE_TARGET) : $(LALAPPS_TARGET)
@@ -252,9 +294,9 @@ $(GLUE_TARGET) : $(LALAPPS_TARGET)
 	fi ;
 
 # lalsuite
-lalsuite : logs/lalsuite.txt
+lalsuite : $(LOGS_DIR)/lalsuite.txt
 
-logs/lalsuite.txt : $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALDETCHAR_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALSTOCH_TARGET) $(LALAPPS_TARGET)
+$(LOGS_DIR)/lalsuite.txt : $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 # lalapps
@@ -401,64 +443,15 @@ $(LAL_TARGET) : $(LOGS_DIR)/patch.txt
 #########################
 
 # patches
-patch : logs/patch.txt
+patch : $(LOGS_DIR)/patch.txt
 
-logs/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_DIR)/gst1.14.patch
+$(LOGS_DIR)/patch.txt : $(LOGS_DIR) $(PATCH_DIR)/gst1.14.patch
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(PATCH_DIR)/gst1.14.patch : $(LOGS_DIR)/tar.txt
+$(PATCH_DIR)/gst1.14.patch : $(LOGS_DIR)
 	@echo $(GREEN)patches$(WHITE) 1>&2
 	cp $(GSTLAL_REPO)/gstlal-inspiral/share/O3/optimized/gst1.14.patch $(PATCH_DIR)
 	cd $(GSTLAL_REPO) && patch -p1 < $(PATCH_DIR)/gst1.14.patch
-
-#tarballs
-logs/tar.txt : $(LAL_TAR_TARGET) $(LALFRAME_TAR_TARGET) $(LALMETAIO_TAR_TARGET) $(LALSIM_TAR_TARGET) $(LALBURST_TAR_TARGET) $(LALINSPIRAL_TAR_TARGET) $(LALPULSAR_TAR_TARGET) $(LALINFER_TAR_TARGET) $(LALAPPS_TAR_TARGET) $(GLUE_TAR_TARGET) $(GSTLAL_TAR_TARGET) $(GSTLALUGLY_TAR_TARGET) $(GSTLALBURST_TAR_TARGET) $(GSTLALCALIB_TAR_TARGET) $(GSTLALINSPIRAL_TAR_TARGET)
-	echo $^ | sed -e "s@ @\n@g" > $@
-
-$(GSTLALINSPIRAL_TAR_TARGET) : $(GSTLALCALIB_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc
-
-$(GSTLALCALIB_TAR_TARGET) : $(GSTLALBURST_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(GSTLALBURST_TAR_TARGET) : $(GSTLAUGLYL_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALBURST).tar.gz --directory-prefix=$(TAR_DIR) -nc
-	
-$(GSTLALUGLY_TAR_TARGET) : $(GSTLAL_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(GSTLAL_TAR_TARGET) : $(GLUE_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(GLUE_TAR_TARGET) : $(LALAPPS_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALAPPS_TAR_TARGET) : $(LALINFER_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALINFER_TAR_TARGET) : $(LALPULSAR_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALPULSAR_TAR_TARGET) : $(LALINSPIRAL_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALINSPIRAL_TAR_TARGET) : $(LALBURST_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALBURST_TAR_TARGET) : $(LALSIM_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALSIM_TAR_TARGET) : $(LALMETAIO_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALMETAIO_TAR_TARGET) : $(LALFRAME_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LALFRAME_TAR_TARGET) : $(LAL_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc
-
-$(LAL_TAR_TARGET) : $(LOGS_DIR)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 # git repos
 $(LOGS_DIR) :
@@ -470,6 +463,18 @@ $(LOGS_DIR) :
 			mkdir -p $(LALSUITE_REPO) ; \
 			git clone -b $(LALSUITE_GIT_BRANCH) https://git.ligo.org/lscsoft/lalsuite.git $(LALSUITE_REPO) ; \
 		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALDETCHAR).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSTOCHASTIC).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 	fi ;
 	if [ "${GLUE_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
@@ -478,6 +483,28 @@ $(LOGS_DIR) :
 			mkdir -p $(GLUE_REPO) ; \
 			git clone -b $(GLUE_GIT_BRANCH) https://git.ligo.org/lscsoft/glue.git $(GLUE_REPO) ; \
 		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+	fi ;
+	if [ "${PYTHONLIGOLW_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Python-ligo-lw git repo exists" ; \
+		else \
+			mkdir -p $(PYTHONLIGOLW_REPO) ; \
+			git clone -b $(PYTHONLIGOLW_GIT_BRANCH) https://git.ligo.org/kipp.cannon/python-ligo-lw.git $(PYTHONLIGOLW_REPO) ; \
+		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(PYTHONLIGOLW).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+	fi ;
+	if [ "${LIGOSEGMENTS_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "Ligo-segments git repo exists" ; \
+		else \
+			mkdir -p $(LIGOSEGMENTS_REPO) ; \
+			git clone -b $(LIGOSEGMENTS_GIT_BRANCH) https://git.ligo.org/lscsoft/ligo-segments.git $(LIGOSEGMENTS_REPO) ; \
+		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LIGOSEGMENTS).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
 	fi ;
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
@@ -486,6 +513,12 @@ $(LOGS_DIR) :
 			mkdir -p $(GSTLAL_REPO) ; \
 			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
 		fi ; \
+	else \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALBURST).tar.gz --directory-prefix=$(TAR_DIR) -nc \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
 	fi ;
 	mkdir -p $(LOGS_DIR)
 
@@ -499,10 +532,10 @@ clean-all :
 	rm -rf *.txt
 
 clean-install :
-	rm -rf opt/* logs/* src/*
+	rm -rf opt/* $(LOGS_DIR)/* src/*
 
 clean-gstlal :
-	rm -rf logs/gstlal.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTLALINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
+	rm -rf $(LOGS_DIR)/gstlal.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALCALIB_TARGET) $(GSTLALINSPIRAL_TARGET) $(GSTLALBURST_TARGET)
 
 clean-lalsuite :
-	rm -rf logs/lalsuite.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET)
+	rm -rf $(LOGS_DIR)/lalsuite.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET)
