@@ -248,7 +248,7 @@ def plot_transfer_function(pipeline, name):
 		# Interleave the channels to make one stream
 		channels = calibration_parts.mkinterleave(pipeline, [numerator, denominator])
 		# Send the data to lal_transferfunction to compute and write transfer functions
-		pipeparts.mkgeneric(pipeline, channels, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, fir_length = td_tf_length, use_median = True if options.use_median else False, update_samples = 1e15, filename = '%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_'), options.denominator_channel_name, options.gps_start_time, data_duration))
+		pipeparts.mkgeneric(pipeline, channels, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, fir_length = td_tf_length, use_median = True if options.use_median else False, update_samples = 1e15, filename = '%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
 
 	#
 	# done
@@ -271,16 +271,16 @@ test_common.build_and_run(plot_transfer_function, "plot_transfer_function", segm
 colors = ['r', 'g', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
-	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")
+	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")
 	lines = f.readlines()
 	f.close()
-	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_'), options.denominator_channel_name, options.gps_start_time, data_duration),"w")
+	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"w")
 	for j in range(3, 3 + tf_length):
 		f.write(lines[j].replace(' + ', '\t').replace(' - ', '\t-').replace('i', ''))
 	f.close()
 
 	# Read data from re-formatted file and find frequency vector, magnitude, and phase
-	data = numpy.loadtxt('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_'), options.denominator_channel_name, options.gps_start_time, data_duration))
+	data = numpy.loadtxt('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
 	frequency = []
 	magnitude = []
 	phase = []
