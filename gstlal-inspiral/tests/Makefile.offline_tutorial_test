@@ -505,7 +505,7 @@ H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz: H1L1-ALL_MASS_MODEL-10
 		--verbose
 	@echo ""
 	
-H1L1-ALL_MASS_MODEL-1000000000-2048.h5: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
+H1L1-ALL_MASS_MODEL-1000000000-2048.h5: gstlal_bank.xml.gz
 	$(TIME) gstlal_inspiral_mass_model \
 		--template-bank $< \
 		--output H1L1-ALL_MASS_MODEL-1187000000-100000.h5 \
