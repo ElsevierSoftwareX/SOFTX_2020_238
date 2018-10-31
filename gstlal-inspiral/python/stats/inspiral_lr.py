@@ -528,6 +528,7 @@ class LnSignalDensity(LnLRDensity):
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, u"horizon_history")
 		self.population_model_file = ligolw_param.get_pyvalue(xml, u"population_model_file")
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
+		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 		return self
 
 
