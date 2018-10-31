@@ -90,10 +90,11 @@ latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
 
 GDS_over_C02: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_C02_frames.cache
-	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'GDS / C02'
+	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --denominator-name 'C02' --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --numerator-name 'GDS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'GDS / C02'
 
-DCS_over_C02: $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_C02_frames.cache
-	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --numerator-frame-cache-list $(IFO)1_hoft_DCS_FCC_frames.cache --numerator-channel-list DCS-CALIB_STRAIN --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'DCS / C02'
+DCS_over_C02:
+	#$(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_C02_frames.cache
+	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --denominator-name 'C02' --numerator-frame-cache-list $(IFO)1_hoft_DCS_FCC_frames.cache --numerator-channel-list DCS-CALIB_STRAIN --numerator-name 'DCS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'DCS / C02'
 
 noise_subtraction_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-channel-name DCS-CALIB_STRAIN_CLEAN --denominator-channel-name DCS-CALIB_STRAIN --magnitude-min 0.0 --magnitude-max 1.5 --phase-min -20.0 --phase-max 20.0 --plot-title 'Noise Subtraction Transfer Function'
