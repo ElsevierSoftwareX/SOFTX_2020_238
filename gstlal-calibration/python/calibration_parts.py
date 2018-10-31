@@ -195,7 +195,7 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency
 
 	return elem
 
-def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384, num_avg = 2048, obsready = None):
+def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384, num_avg = 2048, noisesub_gate_bit = None):
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
@@ -256,8 +256,8 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000) # Removing one second
 
 		# Remove worthless data from computation of transfer function if we can
-		if obsready is not None:
-			tf_at_f = mkgate(pipeline, tf_at_f, obsready, 1, attack_length = -((1.0 - filter_latency) * filter_samples))
+		if noisesub_gate_bit is not None:
+			tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples))
 		tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = 1, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 		# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
@@ -920,7 +920,7 @@ def update_filters(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, notch_frequencies = [], obsready = None, delay_time = 0.0, wait_time = 0.0, critical_lock_loss_time = 0, filename = None):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, notch_frequencies = [], noisesub_gate_bit = None, delay_time = 0.0, wait_time = 0.0, critical_lock_loss_time = 0, filename = None):
 
 	#
 	# Use witness channels that monitor the environment to remove environmental noise
@@ -940,8 +940,8 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 
 	resampled_signal = mkresample(pipeline, signal_tee, 5, False, witness_rate)
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
-	if obsready is not None:
-		transfer_functions = mkgate(pipeline, transfer_functions, obsready, 1)
+	if noisesub_gate_bit is not None:
+		transfer_functions = mkgate(pipeline, transfer_functions, noisesub_gate_bit, 1)
 	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 15, update_after_gap = True, use_median = use_median, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = delay_time * witness_rate, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):

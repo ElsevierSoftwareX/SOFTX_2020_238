@@ -1814,7 +1814,7 @@ if compute_calib_statevector:
 	#
 	
 	# Set the FILTERS-OK bit based on observation-ready transitions
-	filtersok = pipeparts.mkbitvectorgen(pipeline, obsintenttee, bit_vector=pow(2,3), threshold=2)
+	filtersok = pipeparts.mkbitvectorgen(pipeline, obsintenttee, bit_vector = pow(2,3), threshold=2)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
 	filtersok = calibration_parts.mkgate(pipeline, filtersok, obsreadytee, 4, attack_length = -int(filter_settle_time * calibstate_sr), hold_length = -int(filter_latency * calibstate_sr))
 	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = pow(2,3), nongap_is_control = True)
@@ -2169,12 +2169,21 @@ if remove_cal_lines:
 
 	clean_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, straintee, calibration_lines))
 
+# Pick a bit from the ODC state vector to gate the power mains and noise subtraction
+noisesub_gate_bitmask = 2 if config_version < 1 else int(Bitmasks["noisesubgatebitmask"])
+if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_bitmask >= 0:
+	noisesubgate = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,28))
+	noisesubgate = pipeparts.mkcapsfilter(pipeline, noisesubgate, calibstate_caps)
+	noisesubgatetee = pipeparts.mktee(pipeline, noisesubgate)
+else:
+	noisesubgatetee = None
+
 # Next, remove 60 Hz power lines and harmonics
 if remove_power_lines:
 	if not remove_cal_lines:
 		clean_strain = straintee
 	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", "powerlines")
-	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, powerlines_freq_var, filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_avg = powerlines_tf_averaging_time * compute_factors_sr, obsready = None if not compute_calib_statevector else obsreadytee)
+	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, powerlines_freq_var, filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_avg = powerlines_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
 
 # Remove excess noise using any provided witness channels
 if witness_channel_list is not None:
@@ -2189,10 +2198,6 @@ if witness_channel_list is not None:
 	# If we haven't removed any lines, clean the regular h(t) data
 	if not (remove_cal_lines or remove_power_lines):
 		clean_strain = straintee
-
-	# If possible, gate the data being used to compute transfer functions to be sure we are locked
-	if not compute_calib_statevector:
-		obsreadytee = None
 
 	for i in range(0, len(witness_channel_list)):
 		# Length of ffts used to compute FIR filters
@@ -2212,7 +2217,7 @@ if witness_channel_list is not None:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
 			print "WARNING: Not all requested witness channels are being used"
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, notch_frequencies = witness_notch_frequencies[i], obsready = obsreadytee, delay_time = witness_delay_time, wait_time = witness_wait_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, notch_frequencies = witness_notch_frequencies[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, wait_time = witness_wait_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
 		witness_delay_time += witness_delay_increment
 		witness_wait_time += witness_wait_increment
 
@@ -2253,6 +2258,10 @@ if compute_calib_statevector and (remove_cal_lines or remove_power_lines or witn
 
 	# Add these into the CALIB_STATE_VECTOR
 	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
+
+# Check if we gated the cleaning with any ODC bits, and if so, add that to the CALIB_STATE_VECTOR
+if noisesubgatetee is not None:
+	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, noisesubgatetee))
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
