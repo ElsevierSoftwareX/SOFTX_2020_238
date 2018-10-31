@@ -48,10 +48,6 @@ G_BEGIN_DECLS
 #define GST_IS_CUDA_POSTCOH_CLASS(klass) \
   (G_TYPE_CHECK_CLASS_TYPE((klass),CUDA_TYPE_POSTCOH))
 
-#ifndef MIN_OUTPUT_SKYMAP_SNR
-#define MIN_OUTPUT_SKYMAP_SNR 5
-#endif
-
 typedef struct _CudaPostcoh CudaPostcoh;
 typedef struct _CudaPostcohClass CudaPostcohClass;
 

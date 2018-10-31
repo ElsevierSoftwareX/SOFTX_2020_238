@@ -1296,7 +1296,7 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 			output->ra = phi*RAD2DEG;
 			output->dec = (M_PI_2 - theta)*RAD2DEG;
 			output->event_id = postcoh->cur_event_id++;
-			if (postcoh->output_skymap && state->snglsnr_max[iifo] > MIN_OUTPUT_SKYMAP_SNR && state->skymap_peakcur[iifo] == peak_cur) {
+			if (postcoh->output_skymap && state->snglsnr_max[iifo] > postcoh->output_skymap && state->skymap_peakcur[iifo] == peak_cur) {
 				GString *filename = NULL;
 				FILE *file = NULL;
 				filename = g_string_new(IFOComboMap[get_icombo(output->ifos)].name);
@@ -1684,7 +1684,7 @@ static void cuda_postcoh_process(GstCollectPads *pads, gint common_size, CudaPos
 
 			if ( state->cur_nifo >= 2 && (!state->cur_ifo_is_gap[cur_ifo])) {
 				if (state->peak_list[cur_ifo]->npeak[0] > 0) {
-					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max[cur_ifo] > MIN_OUTPUT_SKYMAP_SNR, postcoh->stream);
+					cohsnr_and_chisq(state, cur_ifo, gps_idx, postcoh->output_skymap && state->snglsnr_max[cur_ifo] > postcoh->output_skymap, postcoh->stream);
 					GST_LOG("after coherent analysis for ifo %d, npeak %d", cur_ifo, state->peak_list[cur_ifo]->npeak[0]);
 				}
 
@@ -1921,7 +1921,7 @@ static void cuda_postcoh_class_init(CudaPostcohClass *klass)
 			"output-skymap",
 			"if output skymap",
 			"if output skymap",
-			0, 1, 0,
+			0, G_MAXINT, 0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
 	);

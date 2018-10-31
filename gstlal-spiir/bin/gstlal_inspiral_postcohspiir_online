@@ -227,7 +227,7 @@ def parse_command_line():
     parser.add_option("--cuda-postcoh-cohsnr-thresh", metavar = "SNR", type = "float", default = 1.05, help = "Set the coherent SNR threshold that cohsnr > thresh * triggersnr.")
     parser.add_option("--cuda-postcoh-detrsp-fname", metavar = "filename", help = "detector response filename.")
     parser.add_option("--cuda-postcoh-hist-trials", metavar = "hist-trials", type = "int", default = 100, help = "histogram trials for background distribution.")
-    parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "if output skymap, 1: yes, 0: no")
+    parser.add_option("--cuda-postcoh-output-skymap", metavar = "output-skymap", type = "int", default = 0, help = "output skymap single snr thresh")
     parser.add_option("--cuda-postcoh-detrsp-refresh-interval", metavar = "refresh-interval", type = "int", default = 800, help = "interval to refresh detrsp map.")
  
     # gpu acceleartion support
@@ -318,7 +318,7 @@ def parse_command_line():
     #pdb.set_trace()
     # create skymap dump directory if not exists
     ifo_list = detectors.channel_dict.keys()
-    if options.cuda_postcoh_output_skymap == 1:
+    if options.cuda_postcoh_output_skymap > 0:
         ifo_combos = pipe_macro.get_ifo_combos(ifo_list)
         for i_ifo_combo in ifo_combos:
             skymap_path = "%s_skymap" % i_ifo_combo

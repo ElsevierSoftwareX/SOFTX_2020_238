@@ -1382,7 +1382,7 @@ void cohsnr_and_chisq(PostcohState *state, int iifo, int gps_idx, int output_sky
 	CUDA_CHECK(cudaStreamSynchronize(stream));
 	CUDA_CHECK(cudaPeekAtLastError());
 
-	if(output_skymap && state->snglsnr_max[iifo] > MIN_OUTPUT_SKYMAP_SNR)
+	if(output_skymap && state->snglsnr_max[iifo] > output_skymap)
 	{
 		ker_coh_skymap<<<1, threads, sharedsize, stream>>>(
 									pklist->d_cohsnr_skymap,
