@@ -493,7 +493,7 @@ H1L1-0000_LLOID-1000000000-2048.xml.gz: measured_psd.xml.gz frames.cache segment
 		--verbose
 	@echo ""
 
-H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz:
+H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz: H1L1-ALL_MASS_MODEL-1000000000-2048.h5
 	# gstlal_inspiral_create_prior_diststats_0001
 	$(TIME) gstlal_inspiral_create_prior_diststats \
 		--instrument H1 \
@@ -501,6 +501,7 @@ H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz:
 		--min-instruments $(MIN_IFOS) \
 		--write-likelihood H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz \
 		--background-prior 1 \
+		--mass-model-file H1L1-ALL_MASS_MODEL-1187000000-100000.h5 \
 		--verbose
 	@echo ""
 	
