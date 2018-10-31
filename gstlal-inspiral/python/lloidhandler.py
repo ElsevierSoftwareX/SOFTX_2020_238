@@ -756,6 +756,7 @@ class Handler(simplehandler.Handler):
 
 		if verbose:
 			print >>sys.stderr, "connecting horizon distance handlers to gates ..."
+		self.absent_instruments = set()
 		for instrument in rankingstat.instruments:
 			name = "%s_ht_gate" % instrument
 			elem = pipeline.get_by_name(name)
@@ -770,6 +771,7 @@ class Handler(simplehandler.Handler):
 				# statement in the EOS handler that we
 				# don't do that, and I can remember why
 				# that is.
+				self.absent_instruments.add(instrument)
 				continue
 				raise ValueError("cannot find \"%s\" element for %s" % (name, instrument))
 			if verbose:
@@ -1028,6 +1030,8 @@ class Handler(simplehandler.Handler):
 				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len([event for event in events if event.snr >= snr_min]))
 
 			# run stream thinca.
+			for instrument in self.absent_instruments:
+				self.stream_thinca.push(instrument, (), buf_timestamp)
 			if self.stream_thinca.push(instrument, events, buf_timestamp):
 				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold)
 				self.coincs_document.commit()
