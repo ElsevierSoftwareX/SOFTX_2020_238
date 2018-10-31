@@ -1,3 +1,12 @@
+gstlal-calibration (1.2.2-1) unstable; urgency=low
+
+  * Update gstlal_compute_strain to build muxer from pipeparts, which allows
+    funcionality with gstreamer-1.14
+  * Update to some of the plotting scripts used to test package
+  * Add flexibility into how gating is performed from state vector
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Wed, 31 Oct 2018 10:03:00 -0500
+
 gstlal-calibration (1.2.1-1) unstable; urgency=low
 
   * Minor fix so tests/ directory builds
