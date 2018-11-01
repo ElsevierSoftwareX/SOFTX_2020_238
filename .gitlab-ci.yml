@@ -307,6 +307,7 @@ pages:
     # is too old (see errors in previous piplines). But newer versions won't
     # install on SL7 because setuptools is too old. I (Alex) recurred to find
     # the newest version that would actually install.
+    - mkdir -p ${GSTLAL_DIR}/lib/python2.7/site-packages
     - wget https://github.com/sphinx-doc/sphinx/archive/1.5.zip
     - unzip 1.5.zip
     - cd sphinx-1.5/
