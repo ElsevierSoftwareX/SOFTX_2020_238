@@ -312,6 +312,7 @@ pages:
     - unzip 1.5.zip
     - cd sphinx-1.5/
     - python setup.py install --prefix=${GSTLAL_DIR}
+    - cd ..
     
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
