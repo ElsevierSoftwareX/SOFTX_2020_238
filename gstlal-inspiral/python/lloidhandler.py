@@ -1025,8 +1025,8 @@ class Handler(simplehandler.Handler):
 				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len([event for event in events if event.snr >= snr_min]))
 
 			# run stream thinca.
-			for instrument in self.absent_instruments:
-				self.stream_thinca.push(instrument, (), buf_timestamp)
+			for absent_instrument in self.absent_instruments:
+				self.stream_thinca.push(absent_instrument, (), buf_timestamp)
 			if self.stream_thinca.push(instrument, events, buf_timestamp):
 				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold)
 				self.coincs_document.commit()
