@@ -901,15 +901,18 @@ if use_coherence:
 if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or (remove_cal_lines and "esd1" in act_line_removal_dict.keys()):
 	tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % tst_exc_sr
 	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
-	act_line_removal_dict["esd1"][0] = tstexc
+	if "esd1" in act_line_removal_dict:
+		act_line_removal_dict["esd1"][0] = tstexc
 if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)) or (remove_cal_lines and "pum1" in act_line_removal_dict.keys()):
 	pumexccaps = "audio/x-raw, format=F64LE, rate=%d" % pum_exc_sr
 	pumexc = calibration_parts.caps_and_progress(pipeline, head_dict["pumexc"], pumexccaps, "pumexc")
-	act_line_removal_dict["pum1"][0] = pumexc
+	if "pum1" in act_line_removal_dict:
+		act_line_removal_dict["pum1"][0] = pumexc
 if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)) or (remove_cal_lines and "uim1" in act_line_removal_dict.keys()):
 	uimexccaps = "audio/x-raw, format=F64LE, rate=%d" % uim_exc_sr
 	uimexc = calibration_parts.caps_and_progress(pipeline, head_dict["uimexc"], uimexccaps, "uimexc")
-	act_line_removal_dict["uim1"][0] = uimexc
+	if "uim1" in act_line_removal_dict:
+		act_line_removal_dict["uim1"][0] = uimexc
 
 if compute_kappapu:
 	darmexc = calibration_parts.caps_and_progress(pipeline, head_dict["darmexc"], hoft_caps, "darmexc")
@@ -1961,7 +1964,7 @@ if compute_calib_statevector:
 			pcaly_line4_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line4_coh_ok, calibstate_caps)
 			coherence_ok_list.append(pcaly_line4_coh_ok)
 
-			coherence_bits = calibration_parts.mkadder(pipeline, tuple(coherence_ok_list))
+		coherence_bits = calibration_parts.mkadder(pipeline, tuple(coherence_ok_list))
 
 	#
 	# H(T)-OK BIT BRANCH
