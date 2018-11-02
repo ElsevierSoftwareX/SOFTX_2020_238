@@ -976,6 +976,10 @@ trigger_stats_get_val_from_map(double snr, double chisq, Bins2D *bins)
 gboolean
 trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char *filename)
 {
+  /* sanity check */
+  if (!g_file_test(filename, G_FILE_TEST_EXISTS))
+	  return FALSE;
+
   int nelem = 10; // 4 for feature, 4 for rank, 2 for nevent,livetime
   int ncombo = stats->ncombo;
   int nnode = ncombo * nelem + 1, icombo; // 1 for hist_trials
