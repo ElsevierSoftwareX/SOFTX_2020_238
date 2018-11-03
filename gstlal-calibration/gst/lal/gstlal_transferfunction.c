@@ -1842,6 +1842,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			}
 		}
 	}
+	gst_buffer_unmap(buffer, &mapinfo);
 
 	return result;
 }

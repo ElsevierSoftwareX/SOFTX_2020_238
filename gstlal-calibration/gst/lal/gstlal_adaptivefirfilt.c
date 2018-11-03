@@ -635,6 +635,8 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			average_input_data_double(element, (complex double *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 		else
 			g_assert_not_reached();
+
+		gst_buffer_unmap(buffer, &mapinfo);
 	}
 
 	return result;
