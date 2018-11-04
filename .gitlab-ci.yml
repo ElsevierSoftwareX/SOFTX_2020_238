@@ -301,7 +301,7 @@ pages:
     # container:
     - yum -y install texlive-base texlive-dvipng
     - yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
-    - yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc
+    - yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc texlive-collection-xetex
     
     # Download and install phython-sphinx. The version available for SL7 (1.1)
     # is too old (see errors in previous piplines). But newer versions won't
