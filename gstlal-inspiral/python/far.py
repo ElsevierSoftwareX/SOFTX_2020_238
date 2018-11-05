@@ -360,7 +360,7 @@ class DatalessRankingStat(RankingStat):
 		return True
 
 
-class OnlineFrakensteinRankingStat(RankingStat):
+class OnlineFrankensteinRankingStat(RankingStat):
 	"""
 	Version of RankingStat with horizon distance history and trigger
 	rate history spliced in from another instance.  Used to solve a
@@ -378,8 +378,8 @@ class OnlineFrakensteinRankingStat(RankingStat):
 	# instances, no need to add extra code here to prevent these
 	# operations
 	def __init__(self, src, donor):
-		self.numerator = inspiral_lr.OnlineFrakensteinLnSignalDensity.splice(src.numerator, donor.numerator)
-		self.denominator = inspiral_lr.OnlineFrakensteinLnNoiseDensity.splice(src.denominator, donor.denominator)
+		self.numerator = inspiral_lr.OnlineFrankensteinLnSignalDensity.splice(src.numerator, donor.numerator)
+		self.denominator = inspiral_lr.OnlineFrankensteinLnNoiseDensity.splice(src.denominator, donor.denominator)
 
 	def finish(self):
 		# no zero-lag

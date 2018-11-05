@@ -603,7 +603,7 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		raise NotImplementedError
 
 
-class OnlineFrakensteinLnSignalDensity(LnSignalDensity):
+class OnlineFrankensteinLnSignalDensity(LnSignalDensity):
 	"""
 	Version of LnSignalDensity with horizon distance history spliced in
 	from another instance.  Used to solve a chicken-or-egg problem and
@@ -618,7 +618,7 @@ class OnlineFrakensteinLnSignalDensity(LnSignalDensity):
 	"""
 	@classmethod
 	def splice(cls, src, Dh_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, src.population_model_file, src.min_instruments)
+		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, min_instruments = src.min_instruments)
 		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
@@ -990,7 +990,7 @@ class DatalessLnNoiseDensity(LnNoiseDensity):
 		raise NotImplementedError
 
 
-class OnlineFrakensteinLnNoiseDensity(LnNoiseDensity):
+class OnlineFrankensteinLnNoiseDensity(LnNoiseDensity):
 	"""
 	Version of LnNoiseDensity with trigger rate data spliced in from
 	another instance.  Used to solve a chicken-or-egg problem and
@@ -1005,7 +1005,7 @@ class OnlineFrakensteinLnNoiseDensity(LnNoiseDensity):
 	"""
 	@classmethod
 	def splice(cls, src, rates_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, src.min_instruments)
+		self = cls(src.template_ids, src.instruments, src.delta_t, min_instruments = src.min_instruments)
 		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's

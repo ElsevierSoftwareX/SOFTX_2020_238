@@ -677,7 +677,7 @@ class Handler(simplehandler.Handler):
 
 		if self.ranking_stat_input_url is not None:
 			if self.rankingstat.is_healthy(self.verbose):
-				self.stream_thinca.ln_lr_from_triggers = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish().ln_lr_from_triggers
+				self.stream_thinca.ln_lr_from_triggers = far.OnlineFrankensteinRankingStat(self.rankingstat, self.rankingstat).finish().ln_lr_from_triggers
 				if self.verbose:
 					print >>sys.stderr, "ranking statistic assignment ENABLED"
 			else:
@@ -991,7 +991,7 @@ class Handler(simplehandler.Handler):
 				# update streamthinca's ranking statistic
 				# data
 				if self.rankingstat.is_healthy(self.verbose):
-					self.stream_thinca.ln_lr_from_triggers = far.OnlineFrakensteinRankingStat(self.rankingstat, self.rankingstat).finish().ln_lr_from_triggers
+					self.stream_thinca.ln_lr_from_triggers = far.OnlineFrankensteinRankingStat(self.rankingstat, self.rankingstat).finish().ln_lr_from_triggers
 					if self.verbose:
 						print >>sys.stderr, "ranking statistic assignment ENABLED"
 				else:
