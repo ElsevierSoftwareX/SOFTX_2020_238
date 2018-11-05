@@ -299,7 +299,7 @@ pages:
     # since they don't need to be part of the dev container for running, only
     # for building documentation. This shaves ~600MB off the size of the gstlal-dev
     # container:
-    - yum -y install texlive-base texlive-dvipng texlive-ucs texlive-scheme-full texlive-amsmath texlive-amscls texlive-amsfonts
+    - yum -y install texlive-base texlive-dvipng texlive-ucs texlive-scheme-full texlive-amsmath texlive-amscls texlive-amsfonts texlive-collection-latexrecommended texlive-collection-basic
     - yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
     - yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc texlive-collection-xetex
     
