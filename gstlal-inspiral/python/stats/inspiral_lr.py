@@ -563,15 +563,15 @@ class DatalessLnSignalDensity(LnSignalDensity):
 		# evaluate P(t) \propto number of templates
 		lnP = math.log(len(self.template_ids))
 
-		# Add P(instruments | horizon distances)
-		# Assume all instruments have 100 Mpc
-		# horizon distance
-		horizons = dict.fromkeys(segments, 100.)
-
+		# Add P(instruments | horizon distances).  assume all
+		# instruments have TYPICAL_HORIZON_DISTANCE horizon
+		# distance
+		horizons = dict.fromkeys(segments, TYPICAL_HORIZON_DISTANCE)
 		try:
 			lnP += math.log(self.InspiralExtrinsics.p_of_instruments_given_horizons(snrs.keys(), horizons))
 		except ValueError:
-			# The code raises a value error when a needed horizon distance is zero
+			# raises ValueError when a needed horizon distance
+			# is zero
 			return NegInf
 
 		# Evaluate dt, dphi, snr probability
