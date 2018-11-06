@@ -8,21 +8,21 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O2
 
-START = 1186944000
-END = 1186945024
+START = 1225519232
+END = 1225520256
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 300
 PLOT_COOLDOWN_TIME = 64
 
-GDSCONFIGS = ../../config_files/PreER13/L1/tests/L1GDS_1222058826_frames.ini
+GDSCONFIGS = ../../config_files/PreER13/H1/C00/H1GDS_FRAMES_1225558818.ini
 DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
-GDSTESTCONFIGS = ../../config_files/O2/H1/tests/H1GDS_LowLatency_AllCorrections_Cleaning.ini
+GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: DCS_over_C02
+all: GDS_over_CALCS
 
 ###############################################
 ### These commands should change less often ###
@@ -89,11 +89,13 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
 
+GDS_over_CALCS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
+	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-DELTAL_EXTERNAL_DQ --denominator-name 'CALCS' --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --numerator-name 'GDS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'GDS / CALCS'
+
 GDS_over_C02: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_C02_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --denominator-name 'C02' --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --numerator-name 'GDS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'GDS / C02'
 
-DCS_over_C02:
-	#$(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_C02_frames.cache
+DCS_over_C02: $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_C02_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --denominator-name 'C02' --numerator-frame-cache-list $(IFO)1_hoft_DCS_FCC_frames.cache --numerator-channel-list DCS-CALIB_STRAIN --numerator-name 'DCS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'DCS / C02'
 
 noise_subtraction_tf_DCS: $(IFO)1_hoft_DCS_frames.cache

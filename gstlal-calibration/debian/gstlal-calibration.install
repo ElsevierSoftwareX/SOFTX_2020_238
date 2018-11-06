@@ -1,4 +1,5 @@
 usr/bin/*
 usr/lib/gstreamer-*/lib*.a
-usr/lib/gstreamer-*/lib*.so
-usr/lib/python*/site-packages/gstlal
+#usr/lib/gstreamer-*/lib*.la
+usr/lib/gstreamer-*/lib*.so*
+usr/lib/python*/*-packages/gstlal

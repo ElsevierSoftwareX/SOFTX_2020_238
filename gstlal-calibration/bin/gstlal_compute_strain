@@ -676,8 +676,6 @@ if not factors_from_filters_file or compute_calib_statevector:
 	if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
 		channel_list.extend(((instrument, ChannelNames["ep22realchannel"]), (instrument, ChannelNames["ep22imagchannel"])))
 		headkeys.extend(("EP22_real", "EP22_imag"))
-		channel_list.extend(((instrument, ChannelNames["ep2realchannel"]), (instrument, ChannelNames["ep2imagchannel"]), (instrument, ChannelNames["ep4realchannel"]), (instrument, ChannelNames["ep4imagchannel"]), (instrument, ChannelNames["ep16realchannel"]), (instrument, ChannelNames["ep16imagchannel"]), (instrument, ChannelNames["ep17realchannel"]), (instrument, ChannelNames["ep17imagchannel"])))
-		headkeys.extend(("EP2_real", "EP2_imag", "EP4_real", "EP4_imag", "EP16_real", "EP16_imag", "EP17_real", "EP17_imag"))
 	# These are needed for kappa_PU
 	if compute_kappapu:
 		channel_list.extend(((instrument, ChannelNames["ep2realchannel"]), (instrument, ChannelNames["ep2imagchannel"]), (instrument, ChannelNames["ep3realchannel"]), (instrument, ChannelNames["ep3imagchannel"]), (instrument, ChannelNames["ep4realchannel"]), (instrument, ChannelNames["ep4imagchannel"])))
@@ -724,10 +722,10 @@ if use_coherence:
 		channel_list.append((instrument, ChannelNames["cohuncdarmline1channel"]))
 		headkeys.append("darm_coh")
 	if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
-		channel_list.append((instrument, "cohuncsusline2channel"))
+		channel_list.append((instrument, ChannelNames["cohuncsusline2channel"]))
 		headkeys.append("sus_line2_coh")
 	if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
-		channel_list.append((instrument, "cohuncsusline1channel"))
+		channel_list.append((instrument, ChannelNames["cohuncsusline1channel"]))
 		headkeys.append("sus_line1_coh")
 	if compute_kappac or compute_fcc or compute_fs or compute_srcq:
 		channel_list.append((instrument, ChannelNames["cohuncpcalyline2channel"]))
@@ -1077,7 +1075,7 @@ if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc o
 			# Gate kappa_uim with the coherence of the PCALY_line1 line
 			kuim_gated = calibration_parts.mkgate(pipeline, kuim, pcaly_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'kuimgate1')
 			# Gate kappa_uim with the coherence of the UIM (L1) suspension line
-			kuim_gated = calibration_parts.mkgate(pipeline, kuim_gated, sus_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'kuimgate1')
+			kuim_gated = calibration_parts.mkgate(pipeline, kuim_gated, sus_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'kuimgate2')
 
 			# Smooth kappa_uim
 			smooth_kuim = calibration_parts.smooth_complex_kappas(pipeline, kuim_gated, expected_kappauim_real, expected_kappauim_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
