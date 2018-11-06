@@ -26,6 +26,11 @@
 #
 
 
+try:
+	from fpconst import NegInf
+except ImportError:
+	# not all machines have fpconst installed
+	NegInf = float("-inf")
 import math
 import numpy
 import os
@@ -307,7 +312,7 @@ class LnSignalDensity(LnLRDensity):
 	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		assert frozenset(segments) == self.instruments
 		if len(snrs) < self.min_instruments:
-			return float("-inf")
+			return NegInf
 
 		# use volume-weighted average horizon distance over
 		# duration of event to estimate sensitivity
@@ -335,7 +340,7 @@ class LnSignalDensity(LnLRDensity):
 		# denominator were both normalized properly.
 		horizon = sorted(horizons.values())[-self.min_instruments] / TYPICAL_HORIZON_DISTANCE
 		if not horizon:
-			return float("-inf")
+			return NegInf
 		lnP = 3. * math.log(horizon) + math.log(len(self.template_ids))
 
 		# Add P(instruments | horizon distances)
@@ -343,14 +348,14 @@ class LnSignalDensity(LnLRDensity):
 			lnP += math.log(self.InspiralExtrinsics.p_of_instruments_given_horizons(snrs.keys(), horizons))
 		except ValueError:
 			# The code raises a value error when a needed horizon distance is zero
-			return float("-inf")
+			return NegInf
 
 		# Evaluate dt, dphi, snr probability
 		try:
 			lnP += math.log(self.InspiralExtrinsics.time_phase_snr(dt, phase, snrs, horizons))
 		# FIXME need to make sure this is really a math domain error
 		except ValueError:
-			return float("-inf")
+			return NegInf
 
 		# evaluate population model
 		lnP += self.population_model.lnP_template_signal(template_id, max(snrs.values()))
@@ -567,14 +572,14 @@ class DatalessLnSignalDensity(LnSignalDensity):
 			lnP += math.log(self.InspiralExtrinsics.p_of_instruments_given_horizons(snrs.keys(), horizons))
 		except ValueError:
 			# The code raises a value error when a needed horizon distance is zero
-			return float("-inf")
+			return NegInf
 
 		# Evaluate dt, dphi, snr probability
 		try:
 			lnP += math.log(self.InspiralExtrinsics.time_phase_snr(dt, phase, snrs, horizons))
 		# FIXME need to make sure this is really a math domain error
 		except ValueError:
-			return float("-inf")
+			return NegInf
 
 		# evaluate population model
 		lnP += self.population_model.lnP_template_signal(template_id, max(snrs.values()))
@@ -695,7 +700,7 @@ class LnNoiseDensity(LnLRDensity):
 	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		assert frozenset(segments) == self.instruments
 		if len(snrs) < self.min_instruments:
-			return float("-inf")
+			return NegInf
 
 		# FIXME:  the +/-3600 s window thing is a temporary hack to
 		# work around the problem of vetoes creating short segments
