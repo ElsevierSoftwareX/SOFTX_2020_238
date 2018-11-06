@@ -80,6 +80,9 @@ parser.add_option("--numerator-frame-cache-list", metavar = "name", type = str, 
 parser.add_option("--numerator-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of channel-names of numerators")
 parser.add_option("--numerator-name", metavar = "name", type = str, default = '\\Delta L_{\\rm free}(f)', help = "Name of numerator in plot title, in latex math mode")
 parser.add_option("--numerator-correction", metavar = "name", type = str, default = None, help = "Name of filters-file parameter needed to apply a correction to the numerators")
+parser.add_option("--zeros", metavar = "list", type = str, default = None, help = "Comma-separated list of real and imaginary parts of zeros to filter the transfer function with.  Note that if you want to apply zeros to the denominator, you must apply poles to the transfer function.")
+parser.add_option("--poles", metavar = "list", type = str, default = None, help = "Comma-separated list of real and imaginary parts of poles to filter the transfer function with.  Note that if you want to apply poles to the denominator, you must apply zeros to the transfer function.")
+parser.add_option("--gain", type = float, default = 1.0, help = "Gain factor to apply to the transfer function")
 parser.add_option("--config-file", metavar = "name", default = None, help = "Configurations file used to produce GDS/DCS calibrated frames, needed if applying any correction to numerator or denominator")
 parser.add_option("--sample-rate", metavar = "Hz", type = int, default = 16384, help = "Sample rate at which transfer function is computed")
 parser.add_option("--fft-time", metavar = "seconds", type = float, default = 16, help = "Length of FFTs used to compute transfer function")
@@ -268,6 +271,20 @@ def plot_transfer_function(pipeline, name):
 # Run pipeline
 test_common.build_and_run(plot_transfer_function, "plot_transfer_function", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
+# Get any zeros and poles that we want to use to filter the transfer functions
+zeros = []
+if options.zeros is not None:
+	real_zeros = options.zeros.split(',')
+	zeros = []
+	for i in range(0, len(real_zeros) / 2):
+		zeros.append(float(real_zeros[2 * i]) + 1j * float(real_zeros[2 * i + 1]))
+
+poles = []
+if options.poles is not None:
+	real_poles = options.poles.split(',')
+	for i in range(0, len(real_poles) / 2):
+		poles.append(float(real_poles[2 * i]) + 1j * float(real_poles[2 * i + 1]))
+
 colors = ['r', 'g', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
@@ -286,11 +303,15 @@ for i in range(0, len(labels)):
 	phase = []
 	for j in range(0, len(data)):
 		frequency.append(data[j][0])
-		tf_at_f = data[j][1] + 1j * data[j][2]
+		tf_at_f = (data[j][1] + 1j * data[j][2]) * options.gain
 		if len(num_corr) > j:
 			tf_at_f *= num_corr[j]
 		if len(denom_corr) > j:
 			tf_at_f /= denom_corr[j]
+		for z in zeros:
+			tf_at_f = tf_at_f * (1.0 + 1j * frequency[j] / z)
+		for p in poles:
+			tf_at_f = tf_at_f / (1.0 + 1j * frequency[j] / p)
 		magnitude.append(abs(tf_at_f))
 		phase.append(numpy.angle(tf_at_f) * 180.0 / numpy.pi)
 
@@ -320,6 +341,6 @@ for i in range(0, len(labels)):
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.phase_min, options.phase_max)
 	plt.grid(True)
-plt.savefig('%s_transfer_functions_%d-%d.png' % (ifo, options.gps_start_time, data_duration))
-plt.savefig('%s_transfer_functions_%d-%d.pdf' % (ifo, options.gps_start_time, data_duration))
+plt.savefig('%s_transfer_functions_%s_%s_%d-%d.png' % (ifo, options.numerator_name, options.denominator_name, options.gps_start_time, data_duration))
+plt.savefig('%s_transfer_functions_%s_%s_%d-%d.pdf' % (ifo, options.numerator_name, options.denominator_name, options.gps_start_time, data_duration))
 
