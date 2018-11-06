@@ -207,13 +207,19 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# exclude triggers that are below the SNR threshold
 		#
 		# FIXME:  this alters the mapping from triggers to ln L
-		# density parameters.  it does not alter the definition of
-		# ln L for candidates with SNRs below the threshold.  that
-		# would perhaps be a more sound approach but would have to
-		# be done more carefully, to ensure the behaviour it
-		# introduces maintains the numerator and denominator as
+		# density parameters, but it does not alter the definition
+		# of ln L itself, i.e., it does not affect what the
+		# .__call__() method would return for candidates with SNRs
+		# below the threshold, say, in the context of the
+		# importance-weighted sampler used to construct P(ln L).
+		# that would perhaps be a more sound approach but would
+		# have to be done more carefully, to ensure the behaviour
+		# it introduces maintains the numerator and denominator as
 		# proper probability densities.  think about this some
-		# more.
+		# more.  in the meantime, there are no problems created by
+		# this because, for example, the importance-weighted
+		# sampler never generates trials with SNRs below the
+		# threshold.
 
 		events = tuple(event for event in events if event.snr > self.snr_min)
 		assert len(events) >= self.min_instruments, "coincidence engine failed to respect minimum instrument count requirement for candidates:  found candidate with %d < %d instruments" % (len(events), self.min_instruments)
