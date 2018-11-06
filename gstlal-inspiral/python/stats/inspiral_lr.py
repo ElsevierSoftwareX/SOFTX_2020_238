@@ -61,7 +61,11 @@ from gstlal import paths as gstlal_config_paths
 
 __all__ = [
 	"LnSignalDensity",
-	"LnNoiseDensity"
+	"LnNoiseDensity",
+	"DatalessLnSignalDensity",
+	"DatalessLnNoiseDensity",
+	"OnlineFrankensteinLnSignalDensity",
+	"OnlineFrankensteinLnNoiseDensity"
 ]
 
 
