@@ -1,3 +1,9 @@
+gstlal-calibration (1.2.4-1) unstable; urgency=low
+
+  * Bug fix for memory leak
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Tue, 06 Nov 2018 08:01:11 -0600
+
 gstlal-calibration (1.2.3-1) unstable; urgency=low
 
   * Bug fix for coherence bits of calibration state vector
