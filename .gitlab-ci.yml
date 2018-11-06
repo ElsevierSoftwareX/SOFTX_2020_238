@@ -221,7 +221,7 @@ test:gstlal:
 
     # Run doctests
     - cd gstlal
-    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
   only:
     - pushes
     - schedules
