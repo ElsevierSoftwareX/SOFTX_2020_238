@@ -291,7 +291,8 @@ test:offline:
   allow_failure: true
   
 pages:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  #image: aepace/gstlal-dev:el7-mkl-1.14
+  image: aepace/gstlal-dev:stretch-mkl
   stage: nightly-pages
   script:
     - echo "Building Documentation"
@@ -303,18 +304,18 @@ pages:
     #- yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
     #- yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc texlive-collection-xetex
     
-    - yum -y install texlive*
+    #- yum -y install texlive*
     
     # Download and install phython-sphinx. The version available for SL7 (1.1)
     # is too old (see errors in previous piplines). But newer versions won't
     # install on SL7 because setuptools is too old. I (Alex) recurred to find
     # the newest version that would actually install.
-    - mkdir -p ${GSTLAL_DIR}/lib/python2.7/site-packages
-    - wget https://github.com/sphinx-doc/sphinx/archive/1.5.zip
-    - unzip 1.5.zip
-    - cd sphinx-1.5/
-    - python setup.py install --prefix=${GSTLAL_DIR}
-    - cd ..
+    #- mkdir -p ${GSTLAL_DIR}/lib/python2.7/site-packages
+    #- wget https://github.com/sphinx-doc/sphinx/archive/1.5.zip
+    #- unzip 1.5.zip
+    #- cd sphinx-1.5/
+    #- python setup.py install --prefix=${GSTLAL_DIR}
+    #- cd ..
     
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
