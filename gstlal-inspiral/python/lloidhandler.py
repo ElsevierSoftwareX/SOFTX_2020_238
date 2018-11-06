@@ -1028,7 +1028,7 @@ class Handler(simplehandler.Handler):
 			for absent_instrument in self.absent_instruments:
 				self.stream_thinca.push(absent_instrument, (), buf_timestamp)
 			if self.stream_thinca.push(instrument, events, buf_timestamp):
-				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold)
+				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events, offset_vector: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold)
 				self.coincs_document.commit()
 
 				# do GraceDB alerts and update eye candy
