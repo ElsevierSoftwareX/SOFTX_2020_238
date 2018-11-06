@@ -121,7 +121,6 @@ dag : svd_bank.cache dist_stats.cache $(REF_PSD) $(ZERO_LAG_DB) $(SEGMENTS) $(VE
 		--reference-likelihood-file reference_likelihood_file.xml.gz \
 		--request-cpu 4 \
 		--request-memory 7GB \
-		--min-log-L -50.0 \
 		--min-instruments 1 \
 		$(ADDITIONAL_DAG_OPTIONS)
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag

@@ -107,8 +107,7 @@ dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cac
 		--web-dir $(WEBDIR) \
 		--min-instruments 1 \
 		--state-backup-destination gstlalcbc@pcdev3.phys.uwm.edu:/home/gstlalcbc/observing/2/uber_state_backup \
-		--time-slide-file tisi.xml \
-		--min-log-L 4
+		--time-slide-file tisi.xml
 	#python ~/trim_online_dag.py trigger_pipe.dag
 	#python ~/noretries.py trigger_pipe.dag
 

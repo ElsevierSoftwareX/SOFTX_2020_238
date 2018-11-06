@@ -171,7 +171,6 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		$(ADDITIONAL_DAG_OPTIONS) \
 		$(CONDOR_COMMANDS) \
 		--ht-gate-threshold-linear 0.8:15.0-45.0:100.0 \
-		--min-log-L -50.0 \
 		--singles-threshold 100.0 \
 		--request-cpu 2 \
 		--request-memory 5GB \

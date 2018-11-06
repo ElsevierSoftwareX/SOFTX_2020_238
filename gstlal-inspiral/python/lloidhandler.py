@@ -574,7 +574,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, min_log_L = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", verbose = False):
+	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being
@@ -634,7 +634,6 @@ class Handler(simplehandler.Handler):
 			coincs_document.process_id,
 			delta_t = rankingstat.delta_t,
 			min_instruments = rankingstat.min_instruments,
-			min_log_L = min_log_L,
 			sngls_snr_threshold = sngls_snr_threshold
 		)
 
@@ -669,10 +668,7 @@ class Handler(simplehandler.Handler):
 		#
 		# if we have been supplied with external ranking statistic
 		# information then use it to enable ranking statistic
-		# assignment in streamthinca.  otherwise, if we have not
-		# been and yet we have been asked to apply the min log L
-		# cut anyway then enable ranking statistic assignment using
-		# the dataless ranking statistic variant
+		# assignment in streamthinca.
 		#
 
 		if self.ranking_stat_input_url is not None:
@@ -684,7 +680,11 @@ class Handler(simplehandler.Handler):
 				self.stream_thinca.ln_lr_from_triggers = None
 				if self.verbose:
 					print >>sys.stderr, "ranking statistic assignment DISABLED"
-		elif min_log_L is not None:
+		elif False:
+			# FIXME:  move sum-of-SNR^2 cut into this object's
+			# .__call__() and then use as coinc sieve function
+			# instead.  left here temporariliy to remember how
+			# to initialize it
 			self.stream_thinca.ln_lr_from_triggers = far.DatalessRankingStat(
 				template_ids = rankingstat.template_ids,
 				instruments = rankingstat.instruments,

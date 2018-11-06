@@ -235,11 +235,10 @@ def lower_bound_in_seglist(seglist, x):
 
 
 class StreamThinca(object):
-	def __init__(self, xmldoc, process_id, delta_t, min_instruments = 2, min_log_L = None, sngls_snr_threshold = None):
+	def __init__(self, xmldoc, process_id, delta_t, min_instruments = 2, sngls_snr_threshold = None):
 		self.ln_lr_from_triggers = None
 		self.delta_t = delta_t
 		self.min_instruments = min_instruments
-		self.min_log_L = min_log_L
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.set_xmldoc(xmldoc, process_id)
 
@@ -367,14 +366,9 @@ class StreamThinca(object):
 				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
 					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
 
-
-			# if min_log_L is None, this test always passes,
-			# regardless of the value of .likelihood, be it
-			# None, some number, -inf or even nan.
-			if coinc.likelihood >= self.min_log_L:
-				# finally, append coinc to tables
-				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
-				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
+			# finally, append coinc to tables
+			self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
+			self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
 
 		# add singles that were not used for any candidates to the
 		# noise model
@@ -386,9 +380,9 @@ class StreamThinca(object):
 		# add any triggers that have been used in coincidences for
 		# the first time to the sngl_inspiral table
 		# FIXME:  because this information comes from the
-		# coincidence code, which is not aware of the min_log_L cut
-		# or the clustering, we record a lot of singles that aren't
-		# really used for any (retained) coincs.
+		# coincidence code, which is not aware of the clustering,
+		# we record a lot of singles that aren't really used for
+		# any (retained) coincs.
 
 		self.sngl_inspiral_table.extend(newly_reported)
 

@@ -213,7 +213,6 @@ dag : segments.xml.gz vetoes.xml.gz frame.cache inj_tisi.xml tisi.xml plots $(WE
 		--singles-threshold 100.0 \
 		--request-cpu 2 \
 		--request-memory 5GB \
-		--min-log-L 4. \
 		--min-instruments $(MIN_IFOS)
 	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
 

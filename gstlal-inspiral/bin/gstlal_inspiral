@@ -257,8 +257,7 @@ def parse_command_line():
 	group.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	group.add_option("--coincidence-threshold", metavar = "seconds", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	group.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
-	group.add_option("--min-log-L", metavar = "log likelihood ratio", type = "float", help = "Discard candidates that get assigned log likelihood ratios below this threshold (default = keep all).  When used without --ranking-stat-input, the cut is decided based on an internal approximate ranking statistic.")
-	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly, and the --min-log-L cut will be applied based on the assigned values.  Required when --data-source is lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
+	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly.  Required when --data-source is lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
 	group.add_option("--ranking-stat-output", metavar = "filename", action = "append", default = [], help = "Set the name of the file to which to write ranking statistic data collected from triggers (optional).  Can be given more than once.  If given, exactly as many must be provided as there are --svd-bank options and they will be writen to in order.")
 	group.add_option("--ranking-stat-output-cache", metavar = "filename", help = "Provide a cache of ranking statistic output files.  This can be used instead of giving multiple --ranking-stat-output options.  Cannot be combined with --ranking-stat-output.")
 	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to snapshot candidate and ranking statistic data to disk when running online.")
@@ -822,7 +821,6 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		rankingstatpdf_url = options.ranking_stat_pdf,
 		zerolag_rankingstatpdf_url = zerolag_rankingstat_pdf,
 		likelihood_snapshot_interval = options.likelihood_snapshot_interval,
-		min_log_L = options.min_log_L,
 		sngls_snr_threshold = options.singles_threshold,
 		tag = options.job_tag,
 		kafka_server = options.output_kafka_server,
