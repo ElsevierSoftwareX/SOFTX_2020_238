@@ -5,9 +5,9 @@ You can get a development copy of the gstlal software suite from git.  Doing thi
   * https://git.ligo.org/lscsoft/gstlal
   * https://git.ligo.org/lscsoft/lalsuite
 
-Source tarballs are available here: http://software.ligo.org/lscsoft/source/
+Source tarballs for GstLAL packages and all the LIGO/Virgo software dependencies are available here: http://software.ligo.org/lscsoft/source/
 
-Limited inary packages are available here:
+Limited binary packages are available here: 
 
 Building and installing from source follows the normal GNU build procedures
 involving:
