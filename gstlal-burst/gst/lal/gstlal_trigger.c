@@ -481,12 +481,12 @@ static GstFlowReturn push_nongap(GSTLALTrigger *element, guint copysamps, guint 
 	if (element->peak_type == GSTLAL_PEAK_COMPLEX) {
 		dataptr.as_complex = ((float complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
 		/* Find the peak */
-		gstlal_float_complex_peak_over_window_interp(element->maxdata, dataptr.as_complex, outsamps);
+		gstlal_float_complex_peak_over_window(element->maxdata, dataptr.as_complex, outsamps);
 		}
 	else if (element->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 		dataptr.as_double_complex = ((double complex *) element->data) + element->maxdata->pad * element->maxdata->channels;
 		/* Find the peak */
-		gstlal_double_complex_peak_over_window_interp(element->maxdata, dataptr.as_double_complex, outsamps);
+		gstlal_double_complex_peak_over_window(element->maxdata, dataptr.as_double_complex, outsamps);
 		}
 	else
 		g_assert_not_reached();

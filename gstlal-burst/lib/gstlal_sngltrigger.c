@@ -91,11 +91,11 @@ void add_buffer_from_channel(struct gstlal_peak_state *input, char *channel_name
 	switch (input->type)
 	{
 		case GSTLAL_PEAK_COMPLEX:
-		maxdata_channel = (double complex) input->interpvalues.as_float_complex[channel];
+		maxdata_channel = (double complex) input->values.as_float_complex[channel];
 		break;
 
 		case GSTLAL_PEAK_DOUBLE_COMPLEX:
-		maxdata_channel = (double complex) input->interpvalues.as_double_complex[channel];
+		maxdata_channel = (double complex) input->values.as_double_complex[channel];
 		break;
 
 		default:
@@ -145,7 +145,7 @@ void add_buffer_from_channel(struct gstlal_peak_state *input, char *channel_name
 	XLALINT8NSToGPS(&event->epoch, time);
 	{
 		LIGOTimeGPS end_time = event->epoch;
-		XLALGPSAdd(&end_time, (double) input->interpsamples[channel] / rate);
+		XLALGPSAdd(&end_time, (double) input->samples[channel] / rate);
 		XLALGPSAddGPS(&parent->end, &end_time);
 	}
 	XLALGPSAdd(&event->epoch, (double) (input->samples[channel] - input->pad) / rate);
