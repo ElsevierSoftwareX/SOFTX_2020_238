@@ -204,7 +204,9 @@ class FAPUpdater(object):
 		if len(procs) > 0:
 			for proc in procs:
 				if proc.poll() is None:
-					proc.wait()
+					(stdoutdata, stderrdata) = proc.communicate()
+					if proc.returncode != 0:
+						print >> sys.stderr, "last process return code", proc.returncode, stderrdata
 		
 		# delete all update processes when they are finished
 		del procs[:]
@@ -216,20 +218,17 @@ class FAPUpdater(object):
 
 		self.wait_last_process_finish(self.procs_combine_stats)
 		# remove files that have been combined from last process
-		map(lambda x: os.remove(x), self.rm_fnames)
-		self.rm_fnames = []
-
-		ls_proc = subprocess.Popen(["ls", self.path], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-		ls_out = ""
 		try:
-			ls_out = subprocess.check_output(["grep", keyword], stdin = ls_proc.stdout)
+			map(lambda x: os.remove(x), self.rm_fnames)
+			self.rm_fnames = []
 		except:
-			print "no %s file yet" % keyword
-			return
-		ls_proc.wait()
-		ls_fnames = ls_out.split("\n")
+			print >> sys.stderr, "remove files failed, rm_fnames %s" % ', '.join(self.rm_fnames)
+			return None
+
+		ls_fnames = os.listdir(str(self.path))
+		grep_fnames = [fname for fname in ls_fnames if keyword in fname]
 		# remove file names that contain "next" which are temporary files
-		valid_fnames = [one_fname for one_fname in ls_fnames if not re.search("next", one_fname)]
+		valid_fnames = [one_fname for one_fname in grep_fnames if not re.search("next", one_fname)]
 		return valid_fnames
 
 	def get_valid_bankstats(self, ls_fnames, boundary):
@@ -249,7 +248,7 @@ class FAPUpdater(object):
 		#nprefix = len(self.input_prefix_list[0].split("_"))
 		# FIXME: hard-coded keyword, assuming name name e.g. bank16_stats_1187008882_1800.xml.gz
 		ls_fnames = self.get_fnames("stats")
-		if ls_fnames is None:
+		if ls_fnames is None or len(ls_fnames) == 0:
 			return
 
 		for (i, collect_walltime) in enumerate(self.collect_walltime):
@@ -281,7 +280,7 @@ class FAPUpdater(object):
 		if update_pdf:
 			cmd += ["--update-pdf"]
 		logging.info("%s" % cmd)
-		proc = subprocess.Popen(cmd)
+		proc = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
 		return proc
 
 	# combine stats every day
@@ -326,7 +325,7 @@ class FAPUpdater(object):
 					collected_fnames.append("%s/%s" % (self.path, one_bank_fname))
 
 class FinalSink(object):
-	def __init__(self, channel_dict, process_params, pipeline, need_online_perform, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, singlefar_veto_thresh = 0.01, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
+	def __init__(self, channel_dict, process_params, pipeline, need_online_perform, path, output_prefix, output_name, far_factor, cluster_window = 0.5, snapshot_interval = None, fapupdater_interval = None, cohfar_accumbackground_output_prefix = None, cohfar_accumbackground_output_name = None, fapupdater_output_fname = None, fapupdater_collect_walltime_string = None, singlefar_veto_thresh = 0.01, gracedb_far_threshold = None, gracedb_group = "Test", gracedb_search = "LowMass", gracedb_pipeline = "spiir", gracedb_service_url = "https://gracedb.ligo.org/api/", gracedb_offline_annote = None, output_skymap = 0, superevent_thresh = 3.8e-7, verbose = False):
 		#
 		# initialize
 		#
@@ -357,6 +356,10 @@ class FinalSink(object):
 		self.gracedb_search = gracedb_search
 		self.gracedb_pipeline = gracedb_pipeline
 		self.gracedb_service_url = gracedb_service_url
+		if gracedb_offline_annote:
+			self.gracedb_offline_annote = True
+		else:
+			self.gracedb_offline_annote = False
 		if GraceDb:
 			self.gracedb_client = GraceDb(gracedb_service_url)
 
@@ -684,7 +687,7 @@ class FinalSink(object):
 		# FIXME: make this optional from cmd line?
 		while gracedb_upload_itrial < 10:
 			try:
-				resp = self.gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search)
+				resp = self.gracedb_client.createEvent(self.gracedb_group, self.gracedb_pipeline, filename, filecontents = message.getvalue(), search = self.gracedb_search, offline = self.gracedb_offline_annote)
 				resp_json = resp.json()
 				if resp.status != httplib.CREATED:
 					print >>sys.stderr, "gracedb upload of %s failed" % filename
