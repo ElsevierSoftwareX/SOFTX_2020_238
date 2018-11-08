@@ -13,6 +13,11 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+# This program is modified by Manoj Kovalam, under the supervision of Qi Chu.
+# This program uses a new ranking statistic for Probability density, developed by Alan and Linqing Wen.
+
+
 
 
 """
@@ -66,8 +71,10 @@ parser = OptionParser(
   description = __doc__,
   usage = '%prog [opts] [INPUT]',
   option_list = [
-	  Option("--output", "-o", 
-		  help="Output filename"),
+	  Option("--output-cohsnr", "-c", 
+		  help="Coherent SNR output filename"),
+	  Option("--output-prob", "-p", 
+		  help="Probability density output filename"),
 	  Option("--event-time", "-t",
 		  help="Event GPS time"),
 	  Option("--cuda-postcoh-detrsp-fname", "-m",
@@ -90,56 +97,50 @@ nullsnr_skymap = []
 allread_skymap = []
 input_fname = args[0]
 
-instruments = input_fname.split('/')[0].split('_')[0]
+instruments = input_fname.split('/')[-1].split('_')[0]
 nifo = len(instruments)/2 # ifo e.g. H1, L1, len is 2
-f = open(input_fname, 'rb')
 
+# read cohsnr^2, and nullsnr^2 for each sky direction
+f = open(input_fname, 'rb')
 for chunk in iter(lambda: f.read(4), ''):
 	allread_skymap.append(struct.unpack('f', chunk)[0])
 f.close()
 
+# load cohsnrsq, and nullsnrsq
 npix = len(allread_skymap)/2
-cohsnr_skymap = allread_skymap[0:npix]
-nullsnr_skymap = allread_skymap[npix:]
+cohsnrsq_skymap = allread_skymap[0:npix]
+nullsnrsq_skymap = allread_skymap[npix:]
 
+# get detector response Det(G*G) for each sky direction
 detrsp_start_time = long(param_from_xml(opts.cuda_postcoh_detrsp_fname, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_START))
-
 gps_step = long(param_from_xml(opts.cuda_postcoh_detrsp_fname, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_STEP))
-
 event_time = long(opts.event_time)
 igps = find_closest_gps(event_time, detrsp_start_time, gps_step)
-
 Det_name = "Det_map_gps_%d" % igps
 Det_array = array_from_xml(opts.cuda_postcoh_detrsp_fname, Det_name)
+
+# calc prob for each sky direction using cohsnr^2, nullsnr^2, and Det(G*G)
 log_prob = np.zeros(npix)
+log_den_probability = np.zeros(npix)
 ndof = 2
-for i in range(npix):
-	null = nullsnr_skymap[i]
-	prob_null = 1 - sp.special.gammainc(ndof/2.0, null**2/2)
-	log_prob_null = np.log(prob_null) if prob_null > 0 else 0 # do not apply null_prob if nullsnr is zero
-	if nifo == 2:
-		log_prob[i] = cohsnr_skymap[i]/2.
-	else:
-		log_prob[i] = np.log(4*np.pi**2/Det_array[i]) + cohsnr_skymap[i]/2. + log_prob_null
-
-#log_prob_final = sp.special.logsumexp(log_prob, axis = 0)
-log_prob_final = log_prob
-log_den_prob = log_prob_final - max(log_prob_final)
-den_prob = np.exp(log_den_prob)
 #
-log.info("begin to write skymap in fits format, nifo %d" % nifo)
-#FIXME: gps_time/ runtime are not input
-fits.write_sky_map(opts.output, den_prob,
+for i in range(npix):
+        prob_null = 1 - sp.special.gammainc(ndof/2.0, nullsnrsq_skymap[i]/2)
+        log_prob_null = np.log(prob_null)
+        log_prob[i] = np.log(4*(np.pi**2)/Det_array[i]) + (cohsnrsq_skymap[i]/8) + log_prob_null
+#Normalizing using a stable function. Exp shoots up to large values.
+log_den_probability = log_prob - np.log(np.sum(np.exp(log_prob)))
+#log_den_probability = log_prob
+den_probability = np.exp(log_den_probability)
+
+cohsnr = np.sqrt(cohsnrsq_skymap)
+# Write cohsnr and prob skymaps to fits format.
+fits.write_sky_map(opts.output_cohsnr, cohsnr,
 			objid = str(opts.event_id), gps_time=event_time,
 			creator = 'postcoh', runtime = 0, 
 			instruments = instruments, nest = True)
 
-if opts.verbose:
-	#FIXME: gps_time/ runtime are not input
-	output = "cohsnr_%s" % opts.output
-	fits.write_sky_map(output, cohsnr_skymap,
-			objid = str(opts.event_id), gps_time=event_time,
-			creator = 'postcoh', runtime = 0, 
-			instruments = instruments, nest = True)
-
-
+fits.write_sky_map(opts.output_prob, den_probability,
+                        objid = str(opts.event_id), gps_time=event_time,
+                        creator = 'postcoh', runtime = 0,
+                        instruments = instruments, nest = True)

@@ -12,6 +12,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_postcohspiir_offline \
 	gstlal_inspiral_postcohspiir_extract_zerolag \
 	gstlal_inspiral_postcohspiir_plotsummary \
+	gstlal_inspiral_postcohspiir_summarypage \
 	gstlal_cohfar_plot_stats \
 	gstlal_cohfar_plot_ifar \
 	gstlal_cohfar_assign_far \
@@ -26,4 +27,6 @@ dist_bin_SCRIPTS = \
 	gstlal_periodic_get_urls \
 	gstlal_periodic_fapupdater \
 	gstlal_plot_segments \
-	gstlal_periodic_clean_skymap
+	gstlal_periodic_clean_skymap \
+	gstlal_periodic_postcohspiir_summarypage \
+	bayestar_plot_allsky_postcohspiir
