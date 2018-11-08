@@ -1,0 +1,42 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2018  Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+# # This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+### This program inputs a template bank from lalapps_tmpltbank, and returns
+### a template bank with a unique template_id row. Used to overcome the
+### "Asserion Error: assert row.template_id not in ids" error from 
+### gstlal_inspiral_mass_model.
+
+import sys
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables, param as ligolw_param, array as ligolw_array
+from glue.ligolw import utils as ligolw_utils
+
+@ligolw_array.use_in
+@ligolw_param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+fname = sys.argv[1]
+
+xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+for n, row in enumerate(sngl_inspiral_table):
+	row.template_id = n
+
+ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('gz'), verbose = True)

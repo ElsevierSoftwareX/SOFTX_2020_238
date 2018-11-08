@@ -385,6 +385,7 @@ gstlal_bank.xml.gz: frames.cache
 		--spectrum-type median \
 		--write-compress \
 		--verbose
+	gstlal_inspiral_add_template_ids H1-TMPLTBANK-1000000000-2048.xml.gz
 	mv H1-TMPLTBANK-1000000000-2048.xml.gz gstlal_bank.xml.gz
 	@echo ""
 
