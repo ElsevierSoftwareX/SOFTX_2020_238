@@ -60,6 +60,23 @@ def gen_zerolag_fname(path):
 	input_zerolag_fname = ",".join(ls_out_list_full_path)
 	return input_zerolag_fname
 
+def call_plot_fits_func(pngname, fitsname, labelname, contour = None, colormap = "cylon"):
+	cmd = []
+	cmd += ["bayestar_plot_allsky_postcohspiir"]
+	cmd += ["-o", pngname]
+	cmd += ["--label", labelname]
+	cmd += [fitsname]
+	cmd += ["--colorbar"]
+	cmd += ["--colormap", colormap]
+	if contour:
+		cmd += ["--contour", str(contour)]
+	print cmd
+	proc = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+	proc_out, proc_err = proc.communicate()
+	if proc.returncode != 0:
+		print proc_err
+
+
 def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob):
 	cmd = []
 	cmd += ["gstlal_cohfar_plot_stats"]
@@ -77,18 +94,26 @@ def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq
 	proc = subprocess.Popen(cmd)
 	proc_out, proc_err = proc.communicate()
 
-def call_fits_skymap_func(outfname_skymap, pipe_skymap_name, event_id, event_time, cuda_postcoh_detrsp_fname):
+def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, event_id, event_time, cuda_postcoh_detrsp_fname, verbose = False):
 	input_fname = pipe_skymap_name
 	cmd = []
 	cmd += ["gstlal_postcoh_skymap2fits"]
-	cmd += ["--output", output_fname]
+	cmd += ["--output-cohsnr", out_cohsnr_fits]
+	cmd += ["--output-prob", out_prob_fits]
 	cmd += ["--cuda-postcoh-detrsp-fname", cuda_postcoh_detrsp_fname]
 	cmd += ["--event-id", event_id]
-	cmd += ["--event-time", event_time]
+	cmd += ["--event-time", str(event_time)]
 	cmd += [input_fname]
-	print cmd
-	proc = subprocess.Popen(cmd)
+	if verbose:
+		print cmd
+	proc = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 	proc_out, proc_err = proc.communicate()
+	if verbose:
+		print >> sys.stderr, "skymap2fits return code", proc.returncode
+	if proc.returncode != 0:
+		print proc_err
+
+
 
 
 def parse_command_line():
@@ -146,7 +171,46 @@ for process_params in process_params_table:
 		assignfar_fnames = process_params.value.split(',')
 	if process_params.param == '--cuda-postcoh-detrsp-fname':
 		cuda_postcoh_detrsp_fname = process_params.value
+	if process_params.param == '--cuda-postcoh-output-skymap':
+		cuda_postcoh_output_skymap = process_params.value
 	
+#
+# Upload skymap
+#
+pipe_skymap_name = postcoh_table_row.skymap_fname
+end_time = postcoh_table_row.end_time
+out_cohsnr_fits = 'gracedb/%s/%s_cohsnr_skymap.fits.gz' % (gid, ifos)
+out_cohsnr_png = 'gracedb/%s/%s_cohsnr_skymap.png' % (gid, ifos)
+# follow Leo Single's email that fits name needs to be fixed
+out_prob_fits = 'gracedb/%s/spiir.fits.gz' % gid
+out_prob_png = 'gracedb/%s/spiir.png' % gid
+msg = ""
+
+try:
+	copied_name = 'gracedb/%s/%s' % (gid, os.path.split(pipe_skymap_name)[-1])
+	copyfile(pipe_skymap_name, copied_name)
+except:
+	msg += "no skymap copied file %s" % copied_name
+
+try:
+	call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname, verbose = options.verbose)
+	if options.verbose:
+		print("Uploading %s for event %s" % (out_prob_fits, gid))
+	gracedb.writeLog(gid, "%s prob skymap, with 90 percent contour" % ifos, filename = out_prob_fits, filecontents = open(out_prob_fits).read(), tag_name = "sky_loc")
+except: 
+	msg += " can not make fits"
+
+try:
+	call_plot_fits_func(out_cohsnr_png, out_cohsnr_fits, "Coherent SNR", contour = None, colormap = "spectral")
+	call_plot_fits_func(out_prob_png, out_prob_fits, "Prob", contour = 90, colormap = "cylon") # default colormap
+	if options.verbose:
+		print("Uploading %s, %s for %s, %s " % (out_prob_png, out_cohsnr_png, gid, msg))
+	gracedb.writeLog(gid, "%s prob skymap" % ifos, filename = out_prob_png, filecontents = open(out_prob_png).read(), tag_name = "sky_loc")
+	gracedb.writeLog(gid, "%s cohsnr skymap" % ifos, filename = out_cohsnr_png, filecontents = open(out_cohsnr_png).read(), tag_name = "sky_loc")
+except: 
+	msg += " can not plot fits to pngs"
+	gracedb.writeLog(gid, "%s, check if it is due to that the trigger single SNR is below %s in the postcoh element for a skymap output" % (msg, str(cuda_postcoh_output_skymap)), filename = None, tag_name = "sky_loc")
+
 #
 # set up the background stats files in path folder
 #
@@ -192,17 +256,17 @@ call_background_plot_func(ifos, input_stats_fname_short, input_zerolag_fname, co
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_long, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tagname = "Background Information")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_mid, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tagname = "Background Information")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_short, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tagname = "Background Information")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
 
 def get_snglsnr(snr_name, postcoh_table_row):
 	if snr_name == 'snr_L':
@@ -234,33 +298,15 @@ if far < 1e-5:
 		call_background_plot_func(ifo, input_stats_fname_long, input_zerolag_fname, snr, chisq, outfname_long, njob)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_long, gid))
-		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tagname = "Background Information")
+		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
 		outfname_mid = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifo, dur_mid)
 		call_background_plot_func(ifo, input_stats_fname_mid, input_zerolag_fname, snr, chisq, outfname_mid, njob)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_mid, gid))
-		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tagname = "Background Information")
+		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
 		outfname_short = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifo, dur_short)
 		call_background_plot_func(ifo, input_stats_fname_short, input_zerolag_fname, snr, chisq, outfname_short, njob)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_short, gid))
-		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tagname = "Background Information")
-
-#
-# Upload skymap
-#
-pipe_skymap_name = postcoh_table_row.skymap_fname
-end_time = postcoh_table_row.end_time
-outfname_skymap = 'gracedb/%s/%s_skymap.fits' % (gid, ifos)
-copied_name = 'gracedb/%s/%s' % (gid, ifos, os.path.split(pipe_skymap_name)[-1])
-copyfile(pipe_skymap_name, copied_name)
-try:
-	call_fits_skymap_func(outfname_skymap, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname)
-	if options.verbose:
-		print("Uploading %s for event %s" % (outfname_skymap, gid))
-	gracedb.writeLog(gid, "%s skymap" % ifos, filename = outfname_skymap, filecontents = open(outfname_skymap).read(), tagname = "Sky Localization")
-except:
-	if options.verbose:
-		print("Uploading skymap %s not available message for event %s" % (outfname_skymap, gid))
-	gracedb.writeLog(gid, "skymap not generated; check if it is due to that the trigger single SNR is below the threshold in the postcoh element for a skymap out", filename = None, tagname = "Sky Localization")
+		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
 
