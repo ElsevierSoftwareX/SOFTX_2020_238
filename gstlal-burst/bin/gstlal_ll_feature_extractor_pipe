@@ -327,6 +327,7 @@ if options.save_format == 'kafka':
 
 	synchronizer_options = {
 		"latency-timeout": options.latency_timeout,
+		"sample-rate": options.sample_rate,
 		"input-topic-basename": options.kafka_topic,
 		"output-topic-basename": '_'.join(['synchronizer', options.tag])
 	}
