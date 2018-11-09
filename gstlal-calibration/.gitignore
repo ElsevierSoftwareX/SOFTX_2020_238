@@ -1,3 +1,7 @@
 gstlal-calibration.spec
 tests/check_calibration/Filters/**
 tests/check_calibration/Frames/**
+tests/gstlal-calibration-1.2.3-tests/H1/Frames/**
+tests/gstlal-calibration-1.2.3-tests/H1/Filters/**
+tests/gstlal-calibration-1.2.4-tests/H1/Frames/**
+tests/gstlal-calibration-1.2.4-tests/H1/Filters/**
