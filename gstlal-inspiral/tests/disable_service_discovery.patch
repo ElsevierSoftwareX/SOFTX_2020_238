@@ -1,0 +1,90 @@
+--- gstlal_inspiral	2018-11-09 06:24:21.479979000 -0800
++++ gstlal_inspiral.1	2018-11-09 06:27:05.681872000 -0800
+@@ -170,7 +170,7 @@
+ from gstlal import bottle
+ from gstlal import datasource
+ from gstlal import far
+-from gstlal import httpinterface
++#from gstlal import httpinterface
+ from gstlal import hoftcache
+ from gstlal import inspiral
+ from gstlal import inspiral_pipe
+@@ -637,15 +637,15 @@
+ 	# uncomment the next line to show tracebacks when something fails
+ 	# in the web server
+ 	#bottle.app().catchall = False
+-	httpservers = httpinterface.HTTPServers(
+-		service_name = "%s.gstlal_inspiral" % (options.job_tag if options.job_tag is not None else base64.urlsafe_b64encode(uuid.uuid4().bytes)),
+-		service_domain = service_domain(options.gracedb_search, options.gracedb_pipeline),
+-		service_properties = {
+-			"cwd": os.getcwd(),
+-			"pid": str(os.getpid()),
+-		},
+-		verbose = options.verbose
+-	)
++	#httpservers = httpinterface.HTTPServers(
++	#	service_name = "%s.gstlal_inspiral" % (options.job_tag if options.job_tag is not None else base64.urlsafe_b64encode(uuid.uuid4().bytes)),
++	#	service_domain = service_domain(options.gracedb_search, options.gracedb_pipeline),
++	#	service_properties = {
++	#		"cwd": os.getcwd(),
++	#		"pid": str(os.getpid()),
++	#	},
++	#	verbose = options.verbose
++	#)
+ 
+ 
+ 	#
+@@ -653,25 +653,25 @@
+ 	#
+ 
+ 
+-	@bottle.route("/")
+-	@bottle.route("/index.html")
+-	def index(job_tag = options.job_tag, instruments = all_instruments):
+-		# get the host and port to report in the links from the
+-		# request we've received so that the URLs contain the IP
+-		# address by which client has contacted us
+-		netloc = bottle.request.urlparts[1]
+-		server_address = "http://%s" % netloc
+-		yield "<html><body>\n<h3>%s %s %s %s</h3>\n<p>\n" % (job_tag, os.environ.get("GSTLAL_LL_JOB"), netloc, " ".join(sorted(instruments)))
+-		for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+-			# don't create links back to this page
+-			if route.rule in ("/", "/index.html"):
+-				continue
+-			# only create links for GET methods
+-			if route.method != "GET":
+-				continue
+-			yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
+-		yield "</p>\n</body></html>"
+-	# FIXME:  get service-discovery working, then don't do this
++	#@bottle.route("/")
++	#@bottle.route("/index.html")
++	#def index(job_tag = options.job_tag, instruments = all_instruments):
++	#	# get the host and port to report in the links from the
++	#	# request we've received so that the URLs contain the IP
++	#	# address by which client has contacted us
++	#	netloc = bottle.request.urlparts[1]
++	#	server_address = "http://%s" % netloc
++	#	yield "<html><body>\n<h3>%s %s %s %s</h3>\n<p>\n" % (job_tag, os.environ.get("GSTLAL_LL_JOB"), netloc, " ".join(sorted(instruments)))
++	#	for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
++	#		# don't create links back to this page
++	#		if route.rule in ("/", "/index.html"):
++	#			continue
++	#		# only create links for GET methods
++	#		if route.method != "GET":
++	#			continue
++	#		yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
++	#	yield "</p>\n</body></html>"
++	## FIXME:  get service-discovery working, then don't do this
+ 	if "GSTLAL_LL_JOB" in os.environ:
+ 		open("%s_registry.txt" % os.environ["GSTLAL_LL_JOB"], "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+ 
+@@ -911,7 +911,7 @@
+ 	#
+ 
+ 
+-	del httpservers
++	#del httpservers
+ 	bottle.default_app.pop()
+ 
+ 

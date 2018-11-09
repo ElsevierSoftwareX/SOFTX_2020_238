@@ -277,7 +277,16 @@ test:offline:
     - export LAL_DATA_PATH=${GSTLAL_DIR}/lalsuite-extra/data/lalsimulation/
 
     - cd gstlal-inspiral/tests
+
+    # Patch gstlal_inspiral to disable servicediscovery/avahi:
+    - patch ${GSTLAL_DIR}/bin/gstlal_inspiral ./disable_service_discovery.patch
+
+    # Run the makefile:
     - make -f Makefile.offline_tutorial_test
+
+    # Unpatch gstlal_inspiral to bring it back to normal:
+    - patch -R ${GSTLAL_DIR}/bin/gstlal_inspiral ./disable_service_discovery.patch
+
     - cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
   artifacts:
     expire_in: 24h
