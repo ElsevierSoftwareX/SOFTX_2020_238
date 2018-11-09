@@ -427,7 +427,7 @@ L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 		$<
 	@echo ""
 
-H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
+H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measured_psd.xml.gz
 	# gstlal_svd_bank_0001
 	$(TIME) gstlal_svd_bank \
 		--reference-psd measured_psd.xml.gz \
@@ -446,7 +446,7 @@ H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
 		--samples-max $(SAMPLE_RATE)
 	@echo ""
 
-L1-0000_SVD-1000000000-2048.xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz
+L1-0000_SVD-1000000000-2048.xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measured_psd.xml.gz
 	# gstlal_svd_bank_0002
 	$(TIME) gstlal_svd_bank \
 		--reference-psd measured_psd.xml.gz \
@@ -494,7 +494,7 @@ H1L1-0000_LLOID-1000000000-2048.xml.gz: measured_psd.xml.gz frames.cache segment
 		--verbose
 	@echo ""
 
-H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz: H1L1-ALL_MASS_MODEL-1000000000-2048.h5
+H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz: H1L1-ALL_MASS_MODEL-1000000000-2048.h5 L1-0000_SVD-1000000000-2048.xml.gz
 	# gstlal_inspiral_create_prior_diststats_0001
 	$(TIME) gstlal_inspiral_create_prior_diststats \
 		--instrument H1 \
@@ -502,14 +502,15 @@ H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz: H1L1-ALL_MASS_MODEL-10
 		--min-instruments $(MIN_IFOS) \
 		--write-likelihood H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz \
 		--background-prior 1 \
-		--mass-model-file H1L1-ALL_MASS_MODEL-1187000000-100000.h5 \
+		--mass-model-file H1L1-ALL_MASS_MODEL-1187000000-2048.h5 \
+		--svd-file L1-0000_SVD-1000000000-2048.xml.gz
 		--verbose
 	@echo ""
 	
 H1L1-ALL_MASS_MODEL-1000000000-2048.h5: gstlal_bank.xml.gz
 	$(TIME) gstlal_inspiral_mass_model \
 		--template-bank $< \
-		--output H1L1-ALL_MASS_MODEL-1187000000-100000.h5 \
+		--output H1L1-ALL_MASS_MODEL-1187000000-2048.h5 \
 		--model salpeter
 	@echo ""
 
