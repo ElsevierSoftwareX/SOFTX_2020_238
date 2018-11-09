@@ -1502,13 +1502,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		/* data that will be Fourier transformed into frequency domain */
 		element->workspace.wspf.fft = (complex float *) fftwf_malloc(fd_fft_length * sizeof(*element->workspace.wspf.fft));
-		element->workspace.wspf.plan = fftwf_plan_dft_r2c_1d(element->fft_length, (float *) element->workspace.wspf.fft, element->workspace.wspf.fft, FFTW_MEASURE);
+		element->workspace.wspf.plan = fftwf_plan_dft_r2c_1d(element->fft_length, (float *) element->workspace.wspf.fft, element->workspace.wspf.fft, FFTW_ESTIMATE);
 
 		if(element->make_fir_filters && !element->workspace.wspf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
 			element->workspace.wspf.fir_filter = (complex float *) fftwf_malloc(fd_fir_length * sizeof(*element->workspace.wspf.fir_filter));
-			element->workspace.wspf.fir_plan = fftwf_plan_dft_c2r_1d(element->fir_length, element->workspace.wspf.fir_filter, (float *) element->workspace.wspf.fir_filter, FFTW_MEASURE);
+			element->workspace.wspf.fir_plan = fftwf_plan_dft_c2r_1d(element->fir_length, element->workspace.wspf.fir_filter, (float *) element->workspace.wspf.fir_filter, FFTW_ESTIMATE);
 		}
 		GST_LOG_OBJECT(element, "FFTWF planning complete");
 
@@ -1684,13 +1684,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		/* data that will be Fourier transformed into frequency domain */
 		element->workspace.wdpf.fft = (complex double *) fftw_malloc(fd_fft_length * sizeof(*element->workspace.wdpf.fft));
-		element->workspace.wdpf.plan = fftw_plan_dft_r2c_1d(element->fft_length, (double *) element->workspace.wdpf.fft, element->workspace.wdpf.fft, FFTW_MEASURE);
+		element->workspace.wdpf.plan = fftw_plan_dft_r2c_1d(element->fft_length, (double *) element->workspace.wdpf.fft, element->workspace.wdpf.fft, FFTW_ESTIMATE);
 
 		if(element->make_fir_filters && !element->workspace.wdpf.fir_filter) {
 
 			/* data that will be inverse Fourier transformed back into the time domain */
 			element->workspace.wdpf.fir_filter = (complex double *) fftw_malloc(fd_fir_length * sizeof(*element->workspace.wdpf.fir_filter));
-			element->workspace.wdpf.fir_plan = fftw_plan_dft_c2r_1d(element->fir_length, element->workspace.wdpf.fir_filter, (double *) element->workspace.wdpf.fir_filter, FFTW_MEASURE);
+			element->workspace.wdpf.fir_plan = fftw_plan_dft_c2r_1d(element->fir_length, element->workspace.wdpf.fir_filter, (double *) element->workspace.wdpf.fir_filter, FFTW_ESTIMATE);
 		}
 		GST_LOG_OBJECT(element, "FFTW planning complete");
 

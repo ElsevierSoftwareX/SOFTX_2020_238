@@ -586,7 +586,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		gint64 fd_variable_filter_length = element->variable_filter_length / 2 + 1;
 		element->variable_filter = (complex double *) fftw_malloc(fd_variable_filter_length * sizeof(*element->variable_filter));
-		element->variable_filter_plan = fftw_plan_dft_c2r_1d(element->variable_filter_length, element->variable_filter, (double *) element->variable_filter, FFTW_MEASURE);
+		element->variable_filter_plan = fftw_plan_dft_c2r_1d(element->variable_filter_length, element->variable_filter, (double *) element->variable_filter, FFTW_ESTIMATE);
 
 		GST_LOG_OBJECT(element, "FFTW planning complete");
 
