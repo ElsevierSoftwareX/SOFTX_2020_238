@@ -379,14 +379,14 @@ static int create_fdd_workspace(GSTLALComplexFIRBank *element)
 
 	GST_LOG_OBJECT(element, "starting FFTW planning");
 	element->workspace.fdd.input = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace.fdd.input));
-	element->workspace.fdd.in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->workspace.fdd.input, element->workspace.fdd.input, FFTW_MEASURE);
+	element->workspace.fdd.in_plan = fftw_plan_dft_r2c_1d(fft_block_length(element), (double *) element->workspace.fdd.input, element->workspace.fdd.input, FFTW_ESTIMATE);
 
 	/*
 	 * frequency-domain workspace
 	 */
 
 	element->workspace.fdd.filtered = (complex double *) fftw_malloc(length_fd * sizeof(*element->workspace.fdd.filtered));
-	element->workspace.fdd.out_plan = fftw_plan_dft_c2r_1d(fft_block_length(element), element->workspace.fdd.filtered, (double *) element->workspace.fdd.filtered, FFTW_MEASURE);
+	element->workspace.fdd.out_plan = fftw_plan_dft_c2r_1d(fft_block_length(element), element->workspace.fdd.filtered, (double *) element->workspace.fdd.filtered, FFTW_ESTIMATE);
 	GST_LOG_OBJECT(element, "FFTW planning complete");
 
 	/*
@@ -451,14 +451,14 @@ static int create_fds_workspace(GSTLALComplexFIRBank *element)
 
 	GST_LOG_OBJECT(element, "starting FFTW planning");
 	element->workspace.fds.input = (complex float *) fftwf_malloc(length_fd * sizeof(*element->workspace.fds.input));
-	element->workspace.fds.in_plan = fftwf_plan_dft_r2c_1d(fft_block_length(element), (float *) element->workspace.fds.input, element->workspace.fds.input, FFTW_MEASURE);
+	element->workspace.fds.in_plan = fftwf_plan_dft_r2c_1d(fft_block_length(element), (float *) element->workspace.fds.input, element->workspace.fds.input, FFTW_ESTIMATE);
 
 	/*
 	 * frequency-domain workspace
 	 */
 
 	element->workspace.fds.filtered = (complex float *) fftwf_malloc(length_fd * sizeof(*element->workspace.fds.filtered));
-	element->workspace.fds.out_plan = fftwf_plan_dft_c2r_1d(fft_block_length(element), element->workspace.fds.filtered, (float *) element->workspace.fds.filtered, FFTW_MEASURE);
+	element->workspace.fds.out_plan = fftwf_plan_dft_c2r_1d(fft_block_length(element), element->workspace.fds.filtered, (float *) element->workspace.fds.filtered, FFTW_ESTIMATE);
 	GST_LOG_OBJECT(element, "FFTW planning complete");
 
 	/*

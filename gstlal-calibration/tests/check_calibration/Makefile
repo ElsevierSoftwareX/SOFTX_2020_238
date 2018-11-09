@@ -8,21 +8,21 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O2
 
-START = 1225519232
-END = 1225520256
+START = 1186944000
+END = 1186944512
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 300
 PLOT_COOLDOWN_TIME = 64
 
 GDSCONFIGS = ../../config_files/PreER13/H1/C00/H1GDS_FRAMES_1225558818.ini
-DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepCorrections_Cleaning.ini
+DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: GDS_over_CALCS
+all: $(IFO)1_hoft_DCS_frames.cache
 
 ###############################################
 ### These commands should change less often ###
@@ -51,20 +51,20 @@ $(IFO)1_C02_frames.cache:
 
 $(IFO)1_hoft_GDS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST*.gwf | lalapps_path2cache > $@
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS-*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS*.gwf | lalapps_path2cache > $@
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS-*.gwf | lalapps_path2cache > $@
 
 # In case we want to compare one calibration to another...
 $(IFO)1_hoft_GDS_TEST_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSTESTCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST*.gwf | lalapps_path2cache > $@
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_TEST-*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_TEST_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSTESTCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST*.gwf | lalapps_path2cache > $@
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TEST-*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_FCC_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSFCCCONFIGS)
