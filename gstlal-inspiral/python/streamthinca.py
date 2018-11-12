@@ -286,23 +286,16 @@ class StreamThinca(object):
 		age = float(self.time_slide_graph.age)
 		snr_segments = segments.segmentlistdict((instrument, ratebinlist[lower_bound_in_seglist(ratebinlist, age):].segmentlist()) for instrument, ratebinlist in rankingstat.denominator.triggerrates.items())
 
-		# times when SNR was available.  used only for code
-		# correctness checks
+		# times when at least 2 instruments were generating SNR.
+		# used to sieve triggers for inclusion in the denominator.
 
-		one_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 1)
+		two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
 		# FIXME:  this is needed to work around rounding problems
 		# in safety checks below, trying to compare GPS trigger
 		# times to float segment boundaries (the boundaries don't
 		# have enough precision to know if triggers near the edge
 		# are in or out).  it would be better not to have to screw
 		# around like this.
-		one_or_more_instruments.protract(1e-3)  # 1 ms
-
-		# times when at least 2 instruments were generating SNR.
-		# used to sieve triggers for inclusion in the denominator.
-
-		two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
-		# FIXME:  see comment above.
 		two_or_more_instruments.protract(1e-3)  # 1 ms
 
 		#
@@ -315,10 +308,6 @@ class StreamThinca(object):
 		flushed_unused = []
 		self.last_coincs.clear()
 		for node, events in self.time_slide_graph.pull(self.delta_t, newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, flush = flush):
-			# safety check the end times
-
-			assert all(event.end in one_or_more_instruments for event in events), "encountered trigger at time when there was no SNR, ranking statisic will fail"
-
 			# construct row objects for coinc tables.  latency
 			# goes in minimum_duration column.  NOTE:  latency
 			# is nonsense unless running live.
