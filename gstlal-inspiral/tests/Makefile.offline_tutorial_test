@@ -482,9 +482,7 @@ H1L1-0000_LLOID-1000000000-2048.xml.gz: measured_psd.xml.gz frames.cache segment
 		--time-slide-file tisi.xml \
 		--tmp-space $(TMPDIR) \
 		--svd-bank H1:H1-0000_SVD-1000000000-2048.xml.gz,L1:L1-0000_SVD-1000000000-2048.xml.gz \
-		--ranking-stat-input H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz \
 		--ranking-stat-output H1L1-0000_DIST_STATS-1000000000-2048.xml.gz \
-		--likelihood-snapshot-interval 300 \
 		--veto-segments-file vetoes.xml.gz \
 		--control-peak-time 0 \
 		--min-instruments $(MIN_IFOS) \
@@ -521,7 +519,7 @@ H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_ST
 	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output $@ \
 		--marginalize ranking-stat \
-		$< H1L1-0000_DIST_STATS-1000000000-2048.xml.gz \
+		$^ \
 		--verbose
 	@echo ""
 
