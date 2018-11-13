@@ -514,7 +514,7 @@ H1L1-ALL_MASS_MODEL-1000000000-2048.h5: gstlal_bank.xml.gz
 		--model salpeter
 	@echo ""
 
-H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz H1L1-0000_LLOID-1000000000-2048.xml.gz
+H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz H1L1-0000_DIST_STATS-1000000000-2048.xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0001
 	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output $@ \
