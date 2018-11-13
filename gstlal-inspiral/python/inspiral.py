@@ -500,7 +500,11 @@ class GracedBWrapper(object):
 		gracedb_ids = []
 
 		# no-op short circuit
-		if self.far_threshold is None or not last_coincs:
+		# NOTE the value is tested for less than or equeal to zero so
+		# that people can disable it through the web interface by
+		# setting e.g., -1.  None is also less than zero so this works
+		# out.
+		if self.far_threshold <= 0 or not last_coincs:
 			return gracedb_ids
 
 		coinc_inspiral_index = last_coincs.coinc_inspiral_index
