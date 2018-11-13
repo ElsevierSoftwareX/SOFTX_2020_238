@@ -234,6 +234,28 @@ def lower_bound_in_seglist(seglist, x):
 	return i - 1 if i else 0
 
 
+class backgroundcollector(object):
+	def __init__(self):
+		self.zerolag_singles = set()
+		self.timeshifted_coincs = set()
+
+	def push(self, event_ids, offset_vector):
+		if any(offset_vector.values()):
+			if len(event_ids) > 1:
+				self.timeshifted_coincs.update(event_ids)
+		elif len(event_ids) == 1:
+			self.zerolag_singles.update(event_ids)
+
+	def pull(self, two_or_more_instruments, flushed_events):
+		index = dict((id(event), event) for event in flushed_events)
+		flushed_ids = set(index)
+		background_ds = self.timeshifted_coincs & flushed_ids
+		self.timeshifted_coincs -= flushed_ids
+		background_ds |= set(event_id for event_id in self.zerolag_singles & flushed_ids if index[event_id].end in two_or_more_instruments)
+		self.zerolag_singles -= flushed_ids
+		return map(index.__getitem__, background_ds)
+
+
 class StreamThinca(object):
 	def __init__(self, xmldoc, process_id, delta_t, min_instruments = 2, sngls_snr_threshold = None):
 		self.ln_lr_from_triggers = None
@@ -254,6 +276,7 @@ class StreamThinca(object):
 			self.delta_t,
 			min_instruments = self.min_instruments
 		)
+		self.backgroundcollector = backgroundcollector()
 
 
 	def push(self, instrument, events, t_complete):
@@ -286,18 +309,6 @@ class StreamThinca(object):
 		age = float(self.time_slide_graph.age)
 		snr_segments = segments.segmentlistdict((instrument, ratebinlist[lower_bound_in_seglist(ratebinlist, age):].segmentlist()) for instrument, ratebinlist in rankingstat.denominator.triggerrates.items())
 
-		# times when at least 2 instruments were generating SNR.
-		# used to sieve triggers for inclusion in the denominator.
-
-		two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
-		# FIXME:  this is needed to work around rounding problems
-		# in safety checks below, trying to compare GPS trigger
-		# times to float segment boundaries (the boundaries don't
-		# have enough precision to know if triggers near the edge
-		# are in or out).  it would be better not to have to screw
-		# around like this.
-		two_or_more_instruments.protract(1e-3)  # 1 ms
-
 		#
 		# iterate over coincidences
 		#
@@ -307,14 +318,13 @@ class StreamThinca(object):
 		flushed = []
 		flushed_unused = []
 		self.last_coincs.clear()
-		for node, events in self.time_slide_graph.pull(self.delta_t, newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, flush = flush):
-			# construct row objects for coinc tables.  latency
-			# goes in minimum_duration column.  NOTE:  latency
-			# is nonsense unless running live.
-			# FIXME: add a proper column for latency
+		for node, events in self.time_slide_graph.pull(self.delta_t, newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, event_collector = self.backgroundcollector, flush = flush):
+			# construct row objects for coinc tables.
 
 			coinc, coincmaps, coinc_inspiral = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, seglists = snr_segments)
-			coinc_inspiral.minimum_duration = gps_time_now - float(coinc_inspiral.end)
+
+			# assign ranking statistic, FAP and FAR
+
 			if self.ln_lr_from_triggers is not None:
 				coinc.likelihood = self.ln_lr_from_triggers(events, node.offset_vector)
 				if fapfar is not None:
@@ -323,25 +333,9 @@ class StreamThinca(object):
 					coinc_inspiral.combined_far = fapfar.far_from_rank(coinc.likelihood)
 					coinc_inspiral.false_alarm_rate = fapfar.fap_from_rank(coinc.likelihood)
 
-				# cluster candidates
-				# FIXME:  implement clustering
-
-				# --->
-				#if self.stream_thinca.last_coincs:
-				#	self.stream_thinca.last_coincs.coinc_event_index = dict([max(self.stream_thinca.last_coincs.coinc_event_index.items(), key = lambda (coinc_event_id, coinc_event): coinc_event.likelihood)])
-				# <---
-
 			# some tasks for zero-lag candidates
 
 			if node.is_zero_lag:
-				# single-detector candidates collected from
-				# zero-lag time slides during times when
-				# two or more instruments were producing
-				# SNR are added to the noise model
-
-				if len(events) == 1 and events[0].end in two_or_more_instruments:
-					rankingstat.denominator.increment(events[0])
-
 				# populate ranking statistic's zero-lag
 				# PDFs with triggers from all zero-lag
 				# candidates
@@ -349,21 +343,41 @@ class StreamThinca(object):
 				for event in events:
 					rankingstat.zerolag.increment(event)
 
-				# Add events to the observed likelihood
-				# histogram post "clustering"
+				# add events to the zero-lag ranking
+				# statistic histogram
 
 				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
 					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
 
+			# latency goes in minimum_duration column.  NOTE:
+			# latency is nonsense unless running live.  FIXME:
+			# add a proper column for latency
+
+			coinc_inspiral.minimum_duration = gps_time_now - float(coinc_inspiral.end)
+
 			# finally, append coinc to tables
+
 			self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
 			self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
 
-		# add singles that were not used for any candidates to the
-		# noise model
+		# add selected singles to the noise model
 
-		for event in flushed_unused:
-			if event.end in two_or_more_instruments:
+		if flushed:
+			# times when at least 2 instruments were generating
+			# SNR.  used to select zero-lag singles for
+			# inclusion in the denominator.
+
+			two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
+			# FIXME:  this is needed to work around rounding
+			# problems in safety checks below, trying to
+			# compare GPS trigger times to float segment
+			# boundaries (the boundaries don't have enough
+			# precision to know if triggers near the edge are
+			# in or out).  it would be better not to have to
+			# screw around like this.
+			two_or_more_instruments.protract(1e-3)  # 1 ms
+
+			for event in self.backgroundcollector.pull(two_or_more_instruments, flushed):
 				rankingstat.denominator.increment(event)
 
 		# add any triggers that have been used in coincidences for
