@@ -1441,9 +1441,33 @@ class p_of_instruments_given_horizons(object):
 	The goal of this class is to compute :math:`P(\\vec{O} | \\vec{D_H},
 	s)`.  In order to compute it, the SNR is calculated for an ideal signal as a
 	function of given sky location and distance and then integrated over the
-	extrinsic parameters to figure out the probability that a signal produces and
-	above SNR event in each of the :math:`\\vec{O}` detectors.  This probability is
-	computed for many possible horizon distance combinations.
+	extrinsic parameters to figure out the probability that a signal produces an
+	above SNR event in each of the :math:`\\vec{O}` detectors.  This
+	probability is computed for many possible horizon distance combinations. In
+	other words the probability of having H and L participate in a coinc when H, L,
+	and V are operating is,
+
+	.. math::
+
+		P(H \cup L | D_H, D_L, D_V, s) = \int_\Sigma P(\\rho_{H}, \\rho_{L}, \\rho_{V} | D_H, D_L, D_V, s)
+
+	where
+
+	.. math::
+
+		\Sigma \equiv 
+		\\begin{cases}
+			\\rho_H \geq \\rho_m \\\\
+			\\rho_H \geq \\rho_m \\\\
+			\\rho_V \leq \\rho_m
+		\end{cases}
+
+	with :math:`\\rho_m` as the SNR threshold of the pipeline.  We
+	construct :math:`P(\\rho_{H},\ldots | \dots)` from random sampling of uniform
+	location and orientation sources and according to distance squared.  The
+	location / orientation sampling is identical to the one used in
+	:py:class:`TimePhaseSNR`.  We add a random jitter to each SNR according to a
+	chi-squared distribution with two degrees of freedom.
 	"""
 	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None):
 		"""
@@ -1453,14 +1477,14 @@ class p_of_instruments_given_horizons(object):
 		distance ratios bracketed from hmin to hmax in nbins per dimension.  Horizon
 		distance ratios form an N-1 dimensional function where N is the number of
 		instruments in the sub combination.  Thus computing the probability of a triple
-		coincidence detection requires a two dimensional histogram with nbins^2 mnumber
+		coincidence detection requires a two dimensional histogram with nbins^2 number
 		of points.  The probability is interpolated over the bins with linear
 		interpolation.
 
 		NOTE! This is a very slow class to initialize from scratch in
 		normal circumstances you would use the from_hdf5() method to load precomputed
 		values.  NOTE the :py:class`InspiralExtrinsics` provides a helper class to load
-		precomputed data.
+		precomputed data.  See its documentation.
 		"""
 		self.instruments = tuple(sorted(list(instruments)))
 		self.snr_thresh = snr_thresh
@@ -1641,6 +1665,9 @@ class InspiralExtrinsics(object):
 	0.0021601523270060085
 	>>> IE.p_of_instruments_given_horizons(("H1","L1"), {"H1":200, "L1":200, "V1":200})
 	0.14534898937680402
+
+	>>> IE.p_of_instruments_given_horizons(("H1","L1"), {"H1":200, "L1":200, "V1":200}) + IE.p_of_instruments_given_horizons(("H1","V1"), {"H1":200, "L1":200, "V1":200}) + IE.p_of_instruments_given_horizons(("L1","V1"), {"H1":200, "L1":200, "V1":200}) + IE.p_of_instruments_given_horizons(("H1","L1","V1"), {"H1":200, "L1":200, "V1":200})
+	1.0
 
 	>>> IE.time_phase_snr({"H1":0.001, "L1":0.0, "V1":0.004}, {"H1":1.3, "L1":4.6, "V1":5.3}, {"H1":20, "L1":20, "V1":4}, {"H1":200, "L1":200, "V1":50})
 	array([  1.01240596e-06], dtype=float32)
