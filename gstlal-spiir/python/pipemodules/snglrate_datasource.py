@@ -131,7 +131,7 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		veto_segments = None, seekevent = None, nxydump_segment = None, nxydump_directory = '.',
 		track_psd = False, block_duration = 1 * gst.SECOND, zero_pad =
 		0, width = 64, fir_whitener = 0, statevector = None, dqvector =
-		None, fir_whiten_reference_psd = None):
+		None, fir_whiten_reference_psd = None, whiten_expand_gaps = False):
 	"""!
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -195,18 +195,17 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	head = pipeparts.mknofakedisconts(pipeline, head)	# FIXME:  remove when resampler is patched
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max_rate))
 
-	head = pipeparts.mktee(pipeline, head)
-
-	if nxydump_segment is not None:
-		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/before_whitened_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
-
 	#
 	# construct whitener.
 	#
+	if nxydump_segment is not None:
+		head = pipeparts.mktee(pipeline, head)
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/before_highpass_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
+
 
 	if fir_whitener:
 		head = pipeparts.mktee(pipeline, head)
-		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		whiten = pipeparts.mkwhiten(pipeline, pipeparts.mkqueue(pipeline, head, max_size_time = 2 * psd_fft_length * gst.SECOND), fft_length = psd_fft_length - 2 * zero_pad, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = whiten_expand_gaps, name = "lal_whiten_%s" % instrument)
 		pipeparts.mkfakesink(pipeline, whiten)
 
 		# high pass filter
@@ -214,8 +213,16 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 		block_stride = block_duration * max_rate // gst.SECOND
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
 		head = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
+
+		if nxydump_segment is not None:
+			head = pipeparts.mktee(pipeline, head)
+			pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/after_highpass_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
+
+
 		# FIR filter for whitening kernel
 		head = pipeparts.mktdwhiten(pipeline, head, kernel = numpy.zeros(1 + max_rate * psd_fft_length, dtype=numpy.float64), latency = 0)
+
+
 		# compute whitening kernel from PSD
 		def set_fir_psd(whiten, pspec, firelem, psd_fir_kernel):
 			psd_data = numpy.array(whiten.get_property("mean-psd"))
@@ -252,6 +259,12 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 			firkernel.set_phase(fir_whiten_reference_psd)
 
 		whiten.connect_after("notify::mean-psd", set_fir_psd, head, firkernel)
+
+		if nxydump_segment is not None:
+			head = pipeparts.mktee(pipeline, head)
+			pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/after_tdwhiten_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
+
+
 		# Gate after gaps.  the queue sizes on the control inputs
 		# need only be large enough to hold the state vector
 		# streams until they are required.  the streams will be
@@ -294,10 +307,16 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
 
-		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "lal_whiten_%s" % instrument)
+		head = whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = whiten_expand_gaps, name = "lal_whiten_%s" % instrument)
 		# make the buffers going downstream smaller, this can
 		# really help with RAM
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
+
+		if nxydump_segment is not None:
+			head = pipeparts.mktee(pipeline, head)
+			pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/after_fdwhiten_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
+
+
 		if statevector is not None or dqvector is not None:
 			head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 0, max_size_bytes = 0, max_size_time = gst.SECOND * (psd_fft_length + 2))
 		if statevector is not None:
@@ -401,9 +420,9 @@ def mkwhitened_src(pipeline, src, max_rate, instrument, psd = None,
 	# multi_downsample embeds amplitude correction (audioamplify)
 
 
-	head = pipeparts.mktee(pipeline, head)
 	if nxydump_segment is not None:
-		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/whitened_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
+		head = pipeparts.mktee(pipeline, head)
+		pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, head), "%s/after_htgate_data_%s_%d.dump" % (nxydump_directory, instrument, nxydump_segment[0]), segment = nxydump_segment)
 	
 	return head
 
