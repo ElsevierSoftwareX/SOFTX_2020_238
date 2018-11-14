@@ -73,11 +73,10 @@ def call_plot_fits_func(pngname, fitsname, labelname, contour = None, colormap =
 	print cmd
 	proc = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 	proc_out, proc_err = proc.communicate()
-	if proc.returncode != 0:
-		print proc_err
+	return proc.returncode
 
 
-def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob):
+def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob, verbose = False):
 	cmd = []
 	cmd += ["gstlal_cohfar_plot_stats"]
 	cmd += ["--output", output_fname]
@@ -89,10 +88,11 @@ def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq
 	cmd += ["--far-factor", str(njob)]
 	if zerolag_fname:
 		cmd += ["--input-zerolag", zerolag_fname]
-	print cmd
-
+	if verbose:
+		print cmd
 	proc = subprocess.Popen(cmd)
 	proc_out, proc_err = proc.communicate()
+	return proc.returncode
 
 def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, event_id, event_time, cuda_postcoh_detrsp_fname, verbose = False):
 	input_fname = pipe_skymap_name
@@ -110,10 +110,7 @@ def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, even
 	proc_out, proc_err = proc.communicate()
 	if verbose:
 		print >> sys.stderr, "skymap2fits return code", proc.returncode
-	if proc.returncode != 0:
-		print proc_err
-
-
+	return proc.returncode
 
 
 def parse_command_line():
@@ -190,24 +187,26 @@ try:
 	copied_name = 'gracedb/%s/%s' % (gid, os.path.split(pipe_skymap_name)[-1])
 	copyfile(pipe_skymap_name, copied_name)
 except:
-	msg += "no skymap copied file %s" % copied_name
+	msg += "no skymap generated in %s" % copied_name
 
-try:
-	call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname, verbose = options.verbose)
+returncode = call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname, verbose = options.verbose)
+
+if returncode == 0:
 	if options.verbose:
 		print("Uploading %s for event %s" % (out_prob_fits, gid))
+
 	gracedb.writeLog(gid, "%s prob skymap, with 90 percent contour" % ifos, filename = out_prob_fits, filecontents = open(out_prob_fits).read(), tag_name = "sky_loc")
-except: 
+else:
 	msg += " can not make fits"
 
-try:
-	call_plot_fits_func(out_cohsnr_png, out_cohsnr_fits, "Coherent SNR", contour = None, colormap = "spectral")
-	call_plot_fits_func(out_prob_png, out_prob_fits, "Prob", contour = 90, colormap = "cylon") # default colormap
+returncode = call_plot_fits_func(out_cohsnr_png, out_cohsnr_fits, "Coherent SNR", contour = None, colormap = "spectral")
+returncode = returncode & call_plot_fits_func(out_prob_png, out_prob_fits, "Prob", contour = 90, colormap = "cylon") # default colormap
+if returncode == 0:
 	if options.verbose:
 		print("Uploading %s, %s for %s, %s " % (out_prob_png, out_cohsnr_png, gid, msg))
 	gracedb.writeLog(gid, "%s prob skymap" % ifos, filename = out_prob_png, filecontents = open(out_prob_png).read(), tag_name = "sky_loc")
 	gracedb.writeLog(gid, "%s cohsnr skymap" % ifos, filename = out_cohsnr_png, filecontents = open(out_cohsnr_png).read(), tag_name = "sky_loc")
-except: 
+else:
 	msg += " can not plot fits to pngs"
 	gracedb.writeLog(gid, "%s, check if it is due to that the trigger single SNR is below %s in the postcoh element for a skymap output" % (msg, str(cuda_postcoh_output_skymap)), filename = None, tag_name = "sky_loc")
 
@@ -256,17 +255,17 @@ call_background_plot_func(ifos, input_stats_fname_short, input_zerolag_fname, co
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_long, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_mid, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_short, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq" % (ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
 
 def get_snglsnr(snr_name, postcoh_table_row):
 	if snr_name == 'snr_L':
@@ -288,7 +287,7 @@ def get_chisq(chisq_name, postcoh_table_row):
 # plot single FAR contours for significant triggers
 #
 
-if far < 1e-5:
+if far < 1e-4:
 	for ifo in ifo_list:
 		snr_name = 'snr_%s' % ifo[0]
 		snr = get_snglsnr(snr_name, postcoh_table_row)
