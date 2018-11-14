@@ -249,11 +249,11 @@ class backgroundcollector(object):
 	def pull(self, two_or_more_instruments, flushed_events):
 		index = dict((id(event), event) for event in flushed_events)
 		flushed_ids = set(index)
-		background_ds = self.timeshifted_coincs & flushed_ids
+		background_ids = self.timeshifted_coincs & flushed_ids
 		self.timeshifted_coincs -= flushed_ids
-		background_ds |= set(event_id for event_id in self.zerolag_singles & flushed_ids if index[event_id].end in two_or_more_instruments)
+		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if index[event_id].end in two_or_more_instruments)
 		self.zerolag_singles -= flushed_ids
-		return map(index.__getitem__, background_ds)
+		return map(index.__getitem__, background_ids)
 
 
 class StreamThinca(object):
