@@ -246,14 +246,14 @@ class backgroundcollector(object):
 		elif len(event_ids) == 1:
 			self.zerolag_singles.update(event_ids)
 
-	def pull(self, two_or_more_instruments, flushed_events):
+	def pull(self, snr_min, two_or_more_instruments, flushed_events):
 		index = dict((id(event), event) for event in flushed_events)
 		flushed_ids = set(index)
 		background_ids = self.timeshifted_coincs & flushed_ids
 		self.timeshifted_coincs -= flushed_ids
 		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if index[event_id].end in two_or_more_instruments)
 		self.zerolag_singles -= flushed_ids
-		return map(index.__getitem__, background_ids)
+		return [event for event in map(index.__getitem__, background_ids) if event.snr >= snr_min]
 
 
 class StreamThinca(object):
@@ -377,7 +377,7 @@ class StreamThinca(object):
 			# screw around like this.
 			two_or_more_instruments.protract(1e-3)  # 1 ms
 
-			for event in self.backgroundcollector.pull(two_or_more_instruments, flushed):
+			for event in self.backgroundcollector.pull(rankingstat.snr_min, two_or_more_instruments, flushed):
 				rankingstat.denominator.increment(event)
 
 		# add any triggers that have been used in coincidences for
