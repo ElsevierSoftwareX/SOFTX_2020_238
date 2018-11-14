@@ -120,7 +120,7 @@ static GstFlowReturn push_with_flag(CudaMultirateSPIIR *element, GstBuffer *outb
 			" out_len %d, out_size %u",
 			flag_segments->len, i, GST_TIME_ARGS(start), GST_TIME_ARGS(stop),
 			GST_TIME_ARGS(this_segment->start), GST_TIME_ARGS(this_segment->stop), out_len, outsize);
-
+		if (out_len > 0) {
 		/* note that the buf->data is gunit8 *, so need to calculate the offset for subbuf */
 		subbuf = gst_buffer_create_sub(outbuf, (guint)(sub_offset - GST_BUFFER_OFFSET(outbuf))*element->bps, outsize);
 		if (!subbuf) {
@@ -157,7 +157,7 @@ static GstFlowReturn push_with_flag(CudaMultirateSPIIR *element, GstBuffer *outb
 		element->samples_out += out_len; 
 		start = sub_stop;
 		pushed_len += out_len;
-
+		}
 	}
 	g_assert(pushed_len == GST_BUFFER_OFFSET_END(outbuf) - GST_BUFFER_OFFSET(outbuf));
 
