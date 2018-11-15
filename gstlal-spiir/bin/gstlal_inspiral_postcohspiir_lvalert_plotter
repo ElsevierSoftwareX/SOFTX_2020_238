@@ -76,7 +76,7 @@ def call_plot_fits_func(pngname, fitsname, labelname, contour = None, colormap =
 	return proc.returncode
 
 
-def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob, verbose = False):
+def call_background_plot_func(parti_ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob, verbose = False):
 	cmd = []
 	cmd += ["gstlal_cohfar_plot_stats"]
 	cmd += ["--output", output_fname]
@@ -84,7 +84,7 @@ def call_background_plot_func(ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq
 	cmd += ["--zerolag-format", "single"]
 	cmd += ["--cohsnr", str(cohsnr)]
 	cmd += ["--cmbchisq", str(cmbchisq)]
-	cmd += ["--ifos", ifos]
+	cmd += ["--ifos", parti_ifos]
 	cmd += ["--far-factor", str(njob)]
 	if zerolag_fname:
 		cmd += ["--input-zerolag", zerolag_fname]
@@ -116,6 +116,7 @@ def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, even
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--ifos", metavar = "ifo-names", default = "H1L1V1", help = "Set the name of the ifo names (default = \"H1L1\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	options, gid_list = parser.parse_args()
@@ -158,7 +159,7 @@ coinc_inspiral_row = lsctables.CoincInspiralTable.get_table(xmldoc)[0]
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 postcoh_table_row = postcoh_table_def.PostcohInspiralTable.get_table(xmldoc)[0]
 process_params_table = lsctables.ProcessParamsTable.get_table(xmldoc)
-ifos = "".join(coinc_inspiral_row.ifos.split(","))
+event_ifos = "".join(coinc_inspiral_row.ifos.split(","))
 ifo_list = coinc_inspiral_row.ifos.split(",")
 path = sngl_inspiral_table[0].search
 for process_params in process_params_table:
@@ -176,8 +177,8 @@ for process_params in process_params_table:
 #
 pipe_skymap_name = postcoh_table_row.skymap_fname
 end_time = postcoh_table_row.end_time
-out_cohsnr_fits = 'gracedb/%s/%s_cohsnr_skymap.fits.gz' % (gid, ifos)
-out_cohsnr_png = 'gracedb/%s/%s_cohsnr_skymap.png' % (gid, ifos)
+out_cohsnr_fits = 'gracedb/%s/%s_cohsnr_skymap.fits.gz' % (gid, event_ifos)
+out_cohsnr_png = 'gracedb/%s/%s_cohsnr_skymap.png' % (gid, event_ifos)
 # follow Leo Single's email that fits name needs to be fixed
 out_prob_fits = 'gracedb/%s/spiir.fits.gz' % gid
 out_prob_png = 'gracedb/%s/spiir.png' % gid
@@ -195,7 +196,7 @@ if returncode == 0:
 	if options.verbose:
 		print("Uploading %s for event %s" % (out_prob_fits, gid))
 
-	gracedb.writeLog(gid, "%s prob skymap, with 90 percent contour" % ifos, filename = out_prob_fits, filecontents = open(out_prob_fits).read(), tag_name = "sky_loc")
+	gracedb.writeLog(gid, "%s prob skymap, with 90 percent contour" % event_ifos, filename = out_prob_fits, filecontents = open(out_prob_fits).read(), tag_name = "sky_loc")
 else:
 	msg += " can not make fits"
 
@@ -204,8 +205,8 @@ returncode = returncode & call_plot_fits_func(out_prob_png, out_prob_fits, "Prob
 if returncode == 0:
 	if options.verbose:
 		print("Uploading %s, %s for %s, %s " % (out_prob_png, out_cohsnr_png, gid, msg))
-	gracedb.writeLog(gid, "%s prob skymap" % ifos, filename = out_prob_png, filecontents = open(out_prob_png).read(), tag_name = "sky_loc")
-	gracedb.writeLog(gid, "%s cohsnr skymap" % ifos, filename = out_cohsnr_png, filecontents = open(out_cohsnr_png).read(), tag_name = "sky_loc")
+	gracedb.writeLog(gid, "%s prob skymap" % event_ifos, filename = out_prob_png, filecontents = open(out_prob_png).read(), tag_name = "sky_loc")
+	gracedb.writeLog(gid, "%s cohsnr skymap" % event_ifos, filename = out_cohsnr_png, filecontents = open(out_cohsnr_png).read(), tag_name = "sky_loc")
 else:
 	msg += " can not plot fits to pngs"
 	gracedb.writeLog(gid, "%s, check if it is due to that the trigger single SNR is below %s in the postcoh element for a skymap output" % (msg, str(cuda_postcoh_output_skymap)), filename = None, tag_name = "sky_loc")
@@ -233,9 +234,10 @@ dur_long = get_stats_duration_name(input_stats_fname_long)
 dur_mid = get_stats_duration_name(input_stats_fname_mid)
 dur_short = get_stats_duration_name(input_stats_fname_short)
 
-outfname_long = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifos, dur_long)
-outfname_mid = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifos, dur_mid)
-outfname_short = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifos, dur_short)
+parti_ifos = options.ifos
+outfname_long = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, parti_ifos, dur_long)
+outfname_mid = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, parti_ifos, dur_mid)
+outfname_short = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, parti_ifos, dur_short)
 
 # read in the cohsnr, cmbchisq, and far values from the event
 cohsnr = postcoh_table_row.cohsnr
@@ -245,9 +247,9 @@ far = postcoh_table_row.far
 # 
 # call the program to plot background stats
 #
-call_background_plot_func(ifos, input_stats_fname_long, input_zerolag_fname, cohsnr, cmbchisq, outfname_long, njob)
-call_background_plot_func(ifos, input_stats_fname_mid, input_zerolag_fname, cohsnr, cmbchisq, outfname_mid, njob)
-call_background_plot_func(ifos, input_stats_fname_short, input_zerolag_fname, cohsnr, cmbchisq, outfname_short, njob)
+call_background_plot_func(parti_ifos, input_stats_fname_long, input_zerolag_fname, cohsnr, cmbchisq, outfname_long, njob)
+call_background_plot_func(parti_ifos, input_stats_fname_mid, input_zerolag_fname, cohsnr, cmbchisq, outfname_mid, njob)
+call_background_plot_func(parti_ifos, input_stats_fname_short, input_zerolag_fname, cohsnr, cmbchisq, outfname_short, njob)
 
 #
 # Upload Background plots
@@ -255,17 +257,17 @@ call_background_plot_func(ifos, input_stats_fname_short, input_zerolag_fname, co
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_long, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (parti_ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_mid, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (parti_ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_short, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (parti_ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
 
 def get_snglsnr(snr_name, postcoh_table_row):
 	if snr_name == 'snr_L':
