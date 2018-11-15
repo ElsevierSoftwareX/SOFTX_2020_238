@@ -56,7 +56,7 @@ stages:
     - verify
 
 level0:gstlal:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: level0
   script:
     - cd gstlal
@@ -74,7 +74,7 @@ level0:gstlal:
     - schedules
     
 level1:gstlal-ugly:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: level1
   dependencies:
     - level0:gstlal
@@ -94,7 +94,7 @@ level1:gstlal-ugly:
     - schedules
 
 level2:gstlal-calibration:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: level2
   dependencies:
     - level1:gstlal-ugly
@@ -114,7 +114,7 @@ level2:gstlal-calibration:
     - schedules
 
 level2:gstlal-inspiral:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: level2
   dependencies:
     - level1:gstlal-ugly
@@ -134,7 +134,7 @@ level2:gstlal-inspiral:
     - schedules
     
 level2:gstlal-burst:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: level2
   dependencies:
     - level1:gstlal-ugly
@@ -154,7 +154,7 @@ level2:gstlal-burst:
     - schedules
   
 gstlal-verify:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: verify
   script:
     # -------------------------------------------------------------------
@@ -208,7 +208,7 @@ gstlal-verify:
   allow_failure: true
 
 test:gstlal:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: test-gstlal
   dependencies:
     - level0:gstlal
@@ -228,7 +228,7 @@ test:gstlal:
   allow_failure: true
 
 test:gstlal-inspiral:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: test-inspiral
   dependencies:
     - level2:gstlal-inspiral
@@ -242,7 +242,7 @@ test:gstlal-inspiral:
   allow_failure: true
 
 test:gstlal-burst:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: test-burst
   dependencies:
     - level2:gstlal-burst
@@ -255,7 +255,7 @@ test:gstlal-burst:
   allow_failure: true
 
 test:offline:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: test-offline
   dependencies:
     - level1:gstlal-ugly
