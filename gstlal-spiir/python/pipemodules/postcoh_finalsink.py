@@ -306,12 +306,12 @@ class FAPUpdater(object):
 			collected_fnames = []
 			for one_bank_fname in bank_fnames: 
 				this_walltime = int(one_bank_fname.split('.')[-3].split('_')[-1])
-				collected_walltimes = list(map(lambda x: int(os.split(x)[-1].split('_')[-1].split('.')[0]), collected_fnames))
+				collected_walltimes = list(map(lambda x: int(os.path.split(x)[-1].split('_')[-1].split('.')[0]), collected_fnames))
 				total_collected_walltime = sum(collected_walltimes)
 				if this_walltime >= self.combine_duration:
 					continue
 				elif len(collected_fnames) >= self.max_nstats_perbank or total_collected_walltime >= self.combine_duration:
-					start_banktime = int(os.split(collected_fnames[0])[-1].split('_')[-2])
+					start_banktime = int(os.path.split(collected_fnames[0])[-1].split('_')[-2])
 					fout = "%s/bank%s_stats_%d_%d.xml.gz" % (self.path, bankid, start_banktime, total_collected_walltime)
 
 					proc = self.call_calcfap(fout, ','.join(collected_fnames), self.ifos, total_collected_walltime, update_pdf = False, verbose = self.verbose)
