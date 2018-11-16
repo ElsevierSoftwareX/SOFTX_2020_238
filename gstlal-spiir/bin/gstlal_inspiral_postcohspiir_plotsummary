@@ -54,6 +54,7 @@ import os
 import re
 import operator
 import itertools
+import subprocess
 
 from glue import segments
 from glue.ligolw import dbtables
@@ -139,6 +140,7 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("--noninj-database", metavar = "noninj-database", default = None, help = "noninj database.")
+	parser.add_option("--background-xml", metavar = "background-histogram-xml", default = None, help = "background histogram xml.")
 	parser.add_option("--shift-database", metavar = "shift-database", default = None, help = "shifted database.")
 	parser.add_option("--inj-database", metavar = "inj-database", default = None, help = "one or multiple inj database.")
 	parser.add_option("--noninj-user-tag", metavar = "user-tag", default = "ALL", help = "Set the prefix for output filenames (default = \"ALL\").")
@@ -158,8 +160,10 @@ def parse_command_line():
  5. Background Vs Injection Plots pairwise (effective snr DET1 Vs. DET2...),
  6. Rate Vs Threshold (SNR histograms, IFAR histograms, ...)
  7. Injection Parameter Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
+ 8. Background Distribution Plots (The input parameters that went into inspinj, like mass1 vs mass2...)
 """)
 	parser.add_option("--far-threshold", metavar = "Hz", default = 1. / (30 * 86400), type = "float", help = "Set the FAR threshold for found injections (default = 1 / 30 days).")
+	parser.add_option("--njob", metavar = "N", default = 1, type = "int", help = "Number of jobs launched.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
@@ -621,7 +625,7 @@ SELECT
 			)
 		WHERE
 			sim_coinc_map.simulation_id == sim_inspiral.simulation_id
-			AND postcoh.far < ?
+			AND postcoh.far < ? AND postcoh.far > 0.0
 	)
 FROM
 	sim_inspiral
@@ -639,7 +643,7 @@ FROM
 		postcoh.event_id == coinc_event_map.coinc_event_id
 	)
 WHERE
-	postcoh.far < ?
+	postcoh.far < ? AND postcoh.far > 0.0
 	AND coinc_event_map.coinc_event_id IS NULL
 		""", (init_far_thresh, )):
 				self.myfa.append((values[0], values[-1]))
@@ -711,7 +715,7 @@ SELECT
 			)
 		WHERE
 			sim_coinc_map.simulation_id == sim_inspiral.simulation_id
-			AND postcoh.far < ?
+			AND postcoh.far < ? AND postcoh.far > 0.0
 	)
 FROM
 	sim_inspiral
@@ -907,7 +911,7 @@ FROM
 			far = values[-1]
 			del sim.process_id, sim.source, sim.simulation_id
 			del postcoh.event_id
-			if far <= self.far_thresh:
+			if far <= self.far_thresh and far > 0.0:
 				self.sim_postcoh_pairs.setdefault((sim.waveform, postcoh.ifos), []).append((sim, postcoh, far))
 
 	def finish(self):
@@ -1014,7 +1018,54 @@ FROM
 					axes.plot([sim.get_exp_snr(instrument) for sim, postcoh, far in pairs], [postcoh.get_snglsnr(instrument) for sim, postcoh, far in pairs], "kx")
 				yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 	
-	
+		
+#
+# =============================================================================
+#
+#			   Background --- Single Instrument
+#
+# =============================================================================
+#
+
+class BackgroundPlots(object):
+	def __init__(self, ifos, bgname, njob):
+		self.proc = []
+		self.bgname = bgname
+		self.ifos = ifos
+		self.njob = njob
+
+	def add_contents(self, contents):
+		# do nothing
+		self.output = "%s_08.png" % self.bgname.strip('.xml.gz')
+		self.ifo_list = re.findall('..', self.ifos)
+		self.snglifo_output = {}
+		for ifo in self.ifo_list:
+			self.snglifo_output[ifo] = "%s_%s_08.png" % (self.bgname.strip('.xml.gz'), ifo)
+
+	def __call_background_plot_func(self, ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output, njob):
+		cmd = []
+		cmd += ["gstlal_cohfar_plot_stats"]
+		cmd += ["--output", output]
+		cmd += ["--input-stats", stats_fname]
+		cmd += ["--zerolag-format", "single"]
+		cmd += ["--cohsnr", str(cohsnr)]
+		cmd += ["--cmbchisq", str(cmbchisq)]
+		cmd += ["--ifos", ifos]
+		cmd += ["--far-factor", str(njob)]
+		if zerolag_fname:
+			cmd += ["--input-zerolag", zerolag_fname]
+		print cmd
+		proc = subprocess.Popen(cmd)
+		proc_out, proc_err = proc.communicate()
+
+
+	def finish(self):
+		# plot the point cohsnr = 8, chisq = 1
+		self.__call_background_plot_func(self.ifos, self.bgname, None, 8, 1, self.output, self.njob)
+		for ifo in self.ifo_list:
+			self.__call_background_plot_func(ifo, self.bgname, None, 8, 1, self.snglifo_output[ifo], self.njob)
+		yield None, None, None
+
 #
 # =============================================================================
 #
@@ -1366,7 +1417,7 @@ class RateVsThreshold(object):
 		# FIXME: first should be rank
 		select_candidates = contents.connection.cursor().execute("""
 SELECT
-	postcoh.fap,
+	postcoh.rank,
 	postcoh.far,
 	postcoh.fap,
 	postcoh.cohsnr
@@ -1391,22 +1442,22 @@ WHERE
 	def finish(self):
 		if self.bg_snr:
 			try:
-				fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+				fig, axes = create_plot(x_label = r"SNR", y_label = r"rank")
 				axes.loglog(self.bg_snr, self.bg_rank, "kx", label = "Background")
 				axes.legend(loc = "upper left")
-				axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot (Closed Box)")
-				yield fig, "lr_vs_snr", False
+				axes.set_title(r"rank vs.\ SNR Scatter Plot (Closed Box)")
+				yield fig, "rank_vs_snr", False
 			except: # snr or rank has 0 values
 				pass
 
 		if self.bg_snr and self.zerolag_snr:
 			try:
-				fig, axes = create_plot(x_label = r"SNR", y_label = r"$\ln \Lambda$")
+				fig, axes = create_plot(x_label = r"SNR", y_label = r"rank")
 				axes.loglog(self.bg_snr, self.bg_rank, "kx", label = "Background")
 				axes.loglog(self.zerolag_snr, self.zerolag_rank, "bx", label = "Zero-lag")
 				axes.legend(loc = "upper left")
-				axes.set_title(r"$\ln \Lambda$ vs.\ SNR Scatter Plot")
-				yield fig, "lr_vs_snr", True
+				axes.set_title(r"rank vs.\ SNR Scatter Plot")
+				yield fig, "rank_vs_snr", True
 			except: # snr or rank has 0 values
 				pass
 
@@ -1427,40 +1478,40 @@ WHERE
 				yield fig, "count_vs_ifar", is_open_box
 
 			# if we have some values in ranks
-#			if ranks:
-#				fig, axes = create_plot(None, r"Number of Events")
-#				axes.semilogy()
-#
-#				zerolag_stats = numpy.array(sorted(ranks, reverse = True))
-#
-#				# we want to plot FAR(ln L) * livetime vs.
-#				# ln L, but we don't have access to the
-#				# ranking statistic data file where that
-#				# function is encoded.  instead, we rely on
-#				# the FARs stored in each coinc, together
-#				# with the ln L assigned to each coinc, to
-#				# provide us with a collection of samples
-#				# of that function.  to get more points, we
-#				# combine data from the zero-lag and
-#				# background coincs.  in the future,
-#				# perhaps this program could be provided
-#				# with the marginalized ranking statistic
-#				# PDF data file
-#
-#				expected_count_x = self.zerolag_rank + self.bg_rank
-#				order = range(len(expected_count_x))
-#				order.sort(key = lambda i: expected_count_x[i], reverse = True)
-#				expected_count_x = numpy.array(expected_count_x)[order]
-#				expected_count_y = numpy.array(self.zerolag_far + self.bg_far)[order] * self.livetime
-#
-#				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
-#				if is_open_box:
-#					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
-#				else:
-#					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
-#				axes.set_xlabel(r"$\ln \Lambda$")
-#				yield fig, "count_vs_lr", is_open_box
-#
+			if ranks:
+				fig, axes = create_plot(None, r"Number of Events")
+				axes.semilogy()
+
+				zerolag_stats = numpy.array(sorted(ranks, reverse = True))
+
+				# we want to plot FAR(ln L) * livetime vs.
+				# ln L, but we don't have access to the
+				# ranking statistic data file where that
+				# function is encoded.  instead, we rely on
+				# the FARs stored in each coinc, together
+				# with the ln L assigned to each coinc, to
+				# provide us with a collection of samples
+				# of that function.  to get more points, we
+				# combine data from the zero-lag and
+				# background coincs.  in the future,
+				# perhaps this program could be provided
+				# with the marginalized ranking statistic
+				# PDF data file
+
+				expected_count_x = self.zerolag_rank + self.bg_rank
+				order = range(len(expected_count_x))
+				order.sort(key = lambda i: expected_count_x[i], reverse = True)
+				expected_count_x = numpy.array(expected_count_x)[order]
+				expected_count_y = numpy.array(self.zerolag_far + self.bg_far)[order] * self.livetime
+
+				create_farplot(axes, zerolag_stats, expected_count_x, expected_count_y, is_open_box, xlim = (None, 23.), max_events = 10000)
+				if is_open_box:
+					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
+				else:
+					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold (Closed Box)")
+				axes.set_xlabel(r"$\ln \Lambda$")
+				yield fig, "count_vs_rank", is_open_box
+
 
 #
 # =============================================================================
@@ -1523,7 +1574,8 @@ PlotDescriptionMap = {
 		4: BackgroundVsInjectionPlotsMulti.__name__,
 		5: RateVsThreshold.__name__,
 		6: InjectionParameterDistributionPlots.__name__,
-		7: ROCPlots.__name__
+		7: ROCPlots.__name__,
+		8: BackgroundPlots.__name__
 }
 
 if options.noninj_database:
@@ -1534,7 +1586,8 @@ if options.noninj_database:
 	# need the shift database to plot rates, see shift
 	rate_plot = RateVsThreshold("noninj")
 	plots.append(rate_plot)
-	plot_group = zip([11,0,5], plots)
+	plots.append(BackgroundPlots(options.ifos, options.background_xml, options.njob))
+	plot_group = zip([11,0,5,8], plots)
 	dbname = options.noninj_database
 	contents = setup_plot(dbname, plot_group, options, options.noninj_user_tag, wiki)
 	finish_plot(contents, plot_group, options, options.noninj_user_tag)

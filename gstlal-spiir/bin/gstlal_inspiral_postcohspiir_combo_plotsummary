@@ -35,7 +35,8 @@ def parse_command_line():
 		description = __doc__
 	)
 
-	parser.add_option("--pipeline-output", metavar = "000/zerolag.xmlgz,001/zerolag.xml.gz", default = None, help = "Pipeline output names (required)")
+	parser.add_option("--pipeline-output-zerolag", metavar = "000/zerolag.xml.gz,001/zerolag.xml.gz", default = None, help = "Pipeline output names (required)")
+	parser.add_option("--pipeline-output-background", metavar = "000/000_marginalized_1w.xml.gz,001/001_marginalized_1w.xml.gz", default = None, help = "Pipeline output background names (required)")
 	parser.add_option("--usertag", metavar = "inj0|others", default = None, help = "Output usertag (required)")
 	parser.add_option("--outpath", metavar = "dirname", default = None, help = "Output path of plots (required)")
 	parser.add_option("--common-start", metavar = int, default = None, help = "Set the common start of all the files (required).")
@@ -51,7 +52,7 @@ def parse_command_line():
 	
 	options, tmp = parser.parse_args()
 
-	required_options = ["pipeline_output", "usertag", "outpath", "common_start", "common_duration", "ifos"]
+	required_options = ["pipeline_output_zerolag", "usertag", "outpath", "common_start", "common_duration", "ifos"]
 	missing_options = []
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
@@ -59,6 +60,20 @@ def parse_command_line():
 
 
 	return options
+
+def call_calcfap(fout, fin, ifos, walltime, update_pdf = True, verbose = False):
+	cmd = []
+	cmd += ["gstlal_cohfar_calc_fap"]
+	cmd += ["--input", fin]
+	cmd += ["--input-format", "stats"]
+	cmd += ["--output", fout]
+	cmd += ["--ifos", ifos]
+	if update_pdf:
+		cmd += ["--update-pdf"]
+	if verbose:
+		print cmd
+	proc = subprocess.Popen(cmd)
+	return proc
 
 def call_injfind(xml, window = '0.9', verbose = False):
 	cmd = []
@@ -113,7 +128,7 @@ def call_plotsummary_inj(output_dir, ifos, sqlite_file, usertag, segmentsname = 
 	proc.wait()
 
 
-def call_plotsummary_noninj(output_dir, ifos, sqlite_file, usertag, segmentsname = "postcohprocessed", verbose = False):
+def call_plotsummary_noninj(output_dir, ifos, sqlite_file, usertag, njob = 1, stats = None, segmentsname = "postcohprocessed", verbose = False):
 
 	cmd = []
 	cmd += ["gstlal_inspiral_postcohspiir_plotsummary"]
@@ -122,6 +137,9 @@ def call_plotsummary_noninj(output_dir, ifos, sqlite_file, usertag, segmentsname
 	cmd += ["--segments-name", segmentsname]
 	cmd += ["--noninj-user-tag", usertag]
 	cmd += ["--output-dir", output_dir]
+	cmd += ["--njob", str(njob)]
+	if stats:
+		cmd += ["--background-xml", stats]
 	if verbose:
 		cmd += ["--verbose"]
 		print cmd
@@ -160,12 +178,12 @@ common_start = int(options.common_start)
 common_duration = int(options.common_duration)
 outinjxml = None
 if options.injxml:
-	outinjxml = "%s_%d_%d.xml" % (options.injxml.split('.')[0], common_start, common_duration)
+	outinjxml = "%s_%d_%d.xml" % (os.path.split(options.injxml)[-1].split('.')[0], common_start, common_duration)
 	common_end = common_start + common_duration
 	call_extract_injxml(outinjxml, options.injxml, common_start, common_end, verbose = options.verbose)
 		
 # combine zerolags, one segment file, and injection to a sqlite
-zerolag_xml_list = options.pipeline_output.split(',')
+zerolag_xml_list = options.pipeline_output_zerolag.split(',')
 outsqlite = get_outname(options.outpath, options.ifos, common_start, common_duration, "sqlite", injxml = outinjxml)
 call_xml2sqlite(outsqlite, injxml = outinjxml, segmentxml = options.segmentxml, zerolagxml = zerolag_xml_list, tmpspace = options.tmp_space, verbose = options.verbose)
 	
@@ -173,6 +191,12 @@ outxml = get_outname(options.outpath, options.ifos, common_start, common_duratio
 # extract sqlite to xml
 call_sqlite2xml(outxml, outsqlite, options.tmp_space, verbose = options.verbose)
 		
+# combine background stats
+if options.pipeline_output_background:
+	outstats = get_outname(options.outpath, "margi", common_start, common_duration, "xml.gz")
+	proc = call_calcfap(outstats, options.pipeline_output_background, options.ifos, common_duration, verbose = options.verbose)
+	proc.wait()
+
 if options.injxml:
 	# find injections
 	call_injfind(outxml, verbose = options.verbose)
@@ -184,5 +208,5 @@ call_xml2sqlite(outsqlite, injxml = None, segmentxml = None, zerolagxml = [outxm
 if options.injxml:
 	call_plotsummary_inj(options.outpath, options.ifos, outsqlite, options.usertag, segmentsname = options.segments_name, verbose = options.verbose)
 else:
-	call_plotsummary_noninj(options.outpath, options.ifos, outsqlite, options.usertag, segmentsname = options.segments_name, verbose = options.verbose)
+	call_plotsummary_noninj(options.outpath, options.ifos, outsqlite, options.usertag, njob = len(zerolag_xml_list), stats = outstats, segmentsname = options.segments_name, verbose = options.verbose)
 

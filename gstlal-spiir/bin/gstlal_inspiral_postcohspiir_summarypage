@@ -2,7 +2,7 @@
 
 import sys, os, glob, shutil, time
 import subprocess
-from gstlal import webpage
+from gstlal.workflow import webpage
 from optparse import OptionParser
 
 def parse_command_line():
@@ -206,20 +206,20 @@ inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_
 # Add sensitivity content
 #
 
-sens_about = webpage.elem("p", ["""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
-
-sens_div_list = [sens_about]
-for tag in opts.output_user_tag:
-	try:
-		images = webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
-		if len(images.content) > 0:
-			sens_section = webpage.section("Binned by SOURCE_TYPE")
-			sens_section += images
-			sens_div_list.append(sens_section)
-	except:
-		pass
-
-sens_div = sens(sens_div_list)
+#sens_about = webpage.elem("p", ["""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
+#
+#sens_div_list = [sens_about]
+#for tag in opts.output_user_tag:
+#	try:
+#		images = webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
+#		if len(images.content) > 0:
+#			sens_section = webpage.section("Binned by SOURCE_TYPE")
+#			sens_section += images
+#			sens_div_list.append(sens_section)
+#	except:
+#		pass
+#
+#sens_div = sens(sens_div_list)
 
 
 #
@@ -229,22 +229,21 @@ sens_div = sens(sens_div_list)
 
 back_about = webpage.elem("p", ["This page shows the ingredients that go into ranking events and determining the False alarm probability."])
 
-back_snrchi = webpage.section("SNR and chi-squared")
-back_trigs = webpage.section("Background Triggers")
-#back_ratio = webpage.section("SNR ratios")
-back_rate = webpage.section("Rates")
+back_snrchi = webpage.section("CohSNR and chi-squared")
+#back_trigs = webpage.section("Background Triggers")
+#back_rate = webpage.section("Rates")
 
-back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
-back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
-back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'), "Single Detector Likelihood Ratios")
+back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*margi*.png'), "Multi and Single Detector Background CohSNR-chisq Distributions")
+#back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
+back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*RANK_SNRCHI2*.png'), "Single Detector Likelihood Ratios")
 
-back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_eta_vs_snr_*.png'), "Single detector triggers coincident in time-shifted analyses.")
-back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
-back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
+#back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_eta_vs_snr_*.png'), "Single detector triggers coincident in time-shifted analyses.")
+#back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
+#back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
 
 #back_ratio += webpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'), "")
 
-back_rate +=  webpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'), "")
+#back_rate +=  webpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'), "")
 
 
 
@@ -253,21 +252,22 @@ back_rate +=  webpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'), ""
 #
 
 
-chisq_about = webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])
-
-chisq_dist = webpage.section("Chi-squared Distributions")
-chisq_snr = webpage.section("Signal-to-Noise Ratio")
-chisq_deff = webpage.section("Effective Distance")
-
-chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
-chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_mc_vs_rho_*closedbox*.png'), "Chi-squared vs chirp mass for single detectors after coincidence.")
-
-#chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'), "Comparison of SNR in pairs of detectors.")
-
-chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'), "Comparison of effective distance in pairs of detectors.")
+#chisq_about = webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])
+#
+#chisq_dist = webpage.section("Chi-squared Distributions")
+#chisq_snr = webpage.section("Signal-to-Noise Ratio")
+#chisq_deff = webpage.section("Effective Distance")
+#
+#chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+#chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_mc_vs_rho_*closedbox*.png'), "Chi-squared vs chirp mass for single detectors after coincidence.")
+#
+##chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'), "Comparison of SNR in pairs of detectors.")
+#
+#chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
 #back_div = back([back_about, back_snrchi, back_trigs, back_ratio, back_rate, chisq_about, chisq_dist, chisq_deff])
-back_div = back([back_about, back_snrchi, back_trigs, back_rate, chisq_about, chisq_dist, chisq_deff])
+#back_div = back([back_about, back_snrchi, back_trigs, back_rate, chisq_about, chisq_dist, chisq_deff])
+back_div = back([back_about, back_snrchi])
 
 
 #
@@ -279,16 +279,17 @@ money_about = webpage.elem("p", ["This section provides the detection statistic 
 money_ifar = webpage.section("Rate vs. Threshold")
 money_table = webpage.section("Loudest Table")
 
-money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
+# FIXME: we don't have closed box yet
+# money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
 try:
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "%sbgsummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_bgsummary_table.json' % opts.output_user_tag[0]), "%s_bgsummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
 except:
 	pass
 money_table += [webpage.elem("p", ["Closed Box Summary Table"])]
-money_table += [webpage.elem("div", [], "id=%sbgsummary_table" % opts.output_user_tag[0])]
+money_table += [webpage.elem("div", [], "id=%s_bgsummary_table" % opts.output_user_tag[0])]
+
 
 money_div = money([money_about, money_ifar, money_table])
-
 
 #
 # Open Box plots
@@ -299,23 +300,24 @@ if opts.open_box:
 
 	back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
 
-	chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+	# chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
 
-	chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'), "Comparison of SNR in pairs of detectors.")
+	# chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'), "Comparison of SNR in pairs of detectors.")
 
-	chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
+	# chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
 	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "%ssummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
+	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_summary_table.json' % opts.output_user_tag[0]), "%s_summary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
 	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
-	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
-
+	money_table += [webpage.elem("div", [], "id=%s_summary_table" % opts.output_user_tag[0])]
+	# cover the money_div from shifted table
+	money_div = money([money_about, money_ifar, money_table])
 #
 # Add search documentation
 #
 
 about_search = webpage.section("Search Plan Documentation")
-about_search += [webpage.elem("iframe", [], """src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true" width=100%% height=100%% id=search_doc_div""")]
+about_search += [webpage.elem("iframe", [], """src="https://ldas-jobs.ligo.caltech.edu/~spiir/O3/search_plan" width=100%% height=100%% id=search_doc_div""")]
 
 about_div = about_doc([about_search])
 
@@ -324,7 +326,7 @@ about_div = about_doc([about_search])
 #
 
 about_shifts = webpage.section("Search Run Schedule")
-about_shifts += [webpage.elem("iframe", [], """width=100% height=100% src="https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false" id=shift_doc_div""")]
+about_shifts += [webpage.elem("iframe", [], """width=100% height=100% src="https://ldas-jobs.ligo.caltech.edu/~spiir/O3/search_schedule" id=shift_doc_div""")]
 
 shift_div = sched_doc([about_shifts])
 
@@ -333,7 +335,8 @@ shift_div = sched_doc([about_shifts])
 #
 
 
-thispage += [summary_div, inj_params_div, inj_recovery_div, sens_div, back_div, money_div, about_div, shift_div]
+#thispage += [summary_div, inj_params_div, inj_recovery_div, sens_div, back_div, money_div, about_div, shift_div]
+thispage += [summary_div, inj_params_div, inj_recovery_div, back_div, money_div, about_div, shift_div]
 
 
 #
@@ -426,7 +429,7 @@ money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_
 
 # Include loudest table
 try:
-	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
+	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_bgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
 except:
 	pass
 money_ifar_lite += [webpage.elem("p", ["Closed Box Summary Table"])]
@@ -442,7 +445,7 @@ if opts.open_box:
 	chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
 
 	money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
+	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_summary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
 	money_ifar_lite += [webpage.elem("p", ["Open Box Summary Table"])]
 	money_ifar_lite += [webpage.elem("div", [], "id=zlsummary_table_lite_div")]
 
