@@ -46,14 +46,13 @@ from glue import iterutils
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from glue.text_progress_bar import ProgressBar
-from pylal import git_version
 
 from gstlal.pipemodules.postcohtable import postcoh_table_def 
 from glue.ligolw import ilwd
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
-__version__ = "git id %s" % git_version.id
-__date__ = git_version.date
+#__version__ = "git id %s" % git_version.id
+#__date__ = git_version.date
 
 
 #
