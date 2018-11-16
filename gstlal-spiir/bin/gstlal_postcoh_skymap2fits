@@ -66,6 +66,21 @@ def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler,
 		result = array.get_array(root, array_name).array 
 	return result
 
+def logsumexpo(a):
+
+	a_max = np.amax(a)
+	if a_max.ndim > 0:
+        	a_max[~np.isfinite(a_max)] = 0
+	elif not np.isfinite(a_max):
+        	a_max = 0
+	tmp = np.exp(a - a_max)
+	with np.errstate(divide='ignore'):
+	        s = np.sum(tmp)
+		out = np.log(s)
+	a_max = np.squeeze(a_max)
+	out += a_max
+	return out
+
 
 parser = OptionParser(
   description = __doc__,
@@ -128,8 +143,10 @@ for i in range(npix):
         prob_null = 1 - sp.special.gammainc(ndof/2.0, nullsnrsq_skymap[i]/2)
         log_prob_null = np.log(prob_null)
         log_prob[i] = np.log(4*(np.pi**2)/Det_array[i]) + (cohsnrsq_skymap[i]/8) + log_prob_null
-#Normalizing using a stable function. Exp shoots up to large values.
-log_den_probability = log_prob - np.log(np.sum(np.exp(log_prob)))
+# Normalizing using a stable function. Exp shoots up to large values.
+log_den_probability = log_prob - logsumexpo(log_prob)
+
+# log_den_probability = log_prob - np.log(np.sum(np.exp(log_prob)))
 #log_den_probability = log_prob
 den_probability = np.exp(log_den_probability)
 

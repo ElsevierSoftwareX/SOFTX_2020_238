@@ -45,6 +45,7 @@ def call_update_map(output, ifo_horizons, gps_time, chealpix_order, verbose = Fa
 def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
 	parser.add_option("--data-loc", metavar = "path", default = "/dev/shm/llhoft/H1", help = "Online data location (required)")
+	parser.add_option("--data-keyword", metavar = "name", default = "H1", help = "Online data keyword (optional)")
 	parser.add_option("--output", metavar = "filename", default = "H1L1V1_detrsp_map.xml", help = "Online detrsp map filename (required)")
 	parser.add_option("--ifo-horizons", metavar = "H1:xx,L1:xx", help = "IFO horizons in MPC (required)")
 	parser.add_option("--chealpix-order", metavar = "N", default = "4", help = "Set the chealpix order, 4 = 3072 pixels, 5 = 12228 pixels. (requied).")
@@ -65,18 +66,15 @@ options = parse_command_line()
 
 while True:
 	# list all the files in the data_loc folder and find the latest one
-	ls_proc = subprocess.Popen(["ls", options.data_loc], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-	ls_out = ""
-	try:
-		ls_out = subprocess.check_output(["grep", "H1"], stdin = ls_proc.stdout)
-	except:
-		print "no file yet"
+	ls_out = os.listdir(options.data_loc)
+	grep_out = [fname for fname in ls_out if options.data_keyword in fname]
+	if len(grep_out) == 0:
+		print "no data file yet"
 		time.sleep(int(options.period))
 		continue
-	ls_proc.wait()
-	ls_fnames = ls_out.split("\n")
-	
-	data_name = ls_fnames[-2] # [-1] could be ""
+
+
+	data_name = grep_out[-1] # lastest timestamp
 	search_result = re.search(r'\d{7,11}', data_name)
 	try:
 		gps_time = search_result.group()

@@ -15,9 +15,10 @@ import subprocess
 def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
 	parser.add_option("--data-loc", metavar = "path", default = "/dev/shm/llhoft/H1", help = "Online data location (required)")
+	parser.add_option("--data-keyword", metavar = "name", default = "H1", help = "Online data keyword (optional)")
 	parser.add_option("--skymap-loc", metavar = "path", default = "H1L1V1_skymap,H1L1_skymap,H1V1_skymap,L1V1_skymap", help = "Online skymap map dump locations (required)")
 	parser.add_option("--period", metavar = "N", help = "Update interval (required).")
-	parser.add_option("--clean-days-ago", metavar = "N", help = "Clean files that how many days ago (required).")
+	parser.add_option("--clean-days-ago", metavar = "0.N", type = "float", default = "0.2", help = "Clean files that how many days ago (required).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, tmp = parser.parse_args()
@@ -35,35 +36,28 @@ rm_fnames = []
 
 while True:
 	# list all the files in the data_loc folder and find the latest one
-	ls_proc = subprocess.Popen(["ls", options.data_loc], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-	ls_out = ""
-	try:
-		ls_out = subprocess.check_output(["grep", "H1"], stdin = ls_proc.stdout)
-	except:
+	ls_out = os.listdir(options.data_loc)
+	grep_out = [fname for fname in ls_out if options.data_keyword in fname]
+	if len(grep_out) == 0:
 		print "no data file yet"
 		time.sleep(int(options.period))
 		continue
-	ls_proc.wait()
-	ls_fnames = ls_out.split("\n")
-	
-	data_name = ls_fnames[-2] # [-1] could be ""
+
+	# compute the cut gps time from the latest timestamp	
+	data_name = grep_out[-1] 
 	search_result = re.search(r'\d{7,11}', data_name)
 	try:
 		cur_gps_time = search_result.group()
-		cut_gps_time = int(cur_gps_time) - int(options.clean_days_ago) * 86400
+		cut_gps_time = int(cur_gps_time) - int(options.clean_days_ago * 86400)
 	except:
 		raise ValueError("gps_time should be the 6+ digits of the given name, could not find the digits from %s" % data_name)
 
 	if options.verbose:
 		print "current data time %d gps time, cut at %d" % (int(cur_gps_time), cut_gps_time)
 
+	# remove files in the specified locations if older than the cut time
 	for one_loc in options.skymap_loc.split(','):
-		try:
-			ls_out = subprocess.check_output(["ls", one_loc])
-		except:
-			print "no file in %s yet" % one_loc
-			continue
-		ls_fnames = ls_out.split("\n")
+		ls_fnames = os.listdir(one_loc)
 		for this_file in ls_fnames:
 			search_result = re.search(r'\d{7,11}', this_file)
 			try:
@@ -71,10 +65,12 @@ while True:
 				if int(this_gps_time) < cut_gps_time:
 					rm_fnames.append("%s/%s" % (one_loc, this_file))
 				if len(rm_fnames) > 100:
+					# causing the log too large, do not use verbose in online run
 					if options.verbose:
 						print "cleaning ", rm_fnames
 					map(lambda x: os.remove(x), rm_fnames)
 					rm_fnames = []
 			except:
-				print "no gps time in this file %s, ignored" % this_file
+				if options.verbose:
+					print "no gps time in this file %s, ignored" % this_file
 	time.sleep(int(options.period))
