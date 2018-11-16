@@ -96,7 +96,7 @@ create_detresponse_skymap(
 	//LIGOTimeGPS *out_cur = XLALGPSTimeNow(&gps_cur);
 	//if (out_cur == NULL)
 	//	printf("can not find current gps time");
-	printf("current gps time %d, %d for detector response\n", gps_cur.gpsSeconds, gps_cur.gpsNanoSeconds);
+	// printf("current gps time %d, %d for detector response\n", gps_cur.gpsSeconds, gps_cur.gpsNanoSeconds);
 	LIGOTimeGPS gps_start = {gps_cur.gpsSeconds, 0}; 
 	LIGOTimeGPS gps_end = {gps_cur.gpsSeconds + 24*3600, 0};
 	LIGOTimeGPS gps_step = {ingps_step, 0}; 
@@ -385,8 +385,19 @@ int main(int argc, char *argv[])
 	long gps = atoi(*pgps);
 	RspSkymap *rsp_map = create_detresponse_skymap(ifo_names, nifo, horizons, 1800 ,norder, gps);
 
-	to_xml(rsp_map, *pout, mapname->str, 0);
+   	GString *tmp_fname = g_string_new(*pout);
+    g_string_append_printf(tmp_fname, "_next");
+ 
+	if (to_xml(rsp_map, tmp_fname->str, mapname->str, 0) < 0)
+		return -1;
+
+	if (g_rename(tmp_fname->str, *pout) != 0) {
+		fprintf(stderr, "unable to rename to %s", *pout);
+		return -1;
+	}
+
 	g_string_free(mapname, TRUE);
+	g_string_free(tmp_fname, TRUE);
 
 	for(iifo=0;iifo<nifo;iifo++) 
 		free(ifo_names[iifo]);
