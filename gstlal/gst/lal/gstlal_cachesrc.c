@@ -580,6 +580,16 @@ next:
 	}
 
 	fd = open(path, O_RDONLY);
+	int tries = 1;
+	/* patch to walk around file access problem */
+	while (tries < 500) {
+	if(fd >= 0)
+		break;
+	tries++;
+	sleep(180); // sleep 3 mins
+	fd = open(path, O_RDONLY);
+	}
+
 	if(fd < 0) {
 		/*
 		 * failed to open file.  if the next entry in the cache has
