@@ -289,11 +289,11 @@ class FAPUpdater(object):
 		logging.info("combine_stats")
 		# max number of files to be combined
 		ls_fnames = self.get_fnames("bank")
-		if ls_fnames is None:
+		if ls_fnames is None or len(ls_fnames) == 0:
 			return
 	
 		# FIXME: decode information assuming fixed stats name e.g. bank16_stats_1187008882_1800.xml.gz
-		# decode to {'16', ['bank16_stats_1187008882_1800.xml.gz', '..']}
+		# decode to {'16', ['bank16_stats_1187008882_1800.xml.gz', ..]}
 		stats_dict = {}
 		for ifname in ls_fnames:
 			this_bankid = ifname.split('_')[0][4:]
@@ -305,13 +305,13 @@ class FAPUpdater(object):
 		for bankid,bank_fnames in stats_dict.items():
 			collected_fnames = []
 			for one_bank_fname in bank_fnames: 
-				this_walltime = int(one_bank_fname.split('.')[0].split('_')[-1])
-				collected_walltimes = list(map(lambda x: int(x.split('_')[-1].split('.')[0]), collected_fnames))
+				this_walltime = int(one_bank_fname.split('.')[-3].split('_')[-1])
+				collected_walltimes = list(map(lambda x: int(os.split(x)[-1].split('_')[-1].split('.')[0]), collected_fnames))
 				total_collected_walltime = sum(collected_walltimes)
 				if this_walltime >= self.combine_duration:
 					continue
 				elif len(collected_fnames) >= self.max_nstats_perbank or total_collected_walltime >= self.combine_duration:
-					start_banktime = int(collected_fnames[0].split('_')[2])
+					start_banktime = int(os.split(collected_fnames[0])[-1].split('_')[-2])
 					fout = "%s/bank%s_stats_%d_%d.xml.gz" % (self.path, bankid, start_banktime, total_collected_walltime)
 
 					proc = self.call_calcfap(fout, ','.join(collected_fnames), self.ifos, total_collected_walltime, update_pdf = False, verbose = self.verbose)
@@ -344,7 +344,7 @@ class FinalSink(object):
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded chisq_ratio_thresh to veto 
-		self.chisq_ratio_thresh = 100
+		self.chisq_ratio_thresh = 20
 		self.superevent_thresh = superevent_thresh
 		self.nevent_clustered = 0
 		self.singlefar_veto_thresh = singlefar_veto_thresh
@@ -425,7 +425,7 @@ class FinalSink(object):
 		# FIXME: any two of the sngl fars need to be < singlefar_veto_thresh 
 		# single far veto for high-significance trigger
 		ifo_active=[self.candidate.chisq_H!=0,self.candidate.chisq_L!=0,self.candidate.chisq_V!=0]
-		ifo_fars_ok=[self.candidate.far_h < self.singlefar_veto_thresh, self.candidate.far_l < self.singlefar_veto_thresh, self.candidate.far_v < self.singlefar_veto_thresh]
+		ifo_fars_ok=[self.candidate.far_h < self.singlefar_veto_thresh and self.candidate.far_h > 0., self.candidate.far_l < self.singlefar_veto_thresh and self.candidate.far_l > 0., self.candidate.far_v < self.singlefar_veto_thresh and self.candidate.far_v > 0. ]
 		ifo_chisqs=[self.candidate.chisq_H,self.candidate.chisq_L,self.candidate.chisq_V]
 		if self.candidate.far < self.superevent_thresh:
 			return sum([i for (i,v) in zip(ifo_fars_ok,ifo_active) if v])>=2 and all((lambda x: [i1/i2 < self.chisq_ratio_thresh for i1 in x for i2 in x])([i for (i,v) in zip(ifo_chisqs,ifo_active) if v]))
