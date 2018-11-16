@@ -117,6 +117,7 @@ enum property {
 	ARG_UPDATE_AFTER_GAP,
 	ARG_USE_FIRST_AFTER_GAP,
 	ARG_UPDATE_DELAY_SAMPLES,
+	ARG_PARALLEL_MODE,
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
 	ARG_MAKE_FIR_FILTERS,
@@ -514,15 +515,18 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	g_assert(!(src_size % element->unit_size)); \
 	src_size /= element->unit_size; \
  \
-	gint64 i, j, k, m, num_ffts, k_start, k_stop, first_index, first_index2, fd_fft_length, fd_tf_length, stride, num_tfs; \
+	gint64 i, j, k, m, num_ffts, num_ffts_in_avg_if_nogap, k_start, k_stop, first_index, first_index2, fd_fft_length, fd_tf_length, stride, num_tfs; \
 	fd_fft_length = element->fft_length / 2 + 1; \
 	fd_tf_length = element->fir_length / 2 + 1; \
 	stride = element->fft_length - element->fft_overlap; \
 	num_tfs = element->channels - 1; \
 	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
  \
-	/* Determine how many fft's we will calculate from combined leftover and new input data */ \
-	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg); \
+	/* How many FFTs would there be in the average if there had been no gaps in the data used for transfer functions? Useful for parallel mode. */ \
+	num_ffts_in_avg_if_nogap = element->parallel_mode ? (element->sample_count - (gint64) src_size - element->update_samples - element->fft_overlap) / stride : element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg; \
+ \
+	/* Determine how many FFTs we will calculate from combined leftover and new input data */ \
+	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts - num_ffts_in_avg_if_nogap); \
 	num_ffts = minimum64(num_ffts, (element->workspace.w ## S_OR_D ## pf.num_leftover + (gint64) src_size - element->fft_overlap) / stride); \
 	if(num_ffts < 0) \
 		num_ffts = 0; \
@@ -642,10 +646,11 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	} \
  \
 	element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg += num_ffts; \
+	num_ffts_in_avg_if_nogap += num_ffts; \
  \
-	/* Determine how many fft's we will calculate from only new input samples */ \
-	num_ffts = (element->sample_count - element->update_samples - element->fft_overlap) / stride - element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg; /* how many more we could compute */ \
-	num_ffts = minimum64(num_ffts, element->num_ffts - element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg); /* how many more we need to update the transfer functions */ \
+	/* Determine how many FFTs we will calculate from only new input samples, computed differently in parallel mode */ \
+	num_ffts = (element->sample_count - element->update_samples - element->fft_overlap) / stride - num_ffts_in_avg_if_nogap; /* how many more we could compute */ \
+	num_ffts = minimum64(num_ffts, element->num_ffts - num_ffts_in_avg_if_nogap); /* how many more we need to update transfer functions */ \
 	if(num_ffts < 0) \
 		num_ffts = 0; \
  \
@@ -765,14 +770,16 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	} \
  \
 	element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg += num_ffts; \
+	num_ffts_in_avg_if_nogap += num_ffts; \
 	g_assert_cmpint(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg, <=, element->num_ffts); \
+	g_assert_cmpint(num_ffts_in_avg_if_nogap, <=, element->num_ffts); \
  \
 	/* Now store samples for the next buffer. First, find the sample count of the start of the next fft */ \
 	gint64 sample_count_next_fft; \
-	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) \
+	if(num_ffts_in_avg_if_nogap == element->num_ffts) \
 		sample_count_next_fft = 2 * element->update_samples + element->num_ffts * stride + element->fft_overlap + 1; /* If we finished updating the transfer functions */ \
 	else \
-		sample_count_next_fft = element->update_samples + 1 + element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride; \
+		sample_count_next_fft = element->update_samples + 1 + num_ffts_in_avg_if_nogap * stride; \
  \
 	/* Deal with any leftover samples that will remain leftover */ \
 	first_index = (sample_count_next_fft - 1 - (element->sample_count - (gint64) src_size - element->workspace.w ## S_OR_D ## pf.num_leftover)) * element->channels; \
@@ -792,7 +799,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	element->workspace.w ## S_OR_D ## pf.num_leftover = maximum64(0, element->sample_count + 1 - sample_count_next_fft); \
  \
 	/* Finally, update transfer functions if ready */ \
-	if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts || (element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped >= element->min_ffts && *element->transfer_functions == 0.0)) { \
+	if(num_ffts_in_avg_if_nogap == element->num_ffts || (!element->parallel_mode && num_ffts_in_avg_if_nogap - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped >= element->min_ffts && *element->transfer_functions == 0.0)) { \
 		if(element->use_median) { \
 			/* Then we still need to fill the autocorrelation matrix with median values */ \
 			gint64 median_length = element->num_ffts / 2 + 1; \
@@ -844,17 +851,19 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 			/* Write transfer functions to the screen or a file if we want */ \
 			if(element->write_to_screen || element->filename) \
-				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
+				write_transfer_functions(element->transfer_functions, gst_element_get_name(element), element->rate / 2.0 / (fd_tf_length - 1.0), fd_tf_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (num_ffts_in_avg_if_nogap * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
 			/* If this is this first transfer function after a gap, we may wish to store it */ \
 			if(element->use_first_after_gap && !element->num_tfs_since_gap) { \
 				for(i = 0; i < num_tfs * fd_tf_length; i++) \
 					element->post_gap_transfer_functions[i] = element->transfer_functions[i]; \
 			} \
 			element->num_tfs_since_gap++; \
-		} else \
+		} else if (element->parallel_mode) \
 			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
+		else \
+			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Waiting for the next cycle."); \
  \
-		if(element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg == element->num_ffts) { \
+		if(num_ffts_in_avg_if_nogap == element->num_ffts) { \
 			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) + src_size - element->update_delay_samples) % (element->update_samples + element->num_ffts * stride + element->fft_overlap); \
 			if(element->sample_count > element->update_samples) \
 				element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
@@ -871,7 +880,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
 				/* Write FIR filters to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) \
-					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
+					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (num_ffts_in_avg_if_nogap * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
 				/* If this is this first FIR filter after a gap, we may wish to store it */ \
 				if(element->use_first_after_gap && element->num_tfs_since_gap == 1) { \
 					for(i = 0; i < num_tfs * element->fir_length; i++) \
@@ -913,10 +922,12 @@ static gboolean start(GstBaseSink *sink) {
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 
-	/* At start of stream, we want the element to compute a transfer function as soon as possible */
-	gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
-	gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
-	element->sample_count = element->update_samples - (short_samples * element->update_delay_samples + long_samples - 1) / long_samples;
+	/* At start of stream, we want the element to compute a transfer function as soon as possible, unless in parallel mode */
+	if(!element->parallel_mode) {
+		gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+		gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+		element->sample_count = element->update_samples - (short_samples * element->update_delay_samples + long_samples - 1) / long_samples;
+	}
 	element->computed_full_tfs = FALSE;
 
 	/* If we are writing output to file, and a file already exists with the same name, remove it */
@@ -958,7 +969,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 	gboolean success = TRUE;
 	GST_DEBUG_OBJECT(element, "Got %s event on sink pad", GST_EVENT_TYPE_NAME(event));
 
-	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS) {
+	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS && !element->parallel_mode) {
 		/* If End Of Stream is here and we have not yet computed transfer functions from a full data set, use whatever data we have to compute them now. */
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			if(element->workspace.wspf.num_ffts_in_avg - element->workspace.wspf.num_ffts_dropped > element->min_ffts && !element->computed_full_tfs) {
@@ -1721,16 +1732,20 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(buffer) || GST_BUFFER_OFFSET(buffer) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
 		element->t0 = GST_BUFFER_PTS(buffer);
 		element->offset0 = GST_BUFFER_OFFSET(buffer);
-		if(element->sample_count > element->update_samples) {
+		if(element->parallel_mode) {
+			/* In this case, we want to compute the transfer functions on a schedule, not asap */
+			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(element->t0, element->rate, GST_SECOND) - element->update_delay_samples) % (element->update_samples + element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap);
+			if(element->sample_count > element->update_samples)
+				element->sample_count -= element->update_samples + element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
+		} else if(element->sample_count > element->update_samples) {
 			if(*element->transfer_functions == 0.0) {
 				/* Transfer functions have not been computed, so scale the delay samples down appropriately to compute them asap */
 				gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
 				gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
 				element->sample_count = element->update_samples - (short_samples * element->update_delay_samples + long_samples - 1) / long_samples;
-			} else {
+			} else
 				/* Transfer functions have been computed, so apply the usual number of delay samples */
 				element->sample_count = element->update_samples - element->update_delay_samples;
-			}
 		}
 		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 			element->workspace.wspf.num_ffts_in_avg = 0;
@@ -1778,8 +1793,17 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		}
 		/* Track the number of samples since the last non-gap data */
 		element->gap_samples += (mapinfo.size / element->unit_size);
-		/* Trick it into updating things after the gap ends, if we want */
-		if(element->update_after_gap) {
+
+		if(element->parallel_mode) {
+			/* Update the sample count no matter what */
+			element->sample_count += (mapinfo.size / element->unit_size);
+			/* Throw away stored data */
+			if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32)
+				element->workspace.wspf.num_leftover = 0;
+			else
+				element->workspace.wdpf.num_leftover = 0;
+		} else if(element->update_after_gap) {
+			/* Trick it into updating things after the gap ends */
 			if(*element->transfer_functions == 0.0) {
 				/* Transfer functions have not been computed, so scale the delay samples down appropriately to compute them asap */
 				gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
@@ -1789,16 +1813,26 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 				/* Transfer functions have been computed, so apply the usual number of delay samples */
 				element->sample_count = element->update_samples - element->update_delay_samples;
 			}
-		} else
-			element->sample_count = minimum64(element->sample_count + mapinfo.size / element->unit_size, element->update_samples);
-		if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
-			element->workspace.wspf.num_ffts_in_avg = 0;
-			element->workspace.wspf.num_ffts_dropped = 0;
-			element->workspace.wspf.num_leftover = 0;
+			if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+				element->workspace.wspf.num_ffts_in_avg = 0;
+				element->workspace.wspf.num_ffts_dropped = 0;
+				element->workspace.wspf.num_leftover = 0;
+			} else {
+				element->workspace.wdpf.num_ffts_in_avg = 0;
+				element->workspace.wdpf.num_ffts_dropped = 0;
+				element->workspace.wdpf.num_leftover = 0;
+			}
 		} else {
-			element->workspace.wdpf.num_ffts_in_avg = 0;
-			element->workspace.wdpf.num_ffts_dropped = 0;
-			element->workspace.wdpf.num_leftover = 0;
+			element->sample_count = minimum64(element->sample_count + mapinfo.size / element->unit_size, element->update_samples);
+			if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+				element->workspace.wspf.num_ffts_in_avg = 0;
+				element->workspace.wspf.num_ffts_dropped = 0;
+				element->workspace.wspf.num_leftover = 0;
+			} else {
+				element->workspace.wdpf.num_ffts_in_avg = 0;
+				element->workspace.wdpf.num_ffts_dropped = 0;
+				element->workspace.wdpf.num_leftover = 0;
+			}
 		}
 	} else {
 		/* Increment the sample count */
@@ -1828,7 +1862,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			success = find_transfer_functions_double(element, (double *) mapinfo.data, mapinfo.size, GST_BUFFER_PTS(buffer));
 		}
 
-		if(!success) {
+		if(!success && !element->parallel_mode) {
 			/* Try again */
 			element->sample_count = element->update_samples;
 			if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
@@ -2008,6 +2042,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->update_delay_samples = g_value_get_int64(value);
 		break;
 
+	case ARG_PARALLEL_MODE:
+		element->parallel_mode = g_value_get_boolean(value);
+		break;
+
 	case ARG_WRITE_TO_SCREEN:
 		element->write_to_screen = g_value_get_boolean(value);
 		break;
@@ -2115,6 +2153,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_UPDATE_DELAY_SAMPLES:
 		g_value_set_int64(value, element->update_delay_samples);
+		break;
+
+	case ARG_PARALLEL_MODE:
+		g_value_set_boolean(value, element->parallel_mode);
 		break;
 
 	case ARG_WRITE_TO_SCREEN:
@@ -2345,6 +2387,16 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		0, G_MAXINT64, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_PARALLEL_MODE] = g_param_spec_boolean(
+		"parallel-mode",
+		"Parallel Mode",
+		"When set to true, output produced will be independent of start time.\n\t\t\t"
+		"Transfer function calculations are started and finished on a predetermined\n\t\t\t"
+		"schedule. This is useful when running jobs in parallel on contiguous sets\n\t\t\t"
+		"of data.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_WRITE_TO_SCREEN] = g_param_spec_boolean(
 		"write-to-screen",
 		"Write to Screen",
@@ -2507,6 +2559,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_UPDATE_DELAY_SAMPLES,
 		properties[ARG_UPDATE_DELAY_SAMPLES]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PARALLEL_MODE,
+		properties[ARG_PARALLEL_MODE]
 	);
 	g_object_class_install_property(
 		gobject_class,

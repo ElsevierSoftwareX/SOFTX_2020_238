@@ -154,6 +154,7 @@ struct _GSTLALTransferFunction {
 	gboolean update_after_gap;
 	gint64 use_first_after_gap;
 	gint64 update_delay_samples;
+	gboolean parallel_mode;
 	gboolean write_to_screen;
 	char *filename;
 	double make_fir_filters;
