@@ -268,7 +268,10 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
     	trigger_stats_xml_dump(element->zlstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_MID, &(element->stats_writer));
     	trigger_stats_xml_dump(element->sgstats, element->hist_trials, tmp_fname->str, STATS_XML_WRITE_END, &(element->stats_writer));
         printf("rename from %s\n", tmp_fname->str);
-        g_rename(tmp_fname->str, fname->str);
+        if (g_rename(tmp_fname->str, fname->str) != 0) {
+			fprintf(stderr, "unable to rename to %s\n", fname->str);
+			return GST_FLOW_ERROR;
+		}
     	g_string_free(fname, TRUE);
     	g_string_free(tmp_fname, TRUE);
 		trigger_stats_xml_reset(element->bgstats);

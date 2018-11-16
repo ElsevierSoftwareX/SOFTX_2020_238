@@ -168,13 +168,22 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 
 	/* Check that we have collected enough backgrounds */
 	if (!GST_CLOCK_TIME_IS_VALID(element->t_roll_start)&& (t_cur - element->t_start)/GST_SECOND >= (unsigned) element->silent_time) {
-		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
 		//printf("read input stats to assign far %s, %s, %s\n", element->input_fnames[STATS_FNAME_1W_IDX], element->input_fnames[STATS_FNAME_1D_IDX], element->input_fnames[STATS_FNAME_2H_IDX]);
-		trigger_stats_xml_from_xml(element->bgstats_1w, &(element->hist_trials), element->input_fnames[STATS_FNAME_1W_IDX]);
-		trigger_stats_xml_from_xml(element->bgstats_1d, &(element->hist_trials), element->input_fnames[STATS_FNAME_1D_IDX]);
-		trigger_stats_xml_from_xml(element->bgstats_2h, &(element->hist_trials), element->input_fnames[STATS_FNAME_2H_IDX]);
 		element->pass_silent_time = TRUE;
+		element->t_roll_start = t_cur;
+		if (!trigger_stats_xml_from_xml(element->bgstats_1w, &(element->hist_trials), element->input_fnames[STATS_FNAME_1W_IDX])) {
+			element->pass_silent_time = FALSE;
+			element->t_roll_start = GST_CLOCK_TIME_NONE;
+		}
+		if (!trigger_stats_xml_from_xml(element->bgstats_1d, &(element->hist_trials), element->input_fnames[STATS_FNAME_1D_IDX])) {
+			element->pass_silent_time = FALSE;
+			element->t_roll_start = GST_CLOCK_TIME_NONE;
+		}
+		if (!trigger_stats_xml_from_xml(element->bgstats_2h, &(element->hist_trials), element->input_fnames[STATS_FNAME_2H_IDX])) {
+			element->pass_silent_time = FALSE;
+			element->t_roll_start = GST_CLOCK_TIME_NONE;
+		}
 	}
 
 	/* Check if it is time to refresh the background stats */
@@ -182,9 +191,16 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 		element->t_roll_start = t_cur;
 		/* FIXME: the order of input fnames must match the stats order */
 		//printf("read refreshed stats to assign far.");
-		trigger_stats_xml_from_xml(element->bgstats_1w, &(element->hist_trials), element->input_fnames[STATS_FNAME_1W_IDX]);
-		trigger_stats_xml_from_xml(element->bgstats_1d, &(element->hist_trials), element->input_fnames[STATS_FNAME_1D_IDX]);
-		trigger_stats_xml_from_xml(element->bgstats_2h, &(element->hist_trials), element->input_fnames[STATS_FNAME_2H_IDX]);
+		if (!trigger_stats_xml_from_xml(element->bgstats_1w, &(element->hist_trials), element->input_fnames[STATS_FNAME_1W_IDX])) {
+			printf("1w data no longer available\n");
+		}
+
+		if (!trigger_stats_xml_from_xml(element->bgstats_1d, &(element->hist_trials), element->input_fnames[STATS_FNAME_1D_IDX])) {
+			printf("1d data no longer available\n");
+		}
+		if (!trigger_stats_xml_from_xml(element->bgstats_2h, &(element->hist_trials), element->input_fnames[STATS_FNAME_2H_IDX])) {
+			printf("2h data no longer available\n");
+		}
 	}
 
 	TriggerStats *cur_stats;

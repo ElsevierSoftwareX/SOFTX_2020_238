@@ -38,6 +38,7 @@
 #include <pipe_macro.h>
 
 #define RANK_MIN_LIMIT 1e-100
+#define EPSILON 1e-6
 int get_icombo(char *ifos) {
 	int icombo = 0; 
 	unsigned len_in = strlen(ifos);
@@ -977,8 +978,9 @@ gboolean
 trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char *filename)
 {
   /* sanity check */
-  if (!g_file_test(filename, G_FILE_TEST_EXISTS))
-	  return FALSE;
+  if (!g_file_test(filename, G_FILE_TEST_EXISTS)) {
+    return FALSE;
+  }
 
   int nelem = 10; // 4 for feature, 4 for rank, 2 for nevent,livetime
   int ncombo = stats->ncombo;
@@ -1500,6 +1502,8 @@ double
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 {
 	RankingStats *rank = stats->rank;
+	if (abs(snr) < EPSILON || abs(chisq) < EPSILON)
+		return 0.0;
 	double rank_val = trigger_stats_get_val_from_map(snr, chisq, rank->rank_map);
 	/* the bins1D_get_idx will compute log10(x) first and then find index, so need to 10^rank_val for this function */
 	int rank_idx = bins1D_get_idx(pow(10, rank_val), rank->rank_pdf);

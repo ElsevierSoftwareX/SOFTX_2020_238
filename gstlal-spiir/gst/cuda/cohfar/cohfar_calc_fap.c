@@ -198,7 +198,10 @@ static int process_stats_full(gchar ** in_fnames, int nifo, gchar **pifos, gchar
 	#ifdef __DEBUG__
 	printf("rename from %s\n", tmp_fname->str);
 	#endif
-    g_rename(tmp_fname->str, *pout);
+    if (g_rename(tmp_fname->str, *pout) != 0) {
+		fprintf(stderr, "unable to rename to %s\n", *pout);
+		return -1;
+	}
 
 	g_string_free(tmp_fname, TRUE);
 	trigger_stats_xml_destroy(bgstats_in);
@@ -229,8 +232,10 @@ static int process_stats_single(gchar ** in_fnames, int nifo, gchar **pifos, gch
 
 	trigger_stats_xml_dump(stats_out, hist_trials, tmp_fname->str, STATS_XML_WRITE_FULL, &stats_writer);
 	printf("rename from %s\n", tmp_fname->str);
-    g_rename(tmp_fname->str, *pout);
-
+    if (g_rename(tmp_fname->str, *pout) != 0) {
+		fprintf(stderr, "unable to rename to %s\n", *pout);
+		return -1;
+	}
 	g_string_free(tmp_fname, TRUE);
 	trigger_stats_xml_destroy(stats_in);
 	trigger_stats_xml_destroy(stats_out);
@@ -249,6 +254,7 @@ int main(int argc, char *argv[])
 	parse_opts(argc, argv, pin, pfmt, pout, pifos, ptype, update_pdf);
 	int type = get_type(ptype);
 	int nifo = strlen(*pifos) / IFO_LEN;
+	int rc; // return value
 
 	gchar **in_fnames = g_strsplit(*pin, ",", -1); // split the string completely
 
@@ -270,11 +276,13 @@ int main(int argc, char *argv[])
 		// trigger_stats_pdf_from_data(data_dim1, data_dim2, stats_out[ncombo-1]->rate->lgsnr_bins, stats_out[ncombo-1]->rate->lgchisq_bins, stats_out[ncombo-1]->pdf);
 	} else if(g_strcmp0(*pfmt, "stats") == 0) {
 		if (type == STATS_XML_TYPE_ALL) {
-			process_stats_full(in_fnames, nifo, pifos, pout, update_pdf);
+			rc = process_stats_full(in_fnames, nifo, pifos, pout, update_pdf);
 		} else {
-			process_stats_single(in_fnames, nifo, pifos, pout, type, update_pdf);
+			rc = process_stats_single(in_fnames, nifo, pifos, pout, type, update_pdf);
 		}
 	}
+	if (rc != 0)
+		return rc;
 
 	g_strfreev(in_fnames);
 
