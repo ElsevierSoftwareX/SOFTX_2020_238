@@ -509,11 +509,15 @@ class GracedBWrapper(object):
 
 		coinc_inspiral_index = last_coincs.coinc_inspiral_index
 
+		# NOTE if any are None, this becomes None.
+		# FIXME revisit depending on how clustering goes
+		best_coinc = [min((coinc_inspiral_index[coinc_event.coinc_event_id].combined_far, coinc_event) for coinc_event in last_coincs.coinc_event_index.values())]
 		# This appears to be a silly for loop since
 		# coinc_event_index will only have one value, but we're
 		# future proofing this at the point where it could have
 		# multiple clustered events
-		for coinc_event in last_coincs.coinc_event_index.values():
+		#for coinc_event in last_coincs.coinc_event_index.values():
+		for _, coinc_event in best_coinc:
 			#
 			# continue if the false alarm rate is not low
 			# enough, or is nan, or there aren't enough
@@ -593,7 +597,7 @@ class GracedBWrapper(object):
 		# upload PSDs and ranking statistic data
 		#
 
-		if self.upload_auxiliary_data:
+		if self.upload_auxiliary_data and len(gracedb_ids) > 0:
 			self.__upload_aux_xmldoc("strain spectral densities", "psd.xml.gz", "psd", lalseries.make_psd_xmldoc(psddict), gracedb_ids)
 			self.__upload_aux_xmldoc("ranking statistic PDFs", "ranking_data.xml.gz", "ranking statistic", rankingstat_xmldoc_func(), gracedb_ids)
 
