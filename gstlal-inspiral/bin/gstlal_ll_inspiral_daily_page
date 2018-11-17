@@ -160,7 +160,7 @@ if __name__ == '__main__':
 	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge))
 	for f in noninj_files_to_merge:
 		subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % noninjdb, "%s" % f])
-		# Do not cluster! the online analysis doesn't do a global clustering stage!!
+		# NOTE the online analysis doesn't do a global clustering stage!! That means that you will under count the events in the final db
 		try:
 			subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", cluster_file,  "%s" % noninjdb])
 		except subprocess.CalledProcessError as runsqlite_error:
@@ -172,7 +172,7 @@ if __name__ == '__main__':
 		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]))
 		for f in inj_files_to_merge[injection_file]:
 			subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
-			# Do not cluster! the online analysis doesn't do a global clustering stage!!
+			# NOTE the online analysis doesn't do a global clustering stage!! That means that you will under count the events in the final db
 			try:
 				subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", cluster_file,  "%s" % injdb[injection_file]])
 			except subprocess.CalledProcessError as runsqlite_error:
@@ -210,10 +210,11 @@ if __name__ == '__main__':
 	# Plot background
 	#
 
-	try:
-		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", plot_dir, "--user-tag", "ALL", "--database", noninjdb, "--verbose", "rankingstat_pdf.xml.gz"])
-	except subprocess.CalledProcessError as plot_error:
-		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
+	# FIXME this is broken for some reason online
+#	try:
+#		subprocess.check_call(["gstlal_inspiral_plot_background", "--output-dir", plot_dir, "--user-tag", "ALL", "--database", noninjdb, "--verbose", "rankingstat_pdf.xml.gz"])
+#	except subprocess.CalledProcessError as plot_error:
+#		print >> sys.stderr, "plotting failed. recieved error%s...continuing anyway" % plot_error
 
 	#
 	# Plot summary
