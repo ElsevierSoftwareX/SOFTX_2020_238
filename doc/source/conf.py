@@ -106,8 +106,8 @@ html_logo = "gstlal_small.png"
 # documentation.
 html_theme_options = {
     'fixed_sidebar': 'true',
-    'sidebar_width': '250px',
-    'page_width': '80%',
+    'sidebar_width': '200px',
+    'page_width': '95%',
     'show_powered_by': 'false',
     'logo_name': 'true',
 }
