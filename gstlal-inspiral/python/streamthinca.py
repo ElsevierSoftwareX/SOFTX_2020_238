@@ -45,6 +45,7 @@ import bisect
 import time
 
 
+from glue.ligolw import ligolw
 from glue.ligolw import lsctables
 from gstlal import snglinspiraltable
 import lal
@@ -196,7 +197,7 @@ class last_coincs(object):
 		coincevent = self.coinc_event_index[coinc_event_id]
 		new_time_slide_table.extend(self.time_slide_index[coincevent.time_slide_id])
 
-		new_sngl_inspiral_table.extend(self.self.sngl_inspiral_index[coinc_event_id])
+		new_sngl_inspiral_table.extend(self.sngl_inspiral_index[coinc_event_id])
 		new_coinc_event_table.append(coincevent)
 		new_coinc_event_map_table.extend(self.coinc_event_maps_index[coinc_event_id])
 		new_coinc_inspiral_table.append(self.coinc_inspiral_index[coinc_event_id])
