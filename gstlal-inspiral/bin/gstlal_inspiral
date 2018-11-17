@@ -409,6 +409,12 @@ def parse_command_line():
 
 		# this gets set so that if you log into a node you can find out what the job id is easily
 		os.environ['GSTLAL_LL_JOB'] = options.job_tag
+
+		# FIXME: this is ugly, but we have to protect against busted shared memory partitions
+		if options.data_source == "lvshm":
+			import subprocess
+			for partition in detectors.shm_part_dict.values():
+				subprocess.call(["smrepair", partition])
 	else:
 		bad_options = []
 		for option in ["job_tag", "ranking_stat_pdf", "likelihood_snapshot_interval"]:
