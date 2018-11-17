@@ -171,6 +171,7 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 		coinc_event.time_slide_id AS category,
 		coinc_inspiral.end_time AS end_time,	--- only keep the integer part
 		coinc_event.likelihood AS ranking_stat,
+		coinc_inspiral.combined_far as far,
 		coinc_inspiral.snr AS snr
 	FROM
 		coinc_event
@@ -204,22 +205,22 @@ WHERE
 			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id
 	);
 --
--- delete all events with LR < 4
+-- delete all events with combined far < 1e-4 or NULL
 --
---DELETE FROM
---	coinc_event
---WHERE
---	EXISTS (
---		SELECT
---			*
---		FROM
---			_cluster_info_ AS _cluster_info_a_
---		WHERE
---			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id AND _cluster_info_a_.ranking_stat < 4.0
---	);
---DROP INDEX tmpindex1;
---DROP INDEX tmpindex2;
---DROP TABLE _cluster_info_;
+DELETE FROM
+	coinc_event
+WHERE
+	EXISTS (
+		SELECT
+			*
+		FROM
+			_cluster_info_ AS _cluster_info_a_
+		WHERE
+			_cluster_info_a_.coinc_event_id == coinc_event.coinc_event_id AND (_cluster_info_a_.far > 1e-4 OR _cluster_info_a_.far IS NULL)
+	);
+DROP INDEX tmpindex1;
+DROP INDEX tmpindex2;
+DROP TABLE _cluster_info_;
 
 SELECT
 	"Number of coincs after clustering: " || count(*)
