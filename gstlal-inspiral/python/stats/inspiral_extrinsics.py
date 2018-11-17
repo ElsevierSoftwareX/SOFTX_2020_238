@@ -1449,13 +1449,13 @@ class p_of_instruments_given_horizons(object):
 
 	.. math::
 
-		P(H \cup L | D_H, D_L, D_V, s) = \int_\Sigma P(\\rho_{H}, \\rho_{L}, \\rho_{V} | D_H, D_L, D_V, s)
+		P(H, L | D_H, D_L, D_V, s) = \int_\Sigma P(\\rho_{H}, \\rho_{L}, \\rho_{V} | D_H, D_L, D_V, s)
 
 	where
 
 	.. math::
 
-		\Sigma \equiv 
+		\Sigma \equiv
 		\\begin{cases}
 			\\rho_H \geq \\rho_m \\\\
 			\\rho_H \geq \\rho_m \\\\
@@ -1468,6 +1468,36 @@ class p_of_instruments_given_horizons(object):
 	location / orientation sampling is identical to the one used in
 	:py:class:`TimePhaseSNR`.  We add a random jitter to each SNR according to a
 	chi-squared distribution with two degrees of freedom.
+
+	The result of this is stored in a histogram, which means we choose quanta of horizon distances to do the calculation. Since we only care about
+	the ratios of horizon distances in this calculation, the horizon distance for
+	the first detector in alphabetical order are by convention 1.  The ratios of horizon distances for the other detectors are logarithmically spaced between 0.05 and 20.  Below are a couple of example histograms.
+
+	**Example: 1D histogram for** :math:`p(H1,L1 | D_H, D_L)`:
+
+	This is a 1x41 array representing the following probabilities:
+
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+	| :math:`p(H1,L1| D_H = 1, D_L = 0.05)`               | ...        | ...      | :math:`p(H1,L1| D_H = 1, D_L = 19)`                 |
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+
+	Note, linear interpolation is used over the bins
+
+	**Example 2D histogram for** :math:`p(H1,L1,V1 | D_H, D_L, D_V)`:
+
+	This is a 41x41 array representing the following probabilities:
+
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+	| :math:`p(H1,L1,V1| D_H = 1, D_L = 0.05, D_V= 0.05)` | ...        | ...      | :math:`p(H1,L1,V1| D_H = 1, D_L = 19, D_V= 0.05)`   |
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+	| :math:`p(H1,L1,V1| D_H = 1, D_L = 0.05, D_V= 0.06)` | ...        | ...      | :math:`p(H1,L1,V1| D_H = 1, D_L = 19, D_V= 0.06)`   |
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+	| ...                                                 | ...        | ...      | ...                                                 |
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+	| :math:`p(H1,L1,V1| D_H = 1, D_L = 0.05, D_V= 19)`   | ...        | ...      | :math:`p(H1,L1,V1| D_H = 1, D_L = 19, D_V= 19)`     |
+	+-----------------------------------------------------+------------+----------+-----------------------------------------------------+
+
+	Note, linear interpolation is used over the bins
 	"""
 	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None):
 		"""
@@ -1484,24 +1514,57 @@ class p_of_instruments_given_horizons(object):
 		NOTE! This is a very slow class to initialize from scratch in
 		normal circumstances you would use the from_hdf5() method to load precomputed
 		values.  NOTE the :py:class`InspiralExtrinsics` provides a helper class to load
-		precomputed data.  See its documentation.
+		precomputed data.  See its documentation.  In general *always
+		use* :py:class`InspiralExtrinsics`
 		"""
+		# The instruments that are being considered for this calculation
 		self.instruments = tuple(sorted(list(instruments)))
+
+		# The SNR threshold above which one declares a *found* trigger.
 		self.snr_thresh = snr_thresh
+
+		# The number of bins in the histogram of horizond distance ratios.
 		self.nbins = nbins
+
+		# The minimum and maximum horizon distance ratio to consider
+		# for the binning.  Anything outside this range will be
+		# clipped.
 		self.hmin = hmin
 		self.hmax = hmax
-		# NOTE should be sorted
 
+		# If the user has provided the histograms already, we just use
+		# them.  This would be the case if the from_hdf5() method is
+		# called
 		if histograms is not None:
 			self.histograms = histograms
 			# NOTE we end up pushing any value outside of our
 			# histogram to just be the value in the last(first)
-			# bin, so we track those center values here.
+			# bin, so we track those center values here in order to
+			# decide if something should be clipped.
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
+		# Otherwise we need to initialize these ourselves, which can be pretty slow.
 		else:
+			# We reuse the function in TimePhaseSNR to get
+			# combinations of instruments.  We compute
+			# probabilities for all instruments including singles.
+			# Even if you are running a min_instruments = 2
+			# analysis, the helper class  InspiralExtrinsics will
+			# renormalize this pdf for you.  So you should never
+			# call this directly
 			combos = TimePhaseSNR.instrument_combos(self.instruments, min_instruments = 1)
+
+			# Setup the bins needed to store the probabilities of
+			# getting a combination of instruments: Since we only
+			# care about ratios, this will always be a
+			# len(instruments) - 1 dimensional histogram, e.g., 2D
+			# for H,L,V.  Obviously this approach won't scale to 5
+			# detectors very well and we will need something new,
+			# but it should hopefully be okay for 4 detectors to
+			# get us through O3,O4,...  We use only 41 bins per
+			# dimension, so a 3D histogram still has fewer than
+			# 100,000 points.  While a pain to precompute, it is
+			# not difficult to store or use.
 			self.histograms = {}
 			bins = []
 			for i in range(len(self.instruments) - 1):
@@ -1511,32 +1574,75 @@ class p_of_instruments_given_horizons(object):
 				# Each possible sub combination of ifos gets its own histogram.
 				self.histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 
-			# NOTE we end up pushing any value outside of our
+			# NOTE we end up clipping any value outside of our
 			# histogram to just be the value in the last(first)
 			# bin, so we track those center values here.
 			self.first_center = histograms.values()[0].centres()[0][0]
 			self.last_center = histograms.values()[0].centres()[0][-1]
+
+			# Now we start the monte carlo simulation of a bunch of
+			# signals distributed uniformly in the volume of space
+
 			# The sky tile resolution here is lower than the
 			# TimePhaseSNR calculation, but it seems good enough.
+			# The only variable we care about here is deff, which a
+			# dictionary of effective distances keyed by IFO for
+			# the sky grid produced here assuming a physical
+			# distance of 1 (thus deff is strictly >= 1).
 			_, _, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
+
+			# Figure out the min and max effective distances to help with the integration over physical distance
 			alldeff = []
 			for v in deff.values():
 				alldeff.extend(v)
-			# Figure out the min and max effective distances to help with the integration over physical distance
 			mindeff = min(alldeff)
 			maxdeff = max(alldeff)
 
-			# Iterate over the N-1 horizon distance ratios for all
-			# of the instruments that could have produced coincs
+			# Iterate over the (# of instruments - 1) horizon
+			# distance ratios for all of the instruments that could
+			# have produced coincs
 			for horizontuple in itertools.product(*[b.centres() for b in bins]):
 				horizondict = {}
 				# Calculate horizon distances for each of the
 				# instruments based on these ratios NOTE by
-				# defn the first instrument in alpha order will
-				# always have a horizon of 1
+				# convention the first instrument in
+				# alphabetical order will always have a horizon
+				# of 1 since we are only concerned about the ratio!
 				horizondict[self.instruments[0]] = 1.0
 				for i, ifo in enumerate(self.instruments[1:]):
 					horizondict[ifo] = horizontuple[i]
+
+				#
+				# Begin the count of sources, intended to
+				# simulate real GWS, which pass a SNR threshold
+				# to be found in a given set of detectors for a
+				# given set of horizon distance ratios provided
+				# by horizondict keyed by ifo
+				#
+				# 1) We generate a source at each point of a
+				# coarse grid on the sky (healpix NSIDE = 8) as
+				# well as a coarse gridding in psi and iota (17
+				# points each)) for a total of 221952 source
+				# locations and orientations
+				#
+				# 2) We interate over 200 points in distance
+				# between a LOW value and a HIGH value taken
+				# from the range of effective distances between
+				# detectors in the sky grid that should ensure
+				# that we properly sample the probability space
+				#
+				# 3) We calculate the SNR for each distance for
+				# each ifo for each sky point by choosing a
+				# random number with the calculated SNR as the
+				# mean but drawn from a chi2 distribution, in
+				# order to model noise.  We track the above and
+				# below threshold counts
+				#
+				# Note: The above samples should all be uniform
+				# in the volume of space (and thereby a good
+				# prior for GWs).  We actually do a linear in
+				# distance sampling but weight it by D^2 to
+				# ensure this.
 				snrs = {}
 				snrs_above_thresh = {}
 				snrs_below_thresh = {}
@@ -1545,10 +1651,15 @@ class p_of_instruments_given_horizons(object):
 					# We want to integrate over physical
 					# distance with limits set by the min
 					# and max effective distance
+					# FIXME these variables, LOW and HIGH
+					# should be moved out of the loop for
+					# clarity.  The point is that they are
+					# the same for every instrument
 					LOW = self.hmin * 8. / self.snr_thresh / maxdeff
 					HIGH = max(horizontuple + (1,)) * 8. / self.snr_thresh / mindeff
 					for D in numpy.linspace(LOW, HIGH, 200):
 						# go from horizon distance to an expected SNR
+						# NOTE deff[ifo] is an array of effective distances
 						snrs.setdefault(ifo,[]).extend(8 * horizondict[ifo] / (D * deff[ifo]))
 						# We store the probability
 						# associated with this
@@ -1556,22 +1667,34 @@ class p_of_instruments_given_horizons(object):
 						# do it the first time through
 						if cnt == 0:
 							prob.extend([D**2] * len(deff[ifo]))
-					# Modify the the SNR by a chi
+					# Actually choose the SNR from a chi
 					# distribution with two degrees of
-					# freedom.
+					# freedom.  Only use the calculated SNR
+					# as the mean.
 					snrs[ifo] = stats.ncx2.rvs(2, numpy.array(snrs[ifo])**2)**.5
 					snrs_above_thresh[ifo] = snrs[ifo] >= self.snr_thresh
 					snrs_below_thresh[ifo] = snrs[ifo] < self.snr_thresh
 					prob = numpy.array(prob)
+
+				#
+				# Now that we have figured out how many
+				# triggers survive above the threshold and how
+				# many are below threshold, we can go through
+				# and work out the prbabilities that we are
+				# after for each combination of IFOs.
+				# Normalizing the fractional counts gives us
+				# the P(ifos | horizons).
+				#
 				total = 0.
 				# iterate over all subsets
 				for combo in combos:
+					# All the ifos in this combo must be above threshold.
 					for cnt, ifo in enumerate(combo):
 						if cnt == 0:
 							must_be_above = snrs_above_thresh[ifo].copy()
 						else:
 							must_be_above &= snrs_above_thresh[ifo]
-					# the ones above thresh must be accompanied with the compliment to this combo being below thresh
+					# The ones above thresh must be accompanied with the compliment to this combo being below thresh
 					for ifo in set(self.instruments) - set(combo):
 						must_be_above &= snrs_below_thresh[ifo]
 					# sum up the prob
@@ -1594,7 +1717,11 @@ class p_of_instruments_given_horizons(object):
 
 	def __call__(self, instruments, horizon_distances):
 		"""
-		Calculate the probability of getting a trigger in instruments given the horizon distances.
+		Calculate the probability of getting a trigger in instruments
+		given the horizon distances.  NOTE! this should never be called directly.
+		Always use the helper class InspiralExtrinsics in order to deal with different
+		possibilities for min_instruments (i.e., running an analysis with singles
+		enabled or not)
 		"""
 		H = [horizon_distances[k] for k in sorted(horizon_distances)]
 		return self.interps[tuple(sorted(instruments))](*[min(max(h / H[0], self.first_center), self.last_center) for h in H[1:]])
