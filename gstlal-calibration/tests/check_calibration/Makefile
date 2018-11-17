@@ -22,7 +22,7 @@ GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: noise_subtraction_ASD_DCS
+all: $(IFO)1_hoft_DCS_TEST_frames.cache
 
 ###############################################
 ### These commands should change less often ###

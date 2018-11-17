@@ -757,8 +757,8 @@ if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu o
 
 # We also need DARM_ERR if we are computing the kappas
 if (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq) and CalibrationConfigs["calibrationmode"] == "Partial":
-		channel_list.append((instrument, ChannelNames["darmerrchannel"]))
-		headkeys.append("darm_err")
+	channel_list.append((instrument, ChannelNames["darmerrchannel"]))
+	headkeys.append("darm_err")
 
 # For full calibration we need DARM_ERR and DARM_CTRL as our input channels
 if CalibrationConfigs["calibrationmode"] == "Full":
@@ -838,6 +838,21 @@ if DebuggingConfigs["pipelinegraphfilename"] != "None":
 # Get everything hooked up and fill in discontinuities
 for key, chan in zip(headkeys, channel_list):
 	head_dict[key] = calibration_parts.hook_up(pipeline, demux, chan[1], instrument, float(PipelineConfigs["bufferlength"]))
+
+# The DARM_ERR channel follows different paths if we're doing full vs. partial calibration
+if CalibrationConfigs["calibrationmode"] == "Full":
+	darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "darm_err")
+	derrtee = pipeparts.mktee(pipeline, darm_err)
+elif compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
+	darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["darm_err"], hoft_caps, "darm_err")
+	derrtee = pipeparts.mktee(pipeline, darm_err)
+
+# pcal excitation channel, which will be demodulated
+if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs or (remove_cal_lines and len(pcal_line_removal_dict) > 0):
+	pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
+	pcaltee = pipeparts.mktee(pipeline, pcal)
+	for pcal_line_name in pcal_line_removal_dict.keys():
+		pcal_line_removal_dict[pcal_line_name][0] = pcaltee
 
 #
 # TIME-VARYING FACTORS COMPUTATIONS
@@ -919,19 +934,6 @@ if compute_kappapu:
 
 # Set up computations for kappa_tst, kappa_pum, kappa_uim, kappa_pu,kappa_c, f_cc, f_s, and Q, if applicable
 if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
-
-	# pcal excitation channel, which will be demodulated
-	pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
-	pcaltee = pipeparts.mktee(pipeline, pcal)
-	for pcal_line_name in pcal_line_removal_dict.keys():
-		pcal_line_removal_dict[pcal_line_name][0] = pcaltee
-
-	# DARM_ERR channel, which will have followed different paths if we're doing full vs. partial calibration
-	if CalibrationConfigs["calibrationmode"] == "Full":
-		darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "darm_err")
-	else:
-		darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["darm_err"], hoft_caps, "darm_err")
-	derrtee = pipeparts.mktee(pipeline, darm_err)
 
 	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
 	pcal_at_act_pcal_freq = calibration_parts.demodulate(pipeline, pcaltee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_corr_at_act_freq_real, prefactor_imag = pcal_corr_at_act_freq_imag)
@@ -1706,11 +1708,7 @@ res_filter_latency = 0.0
 
 # enforce caps on the residual branch and hook up progress report if verbose is on
 if CalibrationConfigs["calibrationmode"] == "Full":
-	if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc:
-		res = restee = derrtee
-	else:
-		res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
-		res = restee = pipeparts.mktee(pipeline, res)
+	res = restee = derrtee
 elif CalibrationConfigs["calibrationmode"] == "Partial":
 	res = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "res")
 	res = restee = pipeparts.mktee(pipeline, res)
@@ -2117,11 +2115,6 @@ if compute_calib_statevector:
 
 # First, remove calibration lines
 if remove_cal_lines:
-	# if we didn't compute the kappas, we still need to get the pcal channel
-	if not compute_kappatst and not compute_kappapu and not compute_kappac and not compute_fcc and not compute_srcq and not compute_fs:
-		pcal = calibration_parts.caps_and_progress(pipeline, head_dict["pcal"], hoft_caps, "pcal")
-		pcaltee = pipeparts.mktee(pipeline, pcal)
-
 	callines_list = []
 	# Start with the pcal lines. Loop through the dictionary, reconstruct each line, and add to the list.
 	for pcal_line_name in pcal_line_removal_dict:
@@ -2142,7 +2135,7 @@ if remove_cal_lines:
 			act_line_removal_dict[act_line_name][0] = calibration_parts.demodulate(pipeline, act_line_removal_dict[act_line_name][0], act_line_removal_dict[act_line_name][1], td, compute_factors_sr, demodulation_filter_time, filter_latency_factor)
 		if factors_from_filters_file:
 			# EPICS records were read from the filters file
-			act_line_removal_dict[act_line_name][0] = calibration_parts.complex_audioamplify(pipeline, act_line_removal_dict[act_line_name][0], A_epics_dict[act_line_removal_dict[act_line_name][2]][1], A_epics_dict[act_line_removal_dict[act_line_name][3]][1])
+			act_line_removal_dict[act_line_name][0] = calibration_parts.complex_audioamplify(pipeline, act_line_removal_dict[act_line_name][0], float(filters[act_line_removal_dict[act_line_name][2]]), float(filters[act_line_removal_dict[act_line_name][3]]))
 		else:
 			# EPICS records are read from the frames
 			EPICS = calibration_parts.merge_into_complex(pipeline, A_epics_dict[act_line_removal_dict[act_line_name][2]][0], A_epics_dict[act_line_removal_dict[act_line_name][3]][0])
@@ -2186,6 +2179,8 @@ if remove_power_lines:
 	if not remove_cal_lines:
 		clean_strain = straintee
 	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", "powerlines")
+	if remove_cal_lines and filter_latency_factor > 0:
+		powerlines = pipeparts.mkgeneric(pipeline, powerlines, "lal_insertgap", chop_length = int(1000000000 * filter_latency_factor * demodulation_filter_time))
 	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, powerlines_freq_var, filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_avg = powerlines_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
 
 # Remove excess noise using any provided witness channels
