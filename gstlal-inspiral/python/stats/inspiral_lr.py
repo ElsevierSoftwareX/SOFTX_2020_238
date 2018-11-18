@@ -729,15 +729,8 @@ class LnNoiseDensity(LnLRDensity):
 		lnP += self.coinc_rates.lnP_instruments(**triggers_per_second_per_template)[frozenset(snrs)]
 
 		# evaluate dt and dphi parameters
-		# NOTE: this assumes uniform in dt and dphi.  The dt part is
-		# approximate and should be detector dependent and involve a
-		# slightly intracate calculation since coincidence must be
-		# mutual, but we igore that in this normalization and get it
-		# close enough.
-		# ( 1  / \Deta T ) ( 1 / \Delta \phi) for each detector
-		# hardcode \Delta T = 20 ms
-		#
-		lnP += (1. / 0.020 * 1. / (2. * numpy.pi))**(len(snrs) - 1)
+		# NOTE: uniform and normalized so that the log should be zero, but there is no point in doing that
+		# lnP += 0
 
 		# evaluate the rest
 		interps = self.interps
