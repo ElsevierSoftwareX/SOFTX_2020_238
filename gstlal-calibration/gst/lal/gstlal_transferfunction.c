@@ -524,6 +524,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 	/* How many FFTs would there be in the average if there had been no gaps in the data used for transfer functions? Useful for parallel mode. */ \
 	num_ffts_in_avg_if_nogap = element->parallel_mode ? (element->sample_count - (gint64) src_size - element->update_samples - element->fft_overlap) / stride : element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg; \
+	num_ffts_in_avg_if_nogap = maximum64(num_ffts_in_avg_if_nogap, 0); \
  \
 	/* Determine how many FFTs we will calculate from combined leftover and new input data */ \
 	num_ffts = minimum64((element->workspace.w ## S_OR_D ## pf.num_leftover + stride - 1) / stride, element->num_ffts - num_ffts_in_avg_if_nogap); \
