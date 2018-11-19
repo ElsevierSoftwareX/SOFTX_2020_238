@@ -41,7 +41,7 @@
 #
 
 
-import bisect
+from bisect import bisect_right
 import time
 
 
@@ -231,7 +231,7 @@ def lower_bound_in_seglist(seglist, x):
 	# NOTE:  this is an operation that is performed in a number of
 	# locations in various codes, and is something that I've screwed up
 	# more than once.  maybe this should be put into segments.py itself
-	i = bisect.bisect_right(seglist, x)
+	i = bisect_right(seglist, x)
 	return i - 1 if i else 0
 
 
