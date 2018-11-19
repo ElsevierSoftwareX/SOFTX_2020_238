@@ -644,7 +644,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	/*
 	 * Check for discontinuity
 	 */
-
+	GST_OBJECT_LOCK(element);
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
 		GST_INFO_OBJECT(element, "encountered discont.  reason:  %s", GST_BUFFER_IS_DISCONT(inbuf) ? "discont flag set in input" : GST_BUFFER_OFFSET(inbuf) != element->next_in_offset ? "input offset mismatch" : "internal clock not yet set");
 
@@ -786,6 +786,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 */
 
 done:
+
+	GST_OBJECT_UNLOCK(element);
 	return result;
 }
 
