@@ -35,10 +35,21 @@ $(IFO)1_raw_frames.cache:
 	gw_data_find -o $(IFO) -t $(IFO)1_R -s $(START) -e $(END) -l --url-type file > $@
 
 $(IFO)1_easy_raw_frames.cache: $(IFO)1_raw_frames.cache framesdir
-	FrChannels $(shell sed -nr '0,/localhost/ s/.*localhost([^"]+).*/\1/p' $(IFO)1_raw_frames.cache) > frchannels.txt
-	python frame_manipulator.py --ifo $(IFO)1 --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_raw_frames.cache --frame-type $(IFO)1_R --output-path Frames/$(OBSRUN)/$(IFO)1/easy_raw/
-	ls Frames/$(OBSRUN)/$(IFO)1/easy_raw/$(IFO)-$(IFO)1_R*.gwf | lalapps_path2cache > $@
-	rm frchannels.txt
+	EASY_FRAME_START=`echo "$(START) - $(START) % 64" | bc`; \
+	while [[ -a Frames/$(OBSRUN)/$(IFO)1/easy_raw/$(IFO)-$(IFO)1_R-$$EASY_FRAME_START-64.gwf ]] ; do \
+		EASY_FRAME_START=`echo "$$EASY_FRAME_START + 64" | bc`; \
+	done; \
+	EASY_FRAME_END=`echo "(($(END) - 1)) - (($(END) - 1)) % 64" | bc`; \
+	while [[ -a Frames/$(OBSRUN)/$(IFO)1/easy_raw/$(IFO)-$(IFO)1_R-$$EASY_FRAME_END-64.gwf ]] ; do \
+		EASY_FRAME_END=`echo "$$EASY_FRAME_END - 64" | bc`; \
+	done; \
+	EASY_FRAME_END=`echo "$$EASY_FRAME_END + 64" | bc`; \
+	if [ $$EASY_FRAME_END -gt $$EASY_FRAME_START ] ; then \
+		FrChannels $(shell sed -nr '0,/localhost/ s/.*localhost([^"]+).*/\1/p' $(IFO)1_raw_frames.cache) > frchannels.txt ; \
+		python frame_manipulator.py --ifo $(IFO)1 --gps-start-time $$EASY_FRAME_START --gps-end-time $$EASY_FRAME_END --frame-cache $(IFO)1_raw_frames.cache --frame-type $(IFO)1_R --output-path Frames/$(OBSRUN)/$(IFO)1/easy_raw/ ; \
+		rm frchannels.txt; \
+	fi
+	ls Frames/$(OBSRUN)/$(IFO)1/easy_raw/$(IFO)-$(IFO)1_R-*-64.gwf | lalapps_path2cache > $@
 
 $(IFO)1_C00_frames.cache:
 	gw_data_find -o $(IFO) -t $(IFO)1_HOFT_C00 -s $(START) -e $(END) -l --url-type file > $@
