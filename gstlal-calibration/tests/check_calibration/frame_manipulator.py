@@ -102,10 +102,10 @@ try:
 	f = open('frchannels.txt', 'r')
 	available_channels = f.read()
 	f.close()
+	print "Making channel list using available channels"
 except:
-	raise ValueError('Cannot find file frchannels.txt. Run FrChannels')
+	print "Cannot find file frchannels.txt. Run FrChannels to check for available channels"
 
-print "Making channel list using available channels"
 # These are (or may be) in the calibrated frames
 channel_list.append(chan_prefix + "CALIB_STRAIN" + chan_suffix)
 channel_list.append("ODC-MASTER_CHANNEL_OUT_DQ")

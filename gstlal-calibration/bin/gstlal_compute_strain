@@ -268,7 +268,7 @@ witness_frequency_resolution = float(DataCleaningConfigs["witnessfrequencyresolu
 witness_tf_update_time = float(DataCleaningConfigs["witnesstfupdatetime"])
 critical_lock_loss_time = float(DataCleaningConfigs["criticallocklosstime"])
 witness_filter_taper_time = float(DataCleaningConfigs["witnessfiltertapertime"])
-witness_tf_time_shift = float(DataCleaningConfigs["witnesstftimeshift"])
+witness_tf_time_shift = float(DataCleaningConfigs["witnesstftimeshift"]) if "witnesstftimeshift" in DataCleaningConfigs else 0.0
 witness_tf_filename = DataCleaningConfigs["witnesstffilename"] if DataCleaningConfigs["witnesstffilename"] != "None" else None
 
 expected_kappatst_real = float(TDCFConfigs["expectedkappatstreal"])

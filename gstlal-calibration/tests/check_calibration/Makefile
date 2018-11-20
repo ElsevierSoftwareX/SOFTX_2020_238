@@ -6,23 +6,25 @@
 # which interferometer (H or L)
 IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
-OBSRUN = O2
+OBSRUN = PreER13
 
-START = 1185767808
-END = 1185775616
+START = 1225967424
+#$(shell echo 1185763328 - 700 | bc)
+END = 1225968448
+#$(shell echo 1185767424 + 700 | bc)
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 4000
-PLOT_COOLDOWN_TIME = 1024
+PLOT_WARMUP_TIME = 256
+PLOT_COOLDOWN_TIME = 64
 
-GDSCONFIGS = ../../config_files/PreER13/H1/C00/H1GDS_FRAMES_1225558818.ini
+GDSCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1226769644.ini
 DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: noise_subtraction_ASD_DCS_TEST
+all: CALCS_GDS_ASD GDS_over_CALCS
 
 ###############################################
 ### These commands should change less often ###
@@ -99,6 +101,9 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 
 latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
+
+CALCS_GDS_ASD: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
+	./ASD_comparison_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_easy_raw_frames.cache --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache
 
 GDS_over_CALCS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-DELTAL_EXTERNAL_DQ --denominator-name 'CALCS' --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --numerator-name 'GDS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -180.0 --phase-max 180.0 --labels 'GDS / CALCS' --poles '30,0,30,0,30,0,30,0,30,0,30,0,-3.009075115760242e3,3.993177550236464e3,-3.009075115760242e3,-3.993177550236464e3,-5.839434764093102e2,6.674504477214695e3,-5.839434764093102e2,-6.674504477214695e3' --zeros '0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,1.431097327857237e2,8.198751100282409e3,1.431097327857237e2,-8.198751100282409e3,8.574723070843939e2,1.636154629741894e4,8.574723070843939e2,-1.636154629741894e4' --gain 3994.5
