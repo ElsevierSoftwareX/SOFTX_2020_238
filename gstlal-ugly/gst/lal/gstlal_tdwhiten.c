@@ -515,6 +515,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	gsize in_unit_size;
 	gsize out_unit_size;
 	gboolean success = TRUE;
+	GST_OBJECT_LOCK(element);
 
 	if(!get_unit_size(trans, incaps, &in_unit_size))
 		return FALSE;
@@ -558,6 +559,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	 * done
 	 */
 
+	GST_OBJECT_UNLOCK(element);
 	return success;
 }
 
