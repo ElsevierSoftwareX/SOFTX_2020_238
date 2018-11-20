@@ -114,6 +114,11 @@ class SourcePopulationModel(object):
 			with h5py.File(filename, 'r') as model:
 				coefficients = model['coefficients'].value
 				snr_bp = model['SNR'].value
+                                try:
+                                        model_ids = model['event_id'].value
+                                except KeyError:
+                                        # FIXME: assume sequential order if model['event_id'] doesn't exist
+                                        model_ids = np.arange(1,np.shape(f['coefficients'].value)[-1]+1)
 			# PPoly can construct an array of polynomials by just
 			# feeding it the coefficients array all in one go, but then
 			# it insists on evaluating all of them at once.  we don't
@@ -122,7 +127,15 @@ class SourcePopulationModel(object):
 			# just one.  since we have to do this anyway, we use a
 			# dictionary to also solve the problem of mapping
 			# template_id to a specific polynomial
-			self.polys = dict((template_id, PPoly(coefficients[:,:,[template_id]], snr_bp)) for template_id in template_ids)
+                        template_indices = {}
+                        for template_id in template_ids:
+                                # maps template ID to the right coefficient array, since template IDs
+                                # in the bank may not be in sequential order
+                                try:
+                                        template_indices[template_id] = np.where(model_ids==template_id)[0][0]
+                                except KeyError:
+                                        raise KeyError("template ID %d is not in this model" % template_id)
+			self.polys = dict((template_id, PPoly(coefficients[:,:,[template_indices[template_id]]], snr_bp)) for template_id in template_ids)
 			self.max_snr = snr_bp.max()
 		else:
 			self.polys = None
