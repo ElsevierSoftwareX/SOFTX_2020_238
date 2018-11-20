@@ -704,6 +704,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		output.close()
 		return outstr
 	template_ids = frozenset(row.template_id for row in sngl_inspiral_table)
+	assert len(template_ids) == len(sngl_inspiral_table), "template IDs are not unique within the template bank"
 	@bottle.route("/template_ids.txt")
 	def get_template_ids(template_ids = sorted(template_ids)):
 		return "\n".join("%d" % template_id for template_id in template_ids)
