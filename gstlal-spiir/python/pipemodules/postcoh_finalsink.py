@@ -20,6 +20,7 @@ from collections import deque
 import threading
 import sys
 import StringIO
+from shutil import copyfile
 import httplib
 import math
 import subprocess
@@ -344,7 +345,7 @@ class FinalSink(object):
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded chisq_ratio_thresh to veto 
-		self.chisq_ratio_thresh = 20
+		self.chisq_ratio_thresh = 10
 		self.superevent_thresh = superevent_thresh
 		self.nevent_clustered = 0
 		self.singlefar_veto_thresh = singlefar_veto_thresh
@@ -378,6 +379,12 @@ class FinalSink(object):
 		# self.lookback_boundary = None
 		# coinc doc to be uploaded to gracedb
 		self.coincs_document = CoincsDocFromPostcoh(path, process_params, channel_dict)
+		# get the values needed for skymap uploads accompaning the trigger uploads
+		for param in process_params:
+			if param == 'cuda_postcoh_detrsp_fname':
+				self.cuda_postcoh_detrsp_fname = process_params[param]
+			if param == 'cuda_postcoh_output_skymap':
+				self.cuda_postcoh_output_skymap = process_params[param]
 		# snapshot parameters
 		self.path = path
 		self.output_prefix = output_prefix
@@ -413,6 +420,7 @@ class FinalSink(object):
 
 		# skymap
 		self.output_skymap = output_skymap
+		self.thread_upload_skymap = None
 
 	def __pass_test(self, candidate):
 		if self.candidate.far <= 0.0:
@@ -652,7 +660,6 @@ class FinalSink(object):
 	
 		return False
 
-
 	def __do_gracedb_alert(self, trigger):
 
 		if self.__need_trigger_control(trigger):
@@ -707,7 +714,7 @@ class FinalSink(object):
 
 		gracedb_upload_itrial = 1
 		# write a log to explain far
-		#for gracedb_id in gracedb_ids:
+		#for gid in gracedb_ids:
 
 		# delete the xmldoc and get a new empty one for next upload
 		coincs_document = self.coincs_document.get_another()
@@ -716,11 +723,11 @@ class FinalSink(object):
 		if not gracedb_ids:
 			print "gracedb upload of %s failed completely" % filename
 			return
-		gracedb_id = gracedb_ids[0]
+		gid = gracedb_ids[0]
 		log_message = "Optimal ra and dec from this coherent pipeline: (%f, %f) in degrees" % (trigger.ra, trigger.dec)
 		while gracedb_upload_itrial < 10:
 			try:
-				resp = self.gracedb_client.writeLog(gracedb_id, log_message , filename = None, tagname = "analyst_comments")
+				resp = self.gracedb_client.writeLog(gid, log_message , filename = None, tagname = "analyst_comments")
 				if resp.status != httplib.CREATED:
 						print >>sys.stderr, "gracedb upload of log failed"
 				else:
@@ -728,10 +735,18 @@ class FinalSink(object):
 			except:
 				gracedb_upload_itrial += 1
 
-		# FIXME: upload skymap if output_skymap is turned on
-#		if self.output_skymap == 1:
-			#skymap_loc = "%s/%s_%d_%d_%d" % (skymap_url, trigger.pivotal_ifo, trigger.end_time, trigger.end_time_ns, trigger.tmplt_idx)
-
+		# upload skymap if skymap_fname of the triggers is not empty
+		if len(trigger.skymap_fname) > 0:
+			# make sure the last round of output dumping is finished 
+			if self.thread_upload_skymap is not None and self.thread_upload_skymap.isAlive():
+				self.thread_upload_skymap.join()
+	
+			# free the last used memory
+			del self.thread_upload_skymap
+			# start new thread
+			self.thread_upload_skymap = threading.Thread(target = upload_skymap, args =(self.gracedb_client, gid, trigger.ifos, trigger.skymap_fname, trigger.end_time, self.output_skymap, self.cuda_postcoh_detrsp_fname, self.verbose, ))
+			self.thread_upload_skymap.start()
+		
 
 		if self.verbose:
 			print >>sys.stderr, "retrieving PSDs from whiteners and generating psd.xml.gz ..."
@@ -762,13 +777,13 @@ class FinalSink(object):
 		while common_messages:
 			message, filename, tag, contents = common_messages.pop()
 			gracedb_upload_itrial = 1
-			gracedb_id = gracedb_ids[0]
+			gid = gracedb_ids[0]
 			while gracedb_upload_itrial < 10:
 				try:
-					resp = self.gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
+					resp = self.gracedb_client.writeLog(gid, message, filename = filename, filecontents = contents, tagname = tag)
 					resp_json = resp.json()
 					if resp.status != httplib.CREATED:
-						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
+						print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gid)
 					else:
 						break
 				except:
@@ -833,6 +848,9 @@ class FinalSink(object):
 		if self.thread_snapshot_segment is not None and self.thread_snapshot_segment.isAlive():
 			self.thread_snapshot_segment.join()
 	
+		if self.thread_upload_skymap is not None and self.thread_upload_skymap.isAlive():
+			self.thread_upload_skymap.join()
+
 		self.fapupdater.wait_last_process_finish(self.fapupdater.procs_update_fap_stats)
 		self.fapupdater.wait_last_process_finish(self.fapupdater.procs_combine_stats)
 
@@ -1024,3 +1042,86 @@ class CoincsDocFromPostcoh(object):
 			row.event_id = "sngl_inspiral:event_id:%d" % iifo
 			sngl_inspiral_table.append(row)
 			iifo +=  1
+
+
+
+def call_plot_fits_func(pngname, fitsname, labelname, contour = None, colormap = "cylon"):
+	cmd = []
+	cmd += ["bayestar_plot_allsky_postcohspiir"]
+	cmd += ["-o", pngname]
+	cmd += ["--label", labelname]
+	cmd += [fitsname]
+	cmd += ["--colorbar"]
+	cmd += ["--colormap", colormap]
+	if contour:
+		cmd += ["--contour", str(contour)]
+	print cmd
+	proc = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+	proc_out, proc_err = proc.communicate()
+	return proc.returncode
+
+
+def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, event_id, event_time, cuda_postcoh_detrsp_fname, verbose = False):
+	input_fname = pipe_skymap_name
+	cmd = []
+	cmd += ["gstlal_postcoh_skymap2fits"]
+	cmd += ["--output-cohsnr", out_cohsnr_fits]
+	cmd += ["--output-prob", out_prob_fits]
+	cmd += ["--cuda-postcoh-detrsp-fname", cuda_postcoh_detrsp_fname]
+	cmd += ["--event-id", event_id]
+	cmd += ["--event-time", str(event_time)]
+	cmd += [input_fname]
+	if verbose:
+		print cmd
+	proc = subprocess.Popen(cmd, stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+	proc_out, proc_err = proc.communicate()
+	if verbose:
+		print >> sys.stderr, "skymap2fits return code", proc.returncode
+	return proc.returncode
+
+def upload_skymap(gracedb_client, gid, ifos, skymap_fname, end_time, cuda_postcoh_output_skymap, cuda_postcoh_detrsp_fname, verbose):
+	if not os.path.exists('gracedb'):
+		os.mkdir('gracedb')
+		
+	try:
+		os.mkdir('gracedb/' + gid)
+	except OSError:
+		pass
+
+	out_cohsnr_fits = 'gracedb/%s/%s_cohsnr_skymap.fits.gz' % (gid, ifos)
+	out_cohsnr_png = 'gracedb/%s/%s_cohsnr_skymap.png' % (gid, ifos)
+	# follow Leo Single's email that fits name needs to be fixed
+	out_prob_fits = 'gracedb/%s/spiir.fits.gz' % gid
+	out_prob_png = 'gracedb/%s/spiir.png' % gid
+	msg = ""
+	
+	try:
+		copied_name = 'gracedb/%s/%s' % (gid, os.path.split(skymap_fname)[-1])
+		if verbose:
+			print("copy pipeline skymap %s" % skymap_fname)
+		copyfile(skymap_fname, copied_name)
+	except:
+		msg += "no skymap generated in %s" % copied_name
+
+	returncode = call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, skymap_fname, gid, end_time, cuda_postcoh_detrsp_fname, verbose = verbose)
+	
+	if returncode == 0:
+		if verbose:
+			print("Uploading %s for event %s" % (out_prob_fits, gid))
+	
+		gracedb_client.writeLog(gid, "%s prob skymap, with 90 percent contour" % ifos, filename = out_prob_fits, filecontents = open(out_prob_fits).read(), tag_name = "sky_loc")
+	else:
+		msg += " can not make fits"
+	
+	returncode = call_plot_fits_func(out_cohsnr_png, out_cohsnr_fits, "Coherent SNR", contour = None, colormap = "spectral")
+	returncode = returncode & call_plot_fits_func(out_prob_png, out_prob_fits, "Prob", contour = 90, colormap = "cylon") # default colormap
+	if returncode == 0:
+		if verbose:
+			print("Uploading %s, %s for %s, %s " % (out_prob_png, out_cohsnr_png, gid, msg))
+		gracedb_client.writeLog(gid, "%s prob skymap" % ifos, filename = out_prob_png, filecontents = open(out_prob_png).read(), tag_name = "sky_loc")
+		gracedb_client.writeLog(gid, "%s cohsnr skymap" % ifos, filename = out_cohsnr_png, filecontents = open(out_cohsnr_png).read(), tag_name = "sky_loc")
+	else:
+		msg += " can not plot fits to pngs"
+		gracedb_client.writeLog(gid, "%s, check if it is due to that the trigger single SNR is below %s in the postcoh element for a skymap output" % (msg, str(cuda_postcoh_output_skymap)), filename = None, tag_name = "sky_loc")
+	
+
