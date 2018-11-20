@@ -118,7 +118,7 @@ class SourcePopulationModel(object):
                                         model_ids = model['event_id'].value
                                 except KeyError:
                                         # FIXME: assume sequential order if model['event_id'] doesn't exist
-                                        model_ids = np.arange(1,np.shape(f['coefficients'].value)[-1]+1)
+                                        model_ids = numpy.arange(1,numpy.shape(f['coefficients'].value)[-1]+1)
 			# PPoly can construct an array of polynomials by just
 			# feeding it the coefficients array all in one go, but then
 			# it insists on evaluating all of them at once.  we don't
@@ -132,7 +132,7 @@ class SourcePopulationModel(object):
                                 # maps template ID to the right coefficient array, since template IDs
                                 # in the bank may not be in sequential order
                                 try:
-                                        template_indices[template_id] = np.where(model_ids==template_id)[0][0]
+                                        template_indices[template_id] = numpy.where(model_ids==template_id)[0][0]
                                 except KeyError:
                                         raise KeyError("template ID %d is not in this model" % template_id)
 			self.polys = dict((template_id, PPoly(coefficients[:,:,[template_indices[template_id]]], snr_bp)) for template_id in template_ids)
