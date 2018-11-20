@@ -855,7 +855,7 @@ trigger_stats_feature_to_rank_lr(FeatureStats *feature, RankingStats *rank)
 		gsl_vector_set(rfapdata, ibin_x, pdf_acum * (rank->rank_pdf->step));
 	}
 
-	if (abs(gsl_vector_max(rfapdata) - 1.0) > 1e-2)
+	if (fabs(gsl_vector_max(rfapdata) - 1.0) > 1e-2)
 		fprintf(stderr, "fap cmax %f\n", gsl_vector_max(rfapdata));
 }
 
@@ -957,7 +957,7 @@ trigger_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 		gsl_vector_set(rfapdata, ibin_x, pdf_acum * (rank->rank_pdf->step));
 	}
 
-	if (abs(gsl_vector_max(rfapdata) - 1.0) > 1e-2)
+	if (fabs(gsl_vector_max(rfapdata) - 1.0) > 1e-2)
 		fprintf(stderr, "fap cmax %f\n", gsl_vector_max(rfapdata));
 }
 
@@ -1502,7 +1502,7 @@ double
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 {
 	RankingStats *rank = stats->rank;
-	if (abs(snr) < EPSILON || abs(chisq) < EPSILON)
+	if (fabs(snr) < EPSILON || fabs(chisq) < EPSILON)
 		return 0.0;
 	double rank_val = trigger_stats_get_val_from_map(snr, chisq, rank->rank_map);
 	/* the bins1D_get_idx will compute log10(x) first and then find index, so need to 10^rank_val for this function */
