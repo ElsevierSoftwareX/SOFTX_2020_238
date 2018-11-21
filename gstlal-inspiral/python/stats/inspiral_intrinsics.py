@@ -133,8 +133,8 @@ class SourcePopulationModel(object):
                                 # in the bank may not be in sequential order
                                 try:
                                         template_indices[template_id] = numpy.where(model_ids==template_id)[0][0]
-                                except KeyError:
-                                        raise KeyError("template ID %d is not in this model" % template_id)
+                                except IndexError:
+                                        raise IndexError("template ID %d is not in this model" % template_id)
 			self.polys = dict((template_id, PPoly(coefficients[:,:,[template_indices[template_id]]], snr_bp)) for template_id in template_ids)
 			self.max_snr = snr_bp.max()
 		else:
