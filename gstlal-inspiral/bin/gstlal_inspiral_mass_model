@@ -57,8 +57,10 @@ rate.filter_array(massBA.array, rate.gaussian_window(1.5, 1.5, sigma = 5))
 
 # Assign the proper mass probabilities
 ids = {}
+tmplt_ids = []
 for row in sngl_inspiral_table:
 	assert row.template_id not in ids
+        tmplt_ids.append(int(row.template_id))
 	if options.model == "salpeter":
 		ids[row.template_id] = numpy.log(row.mass1**-2.35 / massBA[row.mass1, row.mass2])
 	else:
@@ -73,4 +75,5 @@ f = h5py.File(options.output, "w")
 # put in a dummy interval for the piecewise polynomials in SNR
 f.create_dataset("SNR", data = numpy.array([0., 100.]))
 f.create_dataset("coefficients", data = coefficients, compression="gzip")
+f.create_dataset("event_id", data = numpy.array(tmplt_ids).astype(int))
 f.close()
