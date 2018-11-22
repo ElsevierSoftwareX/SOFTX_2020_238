@@ -82,8 +82,13 @@ while True:
 		raise ValueError("gps_time should be the 6+ digits of the given name, could not find the digits from %s" % data_name)
 
 	if options.verbose:
-		print "generating detrsp map at %l gps time" % long(gps_time)
+		print "generating detrsp map at %s gps time" % str(gps_time)
+
 	call_update_map(options.output, options.ifo_horizons, gps_time, options.chealpix_order, verbose = False)
+
+	if options.verbose:
+		print "finished detrsp map at %s gps time" % str(gps_time)
+
 	time.sleep(int(options.period))
 
 
