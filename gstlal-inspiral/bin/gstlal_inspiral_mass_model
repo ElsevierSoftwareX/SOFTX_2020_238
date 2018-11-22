@@ -32,28 +32,34 @@ from lal import rate
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
+def chirpmass(m1, m2):
+	return (m1 * m2)**.6 / (m1 + m2)**.2
+
 parser = argparse.ArgumentParser(description = "Create analytic mass models for prior weighting of templates")
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: salpeter. If you want another one, submit a patch.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: salpeter, ligo. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
 # Read the template bank file
 xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-mass1 = sngl_inspiral_table.get_column("mass1")
-mass2 = sngl_inspiral_table.get_column("mass2")
-num_templates = len(mass1)
-num_bins = max(2, int((num_templates / 100.)**.5))
-min_mass = min(min(mass1), min(mass2)) - 1.e-6
-max_mass = max(max(mass1), max(mass2)) + 1.e-6
-massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min_mass, max_mass, num_bins), rate.LogarithmicBins(min_mass, max_mass, num_bins))))
-print min_mass, max_mass
-for m1, m2 in zip(mass1, mass2):
-	massBA.count[(m1, m2)] += 1
-	massBA.count[(m2, m1)] += 1
-rate.filter_array(massBA.array, rate.gaussian_window(1.5, 1.5, sigma = 5))
+
+#
+# Someday if noise is actually a pdf in mass this might matter
+#
+# mass1 = sngl_inspiral_table.get_column("mass1")
+# mass2 = sngl_inspiral_table.get_column("mass2")
+# num_templates = len(mass1)
+# num_bins = max(2, int((num_templates / 100.)**.5))
+# min_mass = min(min(mass1), min(mass2)) - 1.e-6
+# max_mass = max(max(mass1), max(mass2)) + 1.e-6
+# massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min_mass, max_mass, num_bins), rate.LogarithmicBins(min_mass, max_mass, num_bins))))
+# for m1, m2 in zip(mass1, mass2):
+# 	massBA.count[(m1, m2)] += 1
+# 	massBA.count[(m2, m1)] += 1
+# rate.filter_array(massBA.array, rate.gaussian_window(1.5, 1.5, sigma = 5))
 
 # Assign the proper mass probabilities
 ids = {}
@@ -61,14 +67,26 @@ tmplt_ids = []
 for row in sngl_inspiral_table:
 	assert row.template_id not in ids
         tmplt_ids.append(int(row.template_id))
+	primary = max(row.mass1, row.mass2)
 	if options.model == "salpeter":
-		ids[row.template_id] = numpy.log(row.mass1**-2.35 / massBA[row.mass1, row.mass2])
+		ids[row.template_id] = primary**-2.35# / massBA[row.mass1, row.mass2]
+	elif options.model == "ligo":
+		# assume a 0.15 solar mass std deviation, this should capture both population distribution and snr effects
+		sigma = 0.15
+		mean = 1.2
+		bnsprob = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(chirpmass(row.mass1, row.mass2) - mean)**2 / 2. / sigma**2)
+		# normalised over 5 -- 45 Msun
+		bbhprob = 0.46 * primary**-1.6
+		# From: https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/RatesAndSignificance/O1O2CatalogRates
+		bns_to_bbh_rate = 916. / 56.
+		ids[row.template_id] = (bns_to_bbh_rate * bnsprob + bbhprob)# / massBA[row.mass1, row.mass2]
 	else:
 		raise ValueError("Invalid mass model")
 
+norm = sum(ids.values())
 coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
-	coefficients[0,0,tid] = ids[tid]
+	coefficients[0,0,tid] = numpy.log(ids[tid] / norm * len(sngl_inspiral_table))
 
 # Write it out
 f = h5py.File(options.output, "w")
