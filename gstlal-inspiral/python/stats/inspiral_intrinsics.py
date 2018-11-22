@@ -118,7 +118,7 @@ class SourcePopulationModel(object):
                                         model_ids = model['event_id'].value
                                 except KeyError:
                                         # FIXME: assume sequential order if model['event_id'] doesn't exist
-                                        model_ids = numpy.arange(1,numpy.shape(model['coefficients'].value)[-1]+1)
+                                        model_ids = numpy.arange(numpy.shape(model['coefficients'].value)[-1])
 			# PPoly can construct an array of polynomials by just
 			# feeding it the coefficients array all in one go, but then
 			# it insists on evaluating all of them at once.  we don't
