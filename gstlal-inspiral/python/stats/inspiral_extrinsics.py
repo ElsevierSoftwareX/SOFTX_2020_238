@@ -1157,7 +1157,47 @@ class TimePhaseSNR(object):
 		from_hdf() method below.
 		"""
 
-		self.norm = (4 * numpy.pi**2)**2
+		# This is such that the integral over the sky and over all
+		# orientations is 1 for each combo. NOTE!!! the actual
+		# probability of getting sources from these combos is not the
+		# same. However, that is calculated as part of the
+		# p_of_instruments_given_horizon() normalization.
+		#
+		# If you run this code you will see it is normalized
+		#
+		# import numpy
+		# from gstlal.stats import inspiral_extrinsics
+		#
+		# TPDPDF = inspiral_extrinsics.InspiralExtrinsics()
+		# time, phase, deff = inspiral_extrinsics.TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
+		# # This actually doesn't matter it is just needed to map from eff distance to
+		# # snr, but the TimePhaseSNR code actually undoes this...
+		# h = {"H1":1., "L1":1., "V1":1.}
+		#
+		# combos = TPDPDF.time_phase_snr.combos + (("H1",),("L1",),("V1",))
+		#
+		# result = dict((k, 0.) for k in combos)
+		#
+		# def extract_dict(DICT, keys):
+		# 	return dict((k,v) for k,v in DICT.items() if k in keys)
+		#
+		# for i in range(len(time["H1"])):
+		# 	t = dict((k, v[i]) for k, v in time.items())
+		# 	p = dict((k, v[i]) for k, v in phase.items())
+		# 	s = dict((k, h[k] / v[i]) for k, v in deff.items())
+		#
+		# 	for ifos in combos:
+		# 		t2 = extract_dict(t, ifos)
+		# 		p2 = extract_dict(p, ifos)
+		# 		s2 = extract_dict(s, ifos)
+		# 		h2 = extract_dict(h, ifos)
+		# 		result[ifos] += TPDPDF.time_phase_snr(t2,p2,s2,h2) * (sum(x**2 for x in s2.values())**.5)**4 / len(time["H1"]) * 1. / (16. * numpy.pi**2)
+		#
+		# print result
+		# >>> {('H1', 'V1'): array([ 1.00000003]), ('H1', 'L1', 'V1'): array([ 1.00000004]), ('L1', 'V1'): array([ 0.99999999]), ('L1',): 0.99999999999646638, ('H1', 'L1'): array([ 0.99999997]), ('H1',): 0.99999999999646638, ('V1',): 0.99999999999646638}
+
+		self.norm = {('H1', 'V1'):219.32602529, ('H1', 'L1', 'V1'):32.21833921, ('L1', 'V1'):237.5171343, ('L1',):0.0358423687136922, ('H1', 'L1'):1836.16095577, ('H1',):0.0358423687136922, ('V1',):0.0358423687136922}
+
 		self.tree_data = tree_data
 		self.margsky = margsky
 
@@ -1404,17 +1444,17 @@ class TimePhaseSNR(object):
 		array([  9.51668418e-14], dtype=float32)
 
 		"""
+		combo = tuple(sorted(time))
 		#
 		# NOTE shortcut for single IFO
 		#
 		if len(snr) == 1:
-			return 1. /  self.norm * 5.66 / (sum(s**2 for s in snr.values())**.5)**4
+			return 1. /  self.norm[combo] * 5.66 / (sum(s**2 for s in snr.values())**.5)**4
 
 		deff = dict((k, horizon[k] / snr[k] * 8.0) for k in snr)
 		# FIXME can this be a function call??
 		slices = dict((pair, [3*n,3*n+1,3*n+2]) for n,pair in enumerate(self.instrument_pairs(time)))
 		point = self.dtdphideffpoints(time, phase, deff, slices)
-		combo = tuple(sorted(time))
 		treedataslices = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 		nearestix = self.KDTree[combo].query(point)[1]
 		nearestpoint = self.tree_data[nearestix, treedataslices]
@@ -1424,7 +1464,7 @@ class TimePhaseSNR(object):
 		# that goes like rho^-4 with a somewhat arbitrary normilization
 		# which comes form 5.66 ~ (4**2 + 4**2)**.5, so that the factor
 		# is 1 for a double right at threshold.
-		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm * 5.66 / (sum(s**2 for s in snr.values())**.5)**4
+		return numpy.exp(-D2 / 2.) * self.margsky[combo][nearestix] / self.norm[combo] * 5.66 / (sum(s**2 for s in snr.values())**.5)**4
 
 
 #
