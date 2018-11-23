@@ -238,8 +238,7 @@ def parse_command_line():
     #parser.add_option("--num-k10-gpu", metavar = "num-k10-gpu", type = "int", default = 4, help = "Number of GPUs to process postcoh.")
     parser.add_option("--code-version", help = "set the code version for the pipeline (required).")
     parser.add_option("--mode", default = "Online", metavar = "Online|Offline", help = "set the online (optional).")
-
-
+    parser.add_option("--request-data", default = "O2Replay_H1_L1_V1", help = " set the online data option for online data service to be activated.")
 
     options, filenames = parser.parse_args()
 
