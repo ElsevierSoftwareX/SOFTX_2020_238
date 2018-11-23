@@ -345,7 +345,7 @@ class FinalSink(object):
 		self.need_candidate_check = False
 		self.cur_event_table = lsctables.New(postcoh_table_def.PostcohInspiralTable)
 		# FIXME: hard-coded chisq_ratio_thresh to veto 
-		self.chisq_ratio_thresh = 10
+		self.chisq_ratio_thresh = 8
 		self.superevent_thresh = superevent_thresh
 		self.nevent_clustered = 0
 		self.singlefar_veto_thresh = singlefar_veto_thresh
@@ -671,7 +671,7 @@ class FinalSink(object):
 
 		self.coincs_document.assemble_tables(trigger)
 		xmldoc = self.coincs_document.xmldoc
-		filename = "%s_%s_%d_%d.xml" % (trigger.ifos, trigger.end_time, trigger.tmplt_idx, trigger.pix_idx)
+		filename = "%s_%s_%d_%d.xml" % (trigger.ifos, trigger.end_time, trigger.bankid, trigger.tmplt_idx)
 		#
 		# construct message and send to gracedb.
 		# we go through the intermediate step of
