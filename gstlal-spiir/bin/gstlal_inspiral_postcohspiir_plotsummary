@@ -474,14 +474,14 @@ SELECT
 	postcoh.mtotal,
 	postcoh.mchirp,
 	postcoh.ifos,
-		postcoh.mass1,
-		postcoh.mass2,
-		postcoh.spin1z,
-		postcoh.spin2z,
-		postcoh.snglsnr_H,
-		postcoh.chisq_H,
-		postcoh.snglsnr_L,
-		postcoh.chisq_L
+	postcoh.mass1,
+	postcoh.mass2,
+	postcoh.spin1z,
+	postcoh.spin2z,
+	postcoh.snglsnr_H,
+	postcoh.chisq_H,
+	postcoh.snglsnr_L,
+	postcoh.chisq_L
 FROM
 	postcoh
 ORDER BY
@@ -806,7 +806,7 @@ FROM
 				if missed:
 					if cnt == 0:
 						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
-						f.write("Missed in %s: %d" % (", ".join(sorted(participating_instruments)), len(missed)))
+						f.write("Missed in %s: %d" % (", ".join(sorted(self.on_instruments)), len(missed)))
 						for rank, sim in enumerate(missed):
 							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, self.on_instruments), sim.inclination, sim.alpha4, sim.alpha5, missed_decisive_charsnr(sim, self.on_instruments)])
 					legend.append("Missed")
@@ -1466,6 +1466,7 @@ WHERE
 				fig, axes = create_plot(None, r"Number of Events")
 				axes.loglog()
 				# fars in ascending order --> ifars in descending order
+				fars = [i for i in fars if i >0.0]
 				zerolag_stats = 1. / numpy.array(sorted(fars))
 				expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 1000)
 				expected_count_x = self.livetime / expected_count_y

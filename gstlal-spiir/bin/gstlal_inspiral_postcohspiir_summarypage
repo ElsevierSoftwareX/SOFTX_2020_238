@@ -50,7 +50,7 @@ sched_doc = webpage.tab("schedule", "Schedule", "Schedule")
 #
 
 nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.png" """)])]
-nav+=[summary, injparams, injrecovery, sens, back, money, about_doc, sched_doc]
+nav+=[summary, injparams, injrecovery, back, money, about_doc, sched_doc]
 nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
 thispage+=nav
 thispage+=webpage.elem("br",[])
@@ -297,7 +297,6 @@ money_div = money([money_about, money_ifar, money_table])
 
 
 if opts.open_box:
-
 	back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
 
 	# chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
@@ -306,7 +305,7 @@ if opts.open_box:
 
 	# chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
 
-	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
+	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_ifar_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
 	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_summary_table.json' % opts.output_user_tag[0]), "%s_summary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
 	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
 	money_table += [webpage.elem("div", [], "id=%s_summary_table" % opts.output_user_tag[0])]

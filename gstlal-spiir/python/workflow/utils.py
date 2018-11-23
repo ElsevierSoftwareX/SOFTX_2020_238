@@ -1,4 +1,4 @@
-
+import os
 import math
 import subprocess
 from glue import pipeline
@@ -132,17 +132,10 @@ class generic_node(InspiralNode):
 			# Keep track of the cache files being created
 			self.cache_outputs.setdefault(opt, []).append(cache_file_name)
 
-def get_latest_online_output(outdir, keyword):
-	ls_proc = subprocess.Popen(["ls", outdir], stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-	ls_out = ""
-	try:
-		ls_out = subprocess.check_output(["grep", keyword], stdin = ls_proc.stdout)
-	except:
-		print "no %s file yet" % keyword
-		return
-	ls_proc.wait()
-	ls_fnames = ls_out.split("\n")
-	return "%s/%s" % (outdir, max(ls_fnames))
+def get_output(outdir, keyword):
+	ls_fnames = os.listdir(str(outdir))
+	ls_out = [fname for fname in ls_fnames if keyword in fname]
+	return ["%s/%s" % (outdir, fname) for fname in ls_out]
 
 def get_start_end_time(fname):
 	start_time = fname.split('_')[-2]

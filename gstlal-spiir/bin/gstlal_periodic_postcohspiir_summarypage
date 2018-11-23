@@ -28,8 +28,10 @@
 from optparse import OptionParser
 import os
 import time
+import re
 import subprocess
 from gstlal.workflow import utils as workflow_utils
+import pdb
 
 def call_combo_and_plotsummary(ifos, output_path, usertag, zerolag_list, common_start, common_duration, segements_name, segmentxml, backgroundxml = None, injxml = None, tmpspace = None, verbose = False):
 	cmd = []
@@ -81,12 +83,13 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--webserver-dir", help = "Set the directory for the webserver.  Required.  Example /archive/home/channa/public_html/highmass_months_23-24_summary_page")
 	parser.add_option("--open-box", action = "store_true", help = "Produce open box page")
-	parser.add_option("--title", default="gstlal_inspiral offline analysis")
-
+	parser.add_option("--title", default="gstlal_spiir offline analysis")
+	parser.add_option("--start-gps-time", metavar="gps time", default = None, help ="Plot the results from near this gps time and continue if set period, required")
+	parser.add_option("--period", metavar = "N", default = 86400, help = "Update interval (required).")
 
 	options, tmp = parser.parse_args()
 
-	required_options = ["inj_outdirs", "noninj_outdirs", "injxml", "ifos"]
+	required_options = ["inj_outdirs", "noninj_outdirs", "injxml", "ifos", "start_gps_time"]
 	missing_options = []
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
@@ -101,55 +104,72 @@ noninj_ndir = len(noninj_outdirs)
 inj_outdirs  = options.inj_outdirs.split(',')
 inj_ndir = len(inj_outdirs)
 assert noninj_ndir == inj_ndir
+period = int(options.period)
+gps_time = int(options.start_gps_time)
 
-last_inj_zerolag_list = ["nothing" for i in range(0, inj_ndir)]
-last_inj_segment_list = ["nothing" for i in range(0, inj_ndir)]
 
+def get_nearest_output(output_list, gps_time, period):
+	for one_output in output_list:
+		search_result = re.search(r'\d{9,11}', one_output)
+		try:
+			this_gps = search_result.group()
+		except:
+			print "no gps time in %s" % one_output
+			return None
+		if abs(int(this_gps) - gps_time) < period/2:
+			return one_output
 
 while True:
 	# get new zerolags from all inj directories, check if segment is ready
-	latest_inj_zerolag_list = [workflow_utils.get_latest_online_output(one_outdir, "zerolag") for one_outdir in inj_outdirs]
-	
-	latest_inj_segment_list = [workflow_utils.get_latest_online_output(one_outdir, "SEGMENTS") for one_outdir in inj_outdirs]
+	inj_zerolag_list = [get_nearest_output(workflow_utils.get_output(one_outdir, "zerolag"), gps_time, period) for one_outdir in inj_outdirs]
+	inj_segment_list = [get_nearest_output(workflow_utils.get_output(one_outdir, "SEGMENT"), gps_time, period) for one_outdir in inj_outdirs]
+
 	# get new zerolags from all noninj directories
-	latest_noninj_zerolag_list = [workflow_utils.get_latest_online_output(one_outdir, "zerolag") for one_outdir in noninj_outdirs]
-	
-	latest_noninj_segment_list = [workflow_utils.get_latest_online_output(one_outdir, "SEGMENTS") for one_outdir in noninj_outdirs]
-	
-	all_zerolag_ok = sum([latest_inj_zerolag_list[idx] != last_inj_zerolag_list[idx] for idx in range(0, inj_ndir)])
-	all_segment_ok = sum([latest_inj_segment_list[idx] != last_inj_segment_list[idx] for idx in range(0, inj_ndir)])
-	if all_zerolag_ok == inj_ndir and all_segment_ok == inj_ndir:
-		# extract injections only from matched inj latest time range
-		latest_time_range = [workflow_utils.get_start_end_time(one_zerolag) for one_zerolag in latest_inj_zerolag_list]
-		common_start = min([latest_time_range[idx][0] for idx in range(0, inj_ndir)])
-		common_end = max([latest_time_range[idx][1] for idx in range(0, inj_ndir)])
-		common_duration = int(common_end) - int(common_start)
-		outinjxml = None
+	noninj_zerolag_list = [get_nearest_output(workflow_utils.get_output(one_outdir, "zerolag"), gps_time, period) for one_outdir in noninj_outdirs]
+	noninj_segment_list =  [get_nearest_output(workflow_utils.get_output(one_outdir, "SEGMENT"), gps_time, period) for one_outdir in noninj_outdirs]
 
-		output_path = "%d_%d" % (common_start, common_duration)
-		try:
-			os.mkdir(output_path)
-		except:
-			pass
 
-		inj_usertag = "inj0"
-		call_combo_and_plotsummary(options.ifos, output_path, inj_usertag, latest_inj_zerolag_list, common_start, common_duration, options.segments_name, latest_inj_segment_list[0], injxml = options.injxml, tmpspace = options.tmp_space, verbose = options.verbose)
-		# extract noninj zerolags only from noninj latest time range
-		latest_time_range = [workflow_utils.get_start_end_time(one_zerolag) for one_zerolag in latest_noninj_zerolag_list]
-		common_start = min([latest_time_range[idx][0] for idx in range(0, noninj_ndir)])
-		common_end = max([latest_time_range[idx][1] for idx in range(0, noninj_ndir)])
-		common_duration = int(common_end) - int(common_start)
-		noninj_usertag = str(common_start)
+	valid_inj_zerolag_list = filter(lambda x: x is not None, inj_zerolag_list)
+	valid_inj_segment_list = filter(lambda x: x is not None, inj_segment_list)
+	valid_noninj_zerolag_list = filter(lambda x: x is not None, noninj_zerolag_list)
+	valid_noninj_segment_list = filter(lambda x: x is not None, noninj_segment_list)
 
-		# get background margi_stats xmls from each directory
+	valid_inj_ndir = len(valid_inj_zerolag_list)
+	valid_noninj_ndir = len(valid_noninj_zerolag_list)
 
-		latest_noninj_background_list = [workflow_utils.get_latest_online_output(one_outdir, "w") for one_outdir in noninj_outdirs]
-		call_combo_and_plotsummary(options.ifos, output_path, noninj_usertag, latest_noninj_zerolag_list, common_start, common_duration, options.segments_name, latest_noninj_segment_list[0], backgroundxml = ','.join(latest_noninj_background_list), tmpspace = options.tmp_space, verbose = options.verbose)
-		usertags = [noninj_usertag, inj_usertag]
-		webserver_dir= "%s/%d" % (options.webserver_dir, common_start)
-		call_summarypage(output_path, usertags, webserver_dir, open_box = options.open_box, title = options.title, verbose = options.verbose)
-	last_inj_zerolag_list = latest_inj_zerolag_list
-	latest_inj_zerolag_list = []
+	# extract injections only from matched inj latest time range
+	time_range = [workflow_utils.get_start_end_time(one_zerolag) for one_zerolag in valid_inj_zerolag_list]
+	common_start = min([time_range[idx][0] for idx in range(0, valid_inj_ndir)])
+	common_end = max([time_range[idx][1] for idx in range(0, valid_inj_ndir)])
+	common_duration = int(common_end) - int(common_start)
+	outinjxml = None
+
+	output_path = "%d_%d" % (common_start, common_duration)
+	try:
+		os.mkdir(output_path)
+	except:
+		pass
+
+	inj_usertag = "inj0"
+	call_combo_and_plotsummary(options.ifos, output_path, inj_usertag, valid_inj_zerolag_list, common_start, common_duration, options.segments_name, valid_inj_segment_list[0], injxml = options.injxml, tmpspace = options.tmp_space, verbose = options.verbose)
+
+	# extract noninj zerolags only from noninj latest time range
+	time_range = [workflow_utils.get_start_end_time(one_zerolag) for one_zerolag in valid_noninj_zerolag_list]
+	common_start = min([time_range[idx][0] for idx in range(0, valid_noninj_ndir)])
+	common_end = max([time_range[idx][1] for idx in range(0, valid_noninj_ndir)])
+	common_duration = int(common_end) - int(common_start)
+	noninj_usertag = str(common_start)
+
+	# get background margi_stats xmls from each directory
+
+	noninj_background_list = [workflow_utils.get_output(one_outdir, "w")[0] for one_outdir in noninj_outdirs]
+	valid_noninj_background_list = filter(lambda x: x is not None, noninj_background_list)
+
+	call_combo_and_plotsummary(options.ifos, output_path, noninj_usertag, valid_noninj_zerolag_list, common_start, common_duration, options.segments_name, valid_noninj_segment_list[0], backgroundxml = ','.join(valid_noninj_background_list), tmpspace = options.tmp_space, verbose = options.verbose)
+	usertags = [noninj_usertag, inj_usertag]
+	webserver_dir= "%s/%d" % (options.webserver_dir, common_start)
+	call_summarypage(output_path, usertags, webserver_dir, open_box = options.open_box, title = options.title, verbose = options.verbose)
 
 	# sleep 10mins
-	time.sleep(600)
+	time.sleep(period)
+	gps_time += period
