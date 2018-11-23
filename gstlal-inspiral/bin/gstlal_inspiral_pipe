@@ -1012,7 +1012,7 @@ def parse_command_line():
 
 	# Template bank
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
-	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'file', 'salpeter' and 'ligo'")
+	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'file' and 'ligo'")
 	parser.add_option("--mass-model-file", metavar = "filename", help = "Set the name of the mass model file, e.g., mass_model.h5.  Required if --mass-model=file")
 
 	# SVD bank construction options
@@ -1078,8 +1078,8 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	if options.mass_model not in ("salpeter", "ligo", "file"):
-		raise ValueError("--mass-model must be 'salpeter', 'ligo' or 'file'")
+	if options.mass_model not in ("ligo", "file"):
+		raise ValueError("--mass-model must be 'ligo' or 'file'")
 	if options.mass_model == "file" and not options.mass_model_file:
 		raise ValueError("--mass-model-file must be provided if --mass-model=file")
 
