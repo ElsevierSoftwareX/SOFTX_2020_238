@@ -38,6 +38,10 @@ extern "C" {
 }
 #endif
 
+#ifdef SPIIR_FIX_COMPLEX
+#define complex _Complex
+#endif
+
 // for gpu debug
 #define gpuErrchk(ans) { gpuAssert((ans), __FILE__, __LINE__); }
 inline void gpuAssert(cudaError_t code, char *file, int line, bool abort=true)
@@ -521,7 +525,8 @@ GstFlowReturn filter_d(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 		for (j = 0; j < bank->num_templates; ++j)
 		{
 			temp = bank->h_output_s[j*output_length+i];
-			output[i*bank->num_templates+j] =	(double)temp.re + ((double)temp.im)*_Complex_I;
+			__real__ output[i*bank->num_templates+j] = (double)temp.re;
+			__imag__ output[i*bank->num_templates+j] = (double)temp.im;
 		}
 	}
 
@@ -706,7 +711,8 @@ GstFlowReturn filter_s(GSTLALIIRBankCuda *element, GstBuffer *outbuf)
 		for (j = 0; j < bank->num_templates; ++j)
 		{
 			temp = bank->h_output_s[ j*output_length+i ];
-			output[ i*bank->num_templates+j ] = temp.re + temp.im*_Complex_I;
+			__real__ output[ i*bank->num_templates+j ] = (double)temp.re;
+			__imag__ output[ i*bank->num_templates+j ] = (double)temp.im;
 		}
 	}
 	/*

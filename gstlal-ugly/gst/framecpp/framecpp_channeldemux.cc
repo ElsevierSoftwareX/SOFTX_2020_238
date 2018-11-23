@@ -907,8 +907,16 @@ static GstFlowReturn chain(GstPad *pad, GstBuffer *inbuf)
 			verifier.ValidateMetadata(false);
 			verifier.CheckFileChecksumOnly(true);
 
+#ifdef SPIIR_OLD_FRAMECPP
 			if(verifier(ifs) != 0)
 				throw std::runtime_error(verifier.ErrorInfo());
+#else
+			try {
+				verifier(ifs);
+			} catch(const FrameCPP::Common::VerifyException& E) {
+				throw std::runtime_error(E.what());
+			}
+#endif
 		}
 
 		FrameCPP::Common::MemoryBuffer *ibuf(new FrameCPP::Common::MemoryBuffer(std::ios::in));

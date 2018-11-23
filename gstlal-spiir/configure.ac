@@ -321,6 +321,35 @@ AS_IF([test "x$with_cuda" != "xno"], [
 AC_DEFINE([HAVE_CUDA], [test "x${HAVE_CUDA}" == "xyes"], [Defined if you have cuda])
 AM_CONDITIONAL([COND_CUDA], [test "x${HAVE_CUDA}" == "xyes"])
 
+AC_MSG_CHECKING([complex support in nvcc])
+AS_IF([printf "#include <complex.h>\n int main(int argc, char **argv){complex double c; return 0;}" | ${with_cuda}/bin/nvcc -o /dev/null --compile --x cu - 2>/dev/null], [
+	      AC_MSG_RESULT([yes])
+], [
+	      AC_MSG_RESULT([no (working around)])
+	      AC_SUBST([SPIIR_FIX_COMPLEX_CFLAGS], ["-DSPIIR_FIX_COMPLEX"])])
+
+
+
+#
+# Check for lapacke vs openblas
+#
+AC_CHECK_LIB([lapacke], [LAPACKE_dgetrf], [
+			AC_SUBST([LAPACKE_CFLAGS], ["-DSPIIR_HAVE_LAPACKE"])
+			AC_SUBST([LAPACKE_LIBS], ["-llapacke"])
+], [
+			AC_SUBST([LAPACKE_CFLAGS], ["$($PKG_CONFIG --cflags openblas)"])
+			AC_SUBST([LAPACKE_LIBS], ["$($PKG_CONFIG --libs openblas)"])
+], [-llapack])
+
+
+#
+# Check for cython
+#
+AC_CHECK_PROG(have_cython, cython, yes)
+AS_IF([test x"$have_cython" != x"yes"], [
+	    AC_MSG_ERROR([Cython not found.])])
+
+
 
 #
 # Check for Chealpix

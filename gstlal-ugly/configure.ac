@@ -307,6 +307,10 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	AX_COMPARE_VERSION([$framecpp_VERSION], [ge], [2.0.0], [
 		AC_DEFINE([HAVE_FRAMECPP_2x], [1], [Defined if framecpp >= 2.x])
 	])
+	AX_COMPARE_VERSION([$framecpp_VERSION], [lt], [2.5.0], [
+		AC_MSG_NOTICE([old version of framecpp detected (working around)])
+		AC_SUBST([SPIIR_OLD_FRAMECPP_CFLAGS],[-DSPIIR_OLD_FRAMECPP])
+	])
 	# FIXME:  the "-std=c++0x" option is here as a temporary hack until
 	# we can find a way to get the autoconf macros to configure the
 	# cxxflags for us.  note that in later versions of g++ the flag

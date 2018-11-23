@@ -37,8 +37,13 @@
 #include <lal/TimeDelay.h>
 #include <lal/LALSimulation.h>
 
+#ifdef SPIIR_HAVE_LAPACKE
 #include <lapacke/lapacke_config.h>
 #include <lapacke/lapacke.h>
+#else
+#include <lapacke_config.h>
+#include <lapacke.h>
+#endif
 
 //#include <LIGOLw_xmllib/LIGOLwHeader.h>
 #include <math.h>
