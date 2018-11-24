@@ -411,6 +411,77 @@ static struct PyMethodDef methods[] = {
 
 
 /*
+ * comparison is defined specifically for the coincidence code, allowing a
+ * bisection search of a sorted trigger list to be used to identify the
+ * subset of triggers that fall within a time interval
+ */
+
+
+static PyObject *richcompare(PyObject *self, PyObject *other, int op_id)
+{
+	PyObject *converted = PyObject_CallFunctionObjArgs(LIGOTimeGPSType, other, NULL);
+	PyObject *attr;
+	PyObject *result;
+	LIGOTimeGPS t_other;
+	int cmp;
+
+	if(!converted)
+		return NULL;
+
+	attr = PyObject_GetAttrString(converted, "gpsSeconds");
+	if(!attr) {
+		Py_DECREF(converted);
+		return NULL;
+	}
+	t_other.gpsSeconds = PyInt_AsLong(attr);
+	Py_DECREF(attr);
+	attr = PyObject_GetAttrString(converted, "gpsNanoSeconds");
+	if(!attr) {
+		Py_DECREF(converted);
+		return NULL;
+	}
+	t_other.gpsNanoSeconds = PyInt_AsLong(attr);
+	Py_DECREF(attr);
+	Py_DECREF(converted);
+
+	cmp = XLALGPSCmp(&((gstlal_GSTLALSnglInspiral *) self)->row.end, &t_other);
+
+	switch(op_id) {
+	case Py_LT:
+		result = (cmp < 0) ? Py_True : Py_False;
+		break;
+
+	case Py_LE:
+		result = (cmp <= 0) ? Py_True : Py_False;
+		break;
+
+	case Py_EQ:
+		result = (cmp == 0) ? Py_True : Py_False;
+		break;
+
+	case Py_NE:
+		result = (cmp != 0) ? Py_True : Py_False;
+		break;
+
+	case Py_GE:
+		result = (cmp >= 0) ? Py_True : Py_False;
+		break;
+
+	case Py_GT:
+		result = (cmp > 0) ? Py_True : Py_False;
+		break;
+
+	default:
+		PyErr_BadInternalCall();
+		return NULL;
+	}
+
+	Py_INCREF(result);
+	return result;
+}
+
+
+/*
  * Type
  */
 
@@ -426,6 +497,7 @@ static PyTypeObject gstlal_GSTLALSnglInspiral_Type = {
 	.tp_name = MODULE_NAME ".GSTLALSnglInspiral",
 	.tp_new = __new__,
 	.tp_dealloc = __del__,
+	.tp_richcompare = richcompare,
 };
 
 

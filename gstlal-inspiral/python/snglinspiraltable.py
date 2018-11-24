@@ -33,31 +33,6 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 	spin1 = lsctables.SnglInspiral.spin1
 	spin2 = lsctables.SnglInspiral.spin2
 
-	#
-	# comparison is defined specifically for the coincidence code,
-	# allowing a bisection search of a sorted trigger list to be used
-	# to identify the subset of triggers that fall within a time
-	# interval
-	#
-
-	def __eq__(self, other):
-		return self.end == other
-
-	def __ne__(self, other):
-		return self.end != other
-
-	def __lt__(self, other):
-		return self.end < other
-
-	def __le__(self, other):
-		return self.end <= other
-
-	def __gt__(self, other):
-		return self.end > other
-
-	def __ge__(self, other):
-		return self.end >= other
-
 	@property
 	def process_id(self):
 		return self.process_id_type(self._process_id)
