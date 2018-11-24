@@ -13,7 +13,7 @@ from fixtures import *
 from gstlal.pipeutil import *
 from gstlal.lloidparts import mkelems_fast
 from gstlal.pipeparts import mkappsink
-import gstlal.snglinspiraltable import GSTLALSnglInspiral
+from gstlal.snglinspiraltable import GSTLALSnglInspiral
 import random
 
 
