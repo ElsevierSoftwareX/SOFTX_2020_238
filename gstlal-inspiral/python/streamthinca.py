@@ -224,15 +224,10 @@ class last_coincs(object):
 
 
 def lower_bound_in_seglist(seglist, x):
-	"""
-	Return the index of the segment immediately at or before x in the
-	coalesced segment list seglist.  Operation is O(log n).
-	"""
-	# NOTE:  this is an operation that is performed in a number of
-	# locations in various codes, and is something that I've screwed up
-	# more than once.  maybe this should be put into segments.py itself
-	i = bisect_right(seglist, x)
-	return i - 1 if i else 0
+	# FIXME:  replace with segmentlist.value_slice_to_index() when we
+	# can rely on a new-enough ligo.segments
+	i = max(bisect_left(seglist, x) - 1, 0)
+	return i + 1 if seglist and seglist[i][1] <= x else i
 
 
 class backgroundcollector(object):
