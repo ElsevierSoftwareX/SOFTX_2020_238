@@ -106,7 +106,9 @@ for row in sngl_inspiral_table:
 		bns_rate = 916.
 		bbh_rate = 56.
 		other_rate = 20. # made up
-		ids[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob + other_rate * otherprob) / massBA[(mchirp,)] / (bns_rate + bbh_rate + other_rate)
+		# FIXME if the noise is ever normalized over mass then we would need the following, but it isn't
+		#ids[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob + other_rate * otherprob) / massBA[(mchirp,)] / (bns_rate + bbh_rate + other_rate)
+		ids[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob + other_rate * otherprob) / (bns_rate + bbh_rate + other_rate)
 		mchirps.append(mchirp)
 		probs.append(ids[row.template_id])
 	else:
@@ -116,6 +118,7 @@ coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
 	coefficients[0,0,tid] = numpy.log(ids[tid])
 
+#print coefficients.min()
 #import matplotlib
 #matplotlib.use('agg')
 #from matplotlib import pyplot
