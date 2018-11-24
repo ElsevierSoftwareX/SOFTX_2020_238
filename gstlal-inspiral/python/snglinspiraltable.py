@@ -35,10 +35,7 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 	spin2 = lsctables.SnglInspiral.spin2
 
 	def __eq__(self, other):
-		return not cmp(
-			(self.ifo, self.end, self.mass1, self.mass2, self.spin1, self.spin2, self.search),
-			(other.ifo, other.end, other.mass1, other.mass2, other.spin1, other.spin2, other.search)
-		)
+		return (self.ifo, self.end, self.template_id) == (other.ifo, other.end, other.template_id)
 
 	@property
 	def process_id(self):
