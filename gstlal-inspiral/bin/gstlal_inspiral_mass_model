@@ -116,7 +116,7 @@ for row in sngl_inspiral_table:
 
 coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
-	coefficients[0,0,tid] = numpy.log(ids[tid])
+	coefficients[0,0,tid] = numpy.log(ids[tid] / len(sngl_inspiral_table))
 
 #print coefficients.max()
 #import matplotlib
