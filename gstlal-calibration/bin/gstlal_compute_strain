@@ -598,8 +598,10 @@ if CalibrationConfigs["calibrationmode"] == "Partial":
 	except:
 		act_highpass = []
 		invsens_highpass = []
-		invsens_highpass_delay = 0
-		act_highpass_delay = 0
+	try:
+		invsens_highpass_sr = int(filters['res_highpass_sr'])
+	except:
+		invsens_highpass_sr = hoft_sr
 
 # If we're performing full calibration, load the actuation, sensing filters
 if CalibrationConfigs["calibrationmode"] == "Full":
@@ -641,6 +643,10 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 	except:
 		act_highpass = []
 		invsens_highpass = []
+	try:
+		invsens_highpass_sr = int(filters['res_highpass_sr'])
+	except:
+		invsens_highpass_sr = hoft_sr
 
 # If we are reading EPICS from the frames and want to remove calibration lines, account for the fact that not all EPICS were available at all times.
 if not factors_from_filters_file and InputConfigs["datasource"] == "frames" and ((instrument == "H1" and gps_start_time < 1175976256) or (instrument == "L1" and gps_start_time < 1179588864)) and "esd1" in act_line_removal_dict.keys():
@@ -1729,9 +1735,23 @@ if remove_dc:
 
 # High-pass filter the residual chain
 if any(invsens_highpass):
-	res = pipeparts.mkfirbank(pipeline, res, latency = invsens_highpass_delay, fir_matrix = [invsens_highpass[::-1]], time_domain = td)
-	res_filter_settle_time += float(len(invsens_highpass)-invsens_highpass_delay)/hoft_sr
-	res_filter_latency += float(invsens_highpass_delay)/hoft_sr
+	if invsens_highpass_sr != hoft_sr:
+		# Magic trick to apply a high-pass filter to the inverse sensing path at a lower sample rate without losing information above the Nyquist frequency.
+		res = pipeparts.mktee(pipeline, res)
+		res_lowfreq = calibration_parts.mkresample(pipeline, res, 5, False, invsens_highpass_sr)
+		# Use spectral inversion to make a low-pass filter with a gain of -1.
+		invsens_highpass[invsens_highpass_delay] = invsens_highpass[invsens_highpass_delay] - 1.0
+		# Apply this filter to the inverse sensing path at a lower sample rate to get only the low frequency components
+		res_lowfreq = pipeparts.mkfirbank(pipeline, res_lowfreq, latency = invsens_highpass_delay, fir_matrix = [invsens_highpass[::-1]], time_domain = td)
+		# Upsample
+		res_lowfreq = calibration_parts.mkresample(pipeline, res_lowfreq, 5, False, hoft_sr)
+		# Add to the inverse sensing path to get rid of the low frequencies
+		res = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, res, res_lowfreq))
+	else:
+		# Apply the high-pass filter at the h(t) sample rate
+		res = pipeparts.mkfirbank(pipeline, res, latency = invsens_highpass_delay, fir_matrix = [invsens_highpass[::-1]], time_domain = td)
+	res_filter_settle_time += float(len(invsens_highpass)-invsens_highpass_delay) / invsens_highpass_sr
+	res_filter_latency += float(invsens_highpass_delay) / invsens_highpass_sr
 
 if apply_fcc or apply_fs or apply_srcq:
 	if filter_latency_factor > 0:

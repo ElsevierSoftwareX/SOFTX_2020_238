@@ -17,7 +17,7 @@ SHMRUNTIME = 400
 PLOT_WARMUP_TIME = 256
 PLOT_COOLDOWN_TIME = 64
 
-GDSCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1226769644.ini
+GDSCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1227048227.ini
 DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
