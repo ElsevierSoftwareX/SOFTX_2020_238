@@ -47,34 +47,12 @@ import time
 
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
-from gstlal import snglinspiraltable
+from gstlal.snglinspiraltable import GSTLALSnglInspiral as SnglInspiral
 import lal
 from lalburst import snglcoinc
 from lalinspiral import thinca
 from ligo import segments
 from ligo.segments import utils as segmentsUtils
-
-
-#
-# =============================================================================
-#
-#                      lalinspiral.thinca Customizations
-#
-# =============================================================================
-#
-
-
-#
-# Custom trigger class that defines comparison the way we need
-#
-
-
-class SnglInspiral(snglinspiraltable.GSTLALSnglInspiral):
-	# copied from thinca.SnglInspiral
-	__slots__ = ()
-
-	def __cmp__(self, other):
-		return cmp(self.end, other)
 
 
 #
