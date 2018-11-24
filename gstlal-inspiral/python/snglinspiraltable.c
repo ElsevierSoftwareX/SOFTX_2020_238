@@ -32,11 +32,15 @@
 #include <Python.h>
 #include <numpy/ndarrayobject.h>
 #include <structmember.h>
+#include <lal/Date.h>
 #include <lal/TimeSeries.h>
 #include <lal/Units.h>
 
 
 #include <snglinspiralrowtype.h>
+
+
+static PyObject *LIGOTimeGPSType = NULL;
 
 
 /*
@@ -165,6 +169,63 @@ static int pylal_inline_string_set(PyObject *obj, PyObject *val, void *data)
 }
 
 
+static PyObject *end_get(PyObject *obj, void *null)
+{
+	return PyObject_CallFunction(LIGOTimeGPSType, "ii", ((gstlal_GSTLALSnglInspiral *) obj)->row.end.gpsSeconds, ((gstlal_GSTLALSnglInspiral *) obj)->row.end.gpsNanoSeconds);
+}
+
+
+static int end_set(PyObject *obj, PyObject *val, void *null)
+{
+	int end_time, end_time_ns;
+	PyObject *converted = PyObject_CallFunctionObjArgs(LIGOTimeGPSType, val, NULL);
+	PyObject *attr = NULL;;
+
+	if(!converted)
+		goto error;
+
+	attr = PyObject_GetAttrString(converted, "gpsSeconds");
+	if(!attr)
+		goto error;
+	end_time = PyInt_AsLong(attr);
+	Py_DECREF(attr);
+	attr = PyObject_GetAttrString(converted, "gpsNanoSeconds");
+	if(!attr)
+		goto error;
+	end_time_ns = PyInt_AsLong(attr);
+	Py_DECREF(attr);
+	Py_DECREF(converted);
+
+	XLALGPSSet(&((gstlal_GSTLALSnglInspiral *) obj)->row.end, end_time, end_time_ns);
+
+	return 0;
+
+error:
+	Py_XDECREF(converted);
+	Py_XDECREF(attr);
+	return -1;
+}
+
+
+static PyObject *template_id_get(PyObject *obj, void *null)
+{
+	return PyInt_FromLong(((gstlal_GSTLALSnglInspiral *) obj)->row.Gamma[0]);
+}
+
+
+static int template_id_set(PyObject *obj, PyObject *val, void *null)
+{
+	int template_id = PyInt_AsLong(val);
+
+	if(template_id == -1 && PyErr_Occurred())
+		return -1;
+
+	((gstlal_GSTLALSnglInspiral *) obj)->row.Gamma[0] = template_id;
+
+	return 0;
+}
+
+
 static PyObject *snr_component_get(PyObject *obj, void *data)
 {
 	COMPLEX8TimeSeries *snr = ((gstlal_GSTLALSnglInspiral *) obj)->snr;
@@ -209,6 +270,8 @@ static struct PyGetSetDef getset[] = {
 	{"ifo", pylal_inline_string_get, pylal_inline_string_set, "ifo", &(struct pylal_inline_string_description) {offsetof(gstlal_GSTLALSnglInspiral, row.ifo), LIGOMETA_IFO_MAX}},
 	{"search", pylal_inline_string_get, pylal_inline_string_set, "search", &(struct pylal_inline_string_description) {offsetof(gstlal_GSTLALSnglInspiral, row.search), LIGOMETA_SEARCH_MAX}},
 	{"channel", pylal_inline_string_get, pylal_inline_string_set, "channel", &(struct pylal_inline_string_description) {offsetof(gstlal_GSTLALSnglInspiral, row.channel), LIGOMETA_CHANNEL_MAX}},
+	{"end", end_get, end_set, "end", NULL},
+	{"template_id", template_id_get, template_id_set, "template_id", NULL},
 	{"_snr_name", snr_component_get, NULL, ".snr.name", "_snr_name"},
 	{"_snr_epoch_gpsSeconds", snr_component_get, NULL, ".snr.epoch.gpsSeconds", "_snr_epoch_gpsSeconds"},
 	{"_snr_epoch_gpsNanoSeconds", snr_component_get, NULL, ".snr.epoch.gpsNanoSeconds", "_snr_epoch_gpsNanoSeconds"},
@@ -380,6 +443,21 @@ PyMODINIT_FUNC init_snglinspiraltable(void)
 	PyObject *module = Py_InitModule3(MODULE_NAME, NULL, "Low-level wrapper for GSTLALSnglInspiral type.");
 
 	import_array();
+
+	/* LIGOTimeGPS */
+
+	{
+	PyObject *lal = PyImport_ImportModule("lal");
+	if(!lal)
+		return;
+	LIGOTimeGPSType = PyDict_GetItemString(PyModule_GetDict(lal), "LIGOTimeGPS");
+	if(!LIGOTimeGPSType) {
+		Py_DECREF(lal);
+		return;
+	}
+	Py_INCREF(LIGOTimeGPSType);
+	Py_DECREF(lal);
+	}
 
 	/* SnglInspiralTable */
 	if(PyType_Ready(&gstlal_GSTLALSnglInspiral_Type) < 0)

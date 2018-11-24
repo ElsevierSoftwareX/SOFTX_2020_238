@@ -30,7 +30,6 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 	process_id_type = ilwd.get_ilwdchar_class("process", "process_id")
 	event_id_type = ilwd.get_ilwdchar_class("sngl_inspiral", "event_id")
 
-	end = lsctables.gpsproperty("end_time", "end_time_ns")
 	spin1 = lsctables.SnglInspiral.spin1
 	spin2 = lsctables.SnglInspiral.spin2
 
@@ -83,16 +82,3 @@ class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 	@snr_time_series.deleter
 	def snr_time_series(self):
 		self._snr_time_series_deleter()
-
-	#
-	# simulate template_id column
-	# FIXME:  add a proper column for this
-	#
-
-	@property
-	def template_id(self):
-		return int(self.Gamma0)
-
-	@template_id.setter
-	def template_id(self, template_id):
-		self.Gamma0 = float(template_id)
