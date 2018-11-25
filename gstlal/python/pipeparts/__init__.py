@@ -90,6 +90,8 @@ def mkgeneric(pipeline, src, elem_type_name, **properties):
 		elem = Gst.ElementFactory.make(elem_type_name, properties.pop("name"))
 	else:
 		elem = Gst.ElementFactory.make(elem_type_name, None)
+	if elem is None:
+		raise RuntimeError("unknown failure creating \"%s\" element: confirm that the correct plugins are being loaded" % elem_type_name)
 	for name, value in properties.items():
 		elem.set_property(name.replace("_", "-"), value)
 	pipeline.add(elem)
