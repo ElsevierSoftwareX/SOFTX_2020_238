@@ -292,7 +292,7 @@ class StreamThinca(object):
 		flushed = []
 		flushed_unused = []
 		self.last_coincs.clear()
-		for node, events in self.time_slide_graph.pull(self.delta_t, newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, event_collector = self.backgroundcollector, flush = flush):
+		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, event_collector = self.backgroundcollector, flush = flush):
 			# construct row objects for coinc tables.
 
 			coinc, coincmaps, coinc_inspiral = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, seglists = snr_segments)
