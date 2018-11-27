@@ -111,9 +111,14 @@ while true ; do
 		ZEROLAG_COUNTS_URLS="${ZEROLAG_COUNTS_URLS} ${SERVER}${ZEROLAG_COUNTS_PATH}"
 	done || break
 	# NOTE we mix in previous samples
-	cp -v ${OUTPUT} prev_${OUTPUT}
-	gstlal_inspiral_marginalize_likelihood --verbose --marginalize ranking-stat-pdf --density-estimate-zero-lag --output ${OUTPUT} ${RANKING_PDF_FILES} prev_${OUTPUT} ${ZEROLAG_COUNTS_URLS} || break
-	rm -vf prev_${OUTPUT}
+	if [ -f ${OUTPUT} ]; then
+		cp -v ${OUTPUT} prev_${OUTPUT}
+		PREV_OUTPUT=prev_${OUTPUT}
+	else
+		PREV_OUTPUT=""
+	fi
+	echo "Previous output: " ${PREV_OUTPUT}
+	gstlal_inspiral_marginalize_likelihood --verbose --marginalize ranking-stat-pdf --density-estimate-zero-lag --output ${OUTPUT} ${RANKING_PDF_FILES} ${PREV_OUTPUT} ${ZEROLAG_COUNTS_URLS} || break
 	date +"%H:%M:%S" >&2
 	rm -vf ${RANKING_PDF_FILES}
 done
