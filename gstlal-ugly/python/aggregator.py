@@ -103,11 +103,13 @@ def get_data_from_kafka(jobs, routes, kafka_consumer, req_all = False, timeout =
 			continue
 		for route in routes:
 			for x in message.value[route].split("\n"):
-				if x:
+				try:
 					t,d = [float(y) for y in x.split()]
 					timedata[(message.topic, route)].append(t)
 					datadata[(message.topic, route)].append(d)
 					maxt = max(maxt, t)
+				except ValueError as e:
+					logging.info("couldn't process %s for %s: %s" % (route, message.topic, e))
 		if maxt > bailout_time and (not req_all or all(timedata.values()) or now() > bailout_time + timeout):
 			break
 	for k in timedata:
