@@ -509,6 +509,15 @@ class GWDataSourceInfo(object):
 			instrument = dq_channel_dict_from_options.keys()[0]
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
 
+		## set up p(glitch) vetos if used
+		self.use_pglitch = options.use_pglitch
+		if self.use_pglitch:
+			assert options.pglitch_nickname, "if using p(glitch), the nickname used for the p(glitch) channel must be set"
+			assert options.pglitch_threshold, "if using p(glitch), the threshold used for the p(glitch) channel must be set"
+			self.pglitch_nickname = options.pglitch_nickname
+			self.pglitch_threshold = options.pglitch_threshold
+			self.pglitch_channel_dict = { "H1": "IDQ-PGLITCH_%s_32_2048"%options.pglitch_nickname, "L1": "IDQ-PGLITCH_%s_32_2048"%options.pglitch_nickname}
+
 		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits, state_vector_on_off_dict)
 		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits, dq_vector_on_off_dict)
@@ -630,6 +639,18 @@ def append_options(parser):
 		The default is 0x0 for all detectors. Override with IFO=bits can be given multiple times.
 		Only currently has meaning for online (lvshm, framexmit) data
 
+-	--use-pglitch [bool]
+		Specify whether or not to use p(glitch) as a veto, Default = False.
+
+-	--pglitch-nickname [string]
+		Set the nickname to determine the iDQ p(glitch) channels used.
+		This channel will be used to control the flow of data via a threshold value for p(glitch).
+		Required if --use-pglitch option is specified.
+
+-	--pglitch-threshold [float]
+		Set the threshold of the iDQ p(glitch) channel.
+		Required if --use-pglitch option is specified.
+
 	**Typical usage case examples**
 
 	1. Reading data from frames::
@@ -673,6 +694,9 @@ def append_options(parser):
 	group.add_option("--state-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the state vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
 	group.add_option("--dq-vector-on-bits", metavar = "bits", default = [], action = "append", help = "Set the DQ vector on bits to process (optional).  The default is 0x7 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
 	group.add_option("--dq-vector-off-bits", metavar = "bits", default = [], action = "append", help = "Set the DQ vector off bits to process (optional).  The default is 0x160 for all detectors. Override with IFO=bits can be given multiple times.  Only currently has meaning for online (lvshm) data.")
+	group.add_option("--use-pglitch", default = False, action = "store_true", help = "Specify whether or not to use p(glitch) as a veto, Default = False")
+	group.add_option("--pglitch-nickname", metavar = "nickname", help = "Set the nickname to determine the iDQ p(glitch) channels used.  This channel will be used to control the flow of data via a threshold value for p(glitch). Required if --use-pglitch option is specified.")
+	group.add_option("--pglitch-threshold", type="float", help = "Set the threshold of the iDQ p(glitch) channel. Required if --use-pglitch option is specified.")
 	parser.add_option_group(group)
 
 
@@ -868,6 +892,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d" % (t, gap)
 
+		# extract iDQ p(glitch) with 1 buffer of buffering
+		if gw_data_source_info.use_pglitch and instrument in ("H1", "L1"): ### NOTE: p(glitch) only available for H1, L1
+			pglitch = pipeparts.mkqueue(pipeline, None, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
+			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.pglitch_channel_dict[instrument]), pglitch.get_static_pad("sink"))
+
 		# extract strain with 1 buffer of buffering
 		strain = pipeparts.mkqueue(pipeline, None, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.channel_dict[instrument]), strain.get_static_pad("sink"))
@@ -888,6 +917,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 			add = elem.get_property("add")
 			return "%.9f %d" % (t, add // rate)
 
+		if gw_data_source_info.use_pglitch and instrument in ("H1", "L1"): ### NOTE: p(glitch) only available for H1, L1
+			pglitch = pipeparts.mkaudiorate(pipeline, pglitch, skip_to_first = True, silent = False)
+
 		# use state vector and DQ vector to gate strain.  the sizes
 		# of the queues on the control inputs are not important.
 		# they must be large enough to buffer the state vector
@@ -899,6 +931,11 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		dqvector = pipeparts.mktee(pipeline, dqvector)
 		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, statevector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, name = "%s_state_vector_gate" % instrument)
 		src = pipeparts.mkgate(pipeline, src, threshold = 1, control = pipeparts.mkqueue(pipeline, dqvector, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, name = "%s_dq_vector_gate" % instrument)
+		if gw_data_source_info.use_pglitch and instrument in ("H1", "L1"): ### NOTE: p(glitch) only available for H1, L1
+			pglitch = pipeparts.mktee(pipeline, pglitch)
+			src = pipeparts.mkgate(pipeline, src, threshold = gw_data_source_info.pglitch_threshold, control = pipeparts.mkqueue(pipeline, pglitch, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), default_state = False, name = "%s_pglitch" % instrument)
+
+
 	elif gw_data_source_info.data_source == "nds":
 		src = pipeparts.mkndssrc(pipeline, gw_data_source_info.nds_host, instrument, gw_data_source_info.channel_dict[instrument], gw_data_source_info.nds_channel_type, blocksize = gw_data_source_info.block_size, port = gw_data_source_info.nds_port)
 	else:
