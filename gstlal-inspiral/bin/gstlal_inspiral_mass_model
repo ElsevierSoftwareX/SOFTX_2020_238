@@ -55,7 +55,7 @@ sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.get_column("mass1"), sngl_inspiral_table.get_column("mass2"))
 num_templates = len(mchirps_of_tmps)
-num_bins = num_templates / 500
+num_bins = max(5, num_templates / 500)
 massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min(mchirps_of_tmps)-1e-6, max(mchirps_of_tmps)+1e-6, num_bins),)))
 for m in mchirps_of_tmps:
 	massBA.count[(m,)] += 1
