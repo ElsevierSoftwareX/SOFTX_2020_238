@@ -275,8 +275,8 @@ test:offline:
     - yum -y install texlive*
     
     # Get the necessary ROM data:
-    - git clone https://git.ligo.org/lscsoft/lalsuite-extra.git ${GSTLAL_DIR}/lalsuite-extra
-    - export LAL_DATA_PATH=${GSTLAL_DIR}/lalsuite-extra/data/lalsimulation/
+    - git clone https://git.ligo.org/alexander-pace/gstlal-testing-data.git ${GSTLAL_DIR}/gstlal-testing-data
+    - export LAL_DATA_PATH=${GSTLAL_DIR}/gstlal-testing-data/
 
     - cd gstlal-inspiral/tests
 
