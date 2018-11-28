@@ -205,7 +205,6 @@ gstlal-verify:
     - cd ..
   only:
     - manual
-  allow_failure: true
 
 test:gstlal:
   image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
@@ -225,7 +224,6 @@ test:gstlal:
   only:
     - pushes
     - schedules
-  allow_failure: true
 
 test:gstlal-inspiral:
   image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
@@ -299,7 +297,6 @@ test:offline:
   only:
     - pushes
     - schedules
-  allow_failure: true
   
 pages:
   #image: aepace/gstlal-dev:el7-mkl-1.14
