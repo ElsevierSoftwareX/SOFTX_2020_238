@@ -139,6 +139,12 @@ static PyObject *__new__(PyTypeObject *type, PyObject *args, PyObject *kwds)
 }
 
 
+static void __del__(PyObject *self)
+{
+	Py_TYPE(self)->tp_free(self);
+}
+
+
 static PyObject *from_buffer(PyObject *cls, PyObject *args)
 {
 	const char *data;
@@ -208,6 +214,7 @@ static PyTypeObject gstlal_GSTLALSnglBurst_Type = {
 	.tp_getset = getset,
 	.tp_name = MODULE_NAME ".GSTLALSnglBurst",
 	.tp_new = __new__,
+	.tp_dealloc = __del__,
 };
 
 
