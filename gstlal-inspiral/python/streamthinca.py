@@ -225,7 +225,7 @@ class backgroundcollector(object):
 		flushed_ids = set(index)
 		background_ids = self.timeshifted_coincs & flushed_ids
 		self.timeshifted_coincs -= flushed_ids
-		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if index[event_id].end in two_or_more_instruments)
+		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if float(index[event_id].end) in two_or_more_instruments)
 		self.zerolag_singles -= flushed_ids
 		return [event for event in map(index.__getitem__, background_ids) if event.snr >= snr_min]
 
