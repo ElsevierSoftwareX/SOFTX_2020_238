@@ -940,40 +940,39 @@ class Handler(simplehandler.Handler):
 			# "in" the segment (segments are open from above)
 			# FIXME:  is there another way?
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
-			buf_seg = segments.segment(buf_timestamp, max((buf_timestamp + LIGOTimeGPS(0, buf.duration),) + tuple(event.end + 0.000000001 for event in events)))
+			if events:
+				buf_seg = segments.segment(buf_timestamp, max(buf_timestamp + LIGOTimeGPS(0, buf.duration), max(event.end for event in events) + 0.000000001))
+			else:
+				buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
 			buf_is_gap = bool(buf.mini_object.flags & Gst.BufferFlags.GAP)
 			# sanity check that gap buffers are empty
 			assert not (buf_is_gap and events)
 
 			# safety check end times.  we cannot allow triggr
 			# times to go backwards.  they cannot precede the
-			# buffer's start because, below,
-			# streamthinca.add_events() will be told the
-			# trigger list is complete upto this buffer's time
-			# stamp.  this logic also requires this method to
-			# be fed buffers in time order:  we must never
-			# receive a buffer whose timestamp precedes the
-			# timestamp of a buffer we have already received
-			assert all(event.end >= buf_timestamp for event in events)
-			# we have extended the buf_seg above to enclose the
-			# triggers, make sure that worked
-			assert all(event.end in buf_seg for event in events)
+			# buffer's start because, below, streamthinca will
+			# be told the trigger list is complete upto this
+			# buffer's time stamp.  this logic also requires
+			# this method to be fed buffers in time order:  we
+			# must never receive a buffer whose timestamp
+			# precedes the timestamp of a buffer we have
+			# already received.  NOTE:  the trigger objects'
+			# comparison operators can be used for this test
+			# directly, without explicitly retrieving .end
+			assert all(event >= buf_timestamp for event in events)
 
-			# set all effective distances to NaN.
-			# gstlal_inspiral's effective distances are
-			# incorrect, and the PE codes require us to either
-			# provide correct effective distances or
-			# communicate to them that they are incorrect.
+			# assign IDs to triggers.  set all effective
+			# distances to NaN.  gstlal_inspiral's effective
+			# distances are incorrect, and the PE codes require
+			# us to either provide correct effective distances
+			# or communicate to them that they are incorrect.
 			# they have explained that setting them to NaN is
 			# sufficient for the latter.
 			# FIXME:  fix the effective distances
 			for event in events:
-				event.eff_distance = NaN
-
-			# set metadata on triggers.
-			for event in events:
 				event.process_id = self.coincs_document.process_id
 				event.event_id = self.coincs_document.get_next_sngl_id()
+				event.eff_distance = NaN
 
 			# update likelihood snapshot if needed
 			if self.likelihood_snapshot_interval is not None and (self.likelihood_snapshot_timestamp is None or buf_timestamp - self.likelihood_snapshot_timestamp >= self.likelihood_snapshot_interval):
