@@ -207,6 +207,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 					parent_nodes = parent_nodes,
 					opts = {"svd-tolerance":options.tolerance,
 						"flow":options.flow,
+						"sample-rate":options.sample_rate,
 						"clipleft":clipleft,
 						"clipright":clipright,
 						"samples-min":options.samples_min[j],
@@ -1025,6 +1026,7 @@ def parse_command_line():
 	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc.. (can be given multiple times)")
 	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
 	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
+	parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Set the sample rate.  If not set, the sample rate will be based on the template frequency.  The sample rate must be at least twice the highest frequency in the templates. If provided it must be a power of two")
 	parser.add_option("--identity-transform", action = "store_true", help = "Use identity transform, i.e. no SVD")
 	
 	# trigger generation options
@@ -1085,6 +1087,9 @@ def parse_command_line():
 
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
+
+	if options.sample_rate is not None and (not numpy.log2(options.sample_rate) == int(numpy.log2(options.sample_rate))):
+		raise ValueError("--sample-rate must be a power of two")
 
 	if not options.samples_min and not options.svd_bank_cache:
 		options.samples_min = [1024]*len(options.bank_cache)

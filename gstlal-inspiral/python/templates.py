@@ -244,6 +244,7 @@ def time_slices(
 	samples_max_256 = 1024,
 	samples_max_64 = 2048,
 	samples_max = 4096,
+	sample_rate = None,
 	verbose = False
 ):
 	"""
@@ -277,7 +278,11 @@ def time_slices(
 
 	# Remove too-small and too-big sample rates base on input params.
 	sample_rate_min = ceil_pow_2( 2 * padding * flow )
-	sample_rate_max = ceil_pow_2( 2 * fhigh )
+	if sample_rate is None:
+		sample_rate_max = ceil_pow_2( 2 * fhigh )
+	else:
+		# note that sample rate is ensured to be a power of 2 in gstlal_svd_bank
+		sample_rate_max = sample_rate
 	allowed_rates = [rate for rate in allowed_rates if sample_rate_min <= rate <= sample_rate_max]
 
 	#

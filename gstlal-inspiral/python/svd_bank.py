@@ -146,7 +146,7 @@ class BankFragment(object):
 
 
 class Bank(object):
-	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, identity_transform = False, verbose = False, bank_id = None):
+	def __init__(self, bank_xmldoc, psd, time_slices, gate_fap, snr_threshold, tolerance, flow = 40.0, autocorrelation_length = None, logname = None, identity_transform = False, verbose = False, bank_id = None, fhigh = None):
 		# FIXME: remove template_bank_filename when no longer needed
 		# by trigger generator element
 		self.template_bank_filename = None
@@ -165,6 +165,7 @@ class Bank(object):
 			flow,
 			time_slices,
 			autocorrelation_length = autocorrelation_length,
+			fhigh = fhigh,
 			verbose = verbose)
 
 		# Include signal inspiral table
@@ -198,7 +199,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None):
+def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None, sample_rate = None):
 	"""!
 	Return an instance of a Bank class.
 
@@ -236,8 +237,10 @@ def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_
 		samples_max_256 = samples_max_256,
 		samples_max_64 = samples_max_64,
 		samples_max = samples_max,
+		sample_rate = sample_rate,
 		verbose=verbose)
 
+	fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc)
 	# Generate templates, perform SVD, get orthogonal basis
 	# and store as Bank object
 	bank = Bank(
@@ -251,7 +254,8 @@ def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_
 		autocorrelation_length = autocorrelation_length,	# samples
 		identity_transform = identity_transform,
 		verbose = verbose,
-		bank_id = bank_id
+		bank_id = bank_id,
+		fhigh = fhigh
 	)
 
 	# FIXME: remove this when no longer needed

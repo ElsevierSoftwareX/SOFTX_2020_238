@@ -110,6 +110,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	"""
 	if approximant not in templates.gstlal_approximants:
 		raise ValueError("Unsupported approximant given %s" % approximant)
+	assert f_high <= sample_rate // 2
 
 	# FIXME use hcross somday?
 	# We don't here because it is not guaranteed to be orthogonal
@@ -138,8 +139,21 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	parameters['approximant'] = lalsim.GetApproximantFromString(str(approximant))
 
 	hplus, hcross = lalsim.SimInspiralFD(**parameters)
-	# NOTE assumes fhigh is the Nyquist frequency!!!
-	assert len(hplus.data.data) == int(round(sample_rate * duration))//2 +1
+	assert len(hplus.data.data) == int(round(f_high * duration)) +1
+	# pad the output vector if the sample rate was higher than the
+	# requested final frequency
+	if f_high < sample_rate / 2:
+		fseries = lal.CreateCOMPLEX16FrequencySeries(
+			name = hplus.name,
+			epoch = hplus.epoch,
+			f0 = hplus.f0,
+			deltaF = hplus.deltaF,
+			length = int(round(sample_rate * duration))//2 +1,
+			sampleUnits = hplus.sampleUnits
+		)
+		fseries.data.data = numpy.zeros(fseries.data.length)
+		fseries.data.data[:hplus.data.length] = hplus.data.data[:]
+		hplus = fseries
 	return hplus
 
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
@@ -162,6 +176,17 @@ def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_r
 	# done
 	return data, target_index
 
+def condition_ear_warn_template(approximant, data, epoch_time, sample_rate_max, max_shift_time):
+	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
+	# find the index for the peak sample using the epoch returned by
+	# the waveform generator
+	epoch_index = -int(epoch_time*sample_rate_max) - 1
+	# move the early warning waveforms forward according to the waveform
+	# that spends the longest in going from fhigh to ISCO in a given
+	# split bank. This effectively ends some waveforms at f < fhigh
+	target_index = int(sample_rate_max * max_shift_time)
+	data = numpy.roll(data, target_index-epoch_index)
+	return data, target_index
 
 def compute_autocorrelation_mask( autocorrelation ):
 	'''
@@ -251,7 +276,7 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	return psd
 
 
-def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, verbose = False):
+def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, fhigh = None, verbose = False):
 	"""!
 	Generate a bank of templates, which are
 	1. broken up into time slice,
@@ -374,18 +399,27 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	# to get back the original waveform.
 	sigmasq = []
 
-	# Generate each template, downsampling as we go to save memory
-	max_ringtime = max([chirptime.ringtime(row.mass1*lal.MSUN_SI + row.mass2*lal.MSUN_SI, chirptime.overestimate_j_from_chi(max(row.spin1z, row.spin2z))) for row in template_table])
-	for i, row in enumerate(template_table):
-		if verbose:
-			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
+	if approximant in templates.gstlal_IMR_approximants:
+		max_ringtime = max([chirptime.ringtime(row.mass1*lal.MSUN_SI + row.mass2*lal.MSUN_SI, chirptime.overestimate_j_from_chi(max(row.spin1z, row.spin2z))) for row in template_table])
+
+	else:
+		if sample_rate_max>2.*fhigh:
+		# Calculate the maximum time we need to shift the early warning
+		# waveforms forward by, calculated by the 3.5 approximation from
+		# fhigh to ISCO.
+			max_shift_time = max([spawaveform.chirptime(row.mass1, row.mass2, 7, fhigh, 0., spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z)) for row in template_table])
 
 		#
+		# Generate each template, downsampling as we go to save memory
 		# generate "cosine" component of frequency-domain template.
 		# waveform is generated for a canonical distance of 1 Mpc.
 		#
 
-		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, sample_rate_max / 2., fwdplan = fwdplan, fworkspace = fworkspace)
+	for i, row in enumerate(template_table):
+		if verbose:
+			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
+
+		fseries = generate_template(row, approximant, sample_rate_max, working_duration, f_low, fhigh, fwdplan = fwdplan, fworkspace = fworkspace)
 
 		if FIR_WHITENER:
 			#
@@ -435,8 +469,15 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
 			# record the new end times for the waveforms (since we performed the shifts)
 			row.end = LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
+
 		else:
-			data *= tukeywindow(data, samps = 32)
+			if sample_rate_max > fhigh*2.:
+				data, target_index = condition_ear_warn_template(approximant, data, epoch_time, sample_rate_max, max_shift_time)
+				data *= tukeywindow(data, samps = 32)
+				# record the new end times for the waveforms (since we performed the shifts)
+				row.end = LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
+			else:
+				data *= tukeywindow(data, samps = 32)
 
 		data = data[-length_max:]
 		#

@@ -79,7 +79,7 @@ for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentH
 			maxrate = max(maxrate, frag.rate)
 			mint = min(t[0], mint)
 		pyplot.xlabel('time (s) mc:%.2f s1z:%.2f s2z:%.2f' % (mc, s1z, s2z))
-		pyplot.xlim([-.25, 0])
+		#pyplot.xlim([-.25, 0])
 
 		pyplot.subplot(212)
 		pyplot.xlabel('samples')

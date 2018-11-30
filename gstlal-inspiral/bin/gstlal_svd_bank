@@ -30,6 +30,7 @@
 
 
 from optparse import OptionParser
+import numpy
 
 
 import lal.series
@@ -78,6 +79,7 @@ from gstlal.stats import inspiral_lr
 
 parser = OptionParser(description = __doc__)
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Set the sample rate.  If not set, the sample rate will be based on the template frequency.  The sample rate must be at least twice the highest frequency in the templates. If provided it must be a power of two")
 parser.add_option("--identity-transform", action = "store_true", default = False, help = "Do not perform an SVD; instead, use the original templates as the analyzing templates.")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
 parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9995, help = "Set the SVD reconstruction tolerance (default = 0.9995).")
@@ -113,6 +115,10 @@ if not (len(options.template_bank) == len(options.clipleft) == len(options.clipr
 if not options.autocorrelation_length % 2:
 	raise ValueError("--autocorrelation-length must be odd")
 
+if options.sample_rate is not None and (not numpy.log2(options.sample_rate) == int(numpy.log2(options.sample_rate))):
+	raise ValueError("--sample-rate must be a power of two")
+
+
 
 #
 #
@@ -145,7 +151,8 @@ svd_bank.write_bank(
 		samples_max_64 = options.samples_max_64, 
 		samples_max = options.samples_max,
 		bank_id = bank_id,
-		contenthandler = svd_bank.DefaultContentHandler
+		contenthandler = svd_bank.DefaultContentHandler,
+		sample_rate = options.sample_rate
 	) for (template_bank, bank_id) in zip(options.template_bank, options.bank_id)],
 	options.clipleft,
 	options.clipright
