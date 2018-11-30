@@ -141,11 +141,9 @@ class HDF5StreamSink(object):
         Also takes care of creating new directories as needed and removing any leftover temporary files.
         """
         # set/update file names and directories with new gps time and duration
-        job_id = '0001'
-        subset_id = '0001'
         self.feature_name = os.path.splitext(utils.to_trigger_filename(self.basename, start_time, duration, 'h5'))[0]
-        self.feature_path = utils.to_trigger_path(os.path.abspath(self.rootdir), self.basename, start_time, job_id, subset_id)
-        self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time, job_id, subset_id)
+        self.feature_path = utils.to_trigger_path(os.path.abspath(self.rootdir), self.basename, start_time)
+        self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time)
 
         # create temp and output directories if they don't exist
         aggregator.makedir(self.feature_path)

@@ -139,15 +139,23 @@ def gps2latency(gps_time):
 #----------------------------------
 ### pathname utilities
 
-def to_trigger_path(rootdir, basename, start_time, job_id, subset_id):
+def to_trigger_path(rootdir, basename, start_time, job_id=None, subset_id=None):
 	"""
-	Given a basepath, instrument, description, start_time, job_id, will return a
+	Given a basepath, instrument, description, start_time, will return a
 	path pointing to a directory structure in the form::
+
+		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/
+
+    and if the optional job_id, subset_id kwargs are given, the path will be of the form::
 
 		${rootdir}/${basename}/${basename}-${start_time_mod1e5}/${basename}-${job_id}-${subset_id}/
 	"""
 	start_time_mod1e5 = str(start_time).zfill(10)[:5]
-	return os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id, subset_id]))
+	if job_id and subset_id:
+		trigger_path = os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]), '-'.join([basename, job_id, subset_id]))
+	else:
+		trigger_path = os.path.join(rootdir, basename, '-'.join([basename, start_time_mod1e5]))
+	return trigger_path
 
 def to_trigger_filename(basename, start_time, duration, suffix, tmp=False):
 	"""

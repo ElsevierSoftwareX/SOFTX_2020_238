@@ -330,8 +330,8 @@ class MultiChannelHandler(simplehandler.Handler):
 		# set/update file names and directories with new gps time and duration
 		duration = min(duration, self.feature_end_time - start_time)
 		self.fname = os.path.splitext(utils.to_trigger_filename(self.basename, start_time, duration, 'h5'))[0]
-		self.fpath = utils.to_trigger_path(os.path.abspath(self.out_path), self.basename, start_time, self.job_id, self.subset_id)
-		self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time, self.job_id, self.subset_id)
+		self.fpath = utils.to_trigger_path(os.path.abspath(self.out_path), self.basename, start_time, job_id=self.job_id, subset_id=self.subset_id)
+		self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time, job_id=self.job_id, subset_id=self.subset_id)
 
 		# create temp and output directories if they don't exist
 		aggregator.makedir(self.fpath)
