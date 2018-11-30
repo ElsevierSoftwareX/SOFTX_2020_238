@@ -48,7 +48,7 @@ def parse_command_line():
     group.add_option("-v","--verbose", default=False, action="store_true", help = "Print to stdout in addition to writing to automatically generated log.")
     group.add_option("--log-level", type = "int", default = 10, help = "Sets the verbosity of logging. Default = 10.")
     group.add_option("--instrument", metavar = "string", default = "H1", help = "Sets the instrument for files written to disk. Default = H1")
-    group.add_option("--target-channel", metavar = "string", default = "CAL-DELTAL_EXTERNAL_DQ", help = "Sets the target channel to view. Default = CAL-DELTAL_EXTERNAL_DQ")
+    group.add_option("--target-channel", metavar = "string", help = "Sets the target channel to view.")
     group.add_option("--rootdir", metavar = "path", default = ".", help = "Location where log messages and sqlite database lives")
     group.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
     group.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
@@ -92,7 +92,10 @@ class StreamListener(object):
         self.feature_queue = deque(maxlen = 60 * self.sample_rate)
 
         ### other settings
-        self.target_channel = '%s:%s' % (options.instrument, options.target_channel)
+        if options.target_channel:
+            self.target_channel = options.target_channel
+        else:
+            self.target_channel = '%s:CAL-DELTAL_EXTERNAL_DQ'%options.instrument
         self.num_channels = options.num_channels
 
         ### initialize DB
