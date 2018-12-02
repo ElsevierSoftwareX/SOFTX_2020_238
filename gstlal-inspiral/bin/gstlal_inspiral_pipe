@@ -43,6 +43,7 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org>'
 # import standard modules and append the lalapps prefix to the python path
 import sys, os, stat
 import itertools
+import numpy
 from optparse import OptionParser
 
 ##############################################################################
