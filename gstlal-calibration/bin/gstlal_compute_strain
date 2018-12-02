@@ -243,6 +243,7 @@ compute_calib_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(
 compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % compute_factors_sr
 
 # Short cut names for a few other items that appear numerous times
+input_frame_duration = int(InputConfigs["inputframeduration"])
 filter_latency_factor = float(PipelineConfigs["filterlatency"])
 demodulation_filter_time = int(TDCFConfigs["demodulationfiltertime"])
 coherence_unc_threshold = float(TDCFConfigs["coherenceuncthreshold"])
@@ -821,7 +822,7 @@ if not verbose:
 #
 
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
-	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = int(InputConfigs["inputframeduration"]))
+	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = input_frame_duration)
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
 
@@ -1372,19 +1373,19 @@ if compute_fs or compute_srcq:
 
 if apply_complex_kappatst:
 	# We will apply an adaptive FIR filter to the TST component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_tst_filter = pipeparts.mkgeneric(pipeline, smooth_ktsttee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = tstfilt, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr)
+	adaptive_tst_filter = pipeparts.mkgeneric(pipeline, smooth_ktsttee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = tstfilt, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_tst_filter")
 
 if apply_complex_kappapum:
 	# We will apply an adaptive FIR filter to the PUM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pum_filter = pipeparts.mkgeneric(pipeline, smooth_kpumtee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = pumfilt, variable_filter_length = len(pumfilt), adaptive_filter_length = len(pumfilt), tukey_param = 0.5, filter_sample_rate = pumchainsr)
+	adaptive_pum_filter = pipeparts.mkgeneric(pipeline, smooth_kpumtee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = pumfilt, variable_filter_length = len(pumfilt), adaptive_filter_length = len(pumfilt), tukey_param = 0.5, filter_sample_rate = pumchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pum_filter")
 
 if apply_complex_kappauim:
 	# We will apply an adaptive FIR filter to the UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_uim_filter = pipeparts.mkgeneric(pipeline, smooth_kuimtee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = uimfilt, variable_filter_length = len(uimfilt), adaptive_filter_length = len(uimfilt), tukey_param = 0.5, filter_sample_rate = uimchainsr)
+	adaptive_uim_filter = pipeparts.mkgeneric(pipeline, smooth_kuimtee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = uimfilt, variable_filter_length = len(uimfilt), adaptive_filter_length = len(uimfilt), tukey_param = 0.5, filter_sample_rate = uimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_uim_filter")
 
 if apply_complex_kappapu:
 	# We will apply an adaptive FIR filter to the PUM/UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pumuim_filter = pipeparts.mkgeneric(pipeline, smooth_kputee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, static_filter = pumuimfilt, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr)
+	adaptive_pumuim_filter = pipeparts.mkgeneric(pipeline, smooth_kputee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, static_filter = pumuimfilt, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pumuim_filter")
 
 if apply_fcc or apply_fs or apply_srcq:
 	# We will apply an adaptive FIR filter to DARM_ERR that allows corrections for poles, zeros, and gain
@@ -1478,7 +1479,7 @@ if apply_fcc or apply_fs or apply_srcq:
 
 	# Now interleave the correction channels in tdep_zpk and feed them into lal_adaptivefirfilt to update the inverse sensing filter
 	tdep_zpk = calibration_parts.mkinterleave(pipeline, tdep_zpk, complex_data = True)
-	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoft_sr)
+	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, name = "adaptive_invsens_filter")
 
 #
 # CONTROL BRANCH
@@ -1573,13 +1574,17 @@ if any(act_highpass):
 	tst_filter_latency += float(act_highpass_delay)/tstchainsr
 
 if apply_complex_kappatst:
-	if filter_latency_factor > 0:
-		# Make the TST path wait until a correction filter for kappa_TST is ready
-		tst = calibration_parts.mkqueue(pipeline, tst, min_length = filter_latency_factor * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr))
-	# Filter the TST chain with an adaptive TST actuation filter that includes a linear-phase correction from kappa_tst
-	tst = pipeparts.mkgeneric(pipeline, tst, "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = actuation_filter_taper_length)
-	# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-	adaptive_tst_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, tst, "adaptive-filter", "kernel")
+	if filter_latency_factor == 0:
+		# Filter the TST chain with an adaptive TST actuation filter that includes a gain and linear-phase correction from kappa_tst
+		tst = pipeparts.mkgeneric(pipeline, tst, "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = actuation_filter_taper_length, name = "TST_filter")
+		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+		adaptive_tst_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, tst, "adaptive_filter", "kernel")
+	else:
+		# Filter the TST chain with an adaptive TST actuation filter that includes a gain and linear-phase correction from kappa_tst
+		tst = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, tst), "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "TST_filter")
+		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+		adaptive_tst_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, tst, "adaptive_filter", "kernel")
+		adaptive_tst_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, tst, "filter_endtime", "kernel_endtime")
 
 else:
 	# Filter the TST chain with the static TST actuation filter
@@ -1617,25 +1622,33 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_filter_latency += float(act_highpass_delay)/uimchainsr
 
 	if apply_complex_kappapum:
-		if filter_latency_factor > 0:
-			# Make the PUM path wait until a correction filter for kappa_PUM is ready
-			pum = calibration_parts.mkqueue(pipeline, pum, min_length = filter_latency_factor * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr))
-		# Filter the PUM chain with an adaptive PUM actuation filter that includes a linear-phase correction from kappa_pum
-		pum = pipeparts.mkgeneric(pipeline, pum, "lal_tdwhiten", kernel = pumfilt[::-1], latency = pumdelay, taper_length = actuation_filter_taper_length)
-		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-		adaptive_pum_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pum, "adaptive-filter", "kernel")
+		if filter_latency_factor == 0:
+			# Filter the PUM chain with an adaptive PUM actuation filter that includes a gain and linear-phase correction from kappa_pum
+			pum = pipeparts.mkgeneric(pipeline, pum, "lal_tdwhiten", kernel = pumfilt[::-1], latency = pumdelay, taper_length = actuation_filter_taper_length, name = "PUM_filter")
+			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+			adaptive_pum_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pum, "adaptive_filter", "kernel")
+		else:
+			# Filter the PUM chain with an adaptive PUM actuation filter that includes a gain and linear-phase correction from kappa_pum
+			pum = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, pum), "lal_tdwhiten", kernel = pumfilt[::-1], latency = pumdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "PUM_filter")
+			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+			adaptive_pum_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pum, "adaptive_filter", "kernel")
+			adaptive_pum_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, pum, "filter_endtime", "kernel_endtime")
 	else:
 		# Filter the PUM chain with the static PUM actuation filter
 		pum = pipeparts.mkfirbank(pipeline, pum, latency = pumdelay, fir_matrix = [pumfilt[::-1]], time_domain = td)
 
 	if apply_complex_kappauim:
-		if filter_latency_factor > 0:
-			# Make the UIM path wait until a correction filter for kappa_UIM is ready
-			uim = calibration_parts.mkqueue(pipeline, uim, min_length = filter_latency_factor * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr))
-		# Filter the UIM chain with an adaptive UIM actuation filter that includes a linear-phase correction from kappa_uim
-		uim = pipeparts.mkgeneric(pipeline, uim, "lal_tdwhiten", kernel = uimfilt[::-1], latency = uimdelay, taper_length = actuation_filter_taper_length)
-		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-		adaptive_uim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, uim, "adaptive-filter", "kernel")
+		if filter_latency_factor == 0:
+			# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim
+			uim = pipeparts.mkgeneric(pipeline, uim, "lal_tdwhiten", kernel = uimfilt[::-1], latency = uimdelay, taper_length = actuation_filter_taper_length, name = "UIM_filter")
+			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+			adaptive_uim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, uim, "adaptive_filter", "kernel")
+		else:
+			# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim
+			uim = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, uim), "lal_tdwhiten", kernel = uimfilt[::-1], latency = uimdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "UIM_filter")
+			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+			adaptive_uim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, uim, "adaptive_filter", "kernel")
+			adaptive_uim_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, uim, "filter_endtime", "kernel_endtime")
 	else:
 		# Filter the UIM chain with the static UIM actuation filter
 		uim = pipeparts.mkfirbank(pipeline, uim, latency = uimdelay, fir_matrix = [uimfilt[::-1]], time_domain = td)
@@ -1679,13 +1692,17 @@ else:
 		pumuim_filter_latency += float(act_highpass_delay)/pumuimchainsr
 
 	if apply_complex_kappapu:
-		if filter_latency_factor > 0:
-			# Make the PUM/UIM path wait until a correction filter for kappa_PU is ready
-			pumuim = calibration_parts.mkqueue(pipeline, pumuim, min_length = filter_latency_factor * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr))
-		# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a linear-phase correction from kappa_pu
-		pumuim = pipeparts.mkgeneric(pipeline, pumuim, "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = actuation_filter_taper_length)
-		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-		adaptive_pumuim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pumuim, "adaptive-filter", "kernel")
+		if filter_latency_factor == 0:
+			# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a gain and linear-phase correction from kappa_pu
+			pumuim = pipeparts.mkgeneric(pipeline, pumuim, "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = actuation_filter_taper_length, name = "PUMUIM_filter")
+			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+			adaptive_pumuim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pumuim, "adaptive_filter", "kernel")
+		else:
+			# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a gain and linear-phase correction from kappa_pu
+			pumuim = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, pumuim), "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "PUMUIM_filter")
+			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+			adaptive_pumuim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pumuim, "adaptive_filter", "kernel")
+			adaptive_pumuim_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, pumuim, "filter_endtime", "kernel_endtime")
 
 	else:
 		# Filter the PUM/UIM chain with the static PUM/UIM actuation filter
@@ -1754,13 +1771,18 @@ if any(invsens_highpass):
 	res_filter_latency += float(invsens_highpass_delay) / invsens_highpass_sr
 
 if apply_fcc or apply_fs or apply_srcq:
-	if filter_latency_factor > 0:
-		# Make the residual path wait until a correction filter is ready
-		res = calibration_parts.mkqueue(pipeline, res, min_length = filter_latency_factor * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr))
-	# Apply an adaptive filter to include the time-dependence of any sensing function parameters
-	res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = reschainfilt[::-1], latency = reschaindelay, taper_length = sensing_filter_taper_length)
-	# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-	adaptive_invsens_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, res, "adaptive-filter", "kernel")
+	if filter_latency_factor == 0:
+		# Apply an adaptive filter to include the time-dependence of any sensing function parameters
+		res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = reschainfilt[::-1], latency = reschaindelay, taper_length = sensing_filter_taper_length, name = "RES_filter")
+		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+		adaptive_invsens_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, res, "adaptive_filter", "kernel")
+	else:
+		# Apply an adaptive filter to include the time-dependence of any sensing function parameters
+		res = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, res), "lal_tdwhiten", kernel = reschainfilt[::-1], latency = reschaindelay, taper_length = sensing_filter_taper_length, kernel_endtime = 0, name = "RES_filter")
+		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+		adaptive_invsens_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, res, "adaptive_filter", "kernel")
+		adaptive_invsens_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, res, "filter_endtime", "kernel_endtime")
+
 # # Correct for time-dependence of f_cc
 #if apply_fcc:
 #	
@@ -2217,12 +2239,8 @@ if remove_power_lines:
 if witness_channel_list is not None:
 	# Remove initial data from computation of transfer functions and wait until the filters and kappas settle
 	witness_delay_time = witness_tf_time_shift if witness_tf_parallel_mode else (filter_settle_time + (1.0 - filter_latency_factor) * (demodulation_filter_time + median_smoothing_samples / compute_factors_sr + factors_average_samples / compute_factors_sr))
-	# In high latency, make the witnesses wait to be filtered until new filters are ready
-	witness_wait_time = (filter_settle_time + demodulation_filter_time + median_smoothing_samples / compute_factors_sr + factors_average_samples / compute_factors_sr + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency_factor else 0.0
 	# How much does the "delay_time" need to increase per iteration of cleaning?
-	witness_delay_increment = witness_filter_taper_time + (witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0) if not filter_latency_factor else 0.0)
-	# How much does the "wait_time" need to increase per iteration of cleaning?
-	witness_wait_increment = (witness_filter_taper_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0)) if filter_latency_factor else 0.0
+	witness_delay_increment = witness_filter_taper_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0) if not filter_latency_factor else 0.0
 	# If we haven't removed any lines, clean the regular h(t) data
 	if not (remove_cal_lines or remove_power_lines):
 		clean_strain = straintee
@@ -2245,9 +2263,8 @@ if witness_channel_list is not None:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
 			print "WARNING: Not all requested witness channels are being used"
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, wait_time = witness_wait_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
 		witness_delay_time += witness_delay_increment
-		witness_wait_time += witness_wait_increment
 
 if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
@@ -2267,18 +2284,18 @@ if compute_calib_statevector and (remove_cal_lines or remove_power_lines or witn
 	mid_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_mid_max) / numpy.log(2) + 1.01))
 
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
-	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = filter_latency_factor, rate_out = calibstate_sr, td = td)
+	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Compute the RMS of the cleaned strain in a low-frequency range
-	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = filter_latency_factor, rate_out = calibstate_sr, td = td)
+	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_lowfreq = calibration_parts.complex_division(pipeline, strain_rms_lowfreq, clean_strain_rms_lowfreq)
 	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector=pow(2,26), threshold=1.0)
 	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
-	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = filter_latency_factor, rate_out = calibstate_sr, td = td)
+	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Compute the RMS of the cleaned strain in a mid-frequency range
-	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = filter_latency_factor, rate_out = calibstate_sr, td = td)
+	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
 	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector=pow(2,27), threshold=1.0)
@@ -2506,7 +2523,7 @@ elif InputConfigs["datasource"] == "lvshm":
 	start = int(lal.UTCToGPS(tm))
 # start time of first frame file is the desired start time + either filter latency or kappa settling (if computing kappas), whichever is bigger
 if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
-	output_start = start + max(int(filter_settle_time), demodulation_filter_time + int(TDCFConfigs["mediansmoothingtime"]) + int(TDCFConfigs["tdcfaveragingtime"]))
+	output_start = start + max(int(filter_settle_time), int((1.0 - filter_latency_factor) * (demodulation_filter_time + int(TDCFConfigs["mediansmoothingtime"]) + int(TDCFConfigs["tdcfaveragingtime"]))))
 else:
 	output_start = start + int(filter_settle_time)
 

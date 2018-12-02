@@ -63,13 +63,17 @@ typedef struct {
 
 	guint32 taper_length;
 	GQueue *kernels;
+	GQueue *waiting_kernels;
 	gint64 latency;
+	guint64 kernel_endtime;
+	GMutex kernel_lock;
 
 	/*
 	 * timestamp book-keeping
 	 */
 
 	GstClockTime t0;
+	GstClockTime next_pts;
 	guint64 offset0;
 	guint64 next_out_offset;
 	guint64 next_in_offset;

@@ -75,25 +75,25 @@ def mkcomplexfirbank2(pipeline, src, latency = None, fir_matrix = None, time_dom
 def mkpow(pipeline, src, **properties):
 	return pipeparts.mkgeneric(pipeline, src, "cpow", **properties)
 
-def mkmultiplier(pipeline, srcs, sync = True, queue_length = 0):
+def mkmultiplier(pipeline, srcs, sync = True, queue_length = [0]):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync, mix_mode="product")
 	if srcs is not None:
-		for src in srcs:
-			mkqueue(pipeline, src, length = queue_length).link(elem)
+		for i in range(0, len(srcs)):
+			mkqueue(pipeline, srcs[i], length = queue_length[min(i, len(queue_length) - 1)]).link(elem)
 	return elem
 
-def mkadder(pipeline, srcs, sync = True, queue_length = 0):
+def mkadder(pipeline, srcs, sync = True, queue_length = [0]):
 	elem = pipeparts.mkgeneric(pipeline, None, "lal_adder", sync=sync)
 	if srcs is not None:
-		for src in srcs:
-			mkqueue(pipeline, src, length = queue_length).link(elem)
+		for i in range(0, len(srcs)):
+			mkqueue(pipeline, srcs[i], length = queue_length[min(i, len(queue_length) - 1)]).link(elem)
 	return elem
 
 def mkgate(pipeline, src, control, threshold, queue_length = 0, **properties):
 	elem = pipeparts.mkgate(pipeline, mkqueue(pipeline, src, length = queue_length), control = mkqueue(pipeline, control, length = queue_length), threshold = threshold, **properties)
 	return elem
 
-def mkinterleave(pipeline, srcs, complex_data = False):
+def mkinterleave(pipeline, srcs, complex_data = False, queue_length = [0]):
 	complex_factor = 1 + int(complex_data)
 	num_srcs = complex_factor * len(srcs)
 	i = 0
@@ -103,7 +103,7 @@ def mkinterleave(pipeline, srcs, complex_data = False):
 		matrix[0][i] = 1
 		mixed_srcs.append(pipeparts.mkmatrixmixer(pipeline, src, matrix=matrix))
 		i += complex_factor
-	elem = mkadder(pipeline, tuple(mixed_srcs))
+	elem = mkadder(pipeline, tuple(mixed_srcs), queue_length = queue_length)
 
 	#chan1 = pipeparts.mkmatrixmixer(pipeline, src1, matrix=[[1,0]])
 	#chan2 = pipeparts.mkmatrixmixer(pipeline, src2, matrix=[[0,1]])
@@ -172,6 +172,9 @@ def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, pref
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
 	head = mkresample(pipeline, head, 5, filter_latency == 0.0, rate)
+	if filter_latency != 0:
+		# Remove the first several seconds of output, which depend on start time
+		head = pipeparts.mkgeneric(pipeline, head, "lal_insertgap", chop_length = 7000000000)
 	head = lowpass(pipeline, head, rate, length = filter_time, fcut = 0, filter_latency = filter_latency, td = td)
 
 	return head
@@ -204,7 +207,6 @@ def remove_harmonics_with_witness(pipeline, signal, witness, f0, num_harmonics, 
 	upsample_quality = 4
 	resample_shift = 16.0 + 16.5
 	zero_latency = filter_latency == 0.0
-	filter_latency = min(0.5, filter_latency)
 
 	witness = pipeparts.mktee(pipeline, witness)
 	signal = pipeparts.mktee(pipeline, signal)
@@ -912,6 +914,10 @@ def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, E
 
 	return Xi
 
+def update_property_simple(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name):
+	prop = prop_maker.get_property(maker_prop_name)
+	prop_taker.set_property(taker_prop_name, prop)
+
 def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name):
 	firfilter = filter_maker.get_property(maker_prop_name)[::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
@@ -920,15 +926,13 @@ def update_filters(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, parallel_mode = False, notch_frequencies = [], noisesub_gate_bit = None, delay_time = 0.0, wait_time = 0.0, critical_lock_loss_time = 0, filename = None):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, parallel_mode = False, notch_frequencies = [], noisesub_gate_bit = None, delay_time = 0.0, critical_lock_loss_time = 0, filename = None):
 
 	#
 	# Use witness channels that monitor the environment to remove environmental noise
 	# from a signal of interest.  This function accounts for potential correlation
 	# between witness channels.
 	#
-
-	default_fir_filter = numpy.zeros(fir_length)
 
 	signal_tee = pipeparts.mktee(pipeline, signal)
 	witnesses = list(witnesses)
@@ -942,11 +946,16 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	if noisesub_gate_bit is not None:
 		transfer_functions = mkgate(pipeline, transfer_functions, noisesub_gate_bit, 1)
-	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 15, update_after_gap = True, use_median = use_median, parallel_mode = parallel_mode, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = int(delay_time * witness_rate), filename = filename)
+	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = 15, update_after_gap = True, use_median = use_median, parallel_mode = parallel_mode, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = int(delay_time * witness_rate), fir_timeshift = 0, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
-		minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, witness_tees[i], min_length = wait_time), "lal_tdwhiten", kernel = default_fir_filter, latency = fir_length / 2, taper_length = filter_taper_length)
-		transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
+		if parallel_mode:
+			minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, witness_tees[i]), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length, kernel_endtime = 0)
+			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
+			transfer_functions.connect("notify::fir-endtime", update_property_simple, minus_noise, "fir_endtime", "kernel_endtime")
+		else:
+			minus_noise = pipeparts.mkgeneric(pipeline, witness_tees[i], "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length)
+			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 		signal_minus_noise.append(mkresample(pipeline, minus_noise, 5, False, signal_rate))
 
 	return mkadder(pipeline, tuple(signal_minus_noise))

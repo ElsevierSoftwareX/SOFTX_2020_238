@@ -47,7 +47,7 @@ def lal_gate_01(pipeline, name):
 
 	rate = 512	    	# Hz
 	buffer_length = 1.0	# seconds
-	test_duration = 100	# seconds
+	test_duration = 16	# seconds
 	frequency = 0.1		# Hz
 	attack_length = -3	# seconds
 	hold_length = 0		# seconds
@@ -60,13 +60,18 @@ def lal_gate_01(pipeline, name):
 
 	# Make a sine wave
 	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 0, volume = 1.0, freq = frequency, width = 64)
+
 	# Add a DC offset
 	head = pipeparts.mkgeneric(pipeline, src, "lal_add_constant", value = DC_offset)
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, head, "%s_in.txt" % name)
+	control = calibration_parts.mkqueue(pipeline, head, min_length = 8)
+	control = pipeparts.mkgeneric(pipeline, control, "splitcounter", name = "control")
+	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "before")
 
 	# Gate it
-	head = calibration_parts.mkgate(pipeline, head, head, threshold, attack_length = int(attack_length * rate), hold_length = int(hold_length * rate))
+	head = calibration_parts.mkgate(pipeline, head, control, threshold, attack_length = int(attack_length * rate), hold_length = int(hold_length * rate))
+	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "after")
 	pipeparts.mknxydumpsink(pipeline, head, "%s_out.txt" % name)
 
 	#

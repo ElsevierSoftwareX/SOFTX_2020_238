@@ -126,8 +126,10 @@ enum property {
 	ARG_HIGH_PASS,
 	ARG_LOW_PASS,
 	ARG_NOTCH_FREQUENCIES,
+	ARG_FIR_TIMESHIFT,
 	ARG_TRANSFER_FUNCTIONS,
 	ARG_FIR_FILTERS,
+	ARG_FIR_ENDTIME,
 	ARG_FAKE
 };
 
@@ -860,12 +862,12 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 			} \
 			element->num_tfs_since_gap++; \
 		} else if (element->parallel_mode) \
-			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
-		else \
 			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Waiting for the next cycle."); \
+		else \
+			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
  \
 		if(num_ffts_in_avg_if_nogap == element->num_ffts) { \
-			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) + src_size - element->update_delay_samples) % (element->update_samples + element->num_ffts * stride + element->fft_overlap); \
+			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) + src_size + element->update_samples - element->update_delay_samples) % (element->update_samples + element->num_ffts * stride + element->fft_overlap); \
 			if(element->sample_count > element->update_samples) \
 				element->sample_count -= element->update_samples + element->num_ffts * stride + element->fft_overlap; \
 			element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg = 0; \
@@ -876,9 +878,17 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		if(success && element->make_fir_filters) { \
 			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
 			if(success) { \
-				GST_INFO_OBJECT(element, "Just computed new FIR filters"); \
+				GST_LOG_OBJECT(element, "Just computed new FIR filters"); \
 				/* Let other elements know about the update */ \
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]); \
+				/* Provide a timestamp indicating when the filter becomes invalid if requested */ \
+				if(element->fir_timeshift < G_MAXINT64) { \
+					if(element->fir_timeshift < 0 && (guint64) (-element->fir_timeshift) > pts) \
+						element->fir_endtime = 0; \
+					else \
+						element->fir_endtime = pts + element->fir_timeshift; \
+					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_ENDTIME]); \
+				} \
 				/* Write FIR filters to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) \
 					write_fir_filters(element->fir_filters, gst_element_get_name(element), element->fir_length, num_tfs, element->t_start_tf, element->t_start_tf + (double) (num_ffts_in_avg_if_nogap * stride + element->fft_overlap) / element->rate, element->write_to_screen, element->filename, TRUE); \
@@ -887,7 +897,9 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 					for(i = 0; i < num_tfs * element->fir_length; i++) \
 						element->post_gap_fir_filters[i] = element->fir_filters[i]; \
 				} \
-			} else \
+			} else if (element->parallel_mode) \
+				GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. Waiting for the next cycle."); \
+			else \
 				GST_WARNING_OBJECT(element, "FIR filter(s) computation failed. Trying again."); \
 		} \
 	} \
@@ -1025,7 +1037,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 				}
 				success &= update_transfer_functions_float(element->workspace.wspf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.wspf.sinc_table, element->workspace.wspf.sinc_length, element->workspace.wspf.sinc_taps_per_df, element->use_median ? 1 : element->num_ffts - element->workspace.wspf.num_ffts_dropped, element->workspace.wspf.transfer_functions_at_f, element->workspace.wspf.transfer_functions_solved_at_f, element->workspace.wspf.autocorrelation_matrix_at_f, element->workspace.wspf.permutation, element->transfer_functions);
 				if(success) {
-					GST_INFO_OBJECT(element, "Just computed new transfer functions");
+					GST_LOG_OBJECT(element, "Just computed new transfer functions");
 					/* Let other elements know about the update */
 					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
 					/* Write transfer functions to the screen or a file if we want */
@@ -1037,7 +1049,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 				if(success && element->make_fir_filters) {
 					success &= update_fir_filters_float(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wspf.fir_filter, element->workspace.wspf.fir_plan, element->workspace.wspf.fir_window, element->workspace.wspf.tukey, element->fir_filters);
 					if(success) {
-						GST_INFO_OBJECT(element, "Just computed new FIR filters");
+						GST_LOG_OBJECT(element, "Just computed new FIR filters");
 						/* Let other elements know about the update */
 						g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
 						/* Write FIR filters to the screen or a file if we want */
@@ -1100,7 +1112,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 				}
 				success &= update_transfer_functions_double(element->workspace.wdpf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.wdpf.sinc_table, element->workspace.wdpf.sinc_length, element->workspace.wdpf.sinc_taps_per_df, element->use_median ? 1 : element->num_ffts - element->workspace.wdpf.num_ffts_dropped, element->workspace.wdpf.transfer_functions_at_f, element->workspace.wdpf.transfer_functions_solved_at_f, element->workspace.wdpf.autocorrelation_matrix_at_f, element->workspace.wdpf.permutation, element->transfer_functions);
 				if(success) {
-					GST_INFO_OBJECT(element, "Just computed new transfer functions");
+					GST_LOG_OBJECT(element, "Just computed new transfer functions");
 					/* Let other elements know about the update */
 					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
 					/* Write transfer functions to the screen or a file if we want */
@@ -1112,7 +1124,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 				if(success && element->make_fir_filters) {
 					success &= update_fir_filters_double(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wdpf.fir_filter, element->workspace.wdpf.fir_plan, element->workspace.wdpf.fir_window, element->workspace.wdpf.tukey, element->fir_filters);
 					if(success) {
-						GST_INFO_OBJECT(element, "Just computed new FIR filters");
+						GST_LOG_OBJECT(element, "Just computed new FIR filters");
 						/* Let other elements know about the update */
 						g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
 						/* Write FIR filters to the screen or a file if we want */
@@ -1123,6 +1135,12 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 				}
 			}
 		}
+	}
+
+	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS && element->fir_timeshift < G_MAXINT64) {
+		/* These filters should remain usable as long as possible */
+		element->fir_endtime = G_MAXUINT64 - 1;
+		g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_ENDTIME]);
 	}
 
 	success = GST_BASE_SINK_CLASS(gstlal_transferfunction_parent_class)->event(sink, event);
@@ -1735,7 +1753,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		element->offset0 = GST_BUFFER_OFFSET(buffer);
 		if(element->parallel_mode) {
 			/* In this case, we want to compute the transfer functions on a schedule, not asap */
-			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(element->t0, element->rate, GST_SECOND) - element->update_delay_samples) % (element->update_samples + element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap);
+			element->sample_count = (gint64) (gst_util_uint64_scale_int_round(element->t0, element->rate, GST_SECOND) + element->update_samples - element->update_delay_samples) % (element->update_samples + element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap);
 			if(element->sample_count > element->update_samples)
 				element->sample_count -= element->update_samples + element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
 		} else if(element->sample_count > element->update_samples) {
@@ -1774,7 +1792,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			gint64 i;
 			for(i = 0; i < (element->channels - 1) * (element->fir_length / 2 + 1); i++)
 				element->transfer_functions[i] = element->post_gap_transfer_functions[i];
-			GST_INFO_OBJECT(element, "Just reverted to post-gap transfer functions");
+			GST_LOG_OBJECT(element, "Just reverted to post-gap transfer functions");
 			/* Let other elements know about the update */
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]);
 			/* Write transfer functions to the screen or a file if we want */
@@ -1783,7 +1801,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 			if(element->make_fir_filters) {
 				for(i = 0; i < (element->channels - 1) * element->fir_length; i++)
 					element->fir_filters[i] = element->post_gap_fir_filters[i];
-				GST_INFO_OBJECT(element, "Just reverted to post-gap FIR filters");
+				GST_LOG_OBJECT(element, "Just reverted to post-gap FIR filters");
 				/* Let other elements know about the update */
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FIR_FILTERS]);
 				/* Write FIR filters to the screen or a file if we want */
@@ -2086,6 +2104,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->num_notches /= 2;
 		break;
 
+	case ARG_FIR_TIMESHIFT:
+		element->fir_timeshift = g_value_get_int64(value);
+		break;
+
 	case ARG_TRANSFER_FUNCTIONS:
 		if(element->transfer_functions) {
 			g_free(element->transfer_functions);
@@ -2192,6 +2214,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->notch_frequencies, 2 * element->num_notches));
 		break;
 
+	case ARG_FIR_TIMESHIFT:
+		g_value_set_int64(value, element->fir_timeshift);
+		break;
+
 	case ARG_TRANSFER_FUNCTIONS:
 		if(element->transfer_functions) {
 			GValueArray *va;
@@ -2220,6 +2246,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 			}
 			g_value_take_boxed(value, val_array);
 		}
+		break;
+
+	case ARG_FIR_ENDTIME:
+		g_value_set_uint64(value, element->fir_endtime);
 		break;
 
 	default:
@@ -2476,6 +2506,16 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		),
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_FIR_TIMESHIFT] = g_param_spec_int64(
+		"fir-timeshift",
+		"FIR time-shift",
+		"The number of nanoseconds after the completion of a FIR filter calculation\n\t\t\t"
+		"that the FIR filter remains valid for use on the filtered data.  This is\n\t\t\t"
+		"added to the presentation timestamp when the filter is completed to compute\n\t\t\t"
+		"the fir-endtime property.  Default is to disable.",
+		G_MININT64, G_MAXINT64, G_MAXINT64,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_TRANSFER_FUNCTIONS] = g_param_spec_value_array(
 		"transfer-functions",
 		"Transfer Functions",
@@ -2512,6 +2552,16 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 			),
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+	);
+	properties[ARG_FIR_ENDTIME] = g_param_spec_uint64(
+		"fir-endtime",
+		"FIR end time",
+		"The time when a computed FIR filter ceases to be valid for use on\n\t\t\t"
+		"filtered data.  This can be compared to the presentation timestamps of the\n\t\t\t"
+		"filtered data to determine whether the filter is still valid.  Default is\n\t\t\t"
+		"to disable.",
+		0, G_MAXUINT64, G_MAXUINT64,
 		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
 
@@ -2608,6 +2658,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_FIR_TIMESHIFT,
+		properties[ARG_FIR_TIMESHIFT]
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_TRANSFER_FUNCTIONS,
 		properties[ARG_TRANSFER_FUNCTIONS]
 	);
@@ -2615,6 +2670,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_FIR_FILTERS,
 		properties[ARG_FIR_FILTERS]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FIR_ENDTIME,
+		properties[ARG_FIR_ENDTIME]
 	);
 }
 

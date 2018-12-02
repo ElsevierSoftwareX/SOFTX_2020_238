@@ -19,7 +19,7 @@
 /*
  * ============================================================================
  *
- *                                  Preamble
+ *				  Preamble
  *
  * ============================================================================
  */
@@ -32,6 +32,7 @@
 
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 
 
 /*
@@ -69,7 +70,7 @@
 /*
  * ============================================================================
  *
- *                                Kernel Info
+ *				Kernel Info
  *
  * ============================================================================
  */
@@ -81,6 +82,12 @@ struct kernelinfo_t {
 
 	guint64 offset;
 	GstClockTime timestamp;
+
+	/*
+	 * timestamp when the kernel is no longer valid
+	 */
+
+	GstClockTime endtime;
 
 	/*
 	 * the kernel
@@ -104,6 +111,7 @@ static struct kernelinfo_t *kernelinfo_new(gsize length)
 
 	kernelinfo->offset = GST_BUFFER_OFFSET_NONE;
 	kernelinfo->timestamp = GST_CLOCK_TIME_NONE;
+	kernelinfo->endtime = GST_CLOCK_TIME_NONE;
 	kernelinfo->length = length;
 	kernelinfo->kernel = kernel;
 
@@ -142,7 +150,7 @@ static gsize kernelinfo_longest(GQueue *kernels)
 /*
  * ============================================================================
  *
- *                                 Utilities
+ *				 Utilities
  *
  * ============================================================================
  */
@@ -155,9 +163,9 @@ static unsigned get_input_length(GSTLALTDwhiten *element, unsigned output_length
 
 
 /*
-* how many output samples can be generated from the given number of input
-* samples
-*/
+ * how many output samples can be generated from the given number of input
+ * samples
+ */
 
 
 static unsigned get_output_length(const GSTLALTDwhiten *element, unsigned input_length)
@@ -221,7 +229,8 @@ static void set_metadata(GSTLALTDwhiten *element, GstBuffer *buf, guint64 outsam
 	element->next_out_offset += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
 	GST_BUFFER_PTS(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
-	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(buf);
+	element->next_pts = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+	GST_BUFFER_DURATION(buf) = element->next_pts - GST_BUFFER_PTS(buf);
 	if(element->need_discont) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
@@ -441,7 +450,7 @@ static GstFlowReturn filter_and_push(GSTLALTDwhiten *element, guint64 output_len
 /*
  * ============================================================================
  *
- *                                  Signals
+ *				  Signals
  *
  * ============================================================================
  */
@@ -466,7 +475,7 @@ static void rate_changed(GstElement *element, gint rate, void *data)
 /*
  * ============================================================================
  *
- *                           GStreamer Boiler Plate
+ *			   GStreamer Boiler Plate
  *
  * ============================================================================
  */
@@ -482,7 +491,7 @@ G_DEFINE_TYPE(
 /*
  * ============================================================================
  *
- *                    Gst BaseTransform Method Overriddes
+ *		    Gst BaseTransform Method Overriddes
  *
  * ============================================================================
  */
@@ -590,9 +599,11 @@ static gboolean start(GstBaseTransform *trans)
 	GSTLALTDwhiten *element = GSTLAL_TDWHITEN(trans);
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, "unit-size", 8, NULL);
 	element->t0 = GST_CLOCK_TIME_NONE;
+	element->next_pts = 0;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
 	element->need_discont = TRUE;
+	g_mutex_init(&element->kernel_lock);
 	return TRUE;
 }
 
@@ -655,6 +666,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 */
 
 		element->t0 = GST_BUFFER_PTS(inbuf);
+		element->next_pts = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
 		element->next_out_offset = element->offset0 + kernelinfo_longest(element->kernels) - 1 - element->latency;
 
@@ -666,6 +678,51 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	} else if(!gst_audioadapter_is_empty(element->adapter))
 		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
+
+	/*
+	 * Check if we are past the end time of the latest kernel in use.
+	 * If so, put a waiting kernel into use if available.
+	 */
+
+	/*
+	 * FIXME: the purpose of the wait loop below is to make the element
+	 * wait for a new filter kernel if the current one is "expired."
+	 * This should instead be done using the controller:
+	 * https://gstreamer.freedesktop.org/documentation/application-development/advanced/dparams.html
+	 * https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstTimedValueControlSource.html
+	 */
+
+	kernelinfo = g_queue_peek_tail(element->kernels);
+	if(kernelinfo->endtime != GST_CLOCK_TIME_NONE && element->next_pts >= kernelinfo->endtime) {
+		GstClockTime endtime = kernelinfo->endtime;
+		/* Wait until an appropriate filter arrives before continuing */
+		while(element->next_pts >= endtime) {
+			/* First check if we changed our mind about the expiration date fo the current kernel */
+			kernelinfo = g_queue_peek_tail(element->kernels);
+			if(kernelinfo->endtime > element->next_pts)
+				goto setoffsets;
+			kernelinfo = g_queue_peek_head(element->waiting_kernels);
+			if(kernelinfo) {
+				if(kernelinfo->endtime != GST_CLOCK_TIME_NONE) {
+					/* Throw away ones we won't use */
+					if(kernelinfo->endtime <= element->next_pts)
+						kernelinfo_free(g_queue_pop_head(element->waiting_kernels));
+					else
+						endtime = kernelinfo->endtime;
+				}
+			}
+			/* Don't waste CPUs */
+			sleep(1);
+		}
+		/* Dump any kernels we haven't used and won't use */
+		g_mutex_lock(&element->kernel_lock);
+		kernelinfo = g_queue_peek_tail(element->kernels);
+		if(kernelinfo->offset == GST_BUFFER_OFFSET_NONE)
+			kernelinfo_free(g_queue_pop_head(element->kernels));
+		g_queue_push_tail(element->kernels, g_queue_pop_head(element->waiting_kernels));
+		g_mutex_unlock(&element->kernel_lock);
+	}
+setoffsets:
 
 	/*
 	 * set offsets and timestamps for kernels that are new.
@@ -813,7 +870,8 @@ done:
 enum property {
 	PROP_TAPER_LENGTH = 1,
 	PROP_KERNEL,
-	PROP_LATENCY
+	PROP_LATENCY,
+	PROP_KERNEL_ENDTIME
 };
 
 
@@ -830,22 +888,87 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	case PROP_KERNEL: {
 		GValueArray *va = g_value_get_boxed(value);
-		struct kernelinfo_t *kernelinfo;
+		struct kernelinfo_t *kernelinfo, *old_kernelinfo;
 		/* dump any kernels that haven't yet been used */
-		for(kernelinfo = g_queue_peek_tail(element->kernels); kernelinfo && kernelinfo->offset == GST_BUFFER_OFFSET_NONE; kernelinfo = g_queue_peek_tail(element->kernels))
+		for(kernelinfo = g_queue_peek_tail(element->kernels); kernelinfo && kernelinfo->endtime == GST_CLOCK_TIME_NONE && kernelinfo->offset == GST_BUFFER_OFFSET_NONE; kernelinfo = g_queue_peek_tail(element->kernels))
 			kernelinfo_free(g_queue_pop_tail(element->kernels));
 		/* construct new kernelinfo object */
 		kernelinfo = kernelinfo_new(va->n_values);
 		gstlal_doubles_from_g_value_array(va, kernelinfo->kernel, NULL);
 		/* push the new kernel into the queue */
-		g_queue_push_tail(element->kernels, kernelinfo);
-
+		old_kernelinfo = g_queue_peek_tail(element->kernels);
+		if(!old_kernelinfo) {
+			if(element->kernel_endtime < G_MAXUINT64)
+				kernelinfo->endtime = element->kernel_endtime;
+			g_queue_push_tail(element->kernels, kernelinfo);
+		} else if(old_kernelinfo->endtime == GST_CLOCK_TIME_NONE)
+			g_queue_push_tail(element->kernels, kernelinfo);
+		else
+			/* this kernel should wait until the end time of the previous one */
+			g_queue_push_tail(element->waiting_kernels, kernelinfo);
 		break;
 	}
 
 	case PROP_LATENCY: {
 		gint64 latency = g_value_get_int64(value);
 		element->latency = latency;
+		break;
+	}
+
+	case PROP_KERNEL_ENDTIME: {
+		/*
+		 * FIXME: This should instead be handled with the controller. Then this property would be unnecessary.
+		 * https://gstreamer.freedesktop.org/documentation/application-development/advanced/dparams.html
+		 * https://gstreamer.freedesktop.org/data/doc/gstreamer/head/gstreamer-libs/html/GstTimedValueControlSource.html
+		 */
+		GstClockTime kernel_endtime = (GstClockTime) g_value_get_uint64(value);
+		if(!g_queue_is_empty(element->kernels) && kernel_endtime < G_MAXUINT64) {
+			g_mutex_lock(&element->kernel_lock);
+			struct kernelinfo_t *kernelinfo;
+			/*
+			 * If this endtime is less than the current incoming data timestamps
+			 * or less than the end time of the last kernel, we will throw the
+			 * kernel away.
+			 */
+			GstClockTime min_endtime = element->next_pts;
+			guint i;
+			for(i = 0; i < g_queue_get_length(element->waiting_kernels); i++) {
+				kernelinfo = g_queue_peek_nth(element->waiting_kernels, i);
+				if(kernelinfo->endtime != GST_CLOCK_TIME_NONE)
+					min_endtime = min_endtime > kernelinfo->endtime ? min_endtime : kernelinfo->endtime;
+			}
+			for(i = 0; i < g_queue_get_length(element->kernels); i++) {
+				kernelinfo = g_queue_peek_nth(element->kernels, i);
+				if(kernelinfo->endtime != GST_CLOCK_TIME_NONE)
+					min_endtime = min_endtime > kernelinfo->endtime ? min_endtime : kernelinfo->endtime;
+			}
+			/* First check if there are kernels waiting to be used */
+			if(!g_queue_is_empty(element->waiting_kernels)) {
+				if(kernel_endtime > min_endtime) {
+					kernelinfo = g_queue_peek_tail(element->waiting_kernels);
+					kernelinfo->endtime = kernel_endtime;
+					element->kernel_endtime = kernel_endtime;
+					/* In this case, also throw away any waiting kernels without end times */
+					for(i = 0; i < g_queue_get_length(element->waiting_kernels); i++) {
+						kernelinfo = g_queue_peek_nth(element->waiting_kernels, i);
+						if(kernelinfo->endtime == GST_CLOCK_TIME_NONE)
+							kernelinfo_free(g_queue_pop_nth(element->waiting_kernels, i));
+					}
+				} else
+					kernelinfo_free(g_queue_pop_tail(element->waiting_kernels));
+			} else if(!g_queue_is_empty(element->kernels)) {
+				/* If there are no waiting kernels, apply this to the most recent kernel being used */
+				if(kernel_endtime > min_endtime) {
+					kernelinfo = g_queue_peek_tail(element->kernels);
+					kernelinfo->endtime = kernel_endtime;
+					element->kernel_endtime = kernel_endtime;
+				} else
+					kernelinfo_free(g_queue_pop_tail(element->kernels));
+			}
+			g_mutex_unlock(&element->kernel_lock);
+		} else if (kernel_endtime < G_MAXUINT64)
+			/* The first kernel has not arrived yet, so store it for when it does */
+			element->kernel_endtime = kernel_endtime;
 		break;
 	}
 
@@ -888,6 +1011,12 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_int64(value, element->latency);
 		break;
 
+	case PROP_KERNEL_ENDTIME: {
+		/* returns the most recent end time in the queue, or G_MAXUINT64 if no times are present */
+		g_value_set_uint64(value, element->kernel_endtime);
+		break;
+	}
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -908,6 +1037,9 @@ static void finalize(GObject *object)
 
 	g_queue_free_full(element->kernels, (GDestroyNotify) kernelinfo_free);
 	element->kernels = NULL;
+	g_queue_free_full(element->waiting_kernels, (GDestroyNotify) kernelinfo_free);
+	element->waiting_kernels = NULL;
+	g_mutex_clear(&element->kernel_lock);
 	if(element->adapter) {
 		g_object_unref(element->adapter);
 		element->adapter = NULL;
@@ -1019,6 +1151,20 @@ static void gstlal_tdwhiten_class_init(GSTLALTDwhitenClass *klass)
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT | GST_PARAM_CONTROLLABLE
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		PROP_KERNEL_ENDTIME,
+		g_param_spec_uint64(
+			"kernel-endtime",
+			"Kernel end time",
+			"Timestamp at which most recently acquired filter kernel becomes invalid.\n\t\t\t"
+			"At this time, element will wait for another filter before processing\n\t\t\t"
+			"more data.  This feature can be enabled at any time during data flow,\n\t\t\t"
+			"but should not be disabled once enabled.  Default is to leave disabled.",
+			0, G_MAXUINT64, G_MAXUINT64,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT | GST_PARAM_CONTROLLABLE
+		)
+	);
 
 	signals[SIGNAL_RATE_CHANGED] = g_signal_new(
 		"rate-changed",
@@ -1049,5 +1195,7 @@ static void gstlal_tdwhiten_init(GSTLALTDwhiten *filter)
 	filter->adapter = NULL;
 	filter->latency = 0;
 	filter->kernels = g_queue_new();
+	filter->waiting_kernels = g_queue_new();
+	filter->kernel_endtime = G_MAXUINT64;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(filter), TRUE);
 }

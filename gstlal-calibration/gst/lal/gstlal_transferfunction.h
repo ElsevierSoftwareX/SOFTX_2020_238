@@ -165,10 +165,12 @@ struct _GSTLALTransferFunction {
 	double *notch_frequencies;
 	gint64 *notch_indices;
 	int num_notches;
+	gint64 fir_timeshift;
 	complex double *post_gap_transfer_functions;
 	double *post_gap_fir_filters;
 	complex double *transfer_functions;
 	double *fir_filters;
+	guint64 fir_endtime;
 };
 
 

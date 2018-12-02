@@ -98,6 +98,8 @@ struct _GSTLALAdaptiveFIRFilt {
 	double *tukey;
 	gint64 tukey_length;
 	gint filter_sample_rate;
+	gint64 filter_timeshift;
+	guint64 filter_endtime;
 	gboolean write_to_screen;
 	char *filename;
 };

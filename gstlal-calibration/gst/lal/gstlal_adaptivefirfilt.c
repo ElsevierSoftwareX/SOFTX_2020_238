@@ -112,6 +112,8 @@ enum property {
 	ARG_ADAPTIVE_FILTER_LENGTH,
 	ARG_TUKEY_PARAM,
 	ARG_FILTER_SAMPLE_RATE,
+	ARG_FILTER_TIMESHIFT,
+	ARG_FILTER_ENDTIME,
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
 	ARG_FAKE
@@ -419,6 +421,14 @@ static void average_input_data_ ## DTYPE(GSTLALAdaptiveFIRFilt *element, complex
  \
 				/* Let other elements know about the update */ \
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_ADAPTIVE_FILTER]); \
+				/* Provide a timestamp indicating when the filter becomes invalid if requested */ \
+				if(element->filter_timeshift < G_MAXINT64) { \
+					if(element->filter_timeshift < 0 && (guint64) (-element->filter_timeshift) > pts) \
+						element->filter_endtime = 0; \
+					else \
+						element->filter_endtime = pts + element->filter_timeshift; \
+					g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FILTER_ENDTIME]); \
+				} \
  \
 				/* Write FIR filter to the screen or a file if we want */ \
 				if(element->write_to_screen || element->filename) { \
@@ -504,6 +514,29 @@ static gboolean start(GstBaseSink *sink) {
 	}
 
 	return TRUE;
+}
+
+
+/*
+ * event()
+ */
+
+
+static gboolean event(GstBaseSink *sink, GstEvent *event) {
+
+	GSTLALAdaptiveFIRFilt *element = GSTLAL_ADAPTIVEFIRFILT(sink);
+	gboolean success;
+	GST_DEBUG_OBJECT(element, "Got %s event on sink pad", GST_EVENT_TYPE_NAME(event));
+
+	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS && element->filter_timeshift < G_MAXINT64) {
+		/* These filters should remain usable as long as possible */
+		element->filter_endtime = G_MAXUINT64 - 1;
+		g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_FILTER_ENDTIME]);
+	}
+
+	success = GST_BASE_SINK_CLASS(gstlal_adaptivefirfilt_parent_class)->event(sink, event);
+
+	return success;
 }
 
 
@@ -779,6 +812,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->filter_sample_rate = g_value_get_int(value);
 		break;
 
+	case ARG_FILTER_TIMESHIFT:
+		element->filter_timeshift = g_value_get_int64(value);
+		break;
+
 	case ARG_WRITE_TO_SCREEN:
 		element->write_to_screen = g_value_get_boolean(value);
 		break;
@@ -871,6 +908,14 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_int(value, element->filter_sample_rate);
 		break;
 
+	case ARG_FILTER_TIMESHIFT:
+		g_value_set_int64(value, element->filter_timeshift);
+		break;
+
+	case ARG_FILTER_ENDTIME:
+		g_value_set_uint64(value, element->filter_endtime);
+		break;
+
 	case ARG_WRITE_TO_SCREEN:
 		g_value_set_boolean(value, element->write_to_screen);
 		break;
@@ -927,6 +972,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 
 	gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	gstbasesink_class->start = GST_DEBUG_FUNCPTR(start);
+	gstbasesink_class->event = GST_DEBUG_FUNCPTR(event);
 	gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
 	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
 
@@ -1113,6 +1159,26 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		1, G_MAXINT, 16384,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_FILTER_TIMESHIFT] = g_param_spec_int64(
+		"filter-timeshift",
+		"Filter time-shift",
+		"The number of nanoseconds after the completion of a FIR filter calculation\n\t\t\t"
+		"that the FIR filter remains valid for use on the filtered data.  This is\n\t\t\t"
+		"added to the presentation timestamp when the filter is completed to compute\n\t\t\t"
+		"the filter-endtime property.  Default is to disable.",
+		G_MININT64, G_MAXINT64, G_MAXINT64,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_FILTER_ENDTIME] = g_param_spec_uint64(
+		"filter-endtime",
+		"Filter end time",
+		"The time when a computed FIR filter ceases to be valid for use on\n\t\t\t"
+		"filtered data.  This can be compared to the presentation timestamps of the\n\t\t\t"
+		"filtered data to determine whether the filter is still valid.  Default is\n\t\t\t"
+		"to disable.",
+		0, G_MAXUINT64, G_MAXUINT64,
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+	);
 	properties[ARG_WRITE_TO_SCREEN] = g_param_spec_boolean(
 		"write-to-screen",
 		"Write to Screen",
@@ -1199,6 +1265,16 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		gobject_class,
 		ARG_FILTER_SAMPLE_RATE,
 		properties[ARG_FILTER_SAMPLE_RATE]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FILTER_TIMESHIFT,
+		properties[ARG_FILTER_TIMESHIFT]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FILTER_ENDTIME,
+		properties[ARG_FILTER_ENDTIME]
 	);
 	g_object_class_install_property(
 		gobject_class,
