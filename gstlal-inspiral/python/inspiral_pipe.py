@@ -425,12 +425,7 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 	files from H1 and template bank files from L1.
 	"""
 	# Check that every file has same observatory.
-	observatories = [cache_entries[0].observatory]
-	for entry in cache_entries[1:]:
-		if entry.observatory == observatories[0]:
-			break
-		observatories.append(entry.observatory)
-
+	observatories = ''.join(sorted(list(set([cache_entry.observatory for cache_entry in cache_entries]))))
 	split_description = cache_entries[0].description.split('_')
 	min_bin = [x for x in split_description[:2] if x.isdigit()]
 	max_bin = [x for x in cache_entries[-1].description.split('_')[:2] if x.isdigit()]
@@ -448,14 +443,14 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 		# all of the DIST_STATS files from a given background bin and
 		# then CREATE_PRIOR_DIST_STATS files which are not generated
 		# for specific bins
-		return T050017_filename(''.join(observatories), cache_entries[0].description, seg, extension, path = path)
+		return T050017_filename(observatories, cache_entries[0].description, seg, extension, path = path)
 	elif min_bin and max_bin and min_bin != max_bin:
 		if split_description[1].isdigit():
 			description_base = split_description[2:]
 		else:
 			description_base = split_description[1:]
 		# Files from different bins, thus segments must be same
-		return T050017_filename(''.join(observatories), '_'.join([min_bin, max_bin] + description_base), seg, extension, path = path)
+		return T050017_filename(observatories, '_'.join([min_bin, max_bin] + description_base), seg, extension, path = path)
 	else:
 		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
 		raise ValueError
