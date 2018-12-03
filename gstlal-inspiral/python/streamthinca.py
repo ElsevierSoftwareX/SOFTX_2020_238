@@ -263,7 +263,7 @@ class StreamThinca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False):
+	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False):
 		# NOTE:  rankingstat is not used to compute the ranking
 		# statistic, it supplies the detector livetime segment
 		# lists to determine which triggers are eligible for
@@ -292,6 +292,8 @@ class StreamThinca(object):
 		flushed = []
 		flushed_unused = []
 		self.last_coincs.clear()
+		max_last_coinc_lr = None
+		max_last_coinc_snr = None
 		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, event_collector = self.backgroundcollector, flush = flush):
 			# construct row objects for coinc tables.
 
@@ -310,18 +312,17 @@ class StreamThinca(object):
 			# some tasks for zero-lag candidates
 
 			if node.is_zero_lag:
+				# track biggest zero lag snr and lr
+				if (max_last_coinc_lr is not None and coinc.likelihood > max_last_coinc_lr[1].likelihood) or max_last_coinc_lr is None:
+					max_last_coinc_lr = (events, coinc, coincmaps, coinc_inspiral)
+				if (max_last_coinc_snr is not None and coinc_inspiral.snr > max_last_coinc_snr[3].snr) or max_last_coinc_snr is None:
+					max_last_coinc_snr = (events, coinc, coincmaps, coinc_inspiral)
 				# populate ranking statistic's zero-lag
 				# PDFs with triggers from all zero-lag
 				# candidates
 
 				for event in events:
 					rankingstat.zerolag.increment(event)
-
-				# add events to the zero-lag ranking
-				# statistic histogram
-
-				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
-					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
 
 			# latency goes in minimum_duration column.  NOTE:
 			# latency is nonsense unless running live.  FIXME:
@@ -331,8 +332,36 @@ class StreamThinca(object):
 
 			# finally, append coinc to tables
 
-			self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
-			self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
+			if not cluster:
+				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
+
+				# add events to the zero-lag ranking
+				# statistic histogram
+
+				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
+					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
+
+				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
+
+
+		if cluster:
+			# If we have a max LR trigger, append it to last coincs and add
+			# events to the zero-lag ranking statistic histogram
+
+			if max_last_coinc_lr is not None:
+				events, coinc, coincmaps, coinc_inspiral = max_last_coinc_lr
+				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
+				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
+				# it is only the clustered LR trigger that we want to count
+				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
+					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
+			# If we have a max SNR trigger, append it to last coincs
+
+			if max_last_coinc_snr is not None and (max_last_coinc_lr is not None and max_last_coinc_lr[1].coinc_event_id != max_last_coinc_snr[1].coinc_event_id):
+				events, coinc, coincmaps, coinc_inspiral = max_last_coinc_lr
+				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
+				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
+
 
 		# add selected singles to the noise model
 
@@ -361,7 +390,17 @@ class StreamThinca(object):
 		# we record a lot of singles that aren't really used for
 		# any (retained) coincs.
 
-		self.sngl_inspiral_table.extend(newly_reported)
+		if not cluster:
+			self.sngl_inspiral_table.extend(newly_reported)
+		else:
+			sngls_in_coincs_ids = set()
+			if max_last_coinc_lr is not None:
+				for e in max_last_coinc_lr[0]:
+					sngls_in_coincs_ids.add(e.event_id)
+			if max_last_coinc_snr is not None:
+				for e in max_last_coinc_snr[0]:
+					sngls_in_coincs_ids.add(e.event_id)
+			self.sngl_inspiral_table.extend([sngl_trigger for sngl_trigger in newly_reported if sngl_trigger.event_id in sngls_in_coincs_ids])
 
 		# save all sngls above the requested sngls SNR threshold.
 		# all sngls that participated in coincs are already in the
