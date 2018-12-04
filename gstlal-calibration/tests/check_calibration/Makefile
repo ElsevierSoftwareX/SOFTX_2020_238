@@ -8,10 +8,10 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O2
 
-START = $(shell echo 1185767424 - 715 | bc)
+START = $(shell echo 1185763328 - 715 | bc)
 #1225967424
 #$(shell echo 1185763328 - 700 | bc)
-END = $(shell echo 1185771520 + 715 | bc)
+END = $(shell echo 1185767424 + 715 | bc)
 #1225968448
 #$(shell echo 1185767424 + 700 | bc)
 # 1185771520
@@ -27,7 +27,7 @@ GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: noise_subtraction_ASD_DCS_TEST
+all: noise_subtraction_ASD_DCS
 
 ###############################################
 ### These commands should change less often ###

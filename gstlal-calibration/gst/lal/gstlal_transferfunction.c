@@ -1352,12 +1352,17 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 	/* Prepare to deal with any notches */
 	if(element->num_notches && !element->notch_indices) {
-		int k;
+		int k, k_stop = element->num_notches;
 		double df = (double) element->rate / element->fft_length;
 		element->notch_indices = g_malloc(2 * element->num_notches * sizeof(*element->notch_indices));
-		for(k = 0; k < element->num_notches; k++) {
-			element->notch_indices[2 * k] = (gint64) (element->notch_frequencies[2 * k] / df - 1.0);
-			element->notch_indices[2 * k + 1] = (gint64) (element->notch_frequencies[2 * k + 1] / df + 2.0);
+		for(k = 0; k < k_stop; k++) {
+			if(element->notch_frequencies[2 * k + 1] >= element->rate / 2.0) {
+				GST_WARNING_OBJECT(element, "Cannot include notch with upper bound at %f Hz, since that is above the Nyquist rate of %f Hz", element->notch_frequencies[2 * k + 1], element->rate / 2.0);
+				element->num_notches--;
+			} else {
+				element->notch_indices[2 * k] = (gint64) (element->notch_frequencies[2 * k] / df - 1.0);
+				element->notch_indices[2 * k + 1] = (gint64) (element->notch_frequencies[2 * k + 1] / df + 2.0);
+			}
 		}
 	}
 
@@ -1902,109 +1907,6 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 
 
 /*
- * stop()
- */
-
-
-static gboolean stop(GstBaseSink *sink) {
-
-	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(sink);
-
-	g_free(element->transfer_functions);
-	element->transfer_functions = NULL;
-	if(element->make_fir_filters) {
-		g_free(element->fir_filters);
-		element->fir_filters = NULL;
-	}
-	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
-
-		/* free allocated memory in workspace */
-		g_free(element->workspace.wspf.fft_window);
-		element->workspace.wspf.fft_window = NULL;
-		g_free(element->workspace.wspf.leftover_data);
-		element->workspace.wspf.leftover_data = NULL;
-		g_free(element->workspace.wspf.ffts);
-		element->workspace.wspf.ffts = NULL;
-		g_free(element->workspace.wspf.autocorrelation_matrix);
-		element->workspace.wspf.autocorrelation_matrix = NULL;
-		if(element->make_fir_filters) {
-			g_free(element->workspace.wspf.fir_window);
-			element->workspace.wspf.fir_window = NULL;
-			g_free(element->workspace.wspf.sinc_table);
-			element->workspace.wspf.sinc_table = NULL;
-			g_free(element->workspace.wspf.tukey);
-			element->workspace.wspf.tukey = NULL;
-		}
-
-		/* free gsl stuff in workspace */
-		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
-		element->workspace.wspf.transfer_functions_at_f = NULL;
-		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_solved_at_f);
-		element->workspace.wspf.transfer_functions_solved_at_f = NULL;
-		gsl_matrix_complex_free(element->workspace.wspf.autocorrelation_matrix_at_f);
-		element->workspace.wspf.autocorrelation_matrix_at_f = NULL;
-		gsl_permutation_free(element->workspace.wspf.permutation);
-		element->workspace.wspf.permutation = NULL;
-
-		/* free fftwf stuff in workspace */
-		gstlal_fftw_lock();
-		fftwf_free(element->workspace.wspf.fft);
-		element->workspace.wspf.fft = NULL;
-		fftwf_destroy_plan(element->workspace.wspf.plan);
-		if(element->make_fir_filters) {
-			fftwf_free(element->workspace.wspf.fir_filter);
-			element->workspace.wspf.fir_filter = NULL;
-			fftwf_destroy_plan(element->workspace.wspf.fir_plan);
-		}
-		gstlal_fftw_unlock();
-
-	} else {
-
-		/* free allocated memory in workspace */
-		g_free(element->workspace.wdpf.fft_window);
-		element->workspace.wdpf.fft_window = NULL;
-		g_free(element->workspace.wdpf.leftover_data);
-		element->workspace.wdpf.leftover_data = NULL;
-		g_free(element->workspace.wdpf.ffts);
-		element->workspace.wdpf.ffts = NULL;
-		g_free(element->workspace.wdpf.autocorrelation_matrix);
-		element->workspace.wdpf.autocorrelation_matrix = NULL;
-		if(element->make_fir_filters) {
-			g_free(element->workspace.wdpf.fir_window);
-			element->workspace.wdpf.fir_window = NULL;
-			g_free(element->workspace.wdpf.sinc_table);
-			element->workspace.wdpf.sinc_table = NULL;
-			g_free(element->workspace.wdpf.tukey);
-			element->workspace.wdpf.tukey = NULL;
-		}
-
-		/* free gsl stuff in workspace */
-		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
-		element->workspace.wdpf.transfer_functions_at_f = NULL;
-		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_solved_at_f);
-		element->workspace.wdpf.transfer_functions_solved_at_f = NULL;
-		gsl_matrix_complex_free(element->workspace.wdpf.autocorrelation_matrix_at_f);
-		element->workspace.wdpf.autocorrelation_matrix_at_f = NULL;
-		gsl_permutation_free(element->workspace.wdpf.permutation);
-		element->workspace.wdpf.permutation = NULL;
-
-		/* free fftw stuff in workspace*/
-		gstlal_fftw_lock();
-		fftw_free(element->workspace.wdpf.fft);
-		element->workspace.wdpf.fft = NULL;
-		fftw_destroy_plan(element->workspace.wdpf.plan);
-		if(element->make_fir_filters) {
-			fftw_free(element->workspace.wdpf.fir_filter);
-			element->workspace.wdpf.fir_filter = NULL;
-			fftw_destroy_plan(element->workspace.wdpf.fir_plan);
-		}
-		gstlal_fftw_unlock();
-	}
-	return TRUE;
-}
-
-
-/*
  * ============================================================================
  *
  *			      GObject Methods
@@ -2290,6 +2192,117 @@ static void finalize(GObject *object) {
 		g_free(element->notch_frequencies);
 		element->notch_frequencies = NULL;
 	}
+	if(element->notch_indices) {
+		g_free(element->notch_indices);
+		element->notch_indices = NULL;
+	}
+	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+
+		/* free allocated memory in workspace */
+		g_free(element->workspace.wspf.fft_window);
+		element->workspace.wspf.fft_window = NULL;
+		g_free(element->workspace.wspf.leftover_data);
+		element->workspace.wspf.leftover_data = NULL;
+		g_free(element->workspace.wspf.ffts);
+		element->workspace.wspf.ffts = NULL;
+		g_free(element->workspace.wspf.autocorrelation_matrix);
+		element->workspace.wspf.autocorrelation_matrix = NULL;
+		if(element->make_fir_filters) {
+			g_free(element->workspace.wspf.fir_window);
+			element->workspace.wspf.fir_window = NULL;
+			g_free(element->workspace.wspf.sinc_table);
+			element->workspace.wspf.sinc_table = NULL;
+			g_free(element->workspace.wspf.tukey);
+			element->workspace.wspf.tukey = NULL;
+		}
+
+		if(element->use_median) {
+			g_free(element->workspace.wspf.autocorrelation_median_real);
+			element->workspace.wspf.autocorrelation_median_real = NULL;
+			g_free(element->workspace.wspf.index_median_real);
+			element->workspace.wspf.index_median_real = NULL;
+			g_free(element->workspace.wspf.autocorrelation_median_imag);
+			element->workspace.wspf.autocorrelation_median_imag = NULL;
+			g_free(element->workspace.wspf.index_median_imag);
+			element->workspace.wspf.index_median_imag = NULL;
+		}
+
+		/* free gsl stuff in workspace */
+		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
+		element->workspace.wspf.transfer_functions_at_f = NULL;
+		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_solved_at_f);
+		element->workspace.wspf.transfer_functions_solved_at_f = NULL;
+		gsl_matrix_complex_free(element->workspace.wspf.autocorrelation_matrix_at_f);
+		element->workspace.wspf.autocorrelation_matrix_at_f = NULL;
+		gsl_permutation_free(element->workspace.wspf.permutation);
+		element->workspace.wspf.permutation = NULL;
+
+		/* free fftwf stuff in workspace */
+		gstlal_fftw_lock();
+		fftwf_free(element->workspace.wspf.fft);
+		element->workspace.wspf.fft = NULL;
+		fftwf_destroy_plan(element->workspace.wspf.plan);
+		if(element->make_fir_filters) {
+			fftwf_free(element->workspace.wspf.fir_filter);
+			element->workspace.wspf.fir_filter = NULL;
+			fftwf_destroy_plan(element->workspace.wspf.fir_plan);
+		}
+		gstlal_fftw_unlock();
+
+	} else {
+
+		/* free allocated memory in workspace */
+		g_free(element->workspace.wdpf.fft_window);
+		element->workspace.wdpf.fft_window = NULL;
+		g_free(element->workspace.wdpf.leftover_data);
+		element->workspace.wdpf.leftover_data = NULL;
+		g_free(element->workspace.wdpf.ffts);
+		element->workspace.wdpf.ffts = NULL;
+		g_free(element->workspace.wdpf.autocorrelation_matrix);
+		element->workspace.wdpf.autocorrelation_matrix = NULL;
+		if(element->make_fir_filters) {
+			g_free(element->workspace.wdpf.fir_window);
+			element->workspace.wdpf.fir_window = NULL;
+			g_free(element->workspace.wdpf.sinc_table);
+			element->workspace.wdpf.sinc_table = NULL;
+			g_free(element->workspace.wdpf.tukey);
+			element->workspace.wdpf.tukey = NULL;
+		}
+
+		if(element->use_median) {
+			g_free(element->workspace.wdpf.autocorrelation_median_real);
+			element->workspace.wdpf.autocorrelation_median_real = NULL;
+			g_free(element->workspace.wdpf.index_median_real);
+			element->workspace.wdpf.index_median_real = NULL;
+			g_free(element->workspace.wdpf.autocorrelation_median_imag);
+			element->workspace.wdpf.autocorrelation_median_imag = NULL;
+			g_free(element->workspace.wdpf.index_median_imag);
+			element->workspace.wdpf.index_median_imag = NULL;
+		}
+
+		/* free gsl stuff in workspace */
+		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
+		element->workspace.wdpf.transfer_functions_at_f = NULL;
+		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_solved_at_f);
+		element->workspace.wdpf.transfer_functions_solved_at_f = NULL;
+		gsl_matrix_complex_free(element->workspace.wdpf.autocorrelation_matrix_at_f);
+		element->workspace.wdpf.autocorrelation_matrix_at_f = NULL;
+		gsl_permutation_free(element->workspace.wdpf.permutation);
+		element->workspace.wdpf.permutation = NULL;
+
+		/* free fftw stuff in workspace */
+		gstlal_fftw_lock();
+		fftw_free(element->workspace.wdpf.fft);
+		element->workspace.wdpf.fft = NULL;
+		fftw_destroy_plan(element->workspace.wdpf.plan);
+		if(element->make_fir_filters) {
+			fftw_free(element->workspace.wdpf.fir_filter);
+			element->workspace.wdpf.fir_filter = NULL;
+			fftw_destroy_plan(element->workspace.wdpf.fir_plan);
+		}
+		gstlal_fftw_unlock();
+	}
+
 	G_OBJECT_CLASS(gstlal_transferfunction_parent_class)->finalize(object);
 }
 
@@ -2318,7 +2331,6 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	gstbasesink_class->event = GST_DEBUG_FUNCPTR(event);
 	gstbasesink_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	gstbasesink_class->render = GST_DEBUG_FUNCPTR(render);
-	gstbasesink_class->stop = GST_DEBUG_FUNCPTR(stop);
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
