@@ -1465,9 +1465,9 @@ def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box):
 	#
 
 	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Observed", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), ("Observed", r"Noise Model, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"Observed (time shifted)", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
+		axes.legend((line5, line1, line4, line3, line2), (r"Observed (time shifted)", r"Noise Model, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
 
 	#
 	# adjust bounds of plot
@@ -1646,7 +1646,7 @@ WHERE
 				yield fig, "count_vs_ifar", is_open_box
 
 			if ln_likelihood_ratio:
-				fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
+				fig, axes = create_plot(r"$\ln \mathcal{L}$ Threshold", r"Number of Events $\geq \ln \mathcal{L}$")
 				# ln(L) in ascending order
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
 				create_rate_vs_lnL_plot(axes, zerolag_stats, self.fapfar, is_open_box)
@@ -1657,7 +1657,7 @@ WHERE
 				yield fig, "count_vs_lr", is_open_box
 
 		if self.background_ln_likelihood_ratio:
-			fig, axes = create_plot(r"$\ln \mathcal{L}$", r"Number of Events $\geq \ln \mathcal{L}$")
+			fig, axes = create_plot(r"$\ln \mathcal{L}$ Threshold", r"Number of Events $\geq \ln \mathcal{L}$")
 			axes.semilogy()
 			background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
 			zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
