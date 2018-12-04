@@ -198,6 +198,7 @@ class EyeCandy(object):
 		self.kafka_data["snr_history"] = ""
 		self.kafka_data["far_history"] = ""
 		self.kafka_data["ram_history"] = ""
+		self.kafka_data["coinc"] = ""
 		for instrument in instruments:
 			self.kafka_data["%s_snr_history" % instrument] = ""
 			self.kafka_data["%s/dqvector_on" % instrument] = ""
@@ -218,6 +219,27 @@ class EyeCandy(object):
 		if last_coincs:
 			coinc_inspiral_index = last_coincs.coinc_inspiral_index
 			coinc_event_index = last_coincs.coinc_event_index
+			sngl_inspiral_index = last_coincs.sngl_inspiral_index
+			coinc_dict_list = []
+			for coinc_event_id in coinc_event_index:
+				coinc_dict = {}
+				for attr in ("combined_far", "snr", "false_alarm_rate"):
+					try:
+						coinc_dict[attr] = float(getattr(coinc_inspiral_index[coinc_event_id], attr))
+					except TypeError as e:
+						print >>sys.stderr, e, attr, getattr(coinc_inspiral_index[coinc_event_id], attr)
+				coinc_dict["end"] = float(coinc_inspiral_index[coinc_event_id].end)
+				for attr in ("likelihood",):
+					try:
+						coinc_dict[attr] = float(getattr(coinc_event_index[coinc_event_id], attr))
+					except TypeError as e:
+						print >>sys.stderr, e, attr, getattr(coinc_event_index[coinc_event_id], attr)
+				for sngl_row in sngl_inspiral_index[coinc_event_id]:
+					for attr in ("snr", "chisq", "mass1", "mass2", "spin1z", "spin2z"):
+						coinc_dict["%s_%s" % (sngl_row.ifo, attr)] = float(getattr(sngl_row, attr))
+					coinc_dict["%s_end" % sngl_row.ifo] = float(sngl_row.end)
+				coinc_dict_list.append(coinc_dict)
+			self.kafka_data["coinc"] += json.dumps(coinc_dict_list)
 			for coinc_inspiral in coinc_inspiral_index.values():
 				# latency in .minimum_duration
 				# FIXME:  update when a proper column is available
@@ -597,7 +619,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", verbose = False):
+	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", cluster = False, verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being
@@ -621,6 +643,7 @@ class Handler(simplehandler.Handler):
 		# None to disable periodic snapshots, otherwise seconds
 		self.likelihood_snapshot_interval = likelihood_snapshot_interval
 		self.likelihood_snapshot_timestamp = None
+		self.cluster = cluster
 
 		self.gracedbwrapper = gracedbwrapper
 		# FIXME:   detangle this
@@ -1050,7 +1073,7 @@ class Handler(simplehandler.Handler):
 			for absent_instrument in self.absent_instruments:
 				self.stream_thinca.push(absent_instrument, (), buf_timestamp)
 			if self.stream_thinca.push(instrument, events, buf_timestamp):
-				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events, offset_vector: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold)
+				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events, offset_vector: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold, cluster = self.cluster)
 				self.coincs_document.commit()
 
 				# do GraceDB alerts and update eye candy
@@ -1165,6 +1188,10 @@ class Handler(simplehandler.Handler):
 		buffer in order to close off open segment intervals before
 		writing to disk
 		"""
+		try:
+			self.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
+		except TypeError as te:
+			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 		# FIXME:  the timestamp is used to close off open segments
 		# and so should *not* be the timestamp of the current
 		# buffer, necessarily, but rather a GPS time guaranteed to
@@ -1173,10 +1200,6 @@ class Handler(simplehandler.Handler):
 		# warning" configuration using the GPS time of a trigger
 		# buffer would be an especially bad choice.
 		self.segmentstracker.flush_segments_to_disk(self.tag, timestamp)
-		try:
-			self.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
-		except TypeError as te:
-			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
 
 
 	def __get_psd_xmldoc(self):
