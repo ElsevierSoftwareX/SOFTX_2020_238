@@ -45,7 +45,7 @@ def schechter(mass, maxM, alpha):
 parser = argparse.ArgumentParser(description = "Create analytic mass models for prior weighting of templates")
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo. If you want another one, submit a patch.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow_bns. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
@@ -72,7 +72,14 @@ othernorm = schechter_norm(1, 200, 200., -2.35)
 for row in sngl_inspiral_table:
 	assert row.template_id not in ids
         tmplt_ids.append(int(row.template_id))
-	if options.model == "ligo":
+	if options.model == "narrow_bns":
+		mchirp = chirpmass(row.mass1, row.mass2)
+		sigma = 0.04
+		mean = 1.20
+		ids[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
+		mchirps.append(mchirp)
+		probs.append(ids[row.template_id])
+	elif options.model == "ligo":
 
 		#
 		# BNS portion
