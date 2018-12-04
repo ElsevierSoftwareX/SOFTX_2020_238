@@ -473,7 +473,7 @@ class GracedBWrapper(object):
 		assert self.gracedb_client is not None, ".gracedb_client is None;  did you forget to set .far_threshold?"
 		for gracedb_id in gracedb_ids:
 			if self.verbose:
-				print >>sys.stderr, "posting '%s' to gracedb ID %d ..." % (filename, gracedb_id)
+				print >>sys.stderr, "posting '%s' to gracedb ID %s ..." % (filename, gracedb_id)
 			for attempt in range(1, self.retries + 1):
 				try:
 					resp = self.gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
@@ -509,15 +509,19 @@ class GracedBWrapper(object):
 
 		coinc_inspiral_index = last_coincs.coinc_inspiral_index
 
-		# NOTE if any are None, this becomes None.
+		# Pick the "best" coinc
 		# FIXME revisit depending on how clustering goes
-		best_coinc = [min((coinc_inspiral_index[coinc_event.coinc_event_id].combined_far, coinc_event) for coinc_event in last_coincs.coinc_event_index.values())]
-		# This appears to be a silly for loop since
-		# coinc_event_index will only have one value, but we're
-		# future proofing this at the point where it could have
-		# multiple clustered events
-		#for coinc_event in last_coincs.coinc_event_index.values():
-		for _, coinc_event in best_coinc:
+		# NOTE if any are None, this becomes None.
+		# best_coinc = [min((coinc_inspiral_index[coinc_event.coinc_event_id].combined_far, coinc_event) for coinc_event in last_coincs.coinc_event_index.values())]
+
+		# NOTE streamthinca currently records the max LR and max SNR
+		# triggers.  Both will be uploaded if they are separate. Many
+		# times they are the same.  NOTE NOTE NOTE FIXME FIXME FIXME.
+		# this loop would be a disaster if stream thinca doesn't
+		# cluster!
+		for coinc_event in last_coincs.coinc_event_index.values():
+		# revisit this "best coinc" if clustering is removed from streamthinca
+		#for _, coinc_event in best_coinc:
 			#
 			# continue if the false alarm rate is not low
 			# enough, or is nan, or there aren't enough
