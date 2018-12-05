@@ -52,6 +52,7 @@ def parse_command_line():
 	parser.add_option("--reference-psd-cache", metavar = "filename", help = "Set the reference psd cache file.")
 	parser.add_option("--injection-file", metavar = "filename", help = "Set the injection xml file.")
 	parser.add_option("--flow", metavar = "value", type = "float", help = "Set the low frequency for waveform generation and SNR integral.")
+        parser.add_option("--fmax", metavar = "value", type = "float",default=1600, help = "Set the max frequency for waveform generation and SNR integral.Default 1600Hz")
 	parser.add_option("--npool", metavar = "value", type = "int", default = 2, help = "Set value for pool. Number of parallel sub-processes")
 
 	options, filenames = parser.parse_args()
@@ -133,7 +134,7 @@ def calc_expected_snr(inj):
 		if instrument not in chosenPSD:
 			continue
 		h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, lalsimulation.DetectorPrefixToLALDetector(instrument))
-		snr[instrument] = lalsimulation.MeasureSNR(h, chosenPSD[instrument], options.flow, 0.85 * (sample_rate / 2.))
+		snr[instrument] = lalsimulation.MeasureSNR(h, chosenPSD[instrument], options.flow, options.fmax)
 
 	return snr
 
