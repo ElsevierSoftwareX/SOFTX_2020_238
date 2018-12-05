@@ -357,8 +357,8 @@ class StreamThinca(object):
 					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
 			# If we have a max SNR trigger, append it to last coincs
 
-			if max_last_coinc_snr is not None and (max_last_coinc_lr is not None and max_last_coinc_lr[1].coinc_event_id != max_last_coinc_snr[1].coinc_event_id):
-				events, coinc, coincmaps, coinc_inspiral = max_last_coinc_lr
+			if max_last_coinc_snr is not None and (max_last_coinc_lr is not None and max_last_coinc_snr[3].snr > max_last_coinc_lr[3].snr):
+				events, coinc, coincmaps, coinc_inspiral = max_last_coinc_snr
 				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
 				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
 
