@@ -801,6 +801,13 @@ if ChannelNames["witnesschannellist"] != "None":
 else:
 	witness_channel_list = None
 
+# If we are gating the noise or 60 Hz line subtraction with something other than the ODC state vector, add that channel
+noisesub_gate_channel = ChannelNames["noisesubgatechannel"] if "noisesubgatechannel" in ChannelNames else ChannelNames["inputdqchannel"]
+noisesub_gate_bitmask = int(Bitmasks["noisesubgatebitmask"]) if "noisesubgatebitmask" in Bitmasks else int(Bitmasks["obsreadybitmask"])
+if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_channel != ChannelNames["inputdqchannel"] and noisesub_gate_bitmask >= 0:
+	channel_list.append((instrument, ChannelNames["noisesubgatechannel"]))
+	headkeys.append("noisesubgatechannel")
+
 ####################################################################################################
 ####################################### Main Pipeline ##############################################
 ####################################################################################################
@@ -2217,10 +2224,10 @@ if remove_cal_lines:
 
 	clean_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, straintee, calibration_lines))
 
-# Pick a bit from the ODC state vector to gate the power mains and noise subtraction
-noisesub_gate_bitmask = int(Bitmasks["noisesubgatebitmask"]) if "noisesubgatebitmask" in Bitmasks else 2
-if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_bitmask >= 0:
-	noisesubgate = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,28))
+# Set up gating for the power mains and noise subtraction
+if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_bitmask > 0:
+	noisesubgate = odcstatevectortee if noisesub_gate_channel == ChannelNames["inputdqchannel"] else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
+	noisesubgate = pipeparts.mkgeneric(pipeline, noisesubgate, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,28))
 	noisesubgate = pipeparts.mkcapsfilter(pipeline, noisesubgate, calibstate_caps)
 	noisesubgatetee = pipeparts.mktee(pipeline, noisesubgate)
 else:
