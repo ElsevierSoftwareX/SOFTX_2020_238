@@ -239,7 +239,8 @@ channel_list.append("SUS-ETMY_L1_CAL_LINE_OUT_DQ")
 channel_list.append("SUS-ETMY_L2_CAL_LINE_OUT_DQ")
 channel_list.append("CAL-CS_TDEP_SUS_LINE2_UNCERTAINTY")
 channel_list.append("CAL-CS_TDEP_SUS_LINE3_UNCERTAINTY")
-
+channel_list.append("GRD-ISC_LOCK_OK")
+channel_list.append("GRD-ISC_LOCK_ERROR")
 temp_list = channel_list
 channel_list = []
 for chan in temp_list:
