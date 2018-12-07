@@ -139,7 +139,7 @@ class StreamListener(object):
         logger.info('processing features for timestamp %f, latency = %.3f s' % (self.timestamp, latency))
 
         ### format row
-        percent_missed = 100. * ((self.num_channels - len(features.keys())) / self.num_channels)
+        percent_missed = 100 * (float(self.num_channels - len(features.keys())) / self.num_channels)
         if features.has_key(self.target_channel):
             target_snr = features[self.target_channel][0]['snr']
         else:
@@ -151,7 +151,10 @@ class StreamListener(object):
         c = self.conn.cursor()
         sql = ''' INSERT INTO fxmonitor(timestamp,latency,percent_missed,target_snr) VALUES(?,?,?,?) '''
         c.execute(sql,data)
-        self.conn.commit()
+        try:
+            self.conn.commit()
+        except sqlite3.OperationalError:
+            pass
 
     def start(self):
         """
