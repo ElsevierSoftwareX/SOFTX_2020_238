@@ -1082,6 +1082,11 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
+	if options.template_bank:
+		bank_xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
+		assert len(sngl_inspiral_table) == len(set([r.template_id for r in sngl_inspiral_table])), "Template bank ids are not unique"
+
 	if options.mass_model not in ("ligo", "file"):
 		raise ValueError("--mass-model must be 'ligo' or 'file'")
 	if options.mass_model == "file" and not options.mass_model_file:
