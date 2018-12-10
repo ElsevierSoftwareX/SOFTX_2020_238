@@ -682,7 +682,7 @@ WHERE
 		# that have too small a count to have been well measured,
 		# and/or can't be modelled correctly by this fit anyway.
 		mode, = zl.argmax()
-		mask = (x < mode) | (zl.at_centres() < zl[mode,] - 9.)
+		mask = (x < mode) | (zl.at_centres() < zl[mode,] - 15.)
 		zl = numpy.ma.masked_array(zl.array, mask)
 		bg = numpy.ma.masked_array(bg, mask)
 
