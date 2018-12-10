@@ -31,12 +31,15 @@ from glue.ligolw import utils as ligolw_utils
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
-fname = sys.argv[1]
+cnt = 0
 
-xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
-sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+for fname in sys.argv[1:]:
 
-for n, row in enumerate(sngl_inspiral_table):
-	row.template_id = n
+	xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
+	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
-ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('gz'), verbose = True)
+	for row in sngl_inspiral_table:
+		row.template_id = cnt
+		cnt += 1
+
+	ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('gz'), verbose = True)
