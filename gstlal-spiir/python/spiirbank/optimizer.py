@@ -262,7 +262,7 @@ def optimize_a1(a1, delay, template, return_state=False, state=None, passes=0, i
           df = calc_df_indv(a1,delay,state,j)
         if hessian:
           ddf = calc_ddf_indv(a1,delay,state,j)
-          daj = saddle_free_newton(df,ddf,lam=lam)
+          daj = saddle_free_newton(df,ddf,lam=lam)[0]
         else:
           daj = eps*df
         aj = a1[j]
@@ -297,6 +297,7 @@ def optimize_a1(a1, delay, template, return_state=False, state=None, passes=0, i
         if(np.max(np.abs(da))<1e-9):
           a1[:] = a
           stop = True
+          break
     if verbose:
       eprint("Pass %d, overlap %f"%(i+1,overlap))
     if stop:
