@@ -561,10 +561,9 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     epsilon_increment = 0.001
     row = sngl_inspiral_table[irow]
     this_tchirp = lalsimulation.SimInspiralChirpTimeBound(flower, row.mass1 * lal.MSUN_SI, row.mass2 * lal.MSUN_SI, row.spin1z, row.spin2z)
-    fFinal = row.f_final
 
     if verbose:
-        logging.info("working_duration %f, chirp time %f, final frequency %f" % (working_state["working_duration"], this_tchirp, fFinal))
+        logging.info("working_duration %f, chirp time %f" % (working_state["working_duration"], this_tchirp))
 
     amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
 
@@ -869,7 +868,6 @@ class Bank(object):
         self.template_bank_filename = filename
         tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
         sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
-        fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
         self.flower = flower
         self.epsilon = epsilon_start
         self.alpha = alpha
@@ -877,11 +875,12 @@ class Bank(object):
 
 
         if sampleRate is None:
+            fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
             sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
         if verbose:
             logging.basicConfig(format='%(asctime)s %(message)s', level = logging.DEBUG)
-            logging.info("fmin = %f,f_fin = %f, samplerate = %f" % (flower, fFinal, sampleRate))
+            logging.info("fmin = %f, samplerate = %f" % (flower, sampleRate))
 
 
         # Check parity of autocorrelation length
@@ -930,8 +929,6 @@ class Bank(object):
             epsilon_a = None
             epsilon_b = None
             n_filters = 0
-
-            fFinal = row.f_final
 
             amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = snr_cut, negative_latency = negative_latency, verbose = verbose)
 
