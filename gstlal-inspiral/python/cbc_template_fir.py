@@ -286,7 +286,8 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	sample_rate_max = max(time_slices['rate'])
 	duration = max(time_slices['end'])
 	length_max = int(round(duration * sample_rate_max))
-
+	if fhigh is None:
+		fhigh = sample_rate_max/2.
 	# Some input checking to avoid incomprehensible error messages
 	if not template_table:
 		raise ValueError("template list is empty")
