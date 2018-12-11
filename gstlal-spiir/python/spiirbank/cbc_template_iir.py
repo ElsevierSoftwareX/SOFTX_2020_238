@@ -657,7 +657,7 @@ def gen_lalsim_waveform(row, flower, sampleRate, approximant_string):
     #plt.show()
 
 
-def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, snr_cut = 1.0, is_frequency_whiten = 1, verbose = False):
+def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, snr_cut = 1.0, is_frequency_whiten = 1, negative_latency = 0, verbose = False):
     """ Generates whitened waveform from given parameters and PSD, then returns the amplitude and the phase.
 
     Parameters
@@ -768,13 +768,13 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
     cumag = cumag/cumag[-1]
     filter_start = numpy.argmax(cumag >= 1-snr_cut)
 
-    data = data_full[filter_start:]
+    data = data_full[filter_start:-int(1+negative_latency*sampleRate)]
     amp_lalwhiten, phase_lalwhiten = calc_amp_phase(numpy.imag(data), numpy.real(data))
 
     if verbose:
         logging.info("original template length %d, cut to construct spiir coeffs %d" % (len(data_full), len(data)))
 
-    return amp_lalwhiten, phase_lalwhiten, data, data_full
+    return amp_lalwhiten, phase_lalwhiten, data, data_full[:-int(1+negative_latency*sampleRate)]
 
 def gen_spiir_response(length, a1, b0, delay):
         u = spawaveform.iirresponse(length, a1, b0, delay)
@@ -854,7 +854,7 @@ class Bank(object):
         self.flower = None
         self.epsilon = None
 
-    def build_from_tmpltbank(self, filename, sampleRate = None, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon_start = 0.02, epsilon_min = 0.001, epsilon_max = None, filters_min = 0, filters_max = None, filters_per_loglen_min = 0, filters_per_loglen_max = None, initial_overlap_min = 0, b0_optimized_overlap_min = 0, final_overlap_min = 0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, verbose = False, contenthandler = DefaultContentHandler):
+    def build_from_tmpltbank(self, filename, sampleRate = None, negative_latency = 0, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon_start = 0.02, epsilon_min = 0.001, epsilon_max = None, filters_min = 0, filters_max = None, filters_per_loglen_min = 0, filters_per_loglen_max = None, initial_overlap_min = 0, b0_optimized_overlap_min = 0, final_overlap_min = 0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, verbose = False, contenthandler = DefaultContentHandler):
         """
             Build SPIIR template bank from physical parameters, e.g. mass, spin.
             """
@@ -933,7 +933,7 @@ class Bank(object):
 
             fFinal = row.f_final
 
-            amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = snr_cut, verbose = verbose)
+            amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = snr_cut, negative_latency = negative_latency, verbose = verbose)
 
             nround = 1
             nround_max = 10
