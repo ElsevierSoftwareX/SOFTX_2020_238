@@ -240,7 +240,10 @@ def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_
 		sample_rate = sample_rate,
 		verbose=verbose)
 
-	fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc)
+	if sample_rate is not None:
+		fhigh=check_ffinal_and_find_max_ffinal(bank_xmldoc)
+	else:
+		fhigh=None
 	# Generate templates, perform SVD, get orthogonal basis
 	# and store as Bank object
 	bank = Bank(
