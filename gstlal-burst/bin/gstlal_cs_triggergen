@@ -135,9 +135,15 @@ class PSDHandler(simplehandler.Handler):
 				firbank.set_property("fir_matrix", template_t)
 				self.firbank = firbank
 			else:
-				template, _ = lalsimulation.GenerateStringCusp(1.0,30,1.0/options.sample_rate)
-				firbank.set_property("fir_matrix",numpy.zeros((template.data.length,len(template_bank_table)), dtype=float))
-				firbank.set_property("latency",-(template.data.length - 1) // 2)
+				# use templates with all zeros during burn-in period, that way we won't get any triggers.
+				template = [None] * len(template_bank_table)
+				for i, row in enumerate(template_bank_table):
+					template[i], _ = lalsimulation.GenerateStringCusp(1.0,30,1.0/options.sample_rate)
+					template[i] = lal.ResizeREAL8TimeSeries(template[i], -int(32*options.sample_rate - template[i].data.length)//2 ,int(32*options.sample_rate))
+					template[i] = template[i].data.data
+					template[i] *= 0.0
+				firbank.set_property("latency",-(len(template[0]) - 1) // 2)
+				firbank.set_property("fir_matrix", template)
 				self.firbank = firbank
 			return True
 		return False
@@ -203,7 +209,7 @@ template_bank_table = lsctables.SnglBurstTable.get_table(xmldoc)
 # filter bank
 #
 
-head = firbank = pipeparts.mkfirbank(pipeline, head, time_domain = False, block_stride = 4 * options.sample_rate)
+head = firbank = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((len(template_bank_table),int(32*options.sample_rate)),dtype=numpy.float64), block_stride = 4 * options.sample_rate)
 
 
 #
