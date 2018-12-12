@@ -259,12 +259,13 @@ cleaning_check_range_low_min = float(DataCleaningConfigs["cleaningcheckrangelowm
 cleaning_check_range_low_max = float(DataCleaningConfigs["cleaningcheckrangelowmax"])
 cleaning_check_range_mid_min = float(DataCleaningConfigs["cleaningcheckrangemidmin"])
 cleaning_check_range_mid_max = float(DataCleaningConfigs["cleaningcheckrangemidmax"])
+powerlines_tf_median_time = float(DataCleaningConfigs["powerlinestfmediantime"]) if "powerlinestfmediantime" in DataCleaningConfigs else 1
 powerlines_tf_averaging_time = float(DataCleaningConfigs["powerlinestfaveragingtime"])
 powerlines_freq_var = float(DataCleaningConfigs["powerlinesfreqvar"])
 witness_channel_fft_time = float(DataCleaningConfigs["witnesschannelffttime"])
 num_witness_ffts = int(DataCleaningConfigs["numwitnessffts"])
 min_witness_ffts = int(DataCleaningConfigs["minwitnessffts"])
-witness_fir_length = float(DataCleaningConfigs["witnessfirlength"])
+witness_fir_length = DataCleaningConfigs["witnessfirlength"].split(";")
 witness_frequency_resolution = float(DataCleaningConfigs["witnessfrequencyresolution"])
 witness_tf_update_time = float(DataCleaningConfigs["witnesstfupdatetime"])
 critical_lock_loss_time = float(DataCleaningConfigs["criticallocklosstime"])
@@ -784,6 +785,7 @@ if ChannelNames["witnesschannellist"] != "None":
 	witness_channel_list = ChannelNames["witnesschannellist"].split(';')
 	witness_notch_frequencies = DataCleaningConfigs["witnessnotchfrequencies"].split(';')
 	witness_rates = SampleRates["witnesschannelsr"].split(';')
+	witness_highpasses = DataCleaningConfigs['witnesshighpasses'].split(';') if "witnesshighpasses" in DataCleaningConfigs else list(15 * numpy.ones(len(witness_channel_list)))
 	if len(witness_channel_list) != len(witness_notch_frequencies) or len(witness_channel_list) != len(witness_rates):
 		raise ValueError("WitnessChannelList, WitnessChannelSR, and WitnessNotchFrequencies must all be the same length, i.e., they must all have the same number of semicolons (;)")
 	for i in range(0, len(witness_channel_list)):
@@ -792,6 +794,7 @@ if ChannelNames["witnesschannellist"] != "None":
 			channel_list.append((instrument, witness_channel_list[i][j]))
 			headkeys.append(witness_channel_list[i][j])
 		witness_rates[i] = int(witness_rates[i])
+		witness_highpasses[i] = float(witness_highpasses[i])
 		witness_notch_frequencies[i] = witness_notch_frequencies[i].split(',')
 		if len(witness_notch_frequencies[i]) <= 1:
 			witness_notch_frequencies[i] = []
@@ -2240,7 +2243,7 @@ if remove_power_lines:
 	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", "powerlines")
 	if remove_cal_lines and filter_latency_factor > 0:
 		powerlines = pipeparts.mkgeneric(pipeline, powerlines, "lal_insertgap", chop_length = int(1000000000 * filter_latency_factor * demodulation_filter_time))
-	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, powerlines_freq_var, filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_avg = powerlines_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
+	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, powerlines_freq_var, filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_median = powerlines_tf_median_time, num_avg = powerlines_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
 
 # Remove excess noise using any provided witness channels
 if witness_channel_list is not None:
@@ -2260,7 +2263,7 @@ if witness_channel_list is not None:
 		# How many samples between filter updates (does not include the samples used to compute the FIR filters
 		witness_tf_update_samples = int(witness_rates[i] * witness_tf_update_time)
 		# Length of FIR filters
-		witness_fir_samples = int(witness_fir_length * witness_rates[i])
+		witness_fir_samples = int(float(witness_fir_length[min(i, len(witness_fir_length) - 1)]) * witness_rates[i])
 		# Over how many samples should new FIR filters be tapered in?
 		witness_filter_taper_length = int(witness_rates[i] * witness_filter_taper_time)
 
@@ -2270,7 +2273,7 @@ if witness_channel_list is not None:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
 			print "WARNING: Not all requested witness channels are being used"
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], high_pass = witness_highpasses[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
 		witness_delay_time += witness_delay_increment
 
 if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
