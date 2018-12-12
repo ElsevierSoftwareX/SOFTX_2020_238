@@ -27,7 +27,7 @@ GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: DCS_over_C02 noise_subtraction_ASD_DCH_DCS noise_subtraction_tf_DCH_DCS
+all: DCS_over_C02 noise_subtraction_ASD_DCH_DCS noise_subtraction_tf_DCS noise_subtraction_tf_DCH_DCS
 
 ###############################################
 ### These commands should change less often ###
@@ -134,6 +134,9 @@ noise_subtraction_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
 
 noise_subtraction_tf_DCH_DCS: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_clean_C02_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-frame-cache $(IFO)1_clean_C02_frames.cache --numerator-channel-list DCS-CALIB_STRAIN_CLEAN --denominator-channel-name DCH-CLEAN_STRAIN_C02 --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --numerator-name 'DCS' --denominator-name 'DCH' --labels 'DCS_CLEAN / DCH_CLEAN' --use-median
+
+noise_subtraction_tf_DCS_DCH: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_clean_C02_frames.cache
+	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_clean_C02_frames.cache --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-channel-list DCH-CLEAN_STRAIN_C02 --denominator-channel-name DCS-CALIB_STRAIN_CLEAN --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --numerator-name 'DCH' --denominator-name 'DCS' --labels 'DCH_CLEAN / DCS_CLEAN' --use-median
 
 filters:
 	if [ -d Filters/$(OBSRUN)/GDSFilters ]; then \
