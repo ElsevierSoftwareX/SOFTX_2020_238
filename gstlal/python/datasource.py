@@ -834,9 +834,14 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 		# extract state vector and DQ vector and convert to
 		# booleans
 		statevector = pipeparts.mkstatevector(pipeline, None, required_on = state_vector_on_bits, required_off = state_vector_off_bits, name = "%s_state_vector" % instrument)
-		dqvector = pipeparts.mkstatevector(pipeline, None, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits, name = "%s_dq_vector" % instrument)
 		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
+		if gw_data_source_info.dq_channel_dict[instrument] == gw_data_source_info.state_channel_dict[instrument]:
+			# DQ and state vector bits share a channel
+			dqvector = statevector = pipeparts.mktee(pipeline, statevector)
+		else:
+			# DQ and state vector are distinct channels
+			dqvector = pipeparts.mkstatevector(pipeline, None, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits, name = "%s_dq_vector" % instrument)
+			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
 		@bottle.route("/%s/statevector_on.txt" % instrument)
 		def state_vector_state(elem = statevector):
 			t = float(lal.UTCToGPS(time.gmtime()))
