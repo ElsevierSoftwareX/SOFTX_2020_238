@@ -52,31 +52,25 @@ plot.gca().plot(hoft_asd,label='GDS h(t) ASD')
 if options.analyze_additional_hoft_channel:
 	plot.gca().plot(additional_hoft_asd,label='DCS h(t) ASD')
 ax = plot.gca()
-#ax.set_ylabel = 'Strain [Hz$^{-1/2}$]'
-#ax.set_xlabel = 'Frequency [Hz]'
-plot.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
-plot.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-plot.add_legend([r'CALCS h(t) ASD', r'GDS h(t) ASD', r'DCS h(t) ASD'], loc='upper right', fontsize='small')
+ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
+ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
+ax.legend([r'CALCS h(t) ASD', r'GDS h(t) ASD', r'DCS h(t) ASD'], loc='upper right', fontsize='small')
 ax.set_xlim(0.5,8192)
 ax.set_ylim(1e-24,1e-16)
-ax.legend()
 plot.save('%s_%s_%s_spectrum_comparison.png' % (options.ifo, start_time, end_time))
 
 diff1 = calcs_asd / hoft_asd
 if options.analyze_additional_hoft_channel:
 	diff2 = calcs_asd / additional_hoft_asd
 	diff3 = hoft_asd / additional_hoft_asd
-plot = diff1.plot(label="ASD ratios", logy = False)
+plot = diff1.plot(label="ASD ratios")
 if options.analyze_additional_hoft_channel:
 	plot.gca().plot(diff2)
 	plot.gca().plot(diff3)
 ax = plot.gca()
-#ax.set_ylabel = 'Strain [Hz$^{-1/2}$]'
-#ax.set_xlabel = 'Frequency [Hz]'
-plot.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
-plot.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-plot.add_legend([r'CALCS h(t) ASD / GDS h(t) ASD', r'CALCS h(t) ASD / DCS h(t) ASD', r'GDS h(t) ASD / DCS h(t) ASD'], loc='upper right', fontsize='small')
+ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
+ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
+ax.legend([r'CALCS h(t) ASD / GDS h(t) ASD', r'CALCS h(t) ASD / DCS h(t) ASD', r'GDS h(t) ASD / DCS h(t) ASD'], loc='upper right', fontsize='small')
 ax.set_xlim(10,5000)
 ax.set_ylim(0.7, 1.3)
-ax.legend()
 plot.save('%s_%s_%s_ASD_residual.png' % (options.ifo, start_time, end_time))
