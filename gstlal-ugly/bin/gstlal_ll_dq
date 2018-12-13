@@ -121,7 +121,8 @@ class PSDHandler(simplehandler.Handler):
 		return Gst.FlowReturn.OK
 
 	def to_hdf5(self, path, datadict):
-		tmppath = path + ".tmp"
+		tmppath = "/dev/shm/%s" % path.replace("/","_") + ".tmp"
+		print tmppath
 		f = h5py.File(tmppath, "w")
 		for k, v in datadict.items():
 			f[k] = v
