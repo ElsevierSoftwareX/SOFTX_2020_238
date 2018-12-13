@@ -833,42 +833,46 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 		# extract state vector and DQ vector and convert to
 		# booleans
-		statevector = pipeparts.mkstatevector(pipeline, None, required_on = state_vector_on_bits, required_off = state_vector_off_bits, name = "%s_state_vector" % instrument)
-		pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
 		if gw_data_source_info.dq_channel_dict[instrument] == gw_data_source_info.state_channel_dict[instrument]:
-			# DQ and state vector bits share a channel
-			dqvector = statevector = pipeparts.mktee(pipeline, statevector)
+			dqstatetee = pipeparts.mktee(pipeline, None)
+			statevectorelem = statevector = pipeparts.mkstatevector(pipeline, dqstatetee, required_on = state_vector_on_bits, required_off = state_vector_off_bits, name = "%s_state_vector" % instrument)
+			dqvectorelem = dqvector = pipeparts.mkstatevector(pipeline, dqstatetee, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits, name = "%s_dq_vector" % instrument)
+			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), dqstatetee.get_static_pad("sink"))
 		else:
 			# DQ and state vector are distinct channels
-			dqvector = pipeparts.mkstatevector(pipeline, None, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits, name = "%s_dq_vector" % instrument)
+			# first DQ
+			dqvectorelem = dqvector = pipeparts.mkstatevector(pipeline, None, required_on = dq_vector_on_bits, required_off = dq_vector_off_bits, name = "%s_dq_vector" % instrument)
 			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.dq_channel_dict[instrument]), dqvector.get_static_pad("sink"))
+			# then State
+			statevectorelem = statevector = pipeparts.mkstatevector(pipeline, None, required_on = state_vector_on_bits, required_off = state_vector_off_bits, name = "%s_state_vector" % instrument)
+			pipeparts.src_deferred_link(src, "%s:%s" % (instrument, gw_data_source_info.state_channel_dict[instrument]), statevector.get_static_pad("sink"))
 		@bottle.route("/%s/statevector_on.txt" % instrument)
-		def state_vector_state(elem = statevector):
+		def state_vector_state(elem = statevectorelem):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
 			return "%.9f %d" % (t, on)
 		@bottle.route("/%s/statevector_off.txt" % instrument)
-		def state_vector_state(elem = statevector):
+		def state_vector_state(elem = statevectorelem):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			off = elem.get_property("off-samples")
 			return "%.9f %d" % (t, off)
 		@bottle.route("/%s/statevector_gap.txt" % instrument)
-		def state_vector_state(elem = statevector):
+		def state_vector_state(elem = statevectorelem):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d" % (t, gap)
 		@bottle.route("/%s/dqvector_on.txt" % instrument)
-		def dq_vector_state(elem = dqvector):
+		def dq_vector_state(elem = dqvectorelem):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			on = elem.get_property("on-samples")
 			return "%.9f %d" % (t, on)
 		@bottle.route("/%s/dqvector_off.txt" % instrument)
-		def dq_vector_state(elem = dqvector):
+		def dq_vector_state(elem = dqvectorelem):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			off = elem.get_property("off-samples")
 			return "%.9f %d" % (t, off)
 		@bottle.route("/%s/dqvector_gap.txt" % instrument)
-		def dq_vector_state(elem = dqvector):
+		def dq_vector_state(elem = dqvectorelem):
 			t = float(lal.UTCToGPS(time.gmtime()))
 			gap = elem.get_property("gap-samples")
 			return "%.9f %d" % (t, gap)
@@ -937,7 +941,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	# done
 	#
 
-	return src, statevector, dqvector
+	return src, statevectorelem, dqvectorelem
 
 
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128, hold_length = 128, **kwargs):
