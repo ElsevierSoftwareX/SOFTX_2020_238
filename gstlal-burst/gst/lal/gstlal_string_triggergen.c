@@ -44,6 +44,7 @@
 
 
 #include <gstlal_string_triggergen.h>
+#include <gstlal/gstaudioadapter.h>
 #include <gstlal/gstlal_debug.h>
 
 /*
@@ -290,6 +291,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
 	gboolean success = gst_audio_info_from_caps(&element->audio_info, incaps);
 
+	g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8, NULL);
+
 	return success;
 }
 
@@ -443,6 +446,8 @@ static void finalize(GObject *object)
 	element->instrument = NULL;
 	g_free(element->channel_name);
 	element->channel_name = NULL;
+	gst_audioadapter_clear(element->adapter);
+	g_object_unref(element->adapter);
 	G_OBJECT_CLASS(gstlal_string_triggergen_parent_class)->finalize(object);
 }
 
@@ -543,6 +548,7 @@ static void gstlal_string_triggergen_class_init(GSTLALStringTriggergenClass *kla
 static void gstlal_string_triggergen_init(GSTLALStringTriggergen *element)
 {
 	g_mutex_init(&element->bank_lock);
+	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->bank_filename = NULL;
 	element->bank = NULL;
 	element->instrument = NULL;

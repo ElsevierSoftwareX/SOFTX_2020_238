@@ -6,6 +6,7 @@
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gst/base/gstbasetransform.h>
+#include <gstlal/gstaudioadapter.h>
 #include <lal/LIGOMetadataTables.h>
 
 G_BEGIN_DECLS
@@ -30,6 +31,8 @@ typedef struct {
 
 typedef struct {
 	GstBaseTransform element;
+
+	GstAudioAdapter *adapter;
 
 	/*
 	 * input stream
