@@ -227,13 +227,13 @@ class EyeCandy(object):
 					try:
 						coinc_dict[attr] = float(getattr(coinc_inspiral_index[coinc_event_id], attr))
 					except TypeError as e:
-						print >>sys.stderr, e, attr, getattr(coinc_inspiral_index[coinc_event_id], attr)
+						pass#print >>sys.stderr, e, attr, getattr(coinc_inspiral_index[coinc_event_id], attr)
 				coinc_dict["end"] = float(coinc_inspiral_index[coinc_event_id].end)
 				for attr in ("likelihood",):
 					try:
 						coinc_dict[attr] = float(getattr(coinc_event_index[coinc_event_id], attr))
 					except TypeError as e:
-						print >>sys.stderr, e, attr, getattr(coinc_event_index[coinc_event_id], attr)
+						pass#print >>sys.stderr, e, attr, getattr(coinc_event_index[coinc_event_id], attr)
 				for sngl_row in sngl_inspiral_index[coinc_event_id]:
 					for attr in ("snr", "chisq", "mass1", "mass2", "spin1z", "spin2z"):
 						coinc_dict["%s_%s" % (sngl_row.ifo, attr)] = float(getattr(sngl_row, attr))
