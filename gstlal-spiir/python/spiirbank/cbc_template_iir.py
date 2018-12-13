@@ -853,7 +853,7 @@ class Bank(object):
         self.flower = None
         self.epsilon = None
 
-    def build_from_tmpltbank(self, filename, sampleRate = None, negative_latency = 0, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon_start = 0.02, epsilon_min = 0.001, epsilon_max = None, filters_min = 0, filters_max = None, filters_per_loglen_min = 0, filters_per_loglen_max = None, initial_overlap_min = 0, b0_optimized_overlap_min = 0, final_overlap_min = 0, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, verbose = False, contenthandler = DefaultContentHandler):
+    def build_from_tmpltbank(self, filename, sampleRate = None, negative_latency = 0, padding = 1.3, approximant = 'SpinTaylorT4', waveform_domain = "FD", epsilon_start = 0.02, epsilon_min = 0.001, epsilon_max = None, epsilon_factor = 2, filters_min = 0, filters_max = None, filters_per_loglen_min = 0, filters_per_loglen_max = None, initial_overlap_min = 0, b0_optimized_overlap_min = 0, final_overlap_min = 0, initial_overlap_max = 1, b0_optimized_overlap_max = 1, final_overlap_max = 1, nround_max = 10, alpha = .99, beta = 0.25, pnorder = 4, flower = 15, snr_cut = 0.998, all_psd = None, autocorrelation_length = 201, downsample = False, optimizer_options = {}, verbose = False, contenthandler = DefaultContentHandler):
         """
             Build SPIIR template bank from physical parameters, e.g. mass, spin.
             """
@@ -933,7 +933,6 @@ class Bank(object):
             amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = snr_cut, negative_latency = negative_latency, verbose = verbose)
 
             nround = 1
-            nround_max = 10
 
             # Collate various requirements
             spiir_match_min = max(initial_overlap_min, b0_optimized_overlap_min, final_overlap_min)
@@ -941,8 +940,10 @@ class Bank(object):
             n_filters_max = None
             if filters_per_loglen_max is not None:
                 n_filters_max = filters_per_loglen_max * numpy.log2(len(data))
-            if filters_max is not None:
-                n_filters_max = min(filters_max, n_filters_max)
+                if filters_max is not None:
+                    n_filters_max = min(filters_max, n_filters_max)
+            else:
+                n_filters_max = filters_max
             if verbose:
                 logging.info("spiir_match_min %s, n_filters_min %s, n_filters_max %s"%(spiir_match_min, n_filters_min, n_filters_max))
 
@@ -953,44 +954,63 @@ class Bank(object):
                 # compute the SNR
                 spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0
                 optimizer_state = None
-                if verbose:
-                    print >> sys.stderr, "Pass -1, overlap %f"%spiir_match
                 if(nround == 1):
                     original_match = spiir_match
                     original_filters = len(a1)
-                if spiir_match >= initial_overlap_min and (b0_optimized_overlap_min > 0 or final_overlap_min > 0):
-                    # optimizer uses convention that template is normalized to 1 not 2
-                    a1,b0,spiir_match,optimizer_state = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), passes=0, verbose=verbose, return_state=True)
-                    b0 *= numpy.sqrt(2)
-                    if spiir_match >= b0_optimized_overlap_min and (final_overlap_min > 0):
-                        a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), state=optimizer_state, **optimizer_options)
-                        b0 *= numpy.sqrt(2)
 
                 n_filters = len(delay)
                 if verbose:
                     logging.info("number of rounds %d, epsilon_a %s, epsilon %f, epsilon_b %s, spiir overlap with template %f, number of filters %d" % (nround, epsilon_a, epsilon, epsilon_b, spiir_match, n_filters))
                 nround += 1
 
+                epsilon_dir=0
                 if n_filters_max is not None and n_filters > n_filters_max:
                     # we need to increase epsilon to decrease filters
+                    epsilon_dir=1
+                else:
+                    if n_filters >= n_filters_min:
+                        # Filters are correct, so we can now do necessary optimization in epsilon loop
+                        spiir_match_min = initial_overlap_min
+                        spiir_match_max = initial_overlap_max
+                        if spiir_match >= spiir_match_min and (b0_optimized_overlap_min > 0 or final_overlap_min > 0):
+                            # optimizer uses convention that template is normalized to 1 not 2
+                            spiir_match_min = b0_optimized_overlap_min
+                            spiir_match_max = b0_optimized_overlap_max
+                            if verbose:
+                                print >> sys.stderr, "Pass -1, overlap %f"%spiir_match
+                            a1,b0,spiir_match,optimizer_state = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), passes=0, verbose=verbose, return_state=True)
+                            b0 *= numpy.sqrt(2)
+                            if spiir_match >= b0_optimized_overlap_min and (final_overlap_min > 0):
+                                spiir_match_min = final_overlap_min
+                                spiir_match_max = final_overlap_max
+                                a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), state=optimizer_state, **optimizer_options)
+                                b0 *= numpy.sqrt(2)
+
+                    if n_filters < n_filters_min or spiir_match < spiir_match_min:
+                        # we need to decrease epsilon to increase filters and match
+                        epsilon_dir=-1
+                    elif spiir_match > spiir_match_max:
+                        # we need to increase epsilon to decrease filters
+                        epsilon_dir=1
+
+                if epsilon_dir == 1:
                     epsilon_a = epsilon
                     if epsilon_b:
                         epsilon = numpy.sqrt(epsilon_b * epsilon) # geometric mean
                     elif epsilon_max > 0 and epsilon < epsilon_max:
-                        epsilon = min(epsilon*2., epsilon_max)
+                        epsilon = min(epsilon*epsilon_factor, epsilon_max)
                     elif epsilon_max > 0:
                         if verbose:
                             logging.info("failed to meet requirements (epsilon_max)")
                         break
                     else:
-                        epsilon = epsilon*2.
-                elif n_filters < n_filters_min or spiir_match < spiir_match_min:
-                    # we need to decrease epsilon to increase filters and match
+                        epsilon = epsilon*epsilon_factor
+                elif epsilon_dir == -1:
                     epsilon_b = epsilon
                     if epsilon_a:
                         epsilon = numpy.sqrt(epsilon_a * epsilon) # geometric mean
                     elif epsilon > epsilon_min:
-                        epsilon = max(epsilon/2., epsilon_min)
+                        epsilon = max(epsilon/epsilon_factor, epsilon_min)
                     else:
                         if verbose:
                             logging.info("failed to meet requirements (epsilon_min)")
