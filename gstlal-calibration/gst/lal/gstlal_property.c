@@ -223,11 +223,11 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 	/* Record the data type */
 	if(success) {
-		if(!strchr(name, 'S'))
+		if(strchr(name, 'S'))
 			element->data_type = GSTLAL_PROPERTY_SIGNED;
-		else if(!strchr(name, 'U'))
+		else if(strchr(name, 'U'))
 			element->data_type = GSTLAL_PROPERTY_UNSIGNED;
-		else if(!strchr(name, 'F'))
+		else if(strchr(name, 'F'))
 			element->data_type = GSTLAL_PROPERTY_FLOAT;
 		else
 			g_assert_not_reached();
@@ -270,46 +270,49 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		switch(element->data_type) {
 		case GSTLAL_PROPERTY_SIGNED:
 			switch(element->unit_size) {
-			case 8:
+			case 1:
 				average_input_data_gint8(element, (gint8 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
-			case 16:
+			case 2:
 				average_input_data_gint16(element, (gint16 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
-			case 32:
+			case 4:
 				average_input_data_gint32(element, (gint32 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
 			default:
 				g_assert_not_reached();
 				break;
 			}
+			break;
 		case GSTLAL_PROPERTY_UNSIGNED:
 			switch(element->unit_size) {
-			case 8:
+			case 1:
 				average_input_data_guint8(element, (guint8 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
-			case 16:
+			case 2:
 				average_input_data_guint16(element, (guint16 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
-			case 32:
+			case 4:
 				average_input_data_guint32(element, (guint32 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
 			default:
 				g_assert_not_reached();
 				break;
 			}
+			break;
 		case GSTLAL_PROPERTY_FLOAT:
 			switch(element->unit_size) {
-			case 32:
+			case 4:
 				average_input_data_float(element, (float *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
-			case 64:
+			case 8:
 				average_input_data_double(element, (double *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
 				break;
 			default:
 				g_assert_not_reached();
 				break;
 			}
+			break;
 		default:
 			g_assert_not_reached();
 			break;
