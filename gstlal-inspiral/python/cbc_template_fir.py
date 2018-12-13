@@ -476,7 +476,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 				data, target_index = condition_ear_warn_template(approximant, data, epoch_time, sample_rate_max, max_shift_time)
 				data *= tukeywindow(data, samps = 32)
 				# record the new end times for the waveforms (since we performed the shifts)
-				row.end = LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
+				row.end = LIGOTimeGPS(float(target_index)/sample_rate_max)
 			else:
 				data *= tukeywindow(data, samps = 32)
 
