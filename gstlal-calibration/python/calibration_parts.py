@@ -167,10 +167,12 @@ def list_srcs(pipeline, *args):
 # Various filtering functions
 #
 
-def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, prefactor_real = 1.0, prefactor_imag = 0.0):
+def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, prefactor_real = 1.0, prefactor_imag = 0.0, freq_update = None):
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
+	if freq_update is not None:
+		freq_update.connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency")
 	head = mkresample(pipeline, head, 5, filter_latency == 0.0, rate)
 	if filter_latency != 0:
 		# Remove the first several seconds of output, which depend on start time
@@ -815,13 +817,17 @@ def compute_kappac(pipeline, SR, SI):
 	kc = mkmultiplier(pipeline, list_srcs(pipeline, S2, mkpow(pipeline, SR, exponent=-1.0)))
 	return kc
 
-def compute_fcc(pipeline, SR, SI, fpcal2):
+def compute_fcc(pipeline, SR, SI, fpcal2, freq_update = None):
 
 	#
 	# f_cc = - (Re[S]/Im[S]) * fpcal2
 	#
 
-	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0*fpcal2), mkpow(pipeline, SI, exponent=-1.0)))
+	
+	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), mkpow(pipeline, SI, exponent=-1.0)))
+	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal2)
+	if freq_update is not None:
+		freq_update.connect("notify::current-average", update_property_simple, fcc, "current_average", "amplification")
 	return fcc
 
 def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc):

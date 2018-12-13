@@ -71,11 +71,11 @@ static void demodulate_float(const float *src, gsize src_size, float complex *ds
 {
 	const float *src_end;
 	guint64 i = 0;
-	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 128000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
-		t_scaled = 32 * t + i * scale / rate;
-		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = prefactor * *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		t_scaled = 128 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (1000000 * scale);
+		*dst = prefactor * *src * cexpf(-2. * M_PI * I * integer_arg / (1000000.0 * scale));
 	}
 }
 
@@ -84,11 +84,11 @@ static void demodulate_double(const double *src, gsize src_size, double complex 
 {
 	const double *src_end;
 	guint64 i = 0;
-	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 128000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
-		t_scaled = 32 * t + i * scale / rate;
-		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = prefactor * *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		t_scaled = 128 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (1000000 * scale);
+		*dst = prefactor * *src * cexp(-2. * M_PI * I * integer_arg / (1000000.0 * scale));
 	}
 }
 
@@ -97,11 +97,11 @@ static void demodulate_complex_float(const complex float *src, gsize src_size, f
 {
 	const complex float *src_end;
 	guint64 i = 0;
-	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 128000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
-		t_scaled = 32 * t + i * scale / rate;
-		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = prefactor * *src * cexpf(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		t_scaled = 128 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (1000000 * scale);
+		*dst = prefactor * *src * cexpf(-2. * M_PI * I * integer_arg / (1000000.0 * scale));
 	}
 }
 
@@ -110,11 +110,11 @@ static void demodulate_complex_double(const complex double *src, gsize src_size,
 {
 	const complex double *src_end;
 	guint64 i = 0;
-	__int128_t t_scaled, integer_arg, scale = 32000000000ULL;
+	__int128_t t_scaled, integer_arg, scale = 128000000000ULL;
 	for(src_end = src + src_size; src < src_end; src++, dst++, i++) {
-		t_scaled = 32 * t + i * scale / rate;
-		integer_arg = (t_scaled * frequency) % (100 * scale);
-		*dst = prefactor * *src * cexp(-2. * M_PI * I * integer_arg / (100.0 * scale));
+		t_scaled = 128 * t + i * scale / rate;
+		integer_arg = (t_scaled * frequency) % (1000000 * scale);
+		*dst = prefactor * *src * cexp(-2. * M_PI * I * integer_arg / (1000000.0 * scale));
 	}
 }
 
@@ -582,7 +582,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
-		element->line_frequency = (int) (100.000000000001 * g_value_get_double(value)); /* Make sure truncation does not corrupt it */
+		element->line_frequency = (int) (1000000.0 * g_value_get_double(value) + 0.5); /* Round to the nearest uHz */
 		break;
 	case ARG_PREFACTOR_REAL:
 		element->prefactor_real = g_value_get_double(value);
@@ -607,7 +607,7 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	switch (prop_id) {
 	case ARG_LINE_FREQUENCY:
-		g_value_set_double(value, element->line_frequency / 100.0);
+		g_value_set_double(value, element->line_frequency / 1000000.0);
 		break;
 	case ARG_PREFACTOR_REAL:
 		g_value_set_double(value, element->prefactor_real);
