@@ -941,7 +941,7 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	# done
 	#
 
-	return src, statevectorelem, dqvectorelem
+	return src, statevector, dqvector
 
 
 def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128, hold_length = 128, **kwargs):
