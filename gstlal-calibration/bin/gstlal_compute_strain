@@ -221,6 +221,12 @@ if options.gps_start_time is not None and options.gps_end_time is not None:
 	gps_start_time = int(options.gps_start_time)
 	gps_end_time = int(options.gps_end_time)
 
+if InputConfigs["datasource"] == "frames":
+	start = gps_start_time
+elif InputConfigs["datasource"] == "lvshm":
+	tm = time.gmtime()
+	start = int(lal.UTCToGPS(tm))
+
 # Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps string shortcuts
 hoft_sr = int(SampleRates["hoftsr"]) # Sample rate for h(t)
 calibstate_sr = int(SampleRates["calibstatesr"]) # Sample rate for the CALIB_STATE_VECTOR
@@ -356,6 +362,9 @@ verbose = Config.getboolean("DebuggingConfigurations", "verbose")
 # Boolean for file_check_sum
 file_check_sum = Config.getboolean("InputConfigurations", "filechecksum")
 skip_bad_files = Config.getboolean("InputConfigurations", "skipbadfiles")
+# Booleans for calibration tests
+test_latency = Config.getboolean("DebuggingConfigurations", "testlatency") if "testlatency" in DebuggingConfigs else False
+test_filters = Config.getboolean("DebuggingConfigurations", "testfilters") if "testfilters" in DebuggingConfigs else False
 
 #
 # Load in the filters file that contains filter coefficients, etc.
@@ -873,7 +882,7 @@ if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memor
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
 
-if Config.getboolean("DebuggingConfigurations", "testlatency"):
+if test_latency:
 	src = pipeparts.mkgeneric(pipeline, src, "splitcounter", filename = "gstlal_compute_strain_timestamps_in.txt")
 
 #
@@ -1617,6 +1626,9 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
 tst = calibration_parts.mkresample(pipeline, tst, 5, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
+if test_filters:
+	tst = pipeparts.mktee(pipeline, tst)
+	tst_before_filters = tst
 # Remove any DC component
 if remove_dc:
 	tst = calibration_parts.removeDC(pipeline, tst, tstchainsr)
@@ -1646,6 +1658,16 @@ else:
 tst_filter_settle_time += float(len(tstfilt)-tstdelay)/tstchainsr
 tst_filter_latency += float(tstdelay)/tstchainsr
 
+if test_filters:
+	tst = pipeparts.mktee(pipeline, tst)
+	tst_tf = calibration_parts.mkinterleave(pipeline, [tst, tst_before_filters])
+	tst_tf_delay = tst_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappatst else 0)
+	tst_tf_start = start + tst_tf_delay
+	tst_tf_dur = gps_end_time - tst_tf_start - tst_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
+	tst_tf_dur = tst_tf_dur - tst_tf_dur % 4 - 2
+	num_tst_ffts = int(tst_tf_dur / 2)
+	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 4 * tstchainsr, fft_overlap = 2 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, filename = "tst_filters_transfer_function_%d-%d.txt" % (tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
+
 # apply kappa_tst if we haven't already
 if apply_kappatst and not apply_complex_kappatst:
 	# Only apply the real part of \kappa_tst as a correction to A_tst
@@ -1661,6 +1683,11 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 	# resample what will become the PUM and UIM actuation paths to the PUM and UIM FIR filter sample rates
 	pum = calibration_parts.mkresample(pipeline, pumtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumchainsr)
 	uim = calibration_parts.mkresample(pipeline, uimtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % uimchainsr)
+	if test_filters:
+		pum = pipeparts.mktee(pipeline, pum)
+		pum_before_filters = pum
+		uim = pipeparts.mktee(pipeline, uim)
+		uim_before_filters = uim
 	# Remove any DC component
 	if remove_dc:
 		pum = calibration_parts.removeDC(pipeline, pum, pumchainsr)
@@ -1690,6 +1717,19 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		# Filter the PUM chain with the static PUM actuation filter
 		pum = pipeparts.mkfirbank(pipeline, pum, latency = pumdelay, fir_matrix = [pumfilt[::-1]], time_domain = td)
 
+	pum_filter_settle_time += float(len(pumfilt)-pumdelay)/pumchainsr
+	pum_filter_latency += float(pumdelay)/pumchainsr
+
+	if test_filters:
+		pum = pipeparts.mktee(pipeline, pum)
+		pum_tf = calibration_parts.mkinterleave(pipeline, [pum, pum_before_filters])
+		pum_tf_delay = pum_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappapum else 0)
+		pum_tf_start = start + pum_tf_delay
+		pum_tf_dur = gps_end_time - pum_tf_start - pum_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
+		pum_tf_dur = pum_tf_dur - pum_tf_dur % 4 - 2
+		num_pum_ffts = int(pum_tf_dur / 2)
+		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 4 * pumchainsr, fft_overlap = 2 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, filename = "pum_filters_transfer_function_%d-%d.txt" % (pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
+
 	if apply_complex_kappauim:
 		if filter_latency_factor == 0:
 			# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim
@@ -1706,10 +1746,18 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		# Filter the UIM chain with the static UIM actuation filter
 		uim = pipeparts.mkfirbank(pipeline, uim, latency = uimdelay, fir_matrix = [uimfilt[::-1]], time_domain = td)
 
-	pum_filter_settle_time += float(len(pumfilt)-pumdelay)/pumchainsr
-	pum_filter_latency += float(pumdelay)/pumchainsr
 	uim_filter_settle_time += float(len(uimfilt)-uimdelay)/uimchainsr
 	uim_filter_latency += float(uimdelay)/uimchainsr
+
+	if test_filters:
+		uim = pipeparts.mktee(pipeline, uim)
+		uim_tf = calibration_parts.mkinterleave(pipeline, [uim, uim_before_filters])
+		uim_tf_delay = uim_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappauim else 0)
+		uim_tf_start = start + uim_tf_delay
+		uim_tf_dur = gps_end_time - uim_tf_start - uim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
+		uim_tf_dur = uim_tf_dur - uim_tf_dur % 4 - 2
+		num_uim_ffts = int(uim_tf_dur / 2)
+		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 4 * uimchainsr, fft_overlap = 2 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, filename = "uim_filters_transfer_function_%d-%d.txt" % (uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
 
 	# apply kappa_pum if we haven't already
 	if apply_kappapum and not apply_complex_kappapum:
@@ -1735,6 +1783,9 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 else:
 	# resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
 	pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+	if test_filters:
+		pumuim = pipeparts.mktee(pipeline, pumuim)
+		pumuim_before_filters = pumuim
 	# Remove any DC component
 	if remove_dc:
 		pumuim = calibration_parts.removeDC(pipeline, pumuim, pumuimchainsr)
@@ -1763,6 +1814,16 @@ else:
 
 	pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
 	pumuim_filter_latency += float(pumuimdelay)/pumuimchainsr
+
+	if test_filters:
+		pumuim = pipeparts.mktee(pipeline, pumuim)
+		pumuim_tf = calibration_parts.mkinterleave(pipeline, [pumuim, pumuim_before_filters])
+		pumuim_tf_delay = pumuim_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappapu else 0)
+		pumuim_tf_start = start + pumuim_tf_delay
+		pumuim_tf_dur = gps_end_time - pumuim_tf_start - pumuim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
+		pumuim_tf_dur = pumuim_tf_dur - pumuim_tf_dur % 4 - 2
+		num_pumuim_ffts = int(pumuim_tf_dur / 2)
+		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 4 * pumuimchainsr, fft_overlap = 2 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, filename = "pumuim_filters_transfer_function_%d-%d.txt" % (pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
 
 	# apply kappa_pu if we haven't already
 	if apply_kappapu and not apply_complex_kappapu:
@@ -1852,6 +1913,16 @@ else:
 # Account for filter latency and settle time for the CALIB_STATE_VECTOR
 res_filter_settle_time += float(len(reschainfilt)-reschaindelay)/hoft_sr
 res_filter_latency += float(reschaindelay)/hoft_sr
+
+if test_filters:
+	res = pipeparts.mktee(pipeline, res)
+	res_tf = calibration_parts.mkinterleave(pipeline, [res, restee])
+	res_tf_delay = res_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if (apply_fcc or apply_fs or apply_srcq) else 0)
+	res_tf_start = start + res_tf_delay
+	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
+	res_tf_dur = res_tf_dur - res_tf_dur % 4 - 2
+	num_res_ffts = int(res_tf_dur / 2)
+	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, filename = "res_filters_transfer_function_%d-%d.txt" % (res_tf_start, res_tf_dur), name = "res_filters_tf")
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
@@ -2569,11 +2640,7 @@ def check_complete_frames(pad, info, (output_start, frame_duration, wings_start,
 				print("Dropping frame because it lies outside of the wings time")
 			return Gst.PadProbeReturn.DROP
 	return Gst.PadProbeReturn.OK
-if InputConfigs["datasource"] == "frames":
-	start = gps_start_time
-elif InputConfigs["datasource"] == "lvshm":
-	tm = time.gmtime()
-	start = int(lal.UTCToGPS(tm))
+
 # start time of first frame file is the desired start time + either filter latency or kappa settling (if computing kappas), whichever is bigger
 if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
 	output_start = start + max(int(filter_settle_time), int((1.0 - filter_latency_factor) * (demodulation_filter_time + int(TDCFConfigs["mediansmoothingtime"]) + int(TDCFConfigs["tdcfaveragingtime"]))))
@@ -2591,7 +2658,7 @@ else:
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
-if Config.getboolean("DebuggingConfigurations", "testlatency"):
+if test_latency:
 	mux = pipeparts.mkgeneric(pipeline, mux, "splitcounter", filename = "gstlal_compute_strain_timestamps_out.txt")
 
 if OutputConfigs["datasink"] == "lvshm":
