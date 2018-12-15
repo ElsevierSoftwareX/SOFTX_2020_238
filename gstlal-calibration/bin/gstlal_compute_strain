@@ -808,7 +808,7 @@ if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu o
 			headkeys.append("pcal4_linefreq")
 
 # We also need DARM_ERR if we are computing the kappas
-if (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq) and CalibrationConfigs["calibrationmode"] == "Partial":
+if (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or test_filters) and CalibrationConfigs["calibrationmode"] == "Partial":
 	channel_list.append((instrument, ChannelNames["darmerrchannel"]))
 	headkeys.append("darm_err")
 
@@ -904,7 +904,7 @@ for key, chan in zip(headkeys, channel_list):
 if CalibrationConfigs["calibrationmode"] == "Full":
 	darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["res"], hoft_caps, "darm_err")
 	derrtee = pipeparts.mktee(pipeline, darm_err)
-elif compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
+elif compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs or test_filters:
 	darm_err = calibration_parts.caps_and_progress(pipeline, head_dict["darm_err"], hoft_caps, "darm_err")
 	derrtee = pipeparts.mktee(pipeline, darm_err)
 
@@ -1666,7 +1666,7 @@ if test_filters:
 	tst_tf_dur = gps_end_time - tst_tf_start - tst_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 	tst_tf_dur = tst_tf_dur - tst_tf_dur % 4 - 2
 	num_tst_ffts = int(tst_tf_dur / 2)
-	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 4 * tstchainsr, fft_overlap = 2 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, filename = "tst_filters_transfer_function_%d-%d.txt" % (tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
+	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 4 * tstchainsr, fft_overlap = 2 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "tst_filters_transfer_function_%d-%d.txt" % (tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
 
 # apply kappa_tst if we haven't already
 if apply_kappatst and not apply_complex_kappatst:
@@ -1728,7 +1728,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		pum_tf_dur = gps_end_time - pum_tf_start - pum_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		pum_tf_dur = pum_tf_dur - pum_tf_dur % 4 - 2
 		num_pum_ffts = int(pum_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 4 * pumchainsr, fft_overlap = 2 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, filename = "pum_filters_transfer_function_%d-%d.txt" % (pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
+		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 4 * pumchainsr, fft_overlap = 2 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "pum_filters_transfer_function_%d-%d.txt" % (pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
 
 	if apply_complex_kappauim:
 		if filter_latency_factor == 0:
@@ -1757,7 +1757,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_tf_dur = gps_end_time - uim_tf_start - uim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		uim_tf_dur = uim_tf_dur - uim_tf_dur % 4 - 2
 		num_uim_ffts = int(uim_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 4 * uimchainsr, fft_overlap = 2 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, filename = "uim_filters_transfer_function_%d-%d.txt" % (uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
+		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 4 * uimchainsr, fft_overlap = 2 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "uim_filters_transfer_function_%d-%d.txt" % (uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
 
 	# apply kappa_pum if we haven't already
 	if apply_kappapum and not apply_complex_kappapum:
@@ -1823,7 +1823,7 @@ else:
 		pumuim_tf_dur = gps_end_time - pumuim_tf_start - pumuim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		pumuim_tf_dur = pumuim_tf_dur - pumuim_tf_dur % 4 - 2
 		num_pumuim_ffts = int(pumuim_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 4 * pumuimchainsr, fft_overlap = 2 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, filename = "pumuim_filters_transfer_function_%d-%d.txt" % (pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
+		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 4 * pumuimchainsr, fft_overlap = 2 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "pumuim_filters_transfer_function_%d-%d.txt" % (pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
 
 	# apply kappa_pu if we haven't already
 	if apply_kappapu and not apply_complex_kappapu:
@@ -1922,7 +1922,7 @@ if test_filters:
 	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 	res_tf_dur = res_tf_dur - res_tf_dur % 4 - 2
 	num_res_ffts = int(res_tf_dur / 2)
-	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, filename = "res_filters_transfer_function_%d-%d.txt" % (res_tf_start, res_tf_dur), name = "res_filters_tf")
+	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "res_filters_transfer_function_%d-%d.txt" % (res_tf_start, res_tf_dur), name = "res_filters_tf")
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
@@ -1943,7 +1943,15 @@ filter_latency = max(res_filter_latency, tst_filter_latency, pumuim_filter_laten
 
 # Add control and residual chains and divide by L to make h(t)
 strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, res, ctrl))
-
+if test_filters:
+	strain = pipeparts.mktee(pipeline, strain)
+	response_function = calibration_parts.mkinterleave(pipeline, [strain, derrtee])
+	response_delay = max(res_tf_delay, tst_tf_delay)
+	response_start = start + response_delay
+	response_dur = gps_end_time - response_start - max(res_filter_latency, tst_filter_latency) - 10 if InputConfigs["datasource"] == "frames" else 300
+	response_dur = response_dur - response_dur % 4 - 2
+	num_response_ffts = int(response_dur / 2)
+	pipeparts.mkgeneric(pipeline, response_function, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "filters_response_transfer_function_%d-%d.txt" % (response_start, response_dur), name = "response_function")
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
