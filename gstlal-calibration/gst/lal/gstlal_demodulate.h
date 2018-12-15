@@ -79,7 +79,7 @@ struct _GSTLALDemodulate {
 	gboolean need_discont;
 
 	/* properties */
-	int line_frequency; /* in centihertz */
+	gint64 line_frequency; /* in uHz */
 	double prefactor_real;
 	double prefactor_imag;
 };
