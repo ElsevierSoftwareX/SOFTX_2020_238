@@ -67,7 +67,7 @@
  */
 
 
-static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency, complex float prefactor)
+static void demodulate_float(const float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const gint64 frequency, complex float prefactor)
 {
 	const float *src_end;
 	guint64 i = 0;
@@ -80,7 +80,7 @@ static void demodulate_float(const float *src, gsize src_size, float complex *ds
 }
 
 
-static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency, complex double prefactor)
+static void demodulate_double(const double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const gint64 frequency, complex double prefactor)
 {
 	const double *src_end;
 	guint64 i = 0;
@@ -93,7 +93,7 @@ static void demodulate_double(const double *src, gsize src_size, double complex 
 }
 
 
-static void demodulate_complex_float(const complex float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const int frequency, complex float prefactor)
+static void demodulate_complex_float(const complex float *src, gsize src_size, float complex *dst, guint64 t, gint rate, const gint64 frequency, complex float prefactor)
 {
 	const complex float *src_end;
 	guint64 i = 0;
@@ -106,7 +106,7 @@ static void demodulate_complex_float(const complex float *src, gsize src_size, f
 }
 
 
-static void demodulate_complex_double(const complex double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const int frequency, complex double prefactor)
+static void demodulate_complex_double(const complex double *src, gsize src_size, double complex *dst, guint64 t, gint rate, const gint64 frequency, complex double prefactor)
 {
 	const complex double *src_end;
 	guint64 i = 0;
@@ -119,7 +119,7 @@ static void demodulate_complex_double(const complex double *src, gsize src_size,
 }
 
 
-static void demodulate(const void *src, gsize src_size, void *dst, guint64 t, gint rate, enum gstlal_demodulate_data_type data_type, const int frequency, complex double prefactor)
+static void demodulate(const void *src, gsize src_size, void *dst, guint64 t, gint rate, enum gstlal_demodulate_data_type data_type, const gint64 frequency, complex double prefactor)
 {
 
 	switch(data_type) {
@@ -581,8 +581,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-	case ARG_LINE_FREQUENCY:
-		element->line_frequency = (int) (1000000.0 * g_value_get_double(value) + 0.5); /* Round to the nearest uHz */
+	case ARG_LINE_FREQUENCY: ;
+		double freq = g_value_get_double(value);
+		element->line_frequency = (gint64) (1000000.0 * freq + (freq > 0 ? 0.5 : -0.5)); /* Round to the nearest uHz */
 		break;
 	case ARG_PREFACTOR_REAL:
 		element->prefactor_real = g_value_get_double(value);
