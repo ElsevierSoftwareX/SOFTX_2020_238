@@ -936,6 +936,7 @@ static gboolean start(GstBaseSink *sink) {
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
 
 	/* At start of stream, we want the element to compute a transfer function as soon as possible, unless in parallel mode */
+	element->min_ffts = minimum64(element->min_ffts, element->num_ffts);
 	if(!element->parallel_mode) {
 		gint64 long_samples = element->num_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
 		gint64 short_samples = element->min_ffts * (element->fft_length - element->fft_overlap) + element->fft_overlap;
