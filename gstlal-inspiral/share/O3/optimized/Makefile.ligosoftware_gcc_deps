@@ -195,7 +195,7 @@ $(GDS_TARGET) : $(LDASTOOLSFRAMECPP_TARGET)
 	@echo $(GREEN)gds$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/$(GDS).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(GDS) && make && make install
+	cd $(SRC_DIR)/$(GDS) && make -j$(CORES) && make install -j$(CORES)
 
 # ldas-tools-framecpp
 ldas-tools-framecpp : logs/ldas-tools-framecpp.txt
