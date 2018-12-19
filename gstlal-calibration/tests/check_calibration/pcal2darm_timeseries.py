@@ -111,20 +111,33 @@ InputConfigs = ConfigSectionMap("InputConfigurations")
 
 # Search the directory tree for files with names matching the one we want.
 filters_name = InputConfigs["filtersfilename"]
-filters_paths = []
-print "\nSearching for %s ..." % filters_name
-# Check the user's home directory
-for dirpath, dirs, files in os.walk(os.environ['HOME']):
-	if filters_name in files:
-		# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
-		if dirpath.count("GDSFilters") > 0:
-			filters_paths.insert(0, os.path.join(dirpath, filters_name))
-		else:
-			filters_paths.append(os.path.join(dirpath, filters_name))
-if not len(filters_paths):
-	raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-print "Loading calibration filters from %s\n" % filters_paths[0]
-filters = numpy.load(filters_paths[0])
+if filters_name.count('/') > 0:
+	# Then the path to the filters file was given
+	filters = numpy.load(filters_name)
+else:
+	# We need to search for the filters file
+	filters_paths = []
+	print "\nSearching for %s ..." % filters_name
+	# Check the user's home directory
+	for dirpath, dirs, files in os.walk(os.environ['HOME']):
+		if filters_name in files:
+			# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+			if dirpath.count("GDSFilters") > 0:
+				filters_paths.insert(0, os.path.join(dirpath, filters_name))
+			else:
+				filters_paths.append(os.path.join(dirpath, filters_name))
+	# Check if there is a checkout of the entire calibration SVN
+	for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
+		if filters_name in files:
+			# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+			if dirpath.count("GDSFilters") > 0:
+				filters_paths.insert(0, os.path.join(dirpath, filters_name))
+			else:
+				filters_paths.append(os.path.join(dirpath, filters_name))
+	if not len(filters_paths):
+		raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
+	print "Loading calibration filters from %s\n" % filters_paths[0]
+	filters = numpy.load(filters_paths[0])
 
 ifo = options.ifo
 

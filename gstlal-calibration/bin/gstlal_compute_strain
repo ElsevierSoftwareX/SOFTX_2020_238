@@ -575,6 +575,26 @@ if factors_from_filters_file or compute_calib_statevector:
 		if factors_from_filters_file and (compute_kappapum or compute_kappauim):
 			raise ValueError("Cannot compute kappa_PUM or kappa_UIM, as the needed EPICS are not contained in the specified filters file.")
 
+# Load the high-pass filters for h(t)
+if "ctrl_highpass" in filters:
+	act_highpass = filters["ctrl_highpass"]
+	act_highpass_delay = int(filters['ctrl_highpass_delay'])
+elif "actuation_highpass" in filters:
+	act_highpass = filters["actuation_highpass"]
+	act_highpass_delay = int(filters['actuation_highpass_delay'])
+else:
+	act_highpass = []
+if "res_highpass" in filters:
+	invsens_highpass = filters["res_highpass"]
+	invsens_highpass_delay = int(filters['res_highpass_delay'])
+	invsens_highpass_sr = int(filters['res_highpass_sr']) if 'res_highpass_sr' in filters else hoft_sr
+elif "inv_sensing_highpass" in filters:
+	invsens_highpass = filters["inv_sensing_highpass"]
+	invsens_highpass_delay = int(filters['invsens_highpass_delay'])
+	invsens_highpass_sr = int(filters['invsens_highpass_sr']) if 'invsens_highpass_sr' in filters else hoft_sr
+else:
+	invsens_highpass = []
+
 # If we're performing partial calibration, load the deltal filters
 if CalibrationConfigs["calibrationmode"] == "Partial":
 	reschaindelay = int(filters["res_corr_delay"])
@@ -599,20 +619,6 @@ if CalibrationConfigs["calibrationmode"] == "Partial":
 			pumuimdewhiten = filters["deltal_pumuim_dewhiten"]
 		resdewhitendelay = int(filters["deltal_res_dewhiten_delay"])
 		resdewhiten = filters["deltal_res_dewhiten"]
-
-	# Load the high-pass filter for h(t)
-	try:
-		act_highpass_delay = int(filters['ctrl_highpass_delay'])
-		invsens_highpass_delay = int(filters['res_highpass_delay'])
-		act_highpass = filters["ctrl_highpass"]
-		invsens_highpass = filters["res_highpass"]
-	except:
-		act_highpass = []
-		invsens_highpass = []
-	try:
-		invsens_highpass_sr = int(filters['res_highpass_sr'])
-	except:
-		invsens_highpass_sr = hoft_sr
 
 # If we're performing full calibration, load the actuation, sensing filters
 if CalibrationConfigs["calibrationmode"] == "Full":
@@ -644,20 +650,6 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 		ctrldewhitensr = int(filters["dewhiten_ctrl_sr"])
 		resdewhitendelay = int(filters["dewhiten_err_delay"])
 		resdewhiten = filters["dewhiten_err"]
-
-	# Load the high-pass filter for h(t)
-	try:
-		act_highpass_delay = int(filters['actuation_highpass_delay'])
-		invsens_highpass_delay = int(filters['invsens_highpass_delay'])
-		act_highpass = filters["actuation_highpass"]
-		invsens_highpass = filters["inv_sensing_highpass"]
-	except:
-		act_highpass = []
-		invsens_highpass = []
-	try:
-		invsens_highpass_sr = int(filters['res_highpass_sr'])
-	except:
-		invsens_highpass_sr = hoft_sr
 
 # If we are reading EPICS from the frames and want to remove calibration lines, account for the fact that not all EPICS were available at all times.
 if not factors_from_filters_file and InputConfigs["datasource"] == "frames" and ((instrument == "H1" and gps_start_time < 1175976256) or (instrument == "L1" and gps_start_time < 1179588864)) and "tstexc_linefreq" in act_line_removal_dict.keys():
@@ -930,19 +922,19 @@ for key in headkeys:
 	elif key.startswith("EP6_") or key.startswith("EP11_"):
 		C_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		C_epics_dict[key] = calibration_parts.mkresample(pipeline, C_epics_dict[key], 0, False, compute_calib_factors_caps)
-		C_epics_dict[key] = (pipeparts.mktee(pipeline, C_epics_dict[key]), float(filters[key]))
+		C_epics_dict[key] = (pipeparts.mktee(pipeline, C_epics_dict[key]), float(filters[key]) if key in filters else numpy.inf)
 	elif key.startswith("EP7_") or key.startswith("EP12_"):
 		D_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		D_epics_dict[key] = calibration_parts.mkresample(pipeline, D_epics_dict[key], 0, False, compute_calib_factors_caps)
-		D_epics_dict[key] = (pipeparts.mktee(pipeline, D_epics_dict[key]), float(filters[key]))
+		D_epics_dict[key] = (pipeparts.mktee(pipeline, D_epics_dict[key]), float(filters[key]) if key in filters else numpy.inf)
 	elif key.startswith("EP1_") or key.startswith("EP2_") or key.startswith("EP15_") or key.startswith("EP22_"):
 		misc_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		misc_epics_dict[key] = calibration_parts.mkresample(pipeline, misc_epics_dict[key], 0, False, compute_calib_factors_caps)
-		misc_epics_dict[key] = (pipeparts.mktee(pipeline, misc_epics_dict[key]), float(filters[key]))
+		misc_epics_dict[key] = (pipeparts.mktee(pipeline, misc_epics_dict[key]), float(filters[key]) if key in filters else numpy.inf)
 	elif key.startswith("EP"):
 		A_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		A_epics_dict[key] = calibration_parts.mkresample(pipeline, A_epics_dict[key], 0, False, compute_calib_factors_caps)
-		A_epics_dict[key] = (pipeparts.mktee(pipeline, A_epics_dict[key]), float(filters[key]))
+		A_epics_dict[key] = (pipeparts.mktee(pipeline, A_epics_dict[key]), float(filters[key]) if key in filters else numpy.inf)
 
 if use_coherence:
 	if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
@@ -1666,7 +1658,7 @@ if test_filters:
 	tst_tf_dur = gps_end_time - tst_tf_start - tst_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 	tst_tf_dur = tst_tf_dur - tst_tf_dur % 4 - 2
 	num_tst_ffts = int(tst_tf_dur / 2)
-	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 4 * tstchainsr, fft_overlap = 2 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "tst_filters_transfer_function_%d-%d.txt" % (tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
+	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 4 * tstchainsr, fft_overlap = 2 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
 
 # apply kappa_tst if we haven't already
 if apply_kappatst and not apply_complex_kappatst:
@@ -1728,7 +1720,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		pum_tf_dur = gps_end_time - pum_tf_start - pum_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		pum_tf_dur = pum_tf_dur - pum_tf_dur % 4 - 2
 		num_pum_ffts = int(pum_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 4 * pumchainsr, fft_overlap = 2 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "pum_filters_transfer_function_%d-%d.txt" % (pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
+		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 4 * pumchainsr, fft_overlap = 2 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
 
 	if apply_complex_kappauim:
 		if filter_latency_factor == 0:
@@ -1757,7 +1749,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_tf_dur = gps_end_time - uim_tf_start - uim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		uim_tf_dur = uim_tf_dur - uim_tf_dur % 4 - 2
 		num_uim_ffts = int(uim_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 4 * uimchainsr, fft_overlap = 2 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "uim_filters_transfer_function_%d-%d.txt" % (uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
+		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 4 * uimchainsr, fft_overlap = 2 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
 
 	# apply kappa_pum if we haven't already
 	if apply_kappapum and not apply_complex_kappapum:
@@ -1823,7 +1815,7 @@ else:
 		pumuim_tf_dur = gps_end_time - pumuim_tf_start - pumuim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		pumuim_tf_dur = pumuim_tf_dur - pumuim_tf_dur % 4 - 2
 		num_pumuim_ffts = int(pumuim_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 4 * pumuimchainsr, fft_overlap = 2 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "pumuim_filters_transfer_function_%d-%d.txt" % (pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
+		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 4 * pumuimchainsr, fft_overlap = 2 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
 
 	# apply kappa_pu if we haven't already
 	if apply_kappapu and not apply_complex_kappapu:
@@ -1922,7 +1914,7 @@ if test_filters:
 	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 	res_tf_dur = res_tf_dur - res_tf_dur % 4 - 2
 	num_res_ffts = int(res_tf_dur / 2)
-	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "res_filters_transfer_function_%d-%d.txt" % (res_tf_start, res_tf_dur), name = "res_filters_tf")
+	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf")
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
@@ -1951,7 +1943,7 @@ if test_filters:
 	response_dur = gps_end_time - response_start - max(res_filter_latency, tst_filter_latency) - 10 if InputConfigs["datasource"] == "frames" else 300
 	response_dur = response_dur - response_dur % 4 - 2
 	num_response_ffts = int(response_dur / 2)
-	pipeparts.mkgeneric(pipeline, response_function, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "filters_response_transfer_function_%d-%d.txt" % (response_start, response_dur), name = "response_function")
+	pipeparts.mkgeneric(pipeline, response_function, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function")
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
