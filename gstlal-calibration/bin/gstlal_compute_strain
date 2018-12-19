@@ -1656,9 +1656,9 @@ if test_filters:
 	tst_tf_delay = tst_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappatst else 0)
 	tst_tf_start = start + tst_tf_delay
 	tst_tf_dur = gps_end_time - tst_tf_start - tst_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
-	tst_tf_dur = tst_tf_dur - tst_tf_dur % 4 - 2
-	num_tst_ffts = int(tst_tf_dur / 2)
-	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 4 * tstchainsr, fft_overlap = 2 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
+	tst_tf_dur = tst_tf_dur - (tst_tf_dur + 8) % 16
+	num_tst_ffts = int(tst_tf_dur / 8)
+	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 16 * tstchainsr, fft_overlap = 8 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
 
 # apply kappa_tst if we haven't already
 if apply_kappatst and not apply_complex_kappatst:
@@ -1718,9 +1718,9 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		pum_tf_delay = pum_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappapum else 0)
 		pum_tf_start = start + pum_tf_delay
 		pum_tf_dur = gps_end_time - pum_tf_start - pum_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
-		pum_tf_dur = pum_tf_dur - pum_tf_dur % 4 - 2
-		num_pum_ffts = int(pum_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 4 * pumchainsr, fft_overlap = 2 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
+		pum_tf_dur = pum_tf_dur - (pum_tf_dur + 8) % 16
+		num_pum_ffts = int(pum_tf_dur / 8)
+		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 16 * pumchainsr, fft_overlap = 8 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
 
 	if apply_complex_kappauim:
 		if filter_latency_factor == 0:
@@ -1747,9 +1747,9 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_tf_delay = uim_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappauim else 0)
 		uim_tf_start = start + uim_tf_delay
 		uim_tf_dur = gps_end_time - uim_tf_start - uim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
-		uim_tf_dur = uim_tf_dur - uim_tf_dur % 4 - 2
-		num_uim_ffts = int(uim_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 4 * uimchainsr, fft_overlap = 2 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
+		uim_tf_dur = uim_tf_dur - (uim_tf_dur + 8) % 16
+		num_uim_ffts = int(uim_tf_dur / 8)
+		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 16 * uimchainsr, fft_overlap = 8 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
 
 	# apply kappa_pum if we haven't already
 	if apply_kappapum and not apply_complex_kappapum:
@@ -1813,9 +1813,9 @@ else:
 		pumuim_tf_delay = pumuim_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappapu else 0)
 		pumuim_tf_start = start + pumuim_tf_delay
 		pumuim_tf_dur = gps_end_time - pumuim_tf_start - pumuim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
-		pumuim_tf_dur = pumuim_tf_dur - pumuim_tf_dur % 4 - 2
-		num_pumuim_ffts = int(pumuim_tf_dur / 2)
-		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 4 * pumuimchainsr, fft_overlap = 2 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
+		pumuim_tf_dur = pumuim_tf_dur - (pumuim_tf_dur + 8) % 16
+		num_pumuim_ffts = int(pumuim_tf_dur / 8)
+		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 16 * pumuimchainsr, fft_overlap = 8 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
 
 	# apply kappa_pu if we haven't already
 	if apply_kappapu and not apply_complex_kappapu:
@@ -1912,9 +1912,9 @@ if test_filters:
 	res_tf_delay = res_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if (apply_fcc or apply_fs or apply_srcq) else 0)
 	res_tf_start = start + res_tf_delay
 	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
-	res_tf_dur = res_tf_dur - res_tf_dur % 4 - 2
-	num_res_ffts = int(res_tf_dur / 2)
-	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf")
+	res_tf_dur = res_tf_dur - (res_tf_dur + 8) % 16
+	num_res_ffts = int(res_tf_dur / 8)
+	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf")
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
@@ -1941,9 +1941,9 @@ if test_filters:
 	response_delay = max(res_tf_delay, tst_tf_delay)
 	response_start = start + response_delay
 	response_dur = gps_end_time - response_start - max(res_filter_latency, tst_filter_latency) - 10 if InputConfigs["datasource"] == "frames" else 300
-	response_dur = response_dur - response_dur % 4 - 2
-	num_response_ffts = int(response_dur / 2)
-	pipeparts.mkgeneric(pipeline, response_function, "lal_transferfunction", fft_length = 4 * hoft_sr, fft_overlap = 2 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function")
+	response_dur = response_dur - (response_dur + 8) % 16
+	num_response_ffts = int(response_dur / 8)
+	pipeparts.mkgeneric(pipeline, response_function, "lal_transferfunction", fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function")
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
