@@ -208,7 +208,7 @@ def parse_spectrum_message(message):
 		epoch = lal.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
-		sampleUnits = lal.Unit(s["sample-units"].strip()),
+		sampleUnits = lal.Unit(s["sample-units"].strip().encode("utf-8")),
 		length = len(s["magnitude"])
 	)
         psd.data.data = s["magnitude"]
