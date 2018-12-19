@@ -204,7 +204,7 @@ def parse_spectrum_message(message):
 	"""
 	s = message.structure
 	psd = lal.CreateREAL8FrequencySeries(
-		name = s["instrument"] if s.has_field("instrument") else "",
+		name = s["instrument"].encode("utf-8") if s.has_field("instrument") else "",
 		epoch = lal.LIGOTimeGPS(0, message.timestamp),
 		f0 = 0.0,
 		deltaF = s["delta-f"],
