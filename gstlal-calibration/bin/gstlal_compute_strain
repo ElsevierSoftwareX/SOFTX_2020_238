@@ -230,7 +230,9 @@ elif InputConfigs["datasource"] == "lvshm":
 # Set up short-cut names for each of the sample rates used throughout the pipeline and establish caps string shortcuts
 hoft_sr = int(SampleRates["hoftsr"]) # Sample rate for h(t)
 calibstate_sr = int(SampleRates["calibstatesr"]) # Sample rate for the CALIB_STATE_VECTOR
-odc_sr = int(SampleRates["odcsr"]) # Sample rate of the ODC channel that is read in
+obsintent_sr = int(SampleRates["obsintentsr"]) if "obsintentsr" in SampleRates else int(SampleRates["odcsr"]) # Sample rate of the ODC channel that is read in
+lownoise_sr = int(SampleRates["lownoisesr"]) if "lownoisesr" in SampleRates else int(SampleRates["odcsr"])
+hwinj_sr = int(SampleRates["hwinjsr"]) if "hwinjsr" in SampleRates else int(SampleRates["odcsr"])
 ctrl_sr = int(SampleRates["ctrlsr"]) # Sample rate of the control channel (such as DARM_CTRL or DELTAL_CTRL)
 tst_exc_sr = int(SampleRates["tstexcsr"])
 pum_exc_sr = int(SampleRates["pumexcsr"])
@@ -242,7 +244,9 @@ record_factors_sr = int(SampleRates["recordfactorssr"]) # Sample rate for record
 hoft_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoft_sr
 ctrl_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % ctrl_sr
 calibstate_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % calibstate_sr
-odc_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % odc_sr
+obsintent_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % obsintent_sr
+lownoise_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % lownoise_sr
+hwinj_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % hwinj_sr
 coh_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % coh_sr
 ref_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % epics_sr
 compute_calib_factors_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0X0" % compute_factors_sr
@@ -665,10 +669,22 @@ head_dict = {}
 channel_list = []
 headkeys = []
 
-# If we are computing the CALIB_STATE_VECTOR, we need the ODC state vector
+# If we are computing the CALIB_STATE_VECTOR, we need input DQ channel(s)
 if compute_calib_statevector:
-	channel_list.append((instrument, ChannelNames["inputdqchannel"]))
-	headkeys.append("odcstatevector")
+	obsintent_channel_name = ChannelNames["obsintentchannel"] if "obsintentchannel" in ChannelNames else ChannelNames["inputdqchannel"]
+	obsintent_bitmask = int(Bitmasks["obsintentbitmask"])
+	lownoise_channel_name = ChannelNames["lownoisestatechannel"] if "lownoisestatechannel" in ChannelNames else ChannelNames["inputdqchannel"]
+	lownoise_bitmask = int(Bitmasks["lownoisebitmask"]) if "lownoisebitmask" in Bitmasks else int(Bitmasks["obsreadybitmask"])
+	hwinj_channel_name = ChannelNames["hwinjchannel"] if "hwinjchannel" in ChannelNames else ChannelNames["inputdqchannel"]
+	
+	channel_list.append((instrument, obsintent_channel_name))
+	headkeys.append("obsintent")
+	if lownoise_channel_name != obsintent_channel_name:
+		channel_list.append((instrument, lownoise_channel_name))
+		headkeys.append("lownoise")
+	if hwinj_channel_name != obsintent_channel_name and hwinj_channel_name != lownoise_channel_name:
+		channel_list.append((instrument, hwinj_channel_name))
+		headkeys.append("hwinj")
 
 # If we are using the front-end EPICS records to either compute the TDCFs or the CALIB_STATE_VECTOR, we need to add those channels
 # Needed for kappa_tst, kappa_pum, kappa_uim, kappa_pu, kappa_c, f_cc, f_s, and Q
@@ -845,8 +861,8 @@ else:
 # If we are gating the noise or 60 Hz line subtraction with something other than the ODC state vector, add that channel
 noisesub_gate_channel = ChannelNames["noisesubgatechannel"] if "noisesubgatechannel" in ChannelNames else ChannelNames["inputdqchannel"]
 noisesub_gate_bitmask = int(Bitmasks["noisesubgatebitmask"]) if "noisesubgatebitmask" in Bitmasks else int(Bitmasks["obsreadybitmask"])
-if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_channel != ChannelNames["inputdqchannel"] and noisesub_gate_bitmask >= 0:
-	channel_list.append((instrument, ChannelNames["noisesubgatechannel"]))
+if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_bitmask >= 0:
+	channel_list.append((instrument, noisesub_gate_channel))
 	headkeys.append("noisesubgatechannel")
 
 ####################################################################################################
@@ -1967,27 +1983,25 @@ else:
 #FIXME: Add more comments!
 
 if compute_calib_statevector:
-	# FIXME: When the ODC is written as unsigned ints, this piece can be removed
-	odcstatevector = calibration_parts.caps_and_progress(pipeline, head_dict["odcstatevector"], odc_caps, "odc_%s" % instrument)
-	odctagstr = "channel-name=%s:%s, instrument=%s" % (instrument, ChannelNames["inputdqchannel"], instrument)
-	odcstatevector = pipeparts.mktaginject(pipeline, odcstatevector, odctagstr)
-	odcstatevectortee = pipeparts.mktee(pipeline, odcstatevector)
 
 	# 
 	# OBSERVATION-INTENT BIT BRANCH
 	#
 
-	obsintent = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = int(Bitmasks["obsintentbitmask"]), status_out = pow(2,1))
+	obsintentchannel = calibration_parts.caps_and_progress(pipeline, head_dict["obsintent"], obsintent_caps, "obs_intent_%s" % instrument)
+	obsintentchanneltee = pipeparts.mktee(pipeline, obsintentchannel)
+	obsintent = pipeparts.mkgeneric(pipeline, obsintentchanneltee, "lal_logicalundersample", required_on = obsintent_bitmask, status_out = pow(2,1))
 	obsintent = pipeparts.mkcapsfilter(pipeline, obsintent, calibstate_caps)
 	obsintenttee = pipeparts.mktee(pipeline, obsintent)
 	
 	#
-	# OBSERVATION-READY BIT BRANCH
+	# NOMINAL LOW-NOISE BIT BRANCH
 	#
 
-	obsready = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = int(Bitmasks["obsreadybitmask"]), status_out = pow(2,2))
-	obsready = pipeparts.mkcapsfilter(pipeline, obsready, calibstate_caps)
-	obsreadytee = pipeparts.mktee(pipeline, obsready)
+	lownoisechanneltee = obsintentchanneltee if lownoise_channel_name == obsintent_channel_name else pipeparts.mktee(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict["lownoise"], lownoise_caps, "low_noise_state_%s" % instrument))
+	lownoise = pipeparts.mkgeneric(pipeline, lownoisechanneltee, "lal_logicalundersample", required_on = lownoise_bitmask, status_out = pow(2,2))
+	lownoise = pipeparts.mkcapsfilter(pipeline, lownoise, calibstate_caps)
+	lownoisetee = pipeparts.mktee(pipeline, lownoise)
 
 	#
 	# FILTERS-OK BIT BRANCH
@@ -1996,7 +2010,7 @@ if compute_calib_statevector:
 	# Set the FILTERS-OK bit based on observation-ready transitions
 	filtersok = pipeparts.mkbitvectorgen(pipeline, obsintenttee, bit_vector = pow(2,3), threshold=2)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
-	filtersok = calibration_parts.mkgate(pipeline, filtersok, obsreadytee, 4, attack_length = -int(filter_settle_time * calibstate_sr), hold_length = -int(filter_latency * calibstate_sr))
+	filtersok = calibration_parts.mkgate(pipeline, filtersok, lownoisetee, 4, attack_length = -int(filter_settle_time * calibstate_sr), hold_length = -int(filter_latency * calibstate_sr))
 	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = pow(2,3), nongap_is_control = True)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
 
@@ -2005,8 +2019,8 @@ if compute_calib_statevector:
 	#
 
 	# Check if the ODC state vector is present
-	nogap = pipeparts.mkbitvectorgen(pipeline, odcstatevectortee, threshold=1, bit_vector = 1)
-	nogap = pipeparts.mkcapsfilter(pipeline, nogap, odc_caps)
+	nogap = pipeparts.mkbitvectorgen(pipeline, obsintentchanneltee, threshold=1, bit_vector = 1)
+	nogap = pipeparts.mkcapsfilter(pipeline, nogap, obsintent_caps)
 	nogap = pipeparts.mkgeneric(pipeline, nogap, "lal_logicalundersample", required_on = 1, status_out = 1)
 	nogap = pipeparts.mkcapsfilter(pipeline, nogap, calibstate_caps)
 	# Check if any of the input data channels had to be replaced by zeroes because they were < 1e-35
@@ -2148,7 +2162,7 @@ if compute_calib_statevector:
 	#
 
 	# First combine higher order bits to determine h(t)-OK
-	higherbits_list = [filtersok, obsreadytee, noinvalidinput]
+	higherbits_list = [filtersok, lownoisetee, noinvalidinput]
 	htok_threshold = pow(2,2) + pow(2,3) + pow(2,4)
 	if apply_kappatst or apply_complex_kappatst:
 		higherbits_list.append(ktstSmoothInRange)
@@ -2182,16 +2196,18 @@ if compute_calib_statevector:
 	# HW INJECTION BITS
 	#	
 
-	hwinjcbc = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = int(Bitmasks["cbchwinjbitmask"]), status_out = pow(2,6))
+	hwinjchanneltee = obsintentchanneltee if hwinj_channel_name == obsintent_channel_name else lownoisechanneltee if hwinj_channel_name == lownoise_channel_name else pipeparts.mktee(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict["hwinj"], hwinj_caps, "HW_injections_%s" % instrument))
+
+	hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = int(Bitmasks["cbchwinjbitmask"]), status_out = pow(2,6))
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
 
-	hwinjburst = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = int(Bitmasks["bursthwinjbitmask"]), status_out = pow(2,7))
+	hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = int(Bitmasks["bursthwinjbitmask"]), status_out = pow(2,7))
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, calibstate_caps)
 
-	hwinjdetchar = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = int(Bitmasks["detcharhwinjbitmask"]), status_out = pow(2,8))
+	hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = int(Bitmasks["detcharhwinjbitmask"]), status_out = pow(2,8))
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, calibstate_caps)
 
-	hwinjstoch = pipeparts.mkgeneric(pipeline, odcstatevectortee, "lal_logicalundersample", required_on = int(Bitmasks["stochhwinjbitmask"]), status_out = pow(2,5))
+	hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = int(Bitmasks["stochhwinjbitmask"]), status_out = pow(2,5))
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, calibstate_caps)
 
 	#
@@ -2343,7 +2359,7 @@ if remove_cal_lines:
 
 # Set up gating for the power mains and noise subtraction
 if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_bitmask > 0:
-	noisesubgate = odcstatevectortee if noisesub_gate_channel == ChannelNames["inputdqchannel"] else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
+	noisesubgate = obsintentchanneltee if noisesub_gate_channel == obsintent_channel_name else lownoisetee if noisesub_gate_channel == lownoise_channel_name else hwinjtee if noisesub_gate_channel == hwinj_channel_name else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
 	noisesubgate = pipeparts.mkgeneric(pipeline, noisesubgate, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,28))
 	noisesubgate = pipeparts.mkcapsfilter(pipeline, noisesubgate, calibstate_caps)
 	noisesubgatetee = pipeparts.mktee(pipeline, noisesubgate)
