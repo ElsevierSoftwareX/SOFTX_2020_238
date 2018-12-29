@@ -62,23 +62,26 @@ for m in mchirps_of_tmps:
 rate.filter_array(massBA.array, rate.gaussian_window(num_bins / 50., sigma = 5))
 
 # Assign the proper mass probabilities
-ids = {}
-tmplt_ids = []
-mchirps = []
-probs = []
-bbhnorm = schechter_norm(5., 45, 45., -1.6)
-othernorm = schechter_norm(1, 200, 200., -2.35)
+prob = {}
+mchirps = {}
+
+bbh_min = 3
+bbh_max = 30
+bbh_peak = 30
+bbh_alpha = -2.5
+
+bbhnorm = schechter_norm(bbh_min, bbh_max, bbh_peak, bbh_alpha)
 
 for row in sngl_inspiral_table:
-	assert row.template_id not in ids
-        tmplt_ids.append(int(row.template_id))
+	assert row.template_id not in prob
+
+	mchirp = chirpmass(row.mass1, row.mass2)
+	mchirps[row.template_id] = mchirp
+
 	if options.model == "narrow_bns":
-		mchirp = chirpmass(row.mass1, row.mass2)
 		sigma = 0.04
 		mean = 1.20
-		ids[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
-		mchirps.append(mchirp)
-		probs.append(ids[row.template_id])
+		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 	elif options.model == "ligo":
 
 		#
@@ -86,7 +89,6 @@ for row in sngl_inspiral_table:
 		#
 
 		# assume a 0.15 solar mass std deviation, this should capture both population distribution and snr effects
-		mchirp = chirpmass(row.mass1, row.mass2)
 		sigma = 0.15
 		mean = 1.2
 		bnsprob = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
@@ -95,48 +97,42 @@ for row in sngl_inspiral_table:
 		# BBH portion
 		#
 
-		# normalised over 5 -- 45 Msun
 		# From: https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/RatesAndSignificance/O1O2CatalogRates
-		bbhprob = schechter(mchirp, 45., -1.6) / bbhnorm
-
-
-		#
-		# Other: made up
-		#
-
-		otherprob = schechter(mchirp, 200., -2.35) / othernorm
+		bbhprob = schechter(mchirp, bbh_peak, bbh_alpha) / bbhnorm
 
 		#
 		# Combined
 		#
 
-		bns_rate = 916.
-		bbh_rate = 56.
-		other_rate = 20. # made up
+		# make intrinsic BNS rate 10 times higher (it is actually probably 20 times higher)
+		bns_rate = 10.
+		bbh_rate = 1.
 		# FIXME if the noise is ever normalized over mass then we would need the following, but it isn't
-		#ids[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob + other_rate * otherprob) / massBA[(mchirp,)] / (bns_rate + bbh_rate + other_rate)
-		ids[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob + other_rate * otherprob) / (bns_rate + bbh_rate + other_rate)
-		mchirps.append(mchirp)
-		probs.append(ids[row.template_id])
+		#prob[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob) / massBA[(mchirp,)] / (bns_rate + bbh_rate)
+		prob[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob) / (bns_rate + bbh_rate)
 	else:
 		raise ValueError("Invalid mass model")
 
+ids = sorted(prob.keys())
+norm = numpy.sum(prob.values())
+chirpmasses = numpy.array([mchirps[tid] for tid in ids])
 coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
-	coefficients[0,0,tid] = numpy.log(ids[tid] / len(sngl_inspiral_table))
+	coefficients[0,0,tid] = numpy.log(prob[tid]) - numpy.log(norm)
 
-#print coefficients.max()
 #import matplotlib
 #matplotlib.use('agg')
 #from matplotlib import pyplot
-#pyplot.loglog(mchirps, probs, "*")
+#pyplot.plot(chirpmasses, coefficients[0,0,:] + numpy.log((chirpmasses)**(15./6.)), "*")
+#pyplot.plot(chirpmasses, coefficients[0,0,:], "*")
+#pyplot.grid()
+#pyplot.ylim([-20, -10])
 #pyplot.savefig("blah.png")
-#
 
 # Write it out
 f = h5py.File(options.output, "w")
 # put in a dummy interval for the piecewise polynomials in SNR
 f.create_dataset("SNR", data = numpy.array([0., 100.]))
 f.create_dataset("coefficients", data = coefficients, compression="gzip")
-f.create_dataset("event_id", data = numpy.array(tmplt_ids).astype(int))
+f.create_dataset("event_id", data = numpy.array(ids).astype(int))
 f.close()
