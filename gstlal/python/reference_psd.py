@@ -313,7 +313,7 @@ class HorizonDistance(object):
 			f_max + delta_f,
 			100.,	# reference frequency (Hz)
 			None,	# LAL dictionary containing accessory parameters
-			lalsimulation.GetApproximantFromString("SEOBNRv4_ROM")
+			lalsimulation.GetApproximantFromString("IMRPhenomD")
 		)
 		assert hp.data.length > 0, "huh!?  h+ has zero length!"
 
