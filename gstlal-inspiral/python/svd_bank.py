@@ -388,6 +388,9 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
 		bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
 
+		# prepare the horizon distance factors
+		bank.horizon_factors = dict((row.template_id, sigmasq**.5) for row, sigmasq in zip(bank.sngl_inspiral_table, bank.sigmasq))
+
 		# attach a reference to the psd
 		bank.processed_psd = processed_psd
 
@@ -418,6 +421,15 @@ def read_banks(filename, contenthandler, verbose = False):
 			bank.bank_fragments.append(frag)
 
 		banks.append(bank)
+	template_id, func = horizon_distance_func(banks)
+	horizon_norm = None
+	for bank in banks:
+		if template_id in bank.horizon_factors:
+			assert horizon_norm is None
+			horizon_norm = bank.horizon_factors[template_id]
+	for bank in banks:
+		bank.horizon_distance_func = func
+		bank.horizon_factors = dict((tid, f / horizon_norm) for (tid, f) in bank.horizon_factors.items())
 	xmldoc.unlink()
 	return banks
 
@@ -449,27 +461,21 @@ def svdbank_templates_mapping(filenames, contenthandler, verbose = False):
 	return mapping
 
 
-def make_horizon_distance_func(banks):
+def horizon_distance_func(banks):
 	"""
 	Takes a dictionary of objects returned by read_banks keyed by instrument
 	"""
 	# span is [15 Hz, 0.85 * Nyquist frequency]
 	# find the Nyquist frequency for the PSD to be used for each
 	# instrument.  require them to all match
-	sngl_inspiral_table = banks.values()[0][0].sngl_inspiral_table.copy()
-	for bank in banks.values()[0]:
-		sngl_inspiral_table.extend(bank.sngl_inspiral_table)
-	nyquists = set(max(rate for bank in banklist for rate in bank.get_rates()) // 2 for instrument, banklist in banks.items())
+	nyquists = set((max(bank.get_rates()) for bank in banks))
 	assert len(nyquists) == 1, "all banks must have the same Nyquist frequency to define a consistent horizon distance function (got %s)" % ", ".join("%g" % rate for rate in sorted(nyquists))
-	# assume default 32 s PSD.  this is not required to be correct, but
+	# assume default 4 s PSD.  this is not required to be correct, but
 	# for best accuracy it should not be larger than the true value and
 	# for best performance it should not be smaller than the true
 	# value.
-	deltaF = 1. / 32.
-	# FIXME (from Chad) What is the 5/3 for???
-	# pick (m1, m2) from the median template ranked by Mchirp^(5/3)
-	# to provide the canonical waveform model.  See Maggiore equation
-	# (4.3).
-	assert len(sngl_inspiral_table) > 0, "no templates:  must have templates to define horizon distance function"
-	median_row = sorted(sngl_inspiral_table, key = lambda row: row.mchirp**(5./3.))[len(sngl_inspiral_table) // 2]
-	return reference_psd.HorizonDistance(15.0, 0.85 * max(nyquists), deltaF, median_row.mass1, median_row.mass2)
+	deltaF = 1. / 4.
+	# use the minimum template id as the cannonical horizon function
+	template_id, m1, m2 = min((row.template_id, row.mass1, row.mass2) for bank in banks for row in bank.sngl_inspiral_table)
+
+	return template_id, reference_psd.HorizonDistance(15.0, 0.85 * max(nyquists), deltaF, m1, m2)

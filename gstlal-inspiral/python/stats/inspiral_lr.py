@@ -39,6 +39,7 @@ from scipy import interpolate
 from scipy import stats
 import sys
 import warnings
+import json
 
 
 from glue.ligolw import ligolw
@@ -292,6 +293,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 class LnSignalDensity(LnLRDensity):
 	def __init__(self, *args, **kwargs):
 		population_model_file = kwargs.pop("population_model_file", None)
+		self.horizon_factors = kwargs.pop("horizon_factors", None)
 		super(LnSignalDensity, self).__init__(*args, **kwargs)
 
 		# install SNR, chi^2 PDF (one for all instruments)
@@ -308,6 +310,9 @@ class LnSignalDensity(LnLRDensity):
 		# FIXME:  introduce a mechanism for selecting the file
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
+
+	def set_horizon_factors(self, horizon_factors):
+		self.horizon_factors = horizon_factors
 
 	def __call__(self, segments, snrs, chi2s_over_snr2s, phase, dt, template_id):
 		assert frozenset(segments) == self.instruments
@@ -341,7 +346,12 @@ class LnSignalDensity(LnLRDensity):
 		horizon = sorted(horizons.values())[-self.min_instruments] / TYPICAL_HORIZON_DISTANCE
 		if not horizon:
 			return NegInf
-		lnP = 3. * math.log(horizon) + math.log(len(self.template_ids))
+		# horizon factors adjusts the computed horizon factor according
+		# to the sigma values computed at the time of the SVD. This
+		# gives a good approximation to the horizon distance for each
+		# template without computing them each explicitly. Only one
+		# template has its horizon calculated explicitly.
+		lnP = 3. * math.log(horizon * self.horizon_factors[template_id]) + math.log(len(self.template_ids))
 
 		# Add P(instruments | horizon distances)
 		try:
@@ -378,6 +388,10 @@ class LnSignalDensity(LnLRDensity):
 			raise ValueError("incompatible mass model file names")
 		if self.population_model_file is None and other.population_model_file is not None:
 			self.population_model_file = other.population_model_file
+		if self.horizon_factors is not None and other.horizon_factors is not None and other.horizon_factors != self.horizon_factors:
+			raise ValueError("incompatible horizon_factors")
+		if self.horizon_factors is None and other.horizon_factors is not None:
+			self.horizon_factors = other.horizon_factors
 
 		return self
 
@@ -391,6 +405,7 @@ class LnSignalDensity(LnLRDensity):
 		# okay to use references because read-only data
 		new.population_model = self.population_model
 		new.InspiralExtrinsics = self.InspiralExtrinsics
+		new.horizon_factors = self.horizon_factors
 		return new
 
 	def local_mean_horizon_distance(self, gps, window = segments.segment(-32., +2.)):
@@ -534,6 +549,7 @@ class LnSignalDensity(LnLRDensity):
 		xml = super(LnSignalDensity, self).to_xml(name)
 		xml.appendChild(self.horizon_history.to_xml(u"horizon_history"))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"population_model_file", self.population_model_file))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"horizon_factors", json.dumps(self.horizon_factors) if self.horizon_factors is not None else None))
 		return xml
 
 	@classmethod
@@ -542,6 +558,13 @@ class LnSignalDensity(LnLRDensity):
 		self = super(LnSignalDensity, cls).from_xml(xml, name)
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, u"horizon_history")
 		self.population_model_file = ligolw_param.get_pyvalue(xml, u"population_model_file")
+		self.horizon_factors = ligolw_param.get_pyvalue(xml, u"horizon_factors")
+		if self.horizon_factors is not None:
+			# FIXME, how do we properly decode the json, I assume something in ligolw can do this?
+			self.horizon_factors = self.horizon_factors.replace("\\","").replace('\\"','"')
+			self.horizon_factors = json.loads(self.horizon_factors)
+			self.horizon_factors = dict((int(k), v) for k, v in self.horizon_factors.items())
+			assert set(self.template_ids) == set(self.horizon_factors)
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments)
 		return self
