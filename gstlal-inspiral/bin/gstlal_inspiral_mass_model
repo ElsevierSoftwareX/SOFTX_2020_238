@@ -66,8 +66,8 @@ prob = {}
 mchirps = {}
 
 bbh_min = 3
-bbh_max = 30
-bbh_peak = 30
+bbh_max = 200
+bbh_peak = 200
 bbh_alpha = -2.5
 
 bbhnorm = schechter_norm(bbh_min, bbh_max, bbh_peak, bbh_alpha)
