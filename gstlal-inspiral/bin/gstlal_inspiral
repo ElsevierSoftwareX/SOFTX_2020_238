@@ -691,8 +691,10 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	# assume all instruments have the same templates, just extract them
 	# from one of the instruments at random
 	sngl_inspiral_table = banks.values()[0][0].sngl_inspiral_table.copy()
+	horizon_factors = {}
 	for bank in banks.values()[0]:
 		sngl_inspiral_table.extend(bank.sngl_inspiral_table)
+		horizon_factors.update(bank.horizon_factors)
 	@bottle.route("/template_bank.xml.gz")
 	def get_template_bank_xml(sngl_inspiral_table = sngl_inspiral_table):
 		xmldoc = ligolw.Document()
@@ -704,6 +706,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		output.close()
 		return outstr
 	template_ids = frozenset(row.template_id for row in sngl_inspiral_table)
+	assert set(horizon_factors) == template_ids, "horizon factors are not assigned for each template id"
 	assert len(template_ids) == len(sngl_inspiral_table), "template IDs are not unique within the template bank"
 	@bottle.route("/template_ids.txt")
 	def get_template_ids(template_ids = sorted(template_ids)):
@@ -783,8 +786,9 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 				rankingstat.template_ids = template_ids
 			elif rankingstat.template_ids != template_ids:
 				raise ValueError("\"%s\" is for the wrong templates" % options.ranking_stat_input)
+			rankingstat.numerator.set_horizon_factors(horizon_factors)
 	if rankingstat is None:
-		rankingstat = far.RankingStat(template_ids = template_ids, instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments)
+		rankingstat = far.RankingStat(template_ids = template_ids, instruments = all_instruments, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, horizon_factors = horizon_factors)
 		rankingstat.numerator.add_signal_model(df = 40)
 
 
@@ -811,7 +815,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			verbose = options.verbose
 		),
 		rankingstat = rankingstat,
-		horizon_distance_func = svd_bank.make_horizon_distance_func(banks),
+		horizon_distance_func = banks.values()[0][0].horizon_distance_func,# they should all be the same
 		gracedbwrapper = inspiral.GracedBWrapper(
 			instruments = rankingstat.instruments,
 			far_threshold = options.gracedb_far_threshold,
