@@ -268,7 +268,7 @@ class HorizonDistance(object):
 		>>> # compute horizon distance
 		>>> D, (f, model) = horizon_distance(psd)
 		>>> print "%.4g Mpc" % D
-		434.5 Mpc
+		434.7 Mpc
 		>>> # compute distance and spectrum for SNR = 25
 		>>> D, (f, model) = horizon_distance(psd, 25.)
 		>>> "%.4g Mpc" % D
