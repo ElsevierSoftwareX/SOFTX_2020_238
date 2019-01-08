@@ -389,7 +389,10 @@ class LnSignalDensity(LnLRDensity):
 		if self.population_model_file is None and other.population_model_file is not None:
 			self.population_model_file = other.population_model_file
 		if self.horizon_factors is not None and other.horizon_factors is not None and other.horizon_factors != self.horizon_factors:
-			raise ValueError("incompatible horizon_factors")
+			# require that the horizon factors be the same within 1%
+			for k in self.horizon_factors:
+				if 0.99 > self.horizon_factors[k] / other.horizon_factors[k] > 1.01:
+					raise ValueError("incompatible horizon_factors")
 		if self.horizon_factors is None and other.horizon_factors is not None:
 			self.horizon_factors = other.horizon_factors
 
