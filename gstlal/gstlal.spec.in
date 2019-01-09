@@ -22,6 +22,8 @@ Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
 # FIXME:  add this when it becomes available, and figure out what its name
 # is on .rpm based systems
 #Requires: %{gstreamername}-python3-plugin-loader
+# FIXME:  add this when it becomes available
+#Requires: %{gstreamername}-rtsp-server >= @MIN_GSTREAMER_VERSION@
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lal-python >= @MIN_LAL_VERSION@
 Requires: lalburst >= @MIN_LALBURST_VERSION@
@@ -42,6 +44,8 @@ BuildRequires: gsl-devel
 BuildRequires: gtk-doc >= @MIN_GTK_DOC_VERSION@
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
+# FIXME:  add this when it becomes available
+#BuildRequires: %{gstreamername}-rtsp-server-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: lal-devel >= @MIN_LAL_VERSION@
 BuildRequires: lal-python >= @MIN_LAL_VERSION@
 BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
