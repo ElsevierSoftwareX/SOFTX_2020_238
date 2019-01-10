@@ -140,7 +140,7 @@ if options.background_prior > 0:
 	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior)
 
 if options.synthesize_numerator:
-	rankingstat.numerator.add_signal_model(df = 40)
+	rankingstat.numerator.add_signal_model()
 
 
 #
