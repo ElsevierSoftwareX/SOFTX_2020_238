@@ -25,6 +25,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw.utils import process as ligolw_process
 import lal.series
 from lal import rate
+from gstlal import reference_psd
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -44,32 +45,41 @@ def schechter(mass, maxM, alpha):
 
 parser = argparse.ArgumentParser(description = "Create analytic mass models for prior weighting of templates")
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
+parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow_bns. If you want another one, submit a patch.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, broad-bns, bbh, detected-logm. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
 # Read the template bank file
 xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.get_column("mass1"), sngl_inspiral_table.get_column("mass2"))
-num_templates = len(mchirps_of_tmps)
-num_bins = max(5, num_templates / 500)
-massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min(mchirps_of_tmps)-1e-6, max(mchirps_of_tmps)+1e-6, num_bins),)))
-for m in mchirps_of_tmps:
-	massBA.count[(m,)] += 1
-rate.filter_array(massBA.array, rate.gaussian_window(num_bins / 50., sigma = 5))
+
+# NOTE this next block of code isn't used since we don't actuall have a  PDF in mass space. Maybe some day?
+# num_templates = len(mchirps_of_tmps)
+# num_bins = max(5, num_templates / 500)
+# massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min(mchirps_of_tmps)-1e-6, max(mchirps_of_tmps)+1e-6, num_bins),)))
+# for m in mchirps_of_tmps:
+#	massBA.count[(m,)] += 1
+# rate.filter_array(massBA.array, rate.gaussian_window(num_bins / 50., sigma = 5))
 
 # Assign the proper mass probabilities
 prob = {}
 mchirps = {}
 
-bbh_min = 3
-bbh_max = 200
-bbh_peak = 200
-bbh_alpha = -2.5
+ligo_min = 3
+ligo_max = 200
+ligo_peak = 200
+ligo_alpha = -2.5
+ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
+bbh_min = 3
+bbh_max = 30
+bbh_peak = 30
+bbh_alpha = -1
 bbhnorm = schechter_norm(bbh_min, bbh_max, bbh_peak, bbh_alpha)
 
 for row in sngl_inspiral_table:
@@ -78,10 +88,30 @@ for row in sngl_inspiral_table:
 	mchirp = chirpmass(row.mass1, row.mass2)
 	mchirps[row.template_id] = mchirp
 
-	if options.model == "narrow_bns":
+	if options.model == "narrow-bns":
 		sigma = 0.04
 		mean = 1.20
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
+
+	elif options.model == "broad-bns":
+		sigma = 0.155
+		# comes from mean of 1.25444859344 at z = 0.02
+		mean = 1.28
+		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
+
+	elif options.model == "detected-logm":
+		# FIXME should this be **3 or **2?  The term in LR is here: https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/python/stats/inspiral_lr.py#L354
+		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
+		prob[row.template_id] = numpy.log(mchirp) / hdist**3
+
+	elif options.model == "bbh":
+		#
+		# BBH portion
+		#
+
+		# From: https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/RatesAndSignificance/O1O2CatalogRates
+		prob[row.template_id] = schechter(mchirp, bbh_peak, bbh_alpha) / bbhnorm 
+
 	elif options.model == "ligo":
 
 		#
@@ -97,8 +127,7 @@ for row in sngl_inspiral_table:
 		# BBH portion
 		#
 
-		# From: https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/RatesAndSignificance/O1O2CatalogRates
-		bbhprob = schechter(mchirp, bbh_peak, bbh_alpha) / bbhnorm
+		bbhprob = schechter(mchirp, ligo_peak, ligo_alpha) / ligonorm
 
 		#
 		# Combined
@@ -120,14 +149,14 @@ coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
 	coefficients[0,0,tid] = numpy.log(prob[tid]) - numpy.log(norm)
 
-#import matplotlib
-#matplotlib.use('agg')
-#from matplotlib import pyplot
-#pyplot.plot(chirpmasses, coefficients[0,0,:] + numpy.log((chirpmasses)**(15./6.)), "*")
-#pyplot.plot(chirpmasses, coefficients[0,0,:], "*")
-#pyplot.grid()
-#pyplot.ylim([-20, -10])
-#pyplot.savefig("blah.png")
+import matplotlib
+matplotlib.use('agg')
+from matplotlib import pyplot
+#pyplot.semilogx(chirpmasses, coefficients[0,0,:] + numpy.log((chirpmasses)**(15./6.)), "*")
+pyplot.semilogx(chirpmasses, coefficients[0,0,:], "*")
+pyplot.grid()
+pyplot.ylim([-20, 0])
+pyplot.savefig("blah.png")
 
 # Write it out
 f = h5py.File(options.output, "w")
