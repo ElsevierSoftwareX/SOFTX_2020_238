@@ -164,15 +164,15 @@ def inj_psd_node_gen(segsdict, options):
 	ref_psd_parent_nodes = []
 	return psd_nodes, ref_psd_parent_nodes
 
-def model_node_gen(modelJob, dag, instruments, options, seg, template_bank):
+def model_node_gen(modelJob, dag, parent_nodes, instruments, options, seg, template_bank, psd):
 	if options.mass_model_file is None:
 		# choose, arbitrarily, the lowest instrument in alphabetical order
 		model_file_name = inspiral_pipe.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = modelJob.output_path)
 		model_node = inspiral_pipe.generic_node(modelJob, dag,
-			input_files = {"template-bank": template_bank},
+			input_files = {"template-bank": template_bank, "reference-psd": psd},
 			opts = {"model":options.mass_model},
 			output_files = {"output": model_file_name},
-			parent_nodes = []
+			parent_nodes = parent_nodes
 		)
 		return [model_node], model_file_name
 	else:
@@ -1014,7 +1014,7 @@ def parse_command_line():
 
 	# Template bank
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
-	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'file' and 'ligo'")
+	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', or 'file'")
 	parser.add_option("--mass-model-file", metavar = "filename", help = "Set the name of the mass model file, e.g., mass_model.h5.  Required if --mass-model=file")
 
 	# SVD bank construction options
@@ -1087,8 +1087,8 @@ def parse_command_line():
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 		assert len(sngl_inspiral_table) == len(set([r.template_id for r in sngl_inspiral_table])), "Template bank ids are not unique"
 
-	if options.mass_model not in ("ligo", "file"):
-		raise ValueError("--mass-model must be 'ligo' or 'file'")
+	if options.mass_model not in ("narrow-bns", "broad-bns", "bbh", "ligo", "detected-logm", "file"):
+		raise ValueError("--mass-model must be 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', or 'file'")
 	if options.mass_model == "file" and not options.mass_model_file:
 		raise ValueError("--mass-model-file must be provided if --mass-model=file")
 
@@ -1396,7 +1396,7 @@ if options.bank_cache:
 	#
 	#svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
 	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
-	model_add_node, model_file_name = model_node_gen(modelJob, dag, instruments, options, boundary_seg, options.template_bank)
+	model_add_node, model_file_name = model_node_gen(modelJob, dag, ref_psd_parent_nodes, instruments, options, boundary_seg, options.template_bank, ref_psd)
 
 if not options.lloid_cache:
 	#
