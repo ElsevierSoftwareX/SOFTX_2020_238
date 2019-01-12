@@ -1,0 +1,31 @@
+# configuration file for monitoring
+dashboard:
+  title: Online Feature Extraction Status
+  image: null
+  tabs:
+    - name: H1
+      url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi
+    - name: L1
+      url: https://ldas-jobs.ligo-la.caltech.edu/~idq/cgi-bin/fx_monitor.cgi
+    - name: Docs
+      url: https://docs.ligo.org/lscsoft/gstlal/gstlal-burst/gstlal-burst.html
+    - name: Git
+      url: https://git.ligo.org/lscsoft/gstlal
+plots:
+  - title: SNR Timeseries
+    id: tester1
+    url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi/api/target_snr/sqlite/
+    type: TimeSeries
+  - title: Feature Production Latency
+    id: tester2
+    url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi/api/latency/sqlite/
+    type: TimeSeries
+  - title: percent channels missed in packet
+    id: tester3
+    url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi/api/percent_missed/sqlite/
+    type: TimeSeries
+database:
+  backend: sqlite
+  name: fx
+  path: /home/idq/gstlal/online/gstlal_feature_listener
+  table: fxmonitor

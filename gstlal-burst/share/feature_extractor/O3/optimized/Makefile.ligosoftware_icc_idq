@@ -31,20 +31,24 @@ else
 endif
 
 IDQ_REPO:=${PWD}/git/iDQ
+DATAMON_REPO:=${PWD}/git/datamon
 
 # Set the dependency directory:
 DEPS_DIR:=/path/to/deps/dir
 
 # Set to build from git (0 = tarball, 1 = git)
 IDQ_GIT=1
+DATAMON_GIT=1
 
 # Define which branch from git to build. Defaults to 'master', but the user can 
 # set the variable below. The git clone and compilation should fail if this is set to
 # an unknown branch.
 IDQ_GIT_BRANCH="master"
+DATAMON_GIT_BRANCH="master"
 
 # Set package release versions
 IDQ=idq-2.0.0
+DATAMON=0.1.0
 KAFKA_PYTHON=0.11.5
 LIBRDKAFKA=0.11.5
 SKLEARN=scikit-learn-0.18.2
@@ -52,6 +56,7 @@ CYTHON=Cython-0.25.2
 
 # Specify target/dependency files
 IDQ_TARGET=$(INSTALL_DIR)/bin/idq-train
+DATAMON_TARGET=$(INSTALL_DIR)/bin/datamon.cgi
 KAFKA_PYTHON_TARGET=$(PYTHON_DIR)/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg/confluent_kafka/cimpl.so
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 SKLEARN_TARGET=$(PYTHON_DIR)/sklearn/_isotonic.so
@@ -65,6 +70,7 @@ CYTHON_TAR_TARGET=$(TAR_DIR)/$(CYTHON).tar.gz
 
 # git repos
 IDQ_GIT_TARGET=$(IDQ_REPO)/README.md
+DATAMON_GIT_TARGET=$(DATAMON_REPO)/README.md
 
 # Specify how many processors to run on
 #CORES:=$(shell echo `nproc --all`"-2" | bc -l)
@@ -123,10 +129,10 @@ check :
 # iDQ
 idq : logs/idq.txt
 
-logs/idq.txt : $(LOGS_DIR)/kafka-python.txt $(IDQ_TARGET)
+logs/idq.txt : $(LOGS_DIR)/datamon.txt $(IDQ_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(IDQ_TARGET) : $(KAFKA_PYTHON_TARGET)
+$(IDQ_TARGET) : $(DATAMON_TARGET)
 	@echo $(GREEN)iDQ$(WHITE) 1>&2
 	if [ "$(IDQ_GIT)" = "1" ]; then \
 		cd $(IDQ_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
@@ -137,6 +143,16 @@ $(IDQ_TARGET) : $(KAFKA_PYTHON_TARGET)
 	# fix to make python-eggs not world writable (raises UserWarnings if not done)
 	# not tied solely to iDQ install, but should be done at the end of all python installs
 	chmod og-w $(HOME)/.python-eggs
+
+# datamon
+datamon : logs/datamon.txt
+
+logs/datamon.txt : $(LOGS_DIR)/kafka-python.txt $(DATAMON_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(DATAMON_TARGET) : $(KAFKA_PYTHON_TARGET)
+	@echo $(GREEN)datamon$(WHITE) 1>&2
+	cd $(DATAMON_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 
 # confluent-kafka-python
 kafka-python : logs/kafka-python.txt
@@ -221,6 +237,14 @@ $(LOGS_DIR) :
 			git clone -b $(IDQ_GIT_BRANCH) https://git.ligo.org/reed.essick/iDQ.git $(IDQ_REPO) ; \
 		fi ; \
 	fi ;
+	if [ "${DATAMON_GIT}" = "1" ]; then \
+		if [ -f $@ ] ; then \
+			echo "datamon git repo exists" ; \
+		else \
+			mkdir -p $(DATAMON_REPO) ; \
+			git clone -b $(DATAMON_GIT_BRANCH) https://git.ligo.org/gstlal-visualisation/datamon.git $(DATAMON_REPO) ; \
+		fi ; \
+	fi ;
 	mkdir -p $(LOGS_DIR)
 
 ############
@@ -237,6 +261,9 @@ clean-install :
 
 clean-idq :
 	rm -rf logs/idq.txt $(IDQ_TARGET)
+
+clean-datamon :
+	rm -rf logs/datamon.txt $(DATAMON_TARGET)
 
 clean-kafka-python :
 	rm -rf logs/kafka-python.txt $(KAFKA_PYTHON_TARGET)
