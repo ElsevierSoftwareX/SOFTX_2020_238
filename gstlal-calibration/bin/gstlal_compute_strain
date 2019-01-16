@@ -2224,7 +2224,7 @@ if compute_calib_statevector:
 	if(len(D_epics_dict)):
 		D_epics_check_list = []
 		for EP_key in D_epics_dict:
-			D_epics_check = pipeparts.mkaudioamplify(pipeline, D_epics_dict[EP_key][0], 1.0 / D_epics_dict[EP_key][1])
+			D_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, D_epics_dict[EP_key][0], exponent = -1.0), D_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
 			D_epics_check = pipeparts.mkgeneric(pipeline, D_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			D_epics_check_list.append(D_epics_check)
@@ -2238,7 +2238,7 @@ if compute_calib_statevector:
 	if(len(A_epics_dict)):
 		A_epics_check_list = []
 		for EP_key in A_epics_dict:
-			A_epics_check = pipeparts.mkaudioamplify(pipeline, A_epics_dict[EP_key][0], 1.0 / A_epics_dict[EP_key][1])
+			A_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, A_epics_dict[EP_key][0], exponent = -1.0), A_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
 			A_epics_check = pipeparts.mkgeneric(pipeline, A_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			A_epics_check_list.append(A_epics_check)
@@ -2252,7 +2252,7 @@ if compute_calib_statevector:
 	if(len(C_epics_dict)):
 		C_epics_check_list = []
 		for EP_key in C_epics_dict:
-			C_epics_check = pipeparts.mkaudioamplify(pipeline, C_epics_dict[EP_key][0], 1.0 / C_epics_dict[EP_key][1])
+			C_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, C_epics_dict[EP_key][0], exponent = -1.0), C_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
 			C_epics_check = pipeparts.mkgeneric(pipeline, C_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			C_epics_check_list.append(C_epics_check)
@@ -2266,7 +2266,7 @@ if compute_calib_statevector:
 	if(len(misc_epics_dict)):
 		misc_epics_check_list = []
 		for EP_key in misc_epics_dict:
-			misc_epics_check = pipeparts.mkaudioamplify(pipeline, misc_epics_dict[EP_key][0], 1.0 / misc_epics_dict[EP_key][1])
+			misc_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, misc_epics_dict[EP_key][0], exponent = -1.0), misc_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
 			misc_epics_check = pipeparts.mkgeneric(pipeline, misc_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			misc_epics_check_list.append(misc_epics_check)
