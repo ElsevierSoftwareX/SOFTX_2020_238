@@ -42,6 +42,7 @@
 
 import numpy
 import sys
+import warnings
 
 import lal
 
@@ -468,8 +469,9 @@ def horizon_distance_func(banks):
 	# span is [15 Hz, 0.85 * Nyquist frequency]
 	# find the Nyquist frequency for the PSD to be used for each
 	# instrument.  require them to all match
-	nyquists = set((max(bank.get_rates()) for bank in banks))
-	assert len(nyquists) == 1, "all banks must have the same Nyquist frequency to define a consistent horizon distance function (got %s)" % ", ".join("%g" % rate for rate in sorted(nyquists))
+	nyquists = set((max(bank.get_rates())/2. for bank in banks))
+	if len(nyquists) != 1:
+		warnings.warn("all banks should have the same Nyquist frequency to define a consistent horizon distance function (got %s)" % ", ".join("%g" % rate for rate in sorted(nyquists)))
 	# assume default 4 s PSD.  this is not required to be correct, but
 	# for best accuracy it should not be larger than the true value and
 	# for best performance it should not be smaller than the true
