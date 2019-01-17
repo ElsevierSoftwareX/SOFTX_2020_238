@@ -23,6 +23,7 @@
 """
 Produce a fits file from binary sky map file
 """
+
 import struct
 from lalinference.io import fits
 import numpy as np
@@ -47,24 +48,23 @@ def find_closest_gps(event_time, start, gps_step):
 	return idx*gps_step
 
 
-def param_from_xml(filename, param_name, contenthandler = DefaultContentHandler, verbose = False):
-
-	# Load document
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-
+def param_from_xmldoc(xmldoc, param_name, verbose = False):
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == pipe_macro.DETRSP_XML_ID_NAME):
 		result = param.get_param(root, param_name).pcdata
-	return result
+	try:
+		return result
+	except:
+		raise ValueError("no %s param in the doc" % param_name)
 
 
-def array_from_xml(filename, array_name, contenthandler = DefaultContentHandler, verbose = False):
-
-	# Load document
-	xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-
+def array_from_xmldoc(xmldoc, array_name, verbose = False):
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == pipe_macro.DETRSP_XML_ID_NAME):
 		result = array.get_array(root, array_name).array 
-	return result
+	try:
+		return result
+	except:
+		raise ValueError("no %s array in the doc" % array_name)
+
 
 def logsumexpo(a):
 
@@ -127,12 +127,15 @@ cohsnrsq_skymap = allread_skymap[0:npix]
 nullsnrsq_skymap = allread_skymap[npix:]
 
 # get detector response Det(G*G) for each sky direction
-detrsp_start_time = long(param_from_xml(opts.cuda_postcoh_detrsp_fname, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_START))
-gps_step = long(param_from_xml(opts.cuda_postcoh_detrsp_fname, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_STEP))
+
+# Load document
+xmldoc = utils.load_filename(opts.cuda_postcoh_detrsp_fname, contenthandler = DefaultContentHandler, verbose = opts.verbose)
+detrsp_start_time = long(param_from_xmldoc(xmldoc, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_START))
+gps_step = long(param_from_xmldoc(xmldoc, pipe_macro.DETRSP_XML_PARAM_NAME_GPS_STEP))
 event_time = long(opts.event_time)
 igps = find_closest_gps(event_time, detrsp_start_time, gps_step)
 Det_name = "Det_map_gps_%d" % igps
-Det_array = array_from_xml(opts.cuda_postcoh_detrsp_fname, Det_name)
+Det_array = array_from_xmldoc(xmldoc, Det_name)
 
 # calc prob for each sky direction using cohsnr^2, nullsnr^2, and Det(G*G)
 log_prob = np.zeros(npix)
