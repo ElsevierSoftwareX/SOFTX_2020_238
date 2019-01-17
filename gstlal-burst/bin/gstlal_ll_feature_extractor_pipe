@@ -33,7 +33,6 @@ import os
 
 from gstlal import aggregator
 from gstlal import dagparts
-from gstlal import inspiral_pipe
 
 from gstlal.fxtools import feature_extractor
 from gstlal.fxtools import multichannel_datasource
@@ -130,7 +129,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 		subset_options.update(command_line_options)
 
 		feature_extractor_nodes[ii] = \
-			inspiral_pipe.generic_node(feature_extractor_job, dag, parent_nodes = parent_nodes,
+			dagparts.DAGNode(feature_extractor_job, dag, parent_nodes = parent_nodes,
 				opts = subset_options,
 				output_files = {"out-path": os.path.join(options.out_path, "gstlal_feature_extractor")}
 			)
@@ -153,14 +152,14 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 # =============================
 
 
-class zookeeper_job(inspiral_pipe.generic_job):
+class zookeeper_job(dagparts.DAGJob):
 	"""
 	A zookeeper job
 	"""
 	def __init__(self, program = "zookeeper-server-start.sh", datadir = os.path.join(dagparts.log_path(), "zookeeper"), port = 2271, maxclients = 0, condor_commands = {}):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
 
 		try:
 			os.mkdir(datadir)
@@ -179,14 +178,14 @@ maxClientCnxns=%d
 		f.close()
 
 
-class kafka_job(inspiral_pipe.generic_job):
+class kafka_job(dagparts.DAGJob):
 	"""
 	A kafka job
 	"""
 	def __init__(self, program = "kafka-server-start.sh", logdir = os.path.join(dagparts.log_path(), "kafka"), host = "10.14.0.112:9182", zookeeperaddr = "localhost:2271", condor_commands = {}):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
 
 		try:
 			os.mkdir(logdir)
@@ -290,15 +289,15 @@ aggregator.makedir("logs")
 # set up dag and job classes
 #
 
-dag = inspiral_pipe.DAG("feature_extractor_pipe")
+dag = dagparts.DAG("feature_extractor_pipe")
 
 # feature extractor job
 if options.condor_universe == 'local':
 	condor_options = {"want_graceful_removal":"True", "kill_sig":"15"}
 else:
 	condor_options = {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
-condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, condor_options)
-feature_extractor_job = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = condor_commands, universe = options.condor_universe)
+condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, condor_options)
+feature_extractor_job = dagparts.DAGJob("gstlal_feature_extractor", condor_commands = condor_commands, universe = options.condor_universe)
 feature_extractor_nodes, num_channels = feature_extractor_node_gen(feature_extractor_job, dag, [], ifo, options, data_source_info)
 
 # auxiliary jobs
@@ -307,15 +306,15 @@ if options.save_format == 'kafka':
 		auxiliary_condor_options = {"want_graceful_removal":"True", "kill_sig":"15"}
 	else:
 		auxiliary_condor_options = {"request_memory":options.auxiliary_request_memory, "request_cpus":options.auxiliary_request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
-	auxiliary_condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, auxiliary_condor_options)
-	synchronizer_job = inspiral_pipe.generic_job("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
-	hdf5_sink_job = inspiral_pipe.generic_job("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
-	listener_job = inspiral_pipe.generic_job("gstlal_feature_listener", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+	auxiliary_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, auxiliary_condor_options)
+	synchronizer_job = dagparts.DAGJob("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+	hdf5_sink_job = dagparts.DAGJob("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+	listener_job = dagparts.DAGJob("gstlal_feature_listener", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
 
 	if not options.disable_kafka_jobs:
 		# kafka/zookeeper jobs
 		local_condor_options = {"want_graceful_removal":"True", "kill_sig":"15"}
-		local_condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, local_condor_options)
+		local_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, local_condor_options)
 		zoo_job = zookeeper_job(condor_commands = local_condor_commands)
 		kafka_job = kafka_job(condor_commands = local_condor_commands, host = options.kafka_server)
 
@@ -380,13 +379,13 @@ if options.save_format == 'kafka':
 
 if options.save_format == 'kafka':
 	synchronizer_options.update({"num-topics": len(feature_extractor_nodes)})
-	synchronizer_node = inspiral_pipe.generic_node(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_synchronizer")})
-	hdf5_sink_node = inspiral_pipe.generic_node(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_hdf5_sink")})
-	listener_node = inspiral_pipe.generic_node(listener_job, dag, [], opts = listener_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_listener")})
+	synchronizer_node = dagparts.DAGNode(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_synchronizer")})
+	hdf5_sink_node = dagparts.DAGNode(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_hdf5_sink")})
+	listener_node = dagparts.DAGNode(listener_job, dag, [], opts = listener_options, output_files = {"rootdir": os.path.join(options.out_path, "gstlal_feature_listener")})
 
 	if not options.disable_kafka_jobs:
-		zoo_node = inspiral_pipe.generic_node(zoo_job, dag, [], opts = {"":"zookeeper.properties"})
-		kafka_node = inspiral_pipe.generic_node(kafka_job, dag, [], opts = {"":"kafka.properties"})
+		zoo_node = dagparts.DAGNode(zoo_job, dag, [], opts = {"":"zookeeper.properties"})
+		kafka_node = dagparts.DAGNode(kafka_job, dag, [], opts = {"":"kafka.properties"})
 
 #
 # write out dag and sub files

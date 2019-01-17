@@ -9,8 +9,8 @@ from glue.ligolw import ilwd
 from glue.ligolw.utils import process as ligolw_process
 from gstlal import metric as metric_module
 import os,sys,argparse
-from gstlal import inspiral, inspiral_pipe
-from gstlal import dagparts as gstlaldagparts
+from gstlal import inspiral
+from gstlal import dagparts
 
 # Read command line options
 def parse_command_line():
@@ -79,8 +79,8 @@ def parse_command_line():
 	return args
 
 args = parse_command_line()
-dag = inspiral_pipe.DAG("treebank")
-treeJob = inspiral_pipe.generic_job("gstlal_inspiral_treebank")
+dag = dagparts.DAG("treebank")
+treeJob = dagparts.DAGJob("gstlal_inspiral_treebank")
 argsdict = dict((key.replace("_","-"), value) for key,value in vars(args).items())
 mass2 = numpy.logspace(math.log(args.min_mass2, 8/3.), math.log(args.max_mass2, 8/3.), args.num_jobs, base=8/3.)
 del argsdict["num-jobs"]
@@ -91,7 +91,7 @@ for minmass2,maxmass2 in zip(mass2[:-1],mass2[1:]):
 	argsdict["max-mass2"] = maxmass2
 	argsdict["user-tag"] = cnt
 	cnt+=1
-	pnodes.append(inspiral_pipe.generic_node(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {}, opts = argsdict))
+	pnodes.append(dagparts.DAGNode(treeJob, dag, parent_nodes = [], input_files = {}, output_files = {}, opts = argsdict))
 
 #FIXME add a ligolw_add job to the end of the dag
 try:

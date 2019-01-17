@@ -58,7 +58,7 @@ from glue.ligolw import lsctables
 import glue.ligolw.utils as ligolw_utils
 import glue.ligolw.utils.segments as ligolw_segments
 from gstlal import inspiral, inspiral_pipe
-from gstlal import dagparts as gstlaldagparts
+from gstlal import dagparts
 from gstlal import datasource
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -125,7 +125,7 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
 			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad)
-			segsdict[frozenset(ifo_combos)] = gstlaldagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad)
+			segsdict[frozenset(ifo_combos)] = dagparts.breakupsegs(segsdict[frozenset(ifo_combos)], segment_length, start_pad)
 			if not segsdict[frozenset(ifo_combos)]:
 				del segsdict[frozenset(ifo_combos)]
 	return segsdict
@@ -136,7 +136,7 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
 		for seg in segsdict[ifos]:
 			psd_nodes[(ifos, seg)] = \
-				inspiral_pipe.generic_node(refPSDJob, dag, parent_nodes = parent_nodes,
+				dagparts.DAGNode(refPSDJob, dag, parent_nodes = parent_nodes,
 					opts = {"gps-start-time":int(seg[0]),
 						"gps-end-time":int(seg[1]),
 						"data-source":"frames",
@@ -145,7 +145,7 @@ def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
 						"frame-segments-name": options.frame_segments_name},
 					input_files = {	"frame-cache":options.frame_cache,
 							"frame-segments-file":options.frame_segments_file},
-					output_files = {"write-psd":inspiral_pipe.T050017_filename(ifos, "REFERENCE_PSD", seg, '.xml.gz', path = subdir_path([refPSDJob.output_path, str(int(seg[0]))[:5]]))}
+					output_files = {"write-psd":dagparts.T050017_filename(ifos, "REFERENCE_PSD", seg, '.xml.gz', path = subdir_path([refPSDJob.output_path, str(int(seg[0]))[:5]]))}
 				)
 	return psd_nodes
 
@@ -167,8 +167,8 @@ def inj_psd_node_gen(segsdict, options):
 def model_node_gen(modelJob, dag, parent_nodes, instruments, options, seg, template_bank, psd):
 	if options.mass_model_file is None:
 		# choose, arbitrarily, the lowest instrument in alphabetical order
-		model_file_name = inspiral_pipe.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = modelJob.output_path)
-		model_node = inspiral_pipe.generic_node(modelJob, dag,
+		model_file_name = dagparts.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = modelJob.output_path)
+		model_node = dagparts.DAGNode(modelJob, dag,
 			input_files = {"template-bank": template_bank, "reference-psd": psd},
 			opts = {"model":options.mass_model},
 			output_files = {"output": model_file_name},
@@ -200,11 +200,11 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 					if f in template_mchirp_dict:
 						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
 
-				svd_bank_name = inspiral_pipe.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = svdJob.output_path)
+				svd_bank_name = dagparts.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = svdJob.output_path)
 				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
 					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
 
-				svdnode = inspiral_pipe.generic_node(svdJob, dag,
+				svdnode = dagparts.DAGNode(svdJob, dag,
 					parent_nodes = parent_nodes,
 					opts = {"svd-tolerance":options.tolerance,
 						"flow":options.flow,
@@ -233,7 +233,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 	#
 
 	primary_ifo = bank_cache.keys()[0]
-	inspiral_pipe.generic_node(plotBanksJob, dag,
+	dagparts.DAGNode(plotBanksJob, dag,
 				parent_nodes = sum(svd_nodes.values(),[]),
 				opts = {"plot-template-bank":"",
 					"output-dir": output_dir},
@@ -323,8 +323,8 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
 					# setup output names
 					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%s_LLOID' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [inspiral_pipe.T050017_filename(ifos, '%s_DIST_STATS' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [dagparts.T050017_filename(ifos, '%s_DIST_STATS' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
 
 					for bgbin in bgbin_indices:
 						bgbin_chunk_map.setdefault(bgbin, chunk_counter)
@@ -342,7 +342,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
 
 					# non injection node
-					noninjnode = inspiral_pipe.generic_node(gstlalInspiralJob, dag,
+					noninjnode = dagparts.DAGNode(gstlalInspiralJob, dag,
 							parent_nodes = sum((svd_node_list[numchunks*chunk_counter:numchunks*(chunk_counter+1)] for svd_node_list in svd_nodes.values()),[]),
 							opts = {"psd-fft-length":options.psd_fft_length,
 								"ht-gate-threshold":threshold_values,
@@ -350,7 +350,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 								"gps-start-time":int(seg[0]),
 								"gps-end-time":int(seg[1]),
 								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-								"tmp-space":inspiral_pipe.condor_scratch_space(),
+								"tmp-space":dagparts.condor_scratch_space(),
 								"track-psd":"",
 								"control-peak-time":options.control_peak_time,
 								"coincidence-threshold":options.coincidence_threshold,
@@ -392,7 +392,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
-					output_names = [inspiral_pipe.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), seg, '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), seg, '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
 					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
 					try:
 						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
@@ -415,14 +415,14 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
 
 					# setup injection node
-					injnode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, parent_nodes = parents,
+					injnode = dagparts.DAGNode(gstlalInspiralInjJob, dag, parent_nodes = parents,
 							opts = {"psd-fft-length":options.psd_fft_length,
 								"ht-gate-threshold":threshold_values,
 								"frame-segments-name":options.frame_segments_name,
 								"gps-start-time":int(seg[0]),
 								"gps-end-time":int(seg[1]),
 								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-								"tmp-space":inspiral_pipe.condor_scratch_space(),
+								"tmp-space":dagparts.condor_scratch_space(),
 								"track-psd":"",
 								"control-peak-time":options.control_peak_time,
 								"coincidence-threshold":options.coincidence_threshold,
@@ -441,7 +441,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 									"injections": injections
 								},
 							input_cache_files = {"svd-bank-cache":svd_names},
-							input_cache_file_name = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(filename) for filename in svd_names], '.cache').replace('SVD', 'SVD_%s' % sim_name),
+							input_cache_file_name = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(filename) for filename in svd_names], '.cache').replace('SVD', 'SVD_%s' % sim_name),
 							output_cache_files = {
 									"output-cache":output_names
 								}
@@ -517,35 +517,35 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		# FIXME we keep this here in case we someday want to have a
 		# mass bin dependent prior, but it really doesn't matter for
 		# the time being.
-		priornode = inspiral_pipe.generic_node(createPriorDistStatsJob, dag,
+		priornode = dagparts.DAGNode(createPriorDistStatsJob, dag,
 				parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node,
 				opts = {"instrument":instrument_set, "background-prior":1, "min-instruments":options.min_instruments},
 				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file},
-				output_files = {"write-likelihood":inspiral_pipe.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
+				output_files = {"write-likelihood":dagparts.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
 		# for a given bin marginalized over time. This is all that will
 		# be needed to compute the likelihood
-		diststats_per_bin_node = inspiral_pipe.generic_node(marginalizeJob, dag,
+		diststats_per_bin_node = dagparts.DAGNode(marginalizeJob, dag,
 			parent_nodes = [priornode] + parents,
 			opts = {"marginalize":"ranking-stat"},
 			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
-			output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = marginalizeJob.output_path)},
-			input_cache_file_name = inspiral_pipe.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.cache')
+			output_files = {"output":dagparts.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = marginalizeJob.output_path)},
+			input_cache_file_name = dagparts.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.cache')
 			)
 
-		calcranknode = inspiral_pipe.generic_node(calcRankPDFsJob, dag,
+		calcranknode = dagparts.DAGNode(calcRankPDFsJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				opts = {"ranking-stat-samples":options.ranking_stat_samples},
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsJob.output_path)}
+				output_files = {"output":dagparts.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsJob.output_path)}
 			)
 
-		calcrankzerolagnode = inspiral_pipe.generic_node(calcRankPDFsWithZerolagJob, dag,
+		calcrankzerolagnode = dagparts.DAGNode(calcRankPDFsWithZerolagJob, dag,
 				parent_nodes = [diststats_per_bin_node],
 				opts = {"add-zerolag-to-background":"","ranking-stat-samples":options.ranking_stat_samples},
 				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":inspiral_pipe.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsWithZerolagJob.output_path)}
+				output_files = {"output":dagparts.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsWithZerolagJob.output_path)}
 			)
 
 		margnodes['%04d' %(n,)] = diststats_per_bin_node
@@ -554,9 +554,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		
 		# Break up the likelihood jobs into chunks to process fewer files, e.g, 16
 		likelihood_nodes.setdefault(None,[]).append(
-			[inspiral_pipe.generic_node(calcLikelihoodJob, dag,
+			[dagparts.DAGNode(calcLikelihoodJob, dag,
 				parent_nodes = [diststats_per_bin_node],
-				opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+				opts = {"tmp-space":dagparts.condor_scratch_space()},
 				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
 				input_cache_files = {"input-cache":chunked_inputs}
 				) for chunked_inputs in chunks(inputs, 16)]
@@ -577,9 +577,9 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				likelihood_url = diststats[0]
 			# Break up the likelihood jobs into chunks to process fewer files, e.g., 16
 			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
-				[inspiral_pipe.generic_node(calcLikelihoodJobInj, dag,
+				[dagparts.DAGNode(calcLikelihoodJobInj, dag,
 					parent_nodes = parents,
-					opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+					opts = {"tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"likelihood-url":likelihood_url},
 					input_cache_files = {"input-cache":chunked_inputs}
 					) for chunked_inputs in chunks(inputs, 16)]
@@ -597,8 +597,8 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		if inj is None:
 			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
 			for n in range(0, len(inputs), files_to_group):
-				merge_nodes.append(inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = nodes,
-					opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				merge_nodes.append(dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = nodes,
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"":inputs[n:n+files_to_group]}
 					)
 				)
@@ -608,24 +608,24 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 
 			# Merging all the dbs from the same sub bank
 			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
-				db = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite') 
+				db = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite') 
 				db = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(db).description[:4]]), db)
-				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = merge_nodes,
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":inputs},
 					output_files = {"database":db},
 					input_cache_file_name = os.path.basename(db).replace('.sqlite','.cache')
 				)
-				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"":db}
 				)
 				outnodes.setdefault(None, []).append(sqlitenode)
 		else:
 			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
 			for n in range(0, len(inputs), files_to_group):
-				merge_nodes.append(inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = nodes,
-					opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				merge_nodes.append(dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = nodes,
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"":inputs[n:n+files_to_group]}
 					)
 				)
@@ -635,16 +635,16 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 
 			# Merging all the dbs from the same sub bank and injection run
 			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
-				injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
+				injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				injdb = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(injdb).description[:4]]), injdb)
-				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = merge_nodes,
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":inputs},
 					output_files = {"database":injdb},
 					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
 				)
-				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"":injdb}
 				)
 				outnodes.setdefault(sim_tag_from_inj_file(inj), []).append(sqlitenode)
@@ -673,17 +673,17 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 		else:
 			for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
-				noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
+				noninjdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 				# merge all of the dbs from the same subbank
-				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":dbs},
 					output_files = {"database":noninjdb},
 					input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
 				)
 
-				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"":noninjdb}
 				)
 
@@ -694,17 +694,17 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 					bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
 
 				for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
-					injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
+					injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 					# merge all of the dbs from the same subbank
-					sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-						opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+					sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
+						opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 						input_cache_files = {"input-cache":dbs},
 						output_files = {"database":injdb},
 						input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
 					)
 
-					sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-						opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+					sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+						opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 						input_files = {"":injdb}
 					)
 
@@ -722,15 +722,15 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 			noninjdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
 
 			# merge all of the dbs from the same subbank
-			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 				input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
 				output_files = {"database":noninjdb},
 				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
 			)
 
-			sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+			sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 				input_files = {"":noninjdb}
 			)
 
@@ -742,15 +742,15 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 				injdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
 
 				# merge all of the dbs from the same subbank
-				sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 					input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
 					output_files = {"database":injdb},
 					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
 				)
 
-				sqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.injection_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"":injdb}
 				)
 
@@ -783,17 +783,17 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 			parents = []
 
 		# Merge the final non injection database into chunks
-		noninjdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+		noninjdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
+		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = parents,
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 			input_cache_files = {"input-cache": dbs},
 			output_files = {"database":noninjdb},
 			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
 		)
 
 		# cluster the final non injection database
-		noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+		noninjsqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"":noninjdb}
 		)
 		chunk_nodes.append(noninjsqlitenode)
@@ -807,9 +807,9 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		noninjdb = options.non_injection_db
 
 	else:
-		noninjdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+		noninjdb = dagparts.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
+		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = chunk_nodes,
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 			input_files = {"": (vetoes + [options.frame_segments_file])},
 			input_cache_files = {"input-cache": [node.input_files[""] for node in chunk_nodes]},
 			output_files = {"database":noninjdb},
@@ -817,12 +817,12 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		)
 
 		# cluster the final non injection database
-		noninjsqlitenode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+		noninjsqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"":noninjdb}
 		)
 
-		cpnode = inspiral_pipe.generic_node(cpJob, dag, parent_nodes = [noninjsqlitenode],
+		cpnode = dagparts.DAGNode(cpJob, dag, parent_nodes = [noninjsqlitenode],
 			input_files = {"":"%s %s" % (noninjdb, noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
 		)
 
@@ -848,20 +848,20 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 				parents = []
 
 			# Setup the final output names, etc.
-			injdb = inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
+			injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 
 
 			# merge
-			sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = parents,
-				opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = parents,
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 				input_cache_files = {"input-cache":dbs},
 				output_files = {"database":injdb},
 				input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
 			)
 
 			# cluster
-			clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+			clusternode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 				input_files = {"":injdb}
 			)
 
@@ -870,7 +870,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 
 		# Setup the final output names, etc.
-		injdb = inspiral_pipe.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), boundary_seg, '.sqlite')
+		injdb = dagparts.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), boundary_seg, '.sqlite')
 		injdbs.append(injdb)
 		injxml = injdb.replace('.sqlite','.xml.gz')
 
@@ -885,8 +885,8 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		xml_input = injxml
 
 		# merge
-		sqlitenode = inspiral_pipe.generic_node(toSqliteJob, dag, parent_nodes = chunk_nodes + ligolw_add_nodes,
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = chunk_nodes + ligolw_add_nodes,
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 			input_files = {"": (vetoes + [options.frame_segments_file, injections])},
 			input_cache_files = {"input-cache": [node.input_files[""] for node in chunk_nodes]},
 			output_files = {"database":injdb},
@@ -894,30 +894,30 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		)
 
 		# cluster
-		clusternode = inspiral_pipe.generic_node(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":inspiral_pipe.condor_scratch_space()},
+		clusternode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"":injdb}
 		)
 
 
-		clusternode = inspiral_pipe.generic_node(toXMLJob, dag, parent_nodes = [clusternode],
-			opts = {"tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+		clusternode = dagparts.DAGNode(toXMLJob, dag, parent_nodes = [clusternode],
+			opts = {"tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 			output_files = {"extract":injxml},
 			input_files = {"database":injdb}
 		)
 
-		inspinjnode = inspiral_pipe.generic_node(ligolwInspinjFindJob, dag, parent_nodes = [clusternode],
+		inspinjnode = dagparts.DAGNode(ligolwInspinjFindJob, dag, parent_nodes = [clusternode],
 			opts = {"time-window":0.9},
 			input_files = {"":injxml}
 		)
 
-		sqlitenode = inspiral_pipe.generic_node(toSqliteNoCacheJob, dag, parent_nodes = [inspinjnode],
-			opts = {"replace":"", "tmp-space":inspiral_pipe.condor_scratch_space(), "ilwdchar-compat":""},
+		sqlitenode = dagparts.DAGNode(toSqliteNoCacheJob, dag, parent_nodes = [inspinjnode],
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
 			output_files = {"database":injdb},
 			input_files = {"":xml_input}
 		)
 
-		cpnode = inspiral_pipe.generic_node(cpJob, dag, parent_nodes = [sqlitenode],
+		cpnode = dagparts.DAGNode(cpJob, dag, parent_nodes = [sqlitenode],
 			input_files = {"":"%s %s" % (injdb, injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
 		)
 			
@@ -945,8 +945,8 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 	margzerolagnodes = []
 	margnum = 16
 	for i,n in enumerate(range(0, len(margin), margnum)):
-		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
-		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = parents,
+		margout.append(dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
+		margnodes.append(dagparts.DAGNode(marginalizeJob, dag, parent_nodes = parents,
 			opts = {"marginalize":"ranking-stat-pdf"},
 			output_files = {"output":margout[-1]}, 
 			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
@@ -954,8 +954,8 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		))
 
 		if rankpdf_zerolag_nodes:
-			margzerolagout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]], '.xml.gz', path = marginalizeWithZerolagJob.output_path))
-			margzerolagnodes.append(inspiral_pipe.generic_node(marginalizeWithZerolagJob, dag, parent_nodes = parents_zerolag,
+			margzerolagout.append(dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]], '.xml.gz', path = marginalizeWithZerolagJob.output_path))
+			margzerolagnodes.append(dagparts.DAGNode(marginalizeWithZerolagJob, dag, parent_nodes = parents_zerolag,
 				opts = {"marginalize":"ranking-stat-pdf"},
 				output_files = {"output":margzerolagout[-1]},
 				input_cache_files = {"likelihood-cache":margin_zerolag[n:n+margnum]},
@@ -971,7 +971,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		marginalized_likelihood_with_zerolag_file = options.marginalized_likelihood_with_zerolag_file
 
 	else:
-		margnode = inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = margnodes,
+		margnode = dagparts.DAGNode(marginalizeJob, dag, parent_nodes = margnodes,
 			opts = {"marginalize":"ranking-stat-pdf"},
 			output_files = {"output":"marginalized_likelihood.xml.gz"},
 			input_cache_files = {"likelihood-cache":margout},
@@ -980,7 +980,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		parents = [margnode] + final_sqlite_nodes
 		marginalized_likelihood_file = margnode.output_files["output"]
 
-		margnode = inspiral_pipe.generic_node(marginalizeWithZerolagJob, dag, parent_nodes = margzerolagnodes,
+		margnode = dagparts.DAGNode(marginalizeWithZerolagJob, dag, parent_nodes = margzerolagnodes,
 			opts = {"marginalize":"ranking-stat-pdf"},
 			output_files = {"output":"marginalized_likelihood_with_zerolag.xml.gz"},
 			input_cache_files = {"likelihood-cache":margzerolagout},
@@ -990,13 +990,13 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 		marginalized_likelihood_with_zerolag_file = margnode.output_files["output"]
 	
 	
-	farnode = inspiral_pipe.generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents,
-		opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+	farnode = dagparts.DAGNode(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents,
+		opts = {"tmp-space":dagparts.condor_scratch_space()},
 		input_files = {"background-bins-file":marginalized_likelihood_file, "injection-db":injdbs, "non-injection-db":noninjdb}
 	)
 	
-	inspiral_pipe.generic_node(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents_zerolag,
-		opts = {"tmp-space":inspiral_pipe.condor_scratch_space()},
+	dagparts.DAGNode(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents_zerolag,
+		opts = {"tmp-space":dagparts.condor_scratch_space()},
 		input_files = {"background-bins-file":marginalized_likelihood_with_zerolag_file, "injection-db":[injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL') for injdb in injdbs], "non-injection-db":noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL')}
 	)
 
@@ -1151,7 +1151,7 @@ def parse_command_line():
 
 
 	#FIXME a hack to find the sql paths
-	share_path = os.path.split(inspiral_pipe.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
+	share_path = os.path.split(dagparts.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
 	options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
 	options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
 
@@ -1201,7 +1201,7 @@ try:
 	os.mkdir("logs")
 except:
 	pass
-dag = inspiral_pipe.DAG("trigger_pipe")
+dag = dagparts.DAG("trigger_pipe")
 
 if options.max_inspiral_jobs is not None:
 	dag.add_maxjobs_category("INSPIRAL", options.max_inspiral_jobs)
@@ -1244,46 +1244,46 @@ if options.dist_stats_cache:
 
 elif options.lloid_cache:
 	# analysis starting at merger step
-	marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	marginalizeWithZerolagJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	marginalizeJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	marginalizeWithZerolagJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 
 else:
 	# set up jobs only needed for zerolag run
-	refPSDJob = inspiral_pipe.generic_job("gstlal_reference_psd", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
-	medianPSDJob = inspiral_pipe.generic_job("gstlal_median_of_psds", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	plotBanksJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_banks", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	svdJob = inspiral_pipe.generic_job("gstlal_svd_bank", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	modelJob = inspiral_pipe.generic_job("gstlal_inspiral_mass_model", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	modelAddJob = inspiral_pipe.generic_job("gstlal_inspiral_add_mass_models", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	horizonJob = inspiral_pipe.generic_job("gstlal_plot_psd_horizon", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	gstlalInspiralJob = inspiral_pipe.generic_job(options.inspiral_executable, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
-	createPriorDistStatsJob = inspiral_pipe.generic_job("gstlal_inspiral_create_prior_diststats", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcRankPDFsJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcRankPDFsWithZerolagJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_rank_pdfs", tag_base = "gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcLikelihoodJob = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	marginalizeJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	marginalizeWithZerolagJob = inspiral_pipe.generic_job("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	refPSDJob = dagparts.DAGJob("gstlal_reference_psd", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
+	medianPSDJob = dagparts.DAGJob("gstlal_median_of_psds", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	plotBanksJob = dagparts.DAGJob("gstlal_inspiral_plot_banks", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	svdJob = dagparts.DAGJob("gstlal_svd_bank", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	modelJob = dagparts.DAGJob("gstlal_inspiral_mass_model", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	modelAddJob = dagparts.DAGJob("gstlal_inspiral_add_mass_models", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	horizonJob = dagparts.DAGJob("gstlal_plot_psd_horizon", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	gstlalInspiralJob = dagparts.DAGJob(options.inspiral_executable, condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+	createPriorDistStatsJob = dagparts.DAGJob("gstlal_inspiral_create_prior_diststats", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcRankPDFsJob = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcRankPDFsWithZerolagJob = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", tag_base = "gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
+	calcLikelihoodJob = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	marginalizeJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+	marginalizeWithZerolagJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
 
-gstlalInspiralInjJob = inspiral_pipe.generic_job(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
-injSplitterJob = inspiral_pipe.generic_job("gstlal_injsplitter", tag_base="gstlal_injsplitter", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-gstlalInjSnrJob = inspiral_pipe.generic_job("gstlal_inspiral_injection_snr", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
-ligolwAddJob = inspiral_pipe.generic_job("ligolw_add", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-calcLikelihoodJobInj = inspiral_pipe.generic_job("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-gstlalInspiralComputeFarFromSnrChisqHistogramsJob = inspiral_pipe.generic_job("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-ligolwInspinjFindJob = inspiral_pipe.generic_job("lalapps_inspinjfind", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-toSqliteJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-toSqliteNoCacheJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml_inj_final", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-toXMLJob = inspiral_pipe.generic_job("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-lalappsRunSqliteJob = inspiral_pipe.generic_job("lalapps_run_sqlite", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotSummaryIsolatePrecessionJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_isolated_precession", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotIndividualInjectionsSummaryJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotIndividualInjectionsSummaryIsolatePrecessionJob = inspiral_pipe.generic_job("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_isolated_precession_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotSensitivityJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_sensitivity", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-pageJob = inspiral_pipe.generic_job("gstlal_inspiral_summary_page", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotbackgroundJob = inspiral_pipe.generic_job("gstlal_inspiral_plot_background", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-cpJob = inspiral_pipe.generic_job("cp", tag_base = "cp", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
-rmJob = inspiral_pipe.generic_job("rm", tag_base = "rm_intermediate_merger_products", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+gstlalInspiralInjJob = dagparts.DAGJob(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
+injSplitterJob = dagparts.DAGJob("gstlal_injsplitter", tag_base="gstlal_injsplitter", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+gstlalInjSnrJob = dagparts.DAGJob("gstlal_inspiral_injection_snr", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
+ligolwAddJob = dagparts.DAGJob("ligolw_add", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+calcLikelihoodJobInj = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+gstlalInspiralComputeFarFromSnrChisqHistogramsJob = dagparts.DAGJob("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+ligolwInspinjFindJob = dagparts.DAGJob("lalapps_inspinjfind", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+toSqliteJob = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+toSqliteNoCacheJob = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml_inj_final", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+toXMLJob = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+lalappsRunSqliteJob = dagparts.DAGJob("lalapps_run_sqlite", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+plotSummaryJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+plotSummaryIsolatePrecessionJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_isolated_precession", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+plotIndividualInjectionsSummaryJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+plotIndividualInjectionsSummaryIsolatePrecessionJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_isolated_precession_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+plotSensitivityJob = dagparts.DAGJob("gstlal_inspiral_plot_sensitivity", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+pageJob = dagparts.DAGJob("gstlal_inspiral_summary_page", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+plotbackgroundJob = dagparts.DAGJob("gstlal_inspiral_plot_background", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
+cpJob = dagparts.DAGJob("cp", tag_base = "cp", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+rmJob = dagparts.DAGJob("rm", tag_base = "rm_intermediate_merger_products", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 
 #
 # Get mchirp boundaries of banks, maximum duration of templates, and analysis segments
@@ -1326,10 +1326,10 @@ elif options.reference_psd is None:
 	# plot the horizon distance
 	#
 
-	inspiral_pipe.generic_node(horizonJob, dag,
+	dagparts.DAGNode(horizonJob, dag,
 		parent_nodes = psd_nodes.values(),
 		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-		output_files = {"":inspiral_pipe.T050017_filename(instruments, "HORIZON", boundary_seg, '.png', path = output_dir)}
+		output_files = {"":dagparts.T050017_filename(instruments, "HORIZON", boundary_seg, '.png', path = output_dir)}
 	)
 
 	#
@@ -1338,10 +1338,10 @@ elif options.reference_psd is None:
 
 	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_node = \
-		inspiral_pipe.generic_node(medianPSDJob, dag,
+		dagparts.DAGNode(medianPSDJob, dag,
 			parent_nodes = psd_nodes.values(),
 			input_files = {"input-cache": "reference_psd.cache"},
-			output_files = {"output-name": inspiral_pipe.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([medianPSDJob.output_path, str(int(boundary_seg[0]))[:5]]))}
+			output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([medianPSDJob.output_path, str(int(boundary_seg[0]))[:5]]))}
 		)
 
 	ref_psd = median_psd_node.output_files["output-name"]
@@ -1368,7 +1368,7 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 	for inj in options.injections:
 		inj_snr_nodes = []
 
-		inj_splitter_node = inspiral_pipe.generic_node(injSplitterJob, dag, parent_nodes=[],
+		inj_splitter_node = dagparts.DAGNode(injSplitterJob, dag, parent_nodes=[],
 			opts = {"output-path":injSplitterJob.output_path, "usertag": sim_tag_from_inj_file(inj.split(":")[-1]), "nsplit": num_split_inj_snr_jobs},
 			input_files = {"": inj.split(":")[-1]}
 		)
@@ -1376,7 +1376,7 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 
 		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 		for i in xrange(num_split_inj_snr_jobs):
-			injSNRnode = inspiral_pipe.generic_node(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
+			injSNRnode = dagparts.DAGNode(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
 				opts = {"flow":options.flow,"fmax":options.fmax},
 				input_files = {"injection-file": "%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i), "reference-psd-cache": "reference_psd.cache"
 				}
@@ -1384,7 +1384,7 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 			injSNRnode.set_priority(98)
 			inj_snr_nodes.append(injSNRnode)
 
-		ligolw_add_nodes.append(inspiral_pipe.generic_node(ligolwAddJob, dag, parent_nodes=inj_snr_nodes,
+		ligolw_add_nodes.append(dagparts.DAGNode(ligolwAddJob, dag, parent_nodes=inj_snr_nodes,
 			input_files = {"": ' '.join(["%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i) for i in xrange(num_split_inj_snr_jobs)])},
 			opts = {"ilwdchar-compat":""},
 			output_files = {"output": inj.split(":")[-1]}
@@ -1439,44 +1439,44 @@ farnode, margfiles_to_delete = compute_FAP(marginalizeJob, marginalizeWithZerola
 # make summary plots
 plotnodes = []
 
-plotnodes.append(inspiral_pipe.generic_node(plotSummaryJob, dag, parent_nodes=[farnode],
-	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "remove-precession": ""},
+plotnodes.append(dagparts.DAGNode(plotSummaryJob, dag, parent_nodes=[farnode],
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": dagparts.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "remove-precession": ""},
 	input_files = {"":[noninjdb] + injdbs}
 ))
 
-plotnodes.append(inspiral_pipe.generic_node(plotSummaryIsolatePrecessionJob, dag, parent_nodes=[farnode],
-	opts = {"segments-name": options.frame_segments_name, "tmp-space": inspiral_pipe.condor_scratch_space(), "user-tag": "PRECESSION_LLOID_COMBINED", "plot-group":1, "output-dir": output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "isolate-precession": ""},
+plotnodes.append(dagparts.DAGNode(plotSummaryIsolatePrecessionJob, dag, parent_nodes=[farnode],
+	opts = {"segments-name": options.frame_segments_name, "tmp-space": dagparts.condor_scratch_space(), "user-tag": "PRECESSION_LLOID_COMBINED", "plot-group":1, "output-dir": output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "isolate-precession": ""},
 	input_files = {"":[noninjdb] + injdbs}
 ))
 
 for injdb in injdbs:
-	plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryJob, dag, parent_nodes=[farnode],
-		opts = {"segments-name": options.frame_segments_name, "tmp-space":inspiral_pipe.condor_scratch_space(), "user-tag":injdb.replace(".sqlite","").split("-")[1], "plot-group":1, "output-dir":output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "remove-precession": ""},
+	plotnodes.append(dagparts.DAGNode(plotIndividualInjectionsSummaryJob, dag, parent_nodes=[farnode],
+		opts = {"segments-name": options.frame_segments_name, "tmp-space":dagparts.condor_scratch_space(), "user-tag":injdb.replace(".sqlite","").split("-")[1], "plot-group":1, "output-dir":output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "remove-precession": ""},
 		input_files = {"":[noninjdb] + [injdb]}
 	))
 
-	plotnodes.append(inspiral_pipe.generic_node(plotIndividualInjectionsSummaryIsolatePrecessionJob, dag, parent_nodes=[farnode],
-		opts = {"segments-name": options.frame_segments_name, "tmp-space":inspiral_pipe.condor_scratch_space(), "user-tag": injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID","PRECESSION_LLOID"), "plot-group":1, "output-dir":output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "isolate-precession": ""},
+	plotnodes.append(dagparts.DAGNode(plotIndividualInjectionsSummaryIsolatePrecessionJob, dag, parent_nodes=[farnode],
+		opts = {"segments-name": options.frame_segments_name, "tmp-space":dagparts.condor_scratch_space(), "user-tag": injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID","PRECESSION_LLOID"), "plot-group":1, "output-dir":output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "isolate-precession": ""},
 		input_files = {"":[noninjdb] + [injdb]}
 	))
 
 # make sensitivity plots
-plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
-	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-source-type":"", "dist-bins":200, "data-segments-name":"datasegments"},
+plotnodes.append(dagparts.DAGNode(plotSensitivityJob, dag, parent_nodes=[farnode],
+	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":dagparts.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-source-type":"", "dist-bins":200, "data-segments-name":"datasegments"},
 	input_files = {"zero-lag-database":noninjdb, "":injdbs}
 ))
 for injdb in injdbs:
-	plotnodes.append(inspiral_pipe.generic_node(plotSensitivityJob, dag, parent_nodes=[farnode],
-		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":inspiral_pipe.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-source-type":"", "dist-bins":200, "data-segments-name":"datasegments"},
+	plotnodes.append(dagparts.DAGNode(plotSensitivityJob, dag, parent_nodes=[farnode],
+		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":dagparts.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-source-type":"", "dist-bins":200, "data-segments-name":"datasegments"},
 		input_files = {"zero-lag-database":noninjdb, "":injdb}
 	))
 
 
 # make background plots
-plotnodes.append(inspiral_pipe.generic_node(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
+plotnodes.append(dagparts.DAGNode(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
 
 # make a web page
-inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes, 
+dagparts.DAGNode(pageJob, dag, parent_nodes = plotnodes,
 	opts = {"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED", "PRECESSION_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs] + [injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID", "PRECESSION_LLOID") for injdb in injdbs]}
 )
 
@@ -1484,12 +1484,12 @@ inspiral_pipe.generic_node(pageJob, dag, parent_nodes = plotnodes,
 # rm intermediate merger products
 #
 for db in dbs_to_delete:
-	inspiral_pipe.generic_node(rmJob, dag, parent_nodes = plotnodes,
+	dagparts.DAGNode(rmJob, dag, parent_nodes = plotnodes,
 		input_files = {"": db}
 	)
 
 for margfile in margfiles_to_delete:
-	inspiral_pipe.generic_node(rmJob, dag, parent_nodes = plotnodes,
+	dagparts.DAGNode(rmJob, dag, parent_nodes = plotnodes,
 		input_files = {"": margfile}
 	)
 

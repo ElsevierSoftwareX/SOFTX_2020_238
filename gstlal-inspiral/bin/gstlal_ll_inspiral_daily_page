@@ -28,7 +28,7 @@ from gstlal import aggregator
 import lal
 from lal import LIGOTimeGPS
 from multiprocessing import Pool
-from gstlal import inspiral_pipe
+from gstlal import dagparts
 from copy import copy
 
 def now():
@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
 		noninjdball = os.path.join(os.path.join(options.directory, d), 'H1L1-ALL_LLOID-%s00000-100000.sqlite' % (d,))
 		for injection_file in inj_file_bins:
-			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), inspiral_pipe.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file), (int(d) * 100000, (int(d) + 1) * 100000), '.sqlite'))
+			injdball[injection_file] = os.path.join(os.path.join(options.directory, d), dagparts.T050017_filename(instruments, "ALL_LLOID_%s" % injtag(injection_file), (int(d) * 100000, (int(d) + 1) * 100000), '.sqlite'))
 
 		if float(now()) - float("%s00000" % d) > 125000 and all([os.path.exists(f) for f in injdball.values()]+[os.path.exists(noninjdball)]):
 			print >> sys.stderr, "directory is %s %s greater than 125000 seconds old and has already been processed...continuing" % (n,d)

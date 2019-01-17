@@ -66,14 +66,14 @@ from lal.utils import CacheEntry
 # }
 # @enddot
 
-class lvalert_listen_job(inspiral_pipe.generic_job):
+class lvalert_listen_job(dagparts.DAGJob):
 	"""
 	A lvalert_listen_job
 	"""
 	def __init__(self, program, gracedb_service_url = "https://gracedb.ligo.org/api/", gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), inj_progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), condor_commands = {}, inj_gracedb_group = "CBC", inj_gracedb_search = "LowMass", inj_gracedb_pipeline = "gstlal", inj_gracedb_service_url = "https://simdb.cgca.uwm.edu/api/", injections = False):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
 
 		# produce the lvalert processor
 
@@ -116,14 +116,14 @@ class lvalert_listen_node(pipeline.CondorDAGNode):
 		dag.add_node(self)
 
 
-class zookeeper_job(inspiral_pipe.generic_job):
+class zookeeper_job(dagparts.DAGJob):
 	"""
 	A zookeeper job
 	"""
 	def __init__(self, program = "zookeeper-server-start.sh", datadir = os.path.join(os.getcwd(), "zookeeper"), port = 2181, maxclients = 0, condor_commands = {}):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
 
 		try:
 			os.mkdir(datadir)
@@ -142,14 +142,14 @@ maxClientCnxns=%d
 		f.close()
 
 
-class kafka_job(inspiral_pipe.generic_job):
+class kafka_job(dagparts.DAGJob):
 	"""
 	A kafka job
 	"""
 	def __init__(self, program = "kafka-server-start.sh", logdir = os.path.join(os.getcwd(), "kafka"), host = "10.14.0.112:9092", zookeeperaddr = "localhost:2181", condor_commands = {}):
 		"""
 		"""
-		inspiral_pipe.generic_job.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
 
 		try:
 			os.mkdir(logdir)
@@ -314,44 +314,44 @@ try: os.mkdir("logs")
 except: pass
 try: os.mkdir("gracedb")
 except: pass
-dag = dagparts.CondorDAG("trigger_pipe")
+dag = dagparts.DAG("trigger_pipe")
 
 #
 # setup the job classes
 #
 
-gstlalInspiralJob = inspiral_pipe.generic_job('gstlal_inspiral', condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+gstlalInspiralJob = dagparts.DAGJob('gstlal_inspiral', condor_commands = dagparts.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 if inj_channel_dict:
-	gstlalInspiralInjJob = inspiral_pipe.generic_job('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+	gstlalInspiralInjJob = dagparts.DAGJob('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
 
 # A local universe job that will run in a loop marginalizing all of the likelihoods
-margJob = inspiral_pipe.generic_job('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
+margJob = dagparts.DAGJob('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
 
 # an lvalert_listen job
-listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
+listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
 
 # Zookeeper and Kafka Jobs and Nodes which only get set if you specify the kafka server
 if options.output_kafka_server is not None:
-	zooJob = zookeeper_job(condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command), port = options.zookeeper_port)
-	kafkaJob = kafka_job(condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command), host = options.output_kafka_server, zookeeperaddr = "localhost:%d" % options.zookeeper_port)
-	zooNode = inspiral_pipe.generic_node(zooJob, dag, [], opts = {"":"zookeeper.properties"})
-	kafkaNode = inspiral_pipe.generic_node(kafkaJob, dag, [], opts = {"":"kafka.properties"})
+	zooJob = zookeeper_job(condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), port = options.zookeeper_port)
+	kafkaJob = kafka_job(condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), host = options.output_kafka_server, zookeeperaddr = "localhost:%d" % options.zookeeper_port)
+	zooNode = dagparts.DAGNode(zooJob, dag, [], opts = {"":"zookeeper.properties"})
+	kafkaNode = dagparts.DAGNode(kafkaJob, dag, [], opts = {"":"kafka.properties"})
 
 # aggregator job
-aggJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_aggregator",  condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+aggJob = dagparts.DAGJob("gstlal_ll_inspiral_aggregator",  condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 # state job
-analysisStateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_state", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command)) 
+analysisStateJob = dagparts.DAGJob("gstlal_ll_inspiral_state", condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command)) 
 
 # Summary page job
-pageJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
+pageJob = dagparts.DAGJob("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
 
 # DQ job
-dqJob = inspiral_pipe.generic_job("gstlal_ll_dq", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+dqJob = dagparts.DAGJob("gstlal_ll_dq", condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 if options.state_backup_destination:
 	# State saving job 
-	stateJob = inspiral_pipe.generic_job("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.local_condor_command))
+	stateJob = dagparts.DAGJob("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
 
 #
 # Setup the Node classes
@@ -390,7 +390,7 @@ for ifo in channel_dict:
 		"out-path": outpath
 		}
 	common_opts.update(datasource_opts)
-	inspiral_pipe.generic_node(dqJob, dag, [], opts = common_opts)
+	dagparts.DAGNode(dqJob, dag, [], opts = common_opts)
 
 #
 # loop over banks to run gstlal inspiral pre clustering and far computation
@@ -445,7 +445,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		"dq-vector-on-bits":options.dq_vector_on_bits,
 		"dq-vector-off-bits":options.dq_vector_off_bits,
 		"svd-bank":svd_bank_string,
-		"tmp-space":inspiral_pipe.condor_scratch_space(),
+		"tmp-space":dagparts.condor_scratch_space(),
 		"track-psd":"",
 		"control-peak-time":options.control_peak_time,
 		"coincidence-threshold":options.coincidence_threshold,
@@ -464,7 +464,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		}
 	common_opts.update(datasource_opts)
 
-	inspNode = inspiral_pipe.generic_node(gstlalInspiralJob, dag, [],
+	inspNode = dagparts.DAGNode(gstlalInspiralJob, dag, [],
 		opts = common_opts,
 		input_files = {
 			"ranking-stat-input":[likefile],
@@ -507,7 +507,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"dq-vector-on-bits":options.inj_dq_vector_on_bits,
 			"dq-vector-off-bits":options.inj_dq_vector_off_bits,
 			"svd-bank":svd_bank_string,
-			"tmp-space":inspiral_pipe.condor_scratch_space(),
+			"tmp-space":dagparts.condor_scratch_space(),
 			"track-psd":"",
 			"control-peak-time":options.control_peak_time,
 			"coincidence-threshold":options.coincidence_threshold,
@@ -524,7 +524,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"time-slide-file":options.time_slide_file
 			}
 		common_opts.update(datasource_opts)
-		inspInjNode = inspiral_pipe.generic_node(gstlalInspiralInjJob, dag, [],
+		inspInjNode = dagparts.DAGNode(gstlalInspiralInjJob, dag, [],
 			opts = common_opts,
 			input_files = {
 				"ranking-stat-input":[likefile],
@@ -539,7 +539,7 @@ def groups(l, n):
 	for i in xrange(0, len(l), n):
 		yield l[i:i+n]
 
-margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
+margNode = dagparts.DAGNode(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
 #
 # FIXME by default the inspiral jobs advertise the current directory as their
@@ -547,27 +547,27 @@ margNode = inspiral_pipe.generic_node(margJob, dag, [], opts = {}, input_files =
 #
 
 snr_routes = ["%s_snr_history" % ifo for ifo in channel_dict]
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": snr_routes, "kafka-server": options.output_kafka_server})
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["likelihood_history", "snr_history", "latency_history"], "kafka-server": options.output_kafka_server})
-aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history"], "data-type":["min"], "kafka-server": options.output_kafka_server})
+aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": snr_routes, "kafka-server": options.output_kafka_server})
+aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["likelihood_history", "snr_history", "latency_history"], "kafka-server": options.output_kafka_server})
+aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history"], "data-type":["min"], "kafka-server": options.output_kafka_server})
 
-analysisStateNode = inspiral_pipe.generic_node(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2, "instrument": channel_dict.keys(), "kafka-server": options.output_kafka_server})
+analysisStateNode = dagparts.DAGNode(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2, "instrument": channel_dict.keys(), "kafka-server": options.output_kafka_server})
 
 # summary page
 if options.injection_file:
 
-	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":".", "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
+	pageNode = dagparts.DAGNode(pageJob, dag, [], opts = {"directory":".", "injection-file": options.injection_file, "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
 	for injfile, jobrange in inj_range_dict.items():
-		aggNode = inspiral_pipe.generic_node(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"%s_aggregator" % injfile.split(".")[0], "job-tag": os.getcwd(), "job-start": int(min(jobrange))+1000, "num-jobs": len(jobrange), "route": ["far_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
+		aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"%s_aggregator" % injfile.split(".")[0], "job-tag": os.getcwd(), "job-start": int(min(jobrange))+1000, "num-jobs": len(jobrange), "route": ["far_history", "likelihood_history", "snr_history"], "data-type":["max", "min"]})
 
 else:
 
-	pageNode = inspiral_pipe.generic_node(pageJob, dag, [], opts = {"directory":".", "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
+	pageNode = dagparts.DAGNode(pageJob, dag, [], opts = {"directory":".", "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
 
 
 if options.state_backup_destination:
-	stateNode = inspiral_pipe.generic_node(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
+	stateNode = dagparts.DAGNode(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
 
 
 #

@@ -173,7 +173,6 @@ from gstlal import far
 from gstlal import httpinterface
 from gstlal import hoftcache
 from gstlal import inspiral
-from gstlal import inspiral_pipe
 from gstlal import lloidhandler
 from gstlal import lloidparts
 from gstlal import pipeparts

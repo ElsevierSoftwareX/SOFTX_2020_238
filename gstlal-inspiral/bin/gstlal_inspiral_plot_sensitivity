@@ -32,7 +32,7 @@ import sys
 from optparse import OptionParser
 import itertools
 
-from gstlal import inspiral_pipe
+from gstlal import dagparts
 from gstlal import plotutil
 
 from glue.ligolw import ligolw
@@ -711,19 +711,19 @@ for bin_type in opts.bin_types:
         # save and close figures
         ifostr = "%s_%s" % (UL.searched_instruments, "".join(sorted(instr)))
 
-        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far.savefig(tag)
         pyplot.close(fig_far)
 
-        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_far_range.savefig(tag)
         pyplot.close(fig_far_range)
 
-        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_snr.savefig(tag)
         pyplot.close(fig_snr)
 
-        tag = inspiral_pipe.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
         fig_eff.savefig(tag)
         pyplot.close(fig_eff)
 

@@ -35,8 +35,7 @@ import lal
 from ligo import segments
 
 from gstlal import aggregator
-from gstlal import inspiral_pipe
-from gstlal import dagparts as gstlaldagparts
+from gstlal import dagparts
 
 from gstlal.fxtools import feature_extractor
 from gstlal.fxtools import multichannel_datasource
@@ -107,7 +106,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 			feature_end_time = min(int(seg[1]), options.gps_end_time)
 
 			feature_extractor_nodes[(ii, seg)] = \
-				inspiral_pipe.generic_node(feature_extractor_job, dag, parent_nodes = dep_nodes,
+				dagparts.DAGNode(feature_extractor_job, dag, parent_nodes = dep_nodes,
 					opts = {"gps-start-time":gps_start_time,
 						"gps-end-time":feature_end_time,
 						"feature-start-time":feature_start_time,
@@ -207,11 +206,11 @@ aggregator.makedir("logs")
 # set up dag and job classes
 #
 
-dag = inspiral_pipe.DAG("feature_extractor_pipe")
+dag = dagparts.DAG("feature_extractor_pipe")
 
 condor_options = {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
-condor_commands = inspiral_pipe.condor_command_dict_from_opts(options.condor_command, condor_options)
-feature_extractor_job = inspiral_pipe.generic_job("gstlal_feature_extractor", condor_commands = condor_commands)
+condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, condor_options)
+feature_extractor_job = dagparts.DAGJob("gstlal_feature_extractor", condor_commands = condor_commands)
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, data_source_info.seg, options.segment_length, max_template_length=max_template_length)
 
 #

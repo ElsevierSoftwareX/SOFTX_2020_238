@@ -63,7 +63,7 @@ from glue.ligolw import dbtables
 from glue.ligolw import lsctables
 from glue.ligolw.utils import segments as ligolw_segments
 from gstlal import far
-from gstlal import inspiral_pipe
+from gstlal import dagparts
 from gstlal import gviz_api
 from gstlal.plotutil import golden_ratio
 
@@ -1796,7 +1796,7 @@ seg_class.finish()
 #
 
 
-filename_template = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all(), "%s", path = options.output_dir)
+filename_template = dagparts.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOTSUMMARY_%s_%02d_%s_%s", contents.seglists.extent_all(), "%s", path = options.output_dir)
 while len(plots):
 	plot_group, plot = plots.pop(0)
 	for fig, filename_fragment, is_open_box in plot.finish():

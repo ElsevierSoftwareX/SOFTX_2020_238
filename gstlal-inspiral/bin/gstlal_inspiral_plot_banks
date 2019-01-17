@@ -55,7 +55,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.lal import CacheEntry
 
 from gstlal import svd_bank
-from gstlal import inspiral_pipe
+from gstlal import dagparts
 from gstlal.plotutil import golden_ratio
 
 #
@@ -348,7 +348,7 @@ lsctables.use_in(LIGOLWContentHandler)
 
 options, filenames = parse_command_line()
 
-filename_template = inspiral_pipe.T050017_filename('H1L1V1', 'GSTLAL_INSPIRAL_PLOTBANKS_%s', (0, 0), '.png',  path = options.output_dir)
+filename_template = dagparts.T050017_filename('H1L1V1', 'GSTLAL_INSPIRAL_PLOTBANKS_%s', (0, 0), '.png',  path = options.output_dir)
 
 # Make svd bank plots
 if options.plot_svd_bank:

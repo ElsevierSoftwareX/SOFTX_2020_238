@@ -61,7 +61,7 @@ from ligo.segments import utils as segmentsUtils
 
 from gstlal import far
 from gstlal import plotfar
-from gstlal import inspiral_pipe
+from gstlal import dagparts
 
 
 class SnrChiColourNorm(matplotlib.colors.Normalize):
@@ -334,14 +334,14 @@ for bin_index, rankingstat in enumerate(sorted(rankingstats.values(), key = lamb
 			fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, sngls = sngls)
 			if fig is None:
 				continue
-			plotname = inspiral_pipe.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_%s_SNRCHI2" % (options.user_tag, bin_index, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
+			plotname = dagparts.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_%s_SNRCHI2" % (options.user_tag, bin_index, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
 			if options.verbose:
 				print >>sys.stderr, "writing %s" % plotname
 			fig.savefig(plotname)
 
 	# candidate rates
 	fig = plotfar.plot_rates(rankingstat)
-	plotname = inspiral_pipe.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_RATES" % (options.user_tag, bin_index), seg, options.output_format, path = options.output_dir)
+	plotname = dagparts.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_RATES" % (options.user_tag, bin_index), seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
@@ -358,7 +358,7 @@ if options.plot_snr_snr_pdfs:
 		horizon_distances = rankingstat.numerator.SNRPDF.quantized_horizon_distances(horizon_distances)
 		fig = plotfar.plot_snr_joint_pdf(rankingstat.numerator.SNRPDF, instruments, horizon_distances, rankingstat.min_instruments, options.max_snr, sngls = sngls)
 		if fig is not None:
-			plotname = inspiral_pipe.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), seg, options.output_format, path = options.output_dir)
+			plotname = dagparts.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), seg, options.output_format, path = options.output_dir)
 			if options.verbose:
 				print >>sys.stderr, "writing %s" % plotname
 			fig.savefig(plotname)
@@ -368,7 +368,7 @@ if options.plot_snr_snr_pdfs:
 if rankingstatpdf is not None:
 	for Title, which, NAME in (("Noise", "noise", "NOISE"), ("Signal", "signal", "SIGNAL")):
 		fig = plotfar.plot_likelihood_ratio_pdf(rankingstatpdf, (options.min_log_lambda, options.max_log_lambda), Title, which = which)
-		plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_LIKELIHOOD_RATIO_PDF" % (options.user_tag, NAME), seg, options.output_format, path = options.output_dir)
+		plotname = dagparts.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_LIKELIHOOD_RATIO_PDF" % (options.user_tag, NAME), seg, options.output_format, path = options.output_dir)
 		if options.verbose:
 			print >>sys.stderr, "writing %s" % plotname
 		fig.savefig(plotname)
@@ -382,13 +382,13 @@ if rankingstatpdf is not None and rankingstatpdf.zero_lag_lr_lnpdf.array.any():
 	else:
 		xhi = options.max_log_lambda
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = zerolag_ln_lr, is_open_box = True)
-	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_openbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
+	plotname = dagparts.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_openbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
 
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = timeslide_ln_lr, is_open_box = False)
-	plotname = inspiral_pipe.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_closedbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
+	plotname = dagparts.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_closedbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
 		print >>sys.stderr, "writing %s" % plotname
 	fig.savefig(plotname)
