@@ -862,9 +862,11 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 					element->post_gap_transfer_functions[i] = element->transfer_functions[i]; \
 			} \
 			element->num_tfs_since_gap++; \
-		} else if (element->parallel_mode) \
-			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Waiting for the next cycle."); \
-		else \
+		} else if (element->parallel_mode) { \
+			GST_LOG_OBJECT(element, "Transfer function(s) computation failed. Using zeros."); \
+			memset(element->transfer_functions, 0, (element->channels - 1) * fd_tf_length * sizeof(*element->transfer_functions)); \
+			success = TRUE; \
+		} else \
 			GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. Trying again."); \
  \
 		if(num_ffts_in_avg_if_nogap == element->num_ffts) { \

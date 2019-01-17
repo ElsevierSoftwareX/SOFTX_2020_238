@@ -4,24 +4,26 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
-OBSRUN = O2
+OBSRUN = ER13
 
-START = $(shell echo 1185763328 - 715 | bc)
+START = $(shell echo 1229094912 - 715 | bc)
+#1229094912
 #1225967424
-#$(shell echo 1185763328 - 700 | bc)
-END = $(shell echo 1185767424 + 715 | bc)
+#1185763328
+END = $(shell echo 1229099008 + 715 | bc)
+#1229099008
 #1225968448
-#$(shell echo 1185767424 + 700 | bc)
-# 1185771520
+#1185771520
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 715
 PLOT_COOLDOWN_TIME = 715
 
 GDSCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1227048227.ini
-DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
+DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
+#../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
