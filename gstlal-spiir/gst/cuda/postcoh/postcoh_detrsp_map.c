@@ -197,7 +197,7 @@ create_detresponse_skymap(
 	return rsp_map;
 }
 
-static int to_xml(RspSkymap *rsp_map, const char *detrsp_fname, const char *detrsp_header_string, int compression) 
+static int to_xml(RspSkymap *rsp_map, const char *detrsp_fname, const char *detrsp_header_string, int is_coh, int compression) 
 {
     int rc;
     xmlTextWriterPtr writer;
@@ -293,21 +293,24 @@ static int to_xml(RspSkymap *rsp_map, const char *detrsp_fname, const char *detr
 
     gchar gps_name[40];
     int i;
-    for(i=0; i<rsp_map->matrix_size[0]; i++) { // igps
-
-		tmp_array->dim[0] = rsp_map->matrix_size[1];
-		memcpy(tmp_array->data, rsp_map->U_map + i*U_array_len, U_array_size);
-		sprintf(gps_name, "U_map_gps_%d:array", rsp_map->gps_step*i);
-	    ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
-		memcpy(tmp_array->data, rsp_map->diff_map + i*U_array_len, U_array_size);
-		sprintf(gps_name, "diff_map_gps_%d:array", rsp_map->gps_step*i);
-	    ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
+	if (1 == is_coh){
+	    for(i=0; i<rsp_map->matrix_size[0]; i++) { // igps
 	
-		tmp_array->dim[0] = 1;
-		memcpy(tmp_array->data, rsp_map->Det_map + i*Det_array_len, Det_array_size);
-		sprintf(gps_name, "Det_map_gps_%d:array", rsp_map->gps_step*i);
-	    ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
-
+			tmp_array->dim[0] = rsp_map->matrix_size[1];
+			memcpy(tmp_array->data, rsp_map->U_map + i*U_array_len, U_array_size);
+			sprintf(gps_name, "U_map_gps_%d:array", rsp_map->gps_step*i);
+		    ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
+			memcpy(tmp_array->data, rsp_map->diff_map + i*U_array_len, U_array_size);
+			sprintf(gps_name, "diff_map_gps_%d:array", rsp_map->gps_step*i);
+		    ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
+		}
+	} else {
+	    for(i=0; i<rsp_map->matrix_size[0]; i++) { // igps
+			tmp_array->dim[0] = 1;
+			memcpy(tmp_array->data, rsp_map->Det_map + i*Det_array_len, Det_array_size);
+			sprintf(gps_name, "Det_map_gps_%d:array", rsp_map->gps_step*i);
+			ligoxml_write_Array(writer, tmp_array, BAD_CAST "real_4", BAD_CAST " ", BAD_CAST gps_name);
+		}
     }
 
     rc = xmlTextWriterEndDocument(writer);
@@ -321,14 +324,15 @@ static int to_xml(RspSkymap *rsp_map, const char *detrsp_fname, const char *detr
 
 	return 0;
 }
-static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gchar **pgps, gchar **pout)
+static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gchar **pgps, gchar **pout_coh, gchar **pout_prob)
 {
 	int option_index = 0;
 	struct option long_opts[] =
 	{
 		{"ifo-horizons",	required_argument,	0,	'i'},
 		{"chealpix-order",	required_argument,	0,	'n'},
-		{"output-filename",	required_argument,	0,	'o'},
+		{"output-coh-coeff",	required_argument,	0,	'c'},
+		{"output-prob-coeff",	required_argument,	0,	'p'},
 		{"gps-time",		required_argument,	0,	'g'},
 		{0, 0, 0, 0}
 	};
@@ -344,8 +348,11 @@ static void parse_opts(int argc, char *argv[], gchar **pin, gchar **pnorder, gch
 			case 'g':
 				*pgps = g_strdup((gchar *)optarg);
 				break;
-			case 'o':
-				*pout = g_strdup((gchar *)optarg);
+			case 'c':
+				*pout_coh = g_strdup((gchar *)optarg);
+				break;
+			case 'p':
+				*pout_prob = g_strdup((gchar *)optarg);
 				break;
 			default:
 				exit(0);
@@ -358,9 +365,10 @@ int main(int argc, char *argv[])
 	gchar **pin = (gchar **)malloc(sizeof(gchar *));
 	gchar **pnorder = (gchar **)malloc(sizeof(gchar *));
 	gchar **pgps = (gchar **)malloc(sizeof(gchar *));
-	gchar **pout = (gchar **)malloc(sizeof(gchar *));
+	gchar **pout_coh = (gchar **)malloc(sizeof(gchar *));
+	gchar **pout_prob = (gchar **)malloc(sizeof(gchar *));
 
-	parse_opts(argc, argv, pin, pnorder, pgps, pout);
+	parse_opts(argc, argv, pin, pnorder, pgps, pout_coh, pout_prob);
 	
 	gchar ** in_ifo_strings = g_strsplit(*pin, ",", -1);
 	gchar ** one_ifo_string = NULL;
@@ -390,19 +398,34 @@ int main(int argc, char *argv[])
 	long gps = atoi(*pgps);
 	RspSkymap *rsp_map = create_detresponse_skymap(ifo_names, nifo, horizons, 1800 ,norder, gps);
 
-   	GString *tmp_fname = g_string_new(*pout);
-    g_string_append_printf(tmp_fname, "_next");
+   	GString *tmp_fname_coh = g_string_new(*pout_coh);
+    g_string_append_printf(tmp_fname_coh, "_next");
+	int is_coh = 1;
  
-	if (to_xml(rsp_map, tmp_fname->str, mapname->str, 0) < 0)
+	if (to_xml(rsp_map, tmp_fname_coh->str, mapname->str, is_coh, 0) < 0)
 		return -1;
 
-	if (g_rename(tmp_fname->str, *pout) != 0) {
-		fprintf(stderr, "unable to rename to %s", *pout);
+	if (g_rename(tmp_fname_coh->str, *pout_coh) != 0) {
+		fprintf(stderr, "unable to rename to %s", *pout_coh);
+		return -1;
+	}
+
+   	GString *tmp_fname_prob = g_string_new(*pout_prob);
+    g_string_append_printf(tmp_fname_prob, "_next");
+
+	is_coh = 0;
+	if (to_xml(rsp_map, tmp_fname_prob->str, mapname->str, is_coh, 0) < 0)
+		return -1;
+
+
+	if (g_rename(tmp_fname_prob->str, *pout_prob) != 0) {
+		fprintf(stderr, "unable to rename to %s", *pout_prob);
 		return -1;
 	}
 
 	g_string_free(mapname, TRUE);
-	g_string_free(tmp_fname, TRUE);
+	g_string_free(tmp_fname_coh, TRUE);
+	g_string_free(tmp_fname_prob, TRUE);
 
 	for(iifo=0;iifo<nifo;iifo++) 
 		free(ifo_names[iifo]);
