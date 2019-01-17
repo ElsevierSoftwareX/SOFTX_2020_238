@@ -58,42 +58,39 @@
 
 
 #define DEFINE_UNDERSAMPLE_FUNC(sign,width) \
-static void logical_op_g ## sign ## width(const g ## sign ## width *src, guint64 src_size, guint ## width *dst, guint64 dst_size, guint cadence, guint64 *remainder, g ## sign ## width *leftover, g ## sign ## width *required_on, guint ## width status_out) \
+static void logical_op_g ## sign ## width(const g ## sign ## width *src, guint64 src_size, g ## sign ## width *dst, guint64 dst_size, guint cadence, guint *remainder, gboolean *leftover, g ## sign ## width *required_on, g ## sign ## width *required_on_xor_off, guint ## width status_out, gboolean invert_result) \
 { \
-	g ## sign ## width inbits[*remainder + src_size]; \
+	guint i, k, k_start, k_end = 0; \
+	gboolean fail; \
  \
-	for(unsigned int i = 0; i < *remainder; i++) \
-		inbits[i] = *leftover; \
- \
-	for(unsigned int j = *remainder; j < *remainder + src_size; j++, src++) \
-		inbits[j] = *src; \
- \
-	for(unsigned int k_start = 0; k_start < dst_size; k_start++, dst++) { \
-		g ## sign ## width cadence_samples = *required_on; \
-		for(unsigned int k = cadence * k_start; k < cadence * (k_start + 1); k++) \
-			cadence_samples = cadence_samples & inbits[k]; \
-		if(cadence_samples == *required_on) \
-			*dst = status_out; \
+	for(i = 0; i < dst_size; i++, dst++) { \
+		fail = i ? FALSE : *leftover; \
+		k_start = i ? i * cadence - *remainder : 0; \
+		k_end = k_start + cadence; \
+		for(k = k_start; k < k_end; k++) \
+			fail = (src[k] ^ *required_on) & *required_on_xor_off ? TRUE : fail; \
+		if(fail == invert_result) \
+			*dst = (g ## sign ## width) status_out; \
 		else \
 			*dst = 0x00; \
 	} \
  \
-	unsigned int first_leftover_index = src_size + *remainder - ((src_size + *remainder) % cadence); \
 	*remainder = (src_size + *remainder) % cadence; \
-	if(*remainder != 0) { \
-		*leftover = *required_on; \
-		for(unsigned int m = first_leftover_index; m < first_leftover_index + *remainder; m++) \
-			*leftover = *leftover & inbits[m]; \
-	} else \
-		*leftover = 0; \
+	*leftover = i ? FALSE : *leftover; \
+	for(k = k_end; k < src_size; k++) \
+		*leftover = (src[k] ^ *required_on) & *required_on_xor_off ? TRUE : *leftover; \
 }
 
 
+DEFINE_UNDERSAMPLE_FUNC(int,8)
+DEFINE_UNDERSAMPLE_FUNC(uint,8)
+DEFINE_UNDERSAMPLE_FUNC(int,16)
+DEFINE_UNDERSAMPLE_FUNC(uint,16)
 DEFINE_UNDERSAMPLE_FUNC(int,32)
 DEFINE_UNDERSAMPLE_FUNC(uint,32)
 
 
-static void undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, guint unit_size, gboolean sign, guint cadence, guint64 *remainder, void *leftover, void *required_on, guint32 status_out)
+static void undersample(const void *src, guint64 src_size, void *dst, guint64 dst_size, guint unit_size, gboolean sign, guint cadence, guint *remainder, gboolean *leftover, void *required_on, void *required_on_xor_off, guint32 status_out, gboolean invert_result)
 {
 	g_assert_cmpuint(src_size % unit_size, ==, 0);
 	g_assert_cmpuint(dst_size % unit_size, ==, 0);
@@ -104,8 +101,14 @@ static void undersample(const void *src, guint64 src_size, void *dst, guint64 ds
 	if(sign) {
 
 		switch(unit_size) {
+		case 1:
+			logical_op_gint8(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, required_on_xor_off, status_out, invert_result);
+			break;
+		case 2:
+			logical_op_gint16(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, required_on_xor_off, status_out, invert_result);
+			break;
 		case 4:
-			logical_op_gint32(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, status_out);
+			logical_op_gint32(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, required_on_xor_off, status_out, invert_result);
 			break;
 		default:
 			g_assert_not_reached();
@@ -113,8 +116,14 @@ static void undersample(const void *src, guint64 src_size, void *dst, guint64 ds
 	} else {
 
 		switch(unit_size) {
+		case 1:
+			logical_op_guint8(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, required_on_xor_off, status_out, invert_result);
+			break;
+		case 2:
+			logical_op_guint16(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, required_on_xor_off, status_out, invert_result);
+			break;
 		case 4:
-			logical_op_guint32(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, status_out);
+			logical_op_guint32(src, src_size, dst, dst_size, cadence, remainder, leftover, required_on, required_on_xor_off, status_out, invert_result);
 			break;
 		default:
 			g_assert_not_reached();
@@ -163,7 +172,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) {" GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U32) "}, " \
+		"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U32) "}, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -178,7 +187,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 		"audio/x-raw, " \
 		"rate = " GST_AUDIO_RATE_RANGE ", " \
 		"channels = (int) 1, " \
-		"format = (string) " GST_AUDIO_NE(U32) ", " \
+		"format = (string) {" GST_AUDIO_NE(S8) ", " GST_AUDIO_NE(U8) ", " GST_AUDIO_NE(S16) ", " GST_AUDIO_NE(U16) ", " GST_AUDIO_NE(S32) ", " GST_AUDIO_NE(U32) "}, " \
 		"layout = (string) interleaved, " \
 		"channel-mask = (bitmask) 0"
 	)
@@ -257,6 +266,8 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 
 			GstStructure *otherstr = gst_caps_get_structure(othercaps, i);
 
+			gst_structure_set(otherstr, "channels", G_TYPE_INT, 1, NULL);
+
 			if(GST_VALUE_HOLDS_INT_RANGE(v))
 				gst_structure_set(otherstr, "rate", GST_TYPE_INT_RANGE, gst_value_get_int_range_min(v), G_MAXINT, NULL);
 			else if(G_VALUE_HOLDS_INT(v))
@@ -284,7 +295,6 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 			GstStructure *otherstr = gst_caps_get_structure(othercaps, i);
 
 			gst_structure_set(otherstr, "channels", G_TYPE_INT, 1, NULL);
-			gst_structure_set(otherstr, "format", G_TYPE_STRING, GST_AUDIO_NE(U32), NULL);
 
 			if(GST_VALUE_HOLDS_INT_RANGE(v)) {
 				if(gst_value_get_int_range_max(v) == 1)
@@ -332,8 +342,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	gint rate_in, rate_out;
 	gsize unit_size;
 	const gchar *format;
-	static char *formats[] = {"S32LE", "S32BE", "U32LE", "U32BE"};
-	gboolean sign[] = {TRUE, TRUE, FALSE, FALSE};
+	static char *formats[] = {"S8LE", "S8BE", "U8LE", "U8BE", "S16LE", "S16BE", "U16LE", "U16BE", "S32LE", "S32BE", "U32LE", "U32BE"};
+	gboolean sign[] = {TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE};
 
 	/*
 	 * parse the caps
@@ -492,7 +502,11 @@ static gboolean start(GstBaseTransform *trans)
 	element->need_discont = TRUE;
 
 	element->remainder = 0;
-	element->leftover = 0;
+	element->leftover = FALSE;
+
+	if(element->required_on & element->required_off)
+		GST_WARNING_OBJECT(element, "One or more bits are requested to be required both on and off. These bits will be ignored.");
+	element->required_on_xor_off = element->required_on ^ element->required_off;
 
 	return TRUE;
 }
@@ -534,7 +548,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 		gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
 		gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
-		undersample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->sign, element->rate_in / element->rate_out, &element->remainder, &element->leftover, &element->required_on, element->status_out);
+		undersample(inmap.data, inmap.size, outmap.data, outmap.size, element->unit_size, element->sign, element->rate_in / element->rate_out, &element->remainder, &element->leftover, &element->required_on, &element->required_on_xor_off, element->status_out, element->invert_result);
 		set_metadata(element, outbuf, outmap.size / element->unit_size, FALSE);
 		gst_buffer_unmap(outbuf, &outmap);
 		gst_buffer_unmap(inbuf, &inmap);
@@ -574,7 +588,9 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 enum property {
 	ARG_REQUIRED_ON = 1,
-	ARG_STATUS_OUT
+	ARG_REQUIRED_OFF,
+	ARG_STATUS_OUT,
+	ARG_INVERT_RESULT
 };
 
 
@@ -589,8 +605,16 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->required_on = g_value_get_uint(value);
 		break;
 
+	case ARG_REQUIRED_OFF:
+		element->required_off = g_value_get_uint(value);
+		break;
+
 	case ARG_STATUS_OUT:
 		element->status_out = g_value_get_uint(value);
+		break;
+
+	case ARG_INVERT_RESULT:
+		element->invert_result = g_value_get_boolean(value);
 		break;
 
 	default:
@@ -613,8 +637,16 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_uint(value, element->required_on);
 		break;
 
+	case ARG_REQUIRED_OFF:
+		g_value_set_uint(value, element->required_off);
+		break;
+
 	case ARG_STATUS_OUT:
 		g_value_set_uint(value, element->status_out);
+		break;
+
+	case ARG_INVERT_RESULT:
+		g_value_set_boolean(value, element->invert_result);
 		break;
 
 	default:
@@ -676,12 +708,36 @@ static void gstlal_logicalundersample_class_init(GSTLALLogicalUnderSampleClass *
 	);
 	g_object_class_install_property(
 		gobject_class,
+		ARG_REQUIRED_OFF,
+		g_param_spec_uint(
+			"required-off",
+			"Off bits",
+			"Bit mask setting the bits that must be off in the incoming stream.  Note:  if the\n\t\t\t"
+			"mask is wider than the input stream, the high-order bits should be 0 or the off\n\t\t\t"
+			"condition will never be met.",
+			0, G_MAXUINT, 0x0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
 		ARG_STATUS_OUT,
 		g_param_spec_uint(
 			"status-out",
 			"Out bits",
-			"Value of output if required-on mask is true.",
+			"Value of output if required-on mask is true and required-off mask is false.",
 			0, G_MAXUINT, 0x1,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_INVERT_RESULT,
+		g_param_spec_boolean(
+			"invert-result",
+			"Invert result",
+			"If true, output is status-out when conditions are not met.",
+			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

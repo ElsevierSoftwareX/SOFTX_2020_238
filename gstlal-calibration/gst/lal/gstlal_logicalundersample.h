@@ -78,13 +78,16 @@ struct _GSTLALLogicalUnderSample {
 
 	/* internal state */
 
-	guint64 remainder;
-	gint32 leftover;
+	guint remainder;
+	gboolean leftover;
 
 	/* properties  */
 
 	gint32 required_on;
+	gint32 required_off;
+	gint32 required_on_xor_off;
 	guint32 status_out;
+	gboolean invert_result;
 };
 
 

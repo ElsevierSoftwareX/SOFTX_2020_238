@@ -55,13 +55,13 @@ def lal_logicalundersample_01(pipeline, name):
 
 	src = test_common.int_test_src(pipeline, buffer_length = buffer_length, rate = in_rate, width=32, test_duration = test_duration)
 #	src = pipeparts.mkaudiotestsrc(pipeline, num_buffers = int(test_duration / buffer_length))
-#	capsfilter1 = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=S32LE, rate=%d" % int(in_rate))
-	tee1 = pipeparts.mktee(pipeline, src)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee1), "%s_in.dump" % name)
-	undersample = pipeparts.mkgeneric(pipeline, tee1, "lal_logicalundersample")
-	capsfilter2 = pipeparts.mkcapsfilter(pipeline, undersample, "audio/x-raw, format=U32LE, rate=%d" % int(out_rate))
+	capsfilter1 = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, format=S32LE, rate=%d" % int(in_rate))
+	tee1 = pipeparts.mktee(pipeline, capsfilter1)
+	pipeparts.mknxydumpsink(pipeline, tee1, "%s_in.txt" % name)
+	undersample = pipeparts.mkgeneric(pipeline, tee1, "lal_logicalundersample", required_on = 1, required_off = 2, invert_result = True)
+	capsfilter2 = pipeparts.mkcapsfilter(pipeline, undersample, "audio/x-raw, format=S32LE, rate=%d" % int(out_rate))
 	#checktimestamps = pipeparts.mkchecktimestamps(pipeline, capsfilter2)
-	pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, capsfilter2), "%s_out.dump" % name)
+	pipeparts.mknxydumpsink(pipeline, capsfilter2, "%s_out.txt" % name)
 
 	#
 	# done
@@ -137,6 +137,6 @@ def lal_logicalundersample_03(pipeline, name):
 #
 
 
-#test_common.build_and_run(lal_logicalundersample_01, "lal_logicalundersample_01")
-test_common.build_and_run(lal_logicalundersample_02, "lal_logicalundersample_02")
+test_common.build_and_run(lal_logicalundersample_01, "lal_logicalundersample_01")
+#test_common.build_and_run(lal_logicalundersample_02, "lal_logicalundersample_02")
 #test_common.build_and_run(lal_logicalundersample_03, "lal_logicalundersample_03")
