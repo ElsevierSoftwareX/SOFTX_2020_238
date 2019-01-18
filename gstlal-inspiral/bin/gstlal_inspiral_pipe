@@ -1154,6 +1154,7 @@ def parse_command_line():
 	share_path = os.path.split(dagparts.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
 	options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
 	options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
+	options.injection_proc_sql_file = os.path.join(share_path, 'simplify_proc_table_in_inj_file.sql')
 
 	return options, filenames
 
@@ -1384,11 +1385,17 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 			injSNRnode.set_priority(98)
 			inj_snr_nodes.append(injSNRnode)
 
-		ligolw_add_nodes.append(dagparts.DAGNode(ligolwAddJob, dag, parent_nodes=inj_snr_nodes,
+		addnode = dagparts.DAGNode(ligolwAddJob, dag, parent_nodes=inj_snr_nodes,
 			input_files = {"": ' '.join(["%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i) for i in xrange(num_split_inj_snr_jobs)])},
 			opts = {"ilwdchar-compat":""},
 			output_files = {"output": inj.split(":")[-1]}
-		))
+		)
+
+		ligolw_add_nodes.append(dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [addnode],
+			opts = {"sql-file":options.injection_proc_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"":addnode.output_files["output"]}
+			)
+		)
 
 if options.bank_cache:
 	#
