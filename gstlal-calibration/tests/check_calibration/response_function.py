@@ -23,7 +23,7 @@ parser.add_option("--hoft-frames-cache", metavar = "name", help = "Frame cache f
 parser.add_option("--analyze-additional-hoft", action = "store_true", help = "Set this to analyze an additional h(t) channel.")
 parser.add_option("--additional-hoft-frames-cache", metavar = "name", help = "If desired, provide an additional frame cache for a secondary h(t) data stream to be analyzed.")
 parser.add_option("--raw-frames-cache", metavar = "name", help = "Frame cache for raw data.")
-parser.add_option("--darm-err-channel-name", metavar = "name", default = "CAL-DARM_ERR_WHITEN_OUT_DBL_DQ", help = "DARM_ERR channel name (default = CAL-DARM_ERR_WHITEN_OUT_DBL_DQ)")
+parser.add_option("--darm-err-channel-name", metavar = "name", default = "CAL-DARM_ERR_DBL_DQ", help = "DARM_ERR channel name (default = CAL-DARM_ERR_DBL_DQ)")
 parser.add_option("--hoft-channel-name", metavar = "name", default = "GDS-CALIB_STRAIN", help = "h(t) channel name (default = GDS-CALIB_STRAIN")
 parser.add_option("--additional-hoft-channel-name", metavar = "name", help = "Additional h(t) channel name, if provided")
 parser.add_option("--analyze-calcs-hoft", action = "store_true", help = "Set this to analyze CALCS h(t) data")
@@ -114,7 +114,7 @@ while (chunk_end <= end):
 	hoft_chunk_fft = hoft_chunk.average_fft(4, 2, window = 'hann')
 	
 	hoft_chunk_tf = hoft_chunk_fft / DARM_ERR_chunk_fft
-	hoft_tf_data += hoft_chunk_tf.value
+	hoft_tf_data += hoft_chunk_tf.value[:len(hoft_tf_data)]
 
 	if options.analyze_calcs_hoft:
 		CALCS_chunk = CALCS_data.crop(chunk_start, chunk_end, True)
@@ -123,7 +123,7 @@ while (chunk_end <= end):
 		CALCS_chunk_fft = CALCS_chunk_fft.filter([30]*6, [0.3]*6, 1e-12)
 
 		CALCS_chunk_tf = CALCS_chunk_fft / DARM_ERR_chunk_fft
-		CALCS_tf_data += CALCS_chunk_tf.value
+		CALCS_tf_data += CALCS_chunk_tf.value[:len(hoft_tf_data)]
 
 	if options.analyze_additional_hoft:
 		additional_hoft_chunk = additional_hoft_data.crop(chunk_start, chunk_end, True)
@@ -131,7 +131,7 @@ while (chunk_end <= end):
 		additional_hoft_chunk_fft = additional_hoft_chunk.average_fft(4, 2, window = 'hann')
 
 		additional_hoft_chunk_tf = additional_hoft_chunk_fft / DARM_ERR_chunk_fft
-		additional_hoft_tf_data += additional_hoft_chunk_tf.value
+		additional_hoft_tf_data += additional_hoft_chunk_tf.value[:len(hoft_tf_data)]
 
 	chunk_start += averaging_time
 	chunk_end += averaging_time
@@ -175,6 +175,7 @@ if options.analyze_additional_hoft:
 plot.add_legend([r'h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
 plot.maxes.set_yscale('linear')
 plot.paxes.set_yscale('linear')
+plot.maxes.set_ylim(0,5)
 plot.save('%s_%s_%s_all_tf_ratio.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
 
 plot = BodePlot(ratio_hoft*3995.1, frequencies = freqs, dB = False, color='#ee0000', linewidth=2)
