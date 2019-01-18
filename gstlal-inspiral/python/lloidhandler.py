@@ -1269,7 +1269,7 @@ class Handler(simplehandler.Handler):
 		# whatever triggers remain in the queues, and processes
 		# them
 
-		flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, flush = True)
+		flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = lambda events, offset_vector: sum(event.snr**2. for event in events) < self.rankingstat.network_snrsq_threshold, flush = True, cluster = self.cluster)
 		self.coincs_document.commit()
 
 		# do GraceDB alerts
