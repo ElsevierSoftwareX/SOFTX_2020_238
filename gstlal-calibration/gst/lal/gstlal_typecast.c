@@ -330,9 +330,9 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	const gchar *format_in;
 	const gchar *format_out;
 	static char *formats[] = {GST_AUDIO_NE(S8), GST_AUDIO_NE(S16), GST_AUDIO_NE(S32), GST_AUDIO_NE(U8), GST_AUDIO_NE(U16), GST_AUDIO_NE(U32), GST_AUDIO_NE(F32), GST_AUDIO_NE(F64), GST_AUDIO_NE(Z64), GST_AUDIO_NE(Z128)};
-	gboolean complexes[] = {FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE};
-	gboolean floats[] = {FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE};
-	gboolean signs[] = {TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE};
+	gboolean complexes[] = {FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE};
+	gboolean floats[] = {FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE};
+	gboolean signs[] = {TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE};
 
 	/* Find unit sizes of input and output */
 	if(!get_unit_size(trans, incaps, &unit_size_in)) {
