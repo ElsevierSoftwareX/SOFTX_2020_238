@@ -136,10 +136,33 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 
+	def fast_path_cut(self, snrs, **kwargs):
+		"""
+		Return True if the candidate described by kwargs should be
+		cut, False otherwise.  Used to fast-path out of the full
+		likelihood evaluation, and to drop coincs from the
+		coincidence engine to reduce data rate.
+
+		NOTE:  surviving this cut is not an endorsement of the
+		candidate, many candidates that survive this cut will
+		subsequently be discarded for other reasons.  This code is
+		only intended to achieve a computationally efficient data
+		rate reduction that does not negatively impact the search
+		sensitivity.
+		"""
+		# network SNR cut
+		if sum(snr**2. for snr in snrs.values()) < self.network_snrsq_threshold:
+			return True
+		return False
+
 	def __call__(self, **kwargs):
-		# fast-path:  network SNR cut
-		if sum(snr**2. for snr in kwargs["snrs"].values()) < self.network_snrsq_threshold:
+		"""
+		Evaluate the ranking statistic.
+		"""
+		# fast-path cut
+		if self.fast_path_cut(**kwargs):
 			return NegInf
+
 		# full ln L ranking stat.  we define the ranking statistic
 		# to be the largest ln L from all allowed subsets of
 		# triggers
@@ -202,7 +225,14 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 			new.denominator.lnzerolagdensity = new.zerolag
 		return new
 
-	def ln_lr_from_triggers(self, events, offsetvector):
+	def kwargs_from_triggers(self, events, offsetvector):
+		"""
+		Constructs the key-word arguments to be passed to
+		.__call__() from a sequence of single-detector triggers
+		constituting a coincident candidate collected with the
+		given offset vector.  For internal use by the
+		*_from_triggers() methods.
+		"""
 		#
 		# exclude triggers that are below the SNR threshold
 		#
@@ -264,15 +294,33 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# intervals
 		segs.update((event.ifo, segments.segment(event.end - event.template_duration, event.end)) for event in events)
 
+		# done
+		return dict(
+			segments = segs,
+			snrs = dict((event.ifo, event.snr) for event in events),
+			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.snr**2.) for event in events),
+			phase = dict((event.ifo, event.coa_phase) for event in events),
+			dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
+			template_id = template_id
+		)
+
+	def fast_path_cut_from_triggers(self, events, offsetvector):
+		"""
+		Evaluate the ranking statistic's fast-path cut for a
+		sequence of single-detector triggers constituting a
+		coincident candidate collected with the given offset
+		vector.
+		"""
+		return self.fast_path_cut(**self.kwargs_from_triggers(events, offsetvector))
+
+	def ln_lr_from_triggers(self, events, offsetvector):
+		"""
+		Evaluate the ranking statistic for a sequence of
+		single-detector triggers constituting a coincident
+		candidate collected with the given offset vector.
+		"""
 		try:
-			return self(
-				segments = segs,
-				snrs = dict((event.ifo, event.snr) for event in events),
-				chi2s_over_snr2s = dict((event.ifo, event.chisq / event.snr**2.) for event in events),
-				phase = dict((event.ifo, event.coa_phase) for event in events),
-				dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
-				template_id = template_id
-			)
+			return self(**self.kwargs_from_triggers(events, offsetvector))
 		except (ValueError, AssertionError) as e:
 			raise type(e)("%s: event IDs %s, offsets %s" % (str(e), ", ".join(sorted(str(event.event_id) for event in events)), str(offsetvector)))
 
