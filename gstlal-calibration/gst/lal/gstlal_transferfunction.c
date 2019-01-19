@@ -850,7 +850,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		} \
 		success &= update_transfer_functions_ ## DTYPE(element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix, num_tfs, fd_fft_length, fd_tf_length, element->workspace.w ## S_OR_D ## pf.sinc_table, element->workspace.w ## S_OR_D ## pf.sinc_length, element->workspace.w ## S_OR_D ## pf.sinc_taps_per_df, element->use_median ? 1 : element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg - element->workspace.w ## S_OR_D ## pf.num_ffts_dropped, element->workspace.w ## S_OR_D ## pf.transfer_functions_at_f, element->workspace.w ## S_OR_D ## pf.transfer_functions_solved_at_f, element->workspace.w ## S_OR_D ## pf.autocorrelation_matrix_at_f, element->workspace.w ## S_OR_D ## pf.permutation, element->transfer_functions); \
 		if(success) { \
-			GST_INFO_OBJECT(element, "Just computed new transfer functions"); \
+			GST_LOG_OBJECT(element, "Just computed new transfer functions"); \
 			/* Let other elements know about the update */ \
 			g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TRANSFER_FUNCTIONS]); \
 			/* Write transfer functions to the screen or a file if we want */ \

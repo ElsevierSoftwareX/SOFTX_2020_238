@@ -147,7 +147,8 @@ def hook_up(pipeline, demux, channel_name, instrument, buffer_length):
 	return head
 
 def caps_and_progress(pipeline, head, caps, progress_name):
-	head = pipeparts.mkaudioconvert(pipeline, head, caps)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_typecast")
+	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	head = pipeparts.mkprogressreport(pipeline, head, "progress_src_%s" % progress_name)
 
 	return head

@@ -164,8 +164,8 @@ framesdir:
 	mkdir -p Frames/$(OBSRUN)/$(IFO)1/DCS
 
 clean:
-	rm *.gwf *.cache *.png *.txt *.pdf *.jpg
+	rm *.gwf *.cache *.png *.txt *.pdf *.jpg *.svg
 
 CLEAN:
-	rm *.gwf *.cache *.png *.txt *.pdf *.jpg Frames/$(OBSRUN)/$(IFO)1/easy_raw/*.gwf Frames/$(OBSRUN)/$(IFO)1/GDS/*.gwf Frames/$(OBSRUN)/$(IFO)1/DCS/*.gwf
+	rm *.gwf *.cache *.png *.txt *.pdf *.jpg *.svg Frames/$(OBSRUN)/$(IFO)1/easy_raw/*.gwf Frames/$(OBSRUN)/$(IFO)1/GDS/*.gwf Frames/$(OBSRUN)/$(IFO)1/DCS/*.gwf
 
