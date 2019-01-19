@@ -444,8 +444,6 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, itacacpad->channels));
 		} else {
 			GST_WARNING_OBJECT(itacacpad, "no template bank");
-			//g_value_take_boxed(value, g_value_array_new(0));
-			// FIXME Is this right?
 			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
 		}
 		g_mutex_unlock(&itacacpad->bank_lock);
@@ -457,9 +455,6 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
                         g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(itacacpad->autocorrelation_matrix));
                 else {
                         GST_WARNING_OBJECT(itacacpad, "no autocorrelation matrix");
-			// FIXME g_value_array_new() is deprecated
-                        //g_value_take_boxed(value, g_value_array_new(0)); 
-			// FIXME Is this right?
 			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
                         }
                 g_mutex_unlock(&itacacpad->bank_lock);
@@ -471,8 +466,6 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_int(itacacpad->autocorrelation_mask));
 		else {
 			GST_WARNING_OBJECT(itacacpad, "no autocorrelation mask");
-			//g_value_take_boxed(value, g_value_array_new(0));
-			// FIXME Is this right?
 			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
 		}
 		g_mutex_unlock(&itacacpad->bank_lock);
@@ -485,47 +478,6 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 
 	GST_OBJECT_UNLOCK(itacacpad);
 }
-/*
-static void gstlal_itacac_set_property(GObject *object, enum itacacproperty id, const GValue *value, GParamSpec *pspec)
-{
-	GSTLALItacac *itacac = GSTLAL_ITACAC(object);
-
-	GST_OBJECT_LOCK(itacac);
-
-	switch(id) {
-	case ARG_COINC_THRESH:
-		itacac->coinc_thresh = g_value_get_double(value);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(itacac);
-}
-*/
-
-/*
-static void gstlal_itacac_get_property(GObject *object, enum itacacproperty id, GValue *value, GParamSpec *pspec)
-{
-	GSTLALItacac *itacac = GSTLAL_ITACAC_PAD(object);
-
-	GST_OBJECT_LOCK(itacac);
-
-	switch(id) {
-	case ARG_COINC_THRESH:
-		g_value_set_double(value, itacac->coinc_thresh);
-		break;
-
-	default:
-		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
-		break;
-	}
-
-	GST_OBJECT_UNLOCK(itacac);
-}
-*/
 
 /*
  * aggregate()
@@ -538,21 +490,15 @@ static void update_state(GSTLALItacac *itacac, GstBuffer *srcbuf) {
 }
 
 
-//static GstFlowReturn push_buffer(GSTLALItacac *itacac, GstBuffer *srcbuf) {
 static GstFlowReturn *push_buffer(GstAggregator *agg, GstBuffer *srcbuf) {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	update_state(itacac, srcbuf);
 
 	GST_DEBUG_OBJECT(itacac, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	//fprintf(stderr, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-
-	//result = gst_pad_push(GST_PAD((itacac->aggregator).srcpad), srcbuf);
-	//return result;
 	return GST_AGGREGATOR_CLASS(gstlal_itacac_parent_class)->finish_buffer(agg, srcbuf);
 }
 
 static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
-	//GstFlowReturn result = GST_FLOW_OK;
 	GstBuffer *srcbuf = gst_buffer_new();
 	GST_BUFFER_FLAG_SET(srcbuf, GST_BUFFER_FLAG_GAP);
 
@@ -562,8 +508,6 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, samps, itacac->rate);
 	GST_BUFFER_DTS(srcbuf) = GST_BUFFER_PTS(srcbuf);
 
-	//result = push_buffer(itacac, srcbuf);
-	//return result;
 	return gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 
 }
@@ -571,9 +515,7 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	// FIXME Need to add logic to finish initializing GLists. Make sure to ensure there always at least two elements in the GList, even in the case of only having one sinkpad
 	GstElement *element = GST_ELEMENT(itacac);
-	//GSTLALItacacPad *itacacpad, *itacacpad2;
 	GList *padlist, *padlist2;
-	//LALDetector *ifo1, *ifo2;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	// Ensure all of the pads have the same channels and rate, and set them on itacac for easy access
@@ -598,12 +540,6 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	}
 
 	itacac->next_output_offset = itacac->initial_output_offset;
-
-	//Uncomment out the following code once we add coincidence
-
-	// FIXME Currently the padding used to compute chisq much be larger than the largest coincidence window, meaning itacac cannot be run without computing chisq
-	// This assumption should be undone in case we ever want to just compute SNRs for triggers
-	//g_assert(GSTLAL_ITACAC_PAD(element->sinkpads->data)->maxdata->pad > itacac->max_coinc_window_samps);
 
 	// Set up the order that we want to check the pads for coincidence
 	// FIXME For now this is only being used to find snr time series
@@ -1016,7 +952,7 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), NULL);
 			}
 		//
-		// L1H1
+		/ L1H1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "H1") == 0) {
 			if(srcbuf == NULL) {
@@ -1155,7 +1091,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		samples_left_in_window = itacacpad->n;
 
 		// FIXME Currently assumes n is the same for all detectors
-		//while( samples_left_in_window > 0 && ( !itacacpad->EOS || (itacacpad->EOS && gst_audioadapter_available_samples(itacacpad->adapter)) ) ) {
 		while( samples_left_in_window > 0 && gst_audioadapter_available_samples(itacacpad->adapter) ) {
 
 			// Check how many gap samples there are until a nongap
@@ -1169,7 +1104,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 			// Check if the samples are gap, and flush up to samples_left_in_window of them if so
 			if(gapsamps > 0) {
-				itacacpad->last_gap = TRUE; // FIXME This will not work for case where each itacac has multiple sinkpads
+				// FIXME wtf does the FIXME below mean?, that cant be right, i think its leftover from an early version of the code
+				itacacpad->last_gap = TRUE; // FIXME This will not work for case where each itacac has multiple sinkpads 
 				outsamps = gapsamps > samples_left_in_window ? samples_left_in_window : gapsamps;
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 				samples_left_in_window -= outsamps;
@@ -1241,7 +1177,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// outsamps = n + adjust_window - pad - max_coinc_window_samps
 					// peak_finding_length = n + adjust_window - itacacpad->maxdata->pad
 					outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad;
-					//GST_DEBUG_OBJECT(itacac, "(01) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					copy_nongapsamps(itacac, itacacpad, copysamps, itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					itacacpad->last_gap = FALSE;
 				} else if(nongapsamps >= itacacpad->n + itacacpad->adjust_window) {
@@ -1255,7 +1190,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// peak_finding_length = itacacpad->n + itacacpad->adjust_window - 2 * itacacpad->maxdata->pad = outsamps - 2 * itacacpad->maxdata->pad
 					g_assert(availablesamps > nongapsamps);
 					outsamps = itacacpad->n + itacacpad->adjust_window;
-					//GST_DEBUG_OBJECT(itacac, "(02) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					itacacpad->last_gap = TRUE;
 				} else {
@@ -1267,15 +1201,12 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// peak_finding_length = nongapsamps - 2*itacacpad->maxdata->pad
 					g_assert(availablesamps > nongapsamps || itacacpad->EOS);
 					outsamps = copysamps = nongapsamps;
-					//GST_DEBUG_OBJECT(itacac, "(03) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
-					//itacacpad->last_gap = TRUE;
 				}
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 				// FIXME This can put in the conditionals with outsamps and copy_nongapsamps once everything is working
 				if(nongapsamps >= itacacpad->n + itacacpad->adjust_window) {
 					samples_left_in_window = 0;
-					//itacacpad->last_gap = FALSE;
 				} else {
 					samples_left_in_window -= (outsamps - itacacpad->adjust_window);
 				}
@@ -1302,7 +1233,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					if(nongapsamps >= itacacpad->n + 2*itacacpad->maxdata->pad) {
 						copysamps = itacacpad->n + 2*itacacpad->maxdata->pad;
 						outsamps = itacacpad->n;
-						//GST_DEBUG_OBJECT(itacac, "(04) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, outsamps, 0, -1 * (gint) itacacpad->maxdata->pad);
 						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps, 0, -1 * (gint) itacacpad->maxdata->pad);
 						samples_left_in_window = 0;
 					}
@@ -1319,7 +1249,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 						g_assert(availablesamps > nongapsamps || itacacpad->EOS);
 						copysamps = nongapsamps;
 						outsamps = itacacpad->n + itacacpad->maxdata->pad;
-						//GST_DEBUG_OBJECT(itacac, "(05) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, outsamps, 0, -1 * (gint) itacacpad->adjust_window);
 						copy_nongapsamps(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) (itacacpad->maxdata->pad));
 						samples_left_in_window = 0;
 						itacacpad->last_gap = TRUE;
@@ -1333,7 +1262,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// what would happen if this assumption wasnt true
 					else {
 						copysamps = outsamps = nongapsamps;
-						//GST_DEBUG_OBJECT(itacac, "(06) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->maxdata->pad);
 						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) (itacacpad->maxdata->pad));
 						samples_left_in_window -= nongapsamps - itacacpad->maxdata->pad;
 					}
@@ -1348,7 +1276,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					if(nongapsamps >= samples_left_in_window + itacacpad->maxdata->pad) {
 						copysamps = samples_left_in_window + itacacpad->maxdata->pad;
 						outsamps = samples_left_in_window - itacacpad->maxdata->pad;
-						//GST_DEBUG_OBJECT(itacac, "(07) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, samples_left_in_window - itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
 						copy_nongapsamps(itacac, itacacpad, copysamps, samples_left_in_window - itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
 						samples_left_in_window = 0;
 						itacacpad->last_gap = FALSE;
@@ -1364,7 +1291,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 						g_assert(availablesamps > nongapsamps || itacacpad->EOS);
 						copysamps = nongapsamps;
 						outsamps = samples_left_in_window;
-						//GST_DEBUG_OBJECT(itacac, "(08) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, copysamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
 						copy_nongapsamps(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
 						samples_left_in_window = 0;
 						itacacpad->last_gap = TRUE;
@@ -1377,7 +1303,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// FIXME NOTE this currently assumes the pad will always be greater than max_coinc_window_samps
 					else {
 						copysamps = outsamps = nongapsamps;
-						//GST_DEBUG_OBJECT(itacac, "(09) %s copysamps = %u, peak_finding_length = %u, previously_searched_samples = %u, offset_from_trig_window = %d", itacacpad->instrument, copysamps, outsamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
 						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
 						samples_left_in_window -= nongapsamps;
 						itacacpad->last_gap = FALSE;
@@ -1420,7 +1345,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			g_assert(samples_searched_in_window < itacacpad->n);
 
 
-			//GST_DEBUG_OBJECT(itacac, triggers_generated ? "%s generate_triggers, triggers_generated = TRUE" : "%s generate_triggers, triggers_generated = FALSE", itacacpad->instrument);
 			generate_triggers(
 				itacac, 
 				itacacpad, 
@@ -1430,7 +1354,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				samples_searched_in_window,
 				triggers_generated
 			);
-			//GST_DEBUG_OBJECT(itacac, "%s done with generate_triggers", itacacpad->instrument);
 
 			triggers_generated = TRUE;
 			duration = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, ++data_container_index, 0);
@@ -1441,19 +1364,15 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		// trigger. This could also be where an early version of the
 		// network snr cut is imposed
 		if(triggers_generated && !itacacpad->maxdata->no_peaks_past_threshold) {
-			//GST_DEBUG_OBJECT(itacac, "%s about to populate snr in other detectors", itacacpad->instrument);
 			populate_snr_in_other_detectors(itacac, itacacpad);
-			//GST_DEBUG_OBJECT(itacac, "%s just finished populating snr in other detectors", itacacpad->instrument);
 		}
 
 		if(triggers_generated && itacacpad->autocorrelation_matrix)
 			srcbuf = hardcoded_srcbuf_crap(itacac, itacacpad, srcbuf);
 		else if(triggers_generated) {
 			if(srcbuf == NULL) {
-				//GST_DEBUG_OBJECT(itacac, "%s creating new buffer", itacacpad->instrument);
 				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				//GST_DEBUG_OBJECT(itacac, "%s to buffer buffer", itacacpad->instrument);
 				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		}
@@ -1466,7 +1385,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 	if(!itacac->EOS) {
 		if(srcbuf != NULL)
-			//result = push_buffer(itacac, srcbuf);
 			result = gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 		else
 			// FIXME itacacpad->n only works because we still have
@@ -1485,7 +1403,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		if(max_num_samps_left_in_any_pad > 0) {
 			if(srcbuf != NULL) {
 				fprintf(stderr, "pushing buffer at EOS, still have more samps to process, %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-				//push_buffer(itacac, srcbuf);
 				gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 			} else
 				push_gap(itacac, itacacpad->n);
@@ -1493,12 +1410,9 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			result = process(itacac);
 		} else {
 			if(srcbuf != NULL) {
-				//fprintf(stderr, "pushing buffer at EOS, processed all samps, %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-				//push_buffer(itacac, srcbuf);
 				gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 			}
 			result = GST_FLOW_EOS;
-			//result = GST_FLOW_ERROR;
 		}
 	}
 
@@ -1510,7 +1424,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 	GSTLALItacac *itacac = GSTLAL_ITACAC(aggregator);
 	GList *padlist;
 	GstFlowReturn result = GST_FLOW_OK;
-	//guint64 min_offset = G_MAXUINT64;
 
 	// Calculate the coincidence windows and make sure the pads caps are compatible with each other if we're just starting
 	if(itacac->rate == 0) {
@@ -1536,7 +1449,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		GstBuffer *sinkbuf = gst_aggregator_pad_peek_buffer(GST_AGGREGATOR_PAD(itacacpad));
 		if(sinkbuf == NULL) {
 			GST_DEBUG_OBJECT(itacac, "%s sinkbuf is NULL", itacacpad->instrument);
-			////fprintf(stderr, "%s sinkbuf is NULL\n", itacacpad->instrument);
 			continue;
 		}
 		g_assert(GST_BUFFER_PTS_IS_VALID(sinkbuf));
@@ -1572,10 +1484,8 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// FIXME I don't think this logic works for itacac, it came from itac, need to think carefully about what to do around disconts
 		if (GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
 			// FIXME For now, this should ensure we only see disconts at start up
-			////fprintf(stderr, "%s has DISCONT flag, next_output_offset = %lu\n", itacacpad->instrument, itacac->next_output_offset);
 			g_assert(itacac->next_output_offset == itacac->initial_output_offset || itacacpad->waiting);
 			if(!itacacpad->waiting) { 
-				////fprintf(stderr, "%s resetting time and offset, output_offset before = %lu\n", itacacpad->instrument, itacac->next_output_offset);
 				reset_time_and_offset(itacac);
 				gst_audioadapter_clear(itacacpad->adapter);
 			}
@@ -1586,7 +1496,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// trigger, so adapter should never need to hold more than 2*(2
 		// + 2*maxdata->pad).
 		if(itacacpad->adapter->size > 2*(itacacpad->n + 2*itacacpad->maxdata->pad)) {
-			//fprintf(stderr, "%s adapter size too large, ignoring buffer. buffer offset = %lu, buffer offset end = %lu, buffer duration = %lu\n", itacacpad->instrument, GST_BUFFER_OFFSET(sinkbuf), GST_BUFFER_OFFSET_END(sinkbuf), GST_BUFFER_DURATION(sinkbuf));
 			gst_buffer_unref(sinkbuf);
 			continue;
 		}
@@ -1594,8 +1503,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		if(itacacpad->waiting) {
 			// Wait to use buffers from pad until next_output_offset passes this buffers offset
 			if(itacac->next_output_offset < GST_BUFFER_OFFSET(sinkbuf)) {
-				//fprintf(stderr, "%s sinkbuf is not being used yet, boundaries = %" GST_BUFFER_BOUNDARIES_FORMAT "\n", itacacpad->instrument, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
-				//fprintf(stderr, "%s adapter size = %lu\n", itacacpad->instrument, itacacpad->adapter->size);
 				gst_buffer_unref(sinkbuf);
 				continue;
 			}
@@ -1613,7 +1520,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			if(itacac->next_output_timestamp == GST_CLOCK_TIME_NONE)
 				itacac->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);
 
-			//fprintf(stderr, "%s set waiting to FALSE, boundaries = %" GST_BUFFER_BOUNDARIES_FORMAT "\n", itacacpad->instrument, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 			gst_buffer_unref(sinkbuf);
 			gst_aggregator_pad_drop_buffer(GST_AGGREGATOR_PAD(itacacpad));
 			itacacpad->waiting = FALSE;
@@ -1626,11 +1532,9 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			if(itacac->next_output_timestamp == GST_CLOCK_TIME_NONE)
 				itacac->next_output_timestamp = GST_BUFFER_PTS(sinkbuf);
 
-			//fprintf(stderr, "%s pushing buffer to adapter, next_output_offset = %lu, boundaries = %" GST_BUFFER_BOUNDARIES_FORMAT "\n", itacacpad->instrument, itacac->next_output_offset, GST_BUFFER_BOUNDARIES_ARGS(sinkbuf));
 			gst_audioadapter_push(itacacpad->adapter, sinkbuf);
 			gst_aggregator_pad_drop_buffer(GST_AGGREGATOR_PAD(itacacpad));
 		}
-		//fprintf(stderr, "%s adapter size before = %lu, after = %lu\n", itacacpad->instrument, tmp_uint, itacacpad->adapter->size);
 	}
 
 	if(!itacac->waiting)
@@ -1720,15 +1624,6 @@ static void gstlal_itacac_unref_pad(GSTLALItacacPad *itacacpad)
 
 static void gstlal_itacac_finalize(GObject *object)
 {
-	/*
-	GstElement *element = GST_ELEMENT(object);
-	g_list_foreach(element->sinkpads, (GFunc) gstlal_itacac_unref_pad, NULL);
-	g_list_free(element->sinkpads);
-	element->sinkpads = NULL;
-	g_list_foreach(element->srcpads, (GFunc) gst_object_unref, NULL);
-	g_list_free(element->srcpads);
-	element->srcpads = NULL;
-	*/
 	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
 }
 
@@ -1899,9 +1794,6 @@ static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 		GST_TYPE_AGGREGATOR_PAD
 	);
 
-	//
-	// Properties
-	//
 }
 
 
