@@ -70,6 +70,7 @@
 #include <gstlal_adaptivefirfilt.h>
 #include <gstlal_dqtukey.h>
 #include <gstlal_property.h>
+#include <gstlal_typecast.h>
 
 
 /*
@@ -104,6 +105,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_adaptivefirfilt", GSTLAL_ADAPTIVEFIRFILT_TYPE},
 		{"lal_dqtukey", GSTLAL_DQTUKEY_TYPE},
 		{"lal_property", GSTLAL_PROPERTY_TYPE},
+		{"lal_typecast", GSTLAL_TYPECAST_TYPE},
 		{NULL, 0},
 	};
 
