@@ -18,7 +18,8 @@ dist_pkgdata_DATA = \
 	ll_simplify_and_cluster.sql \
 	Makefile.offline_analysis_rules \
 	O1_snr_chi_pdf_reference.xml.gz \
-	simplify_and_cluster.sql
+	simplify_and_cluster.sql \
+	simplify_proc_table_in_inj_file.sql
 
 inspiral_snr_pdf.xml.gz :
 	gstlal_inspiral_make_snr_pdf --verbose --output $@ \
