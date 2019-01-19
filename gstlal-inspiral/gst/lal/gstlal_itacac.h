@@ -70,16 +70,10 @@ G_BEGIN_DECLS
 #define GST_IS_GSTLAL_ITACAC_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_ITACAC_TYPE))
 
-struct {
-	union {
-		float complex *as_complex;
-		double complex *as_double_complex
-		void *as_void;
-	} dataptr;
-
+struct data_container {
 	gsl_matrix *duration_dataoffset_trigwindowoffset_peakfindinglength_matrix;
 	void *data;
-} data_container;
+};
 
 typedef struct {
 	GstAggregatorPadClass parent_class;
@@ -114,6 +108,8 @@ typedef struct {
 	gsl_matrix_complex_float_view tmp_snr_matrix_view;
 	SnglInspiralTable *bankarray;
 	gboolean last_gap;
+	gboolean EOS;
+	gboolean waiting;
 
 	guint adjust_window;
 	GList *next_in_coinc_order;
@@ -132,16 +128,15 @@ typedef struct {
 	gint rate;
 	guint channels;
 	gstlal_peak_type_specifier peak_type;
+	guint64 initial_output_offset;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	GstClockTimeDiff difftime;
 	gboolean EOS;
-	gdouble coinc_thresh;
-	GHashTable *coinc_window_hashtable;
-	guint max_coinc_window_samps;
-	gchar ifo_pair[3];
-	LIGOTimeGPS *trigger_end;
-	//guint samples_in_last_short_window;
+	GMutex snr_lock;
+	gboolean waiting;
+
+	//guint max_coinc_window_samps;
 
 } GSTLALItacac;
 
