@@ -6,7 +6,7 @@ from collections import deque
 from scipy import signal
 import sys
 import StringIO
-from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd, aggregator
+from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd
 from optparse import OptionParser
 import gi
 gi.require_version('Gst', '1.0')
@@ -15,6 +15,9 @@ GObject.threads_init()
 Gst.init(None)
 import h5py
 import logging
+
+from datamon import aggregator
+from datamon import io
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -41,11 +44,14 @@ class PSDHandler(simplehandler.Handler):
 		del kwargs["instrument"]
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 		self.horizon_distance_func = reference_psd.HorizonDistance(20., 2048., 1./16., 1.4, 1.4)
-		self.range_history = deque(maxlen = 10000)
-		self.range_history_time = deque(maxlen = 10000)
-		self.noisedeq = deque(maxlen = 10000)
+
+		self.routes = ("noise", "range_history")
+		self.datatypes = (("min", min), ("median", aggregator.median), ("max", max))
 		self.timedeq = deque(maxlen = 10000)
+		self.datadeq = {route: deque(maxlen = 10000) for route in self.routes}
 		self.last_reduce_time = None
+		self.prevdataspan = set()
+
 	def do_on_message(self, bus, message):
 		if message.type == Gst.MessageType.ELEMENT and message.get_structure().get_name() == "spectrum":
 			self.psd = pipeio.parse_spectrum_message(message)
@@ -58,19 +64,16 @@ class PSDHandler(simplehandler.Handler):
 		if self.last_reduce_time is None:
 			self.last_reduce_time = int(round(buftime,-2))
 		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
-		thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
-		for typ in ("min", "median", "max"):
-			aggregator.makedir(os.path.join(thisdir, typ))
 		if mapinfo.data:
 			# First noise
 			s = StringIO.StringIO(mapinfo.data)
 			data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().split('\n') if x])
 			ix = numpy.argmax(data, axis=0)[1]
 			self.timedeq.append(buftime)
-			self.noisedeq.append(data[ix,1])
+			self.datadeq['noise'].append(data[ix,1])
 
 			# Then range
-			self.range_history.append(self.horizon_distance_func(self.psd, 8)[0] / 2.25)
+			self.datadeq['range_history'].append(self.horizon_distance_func(self.psd, 8)[0] / 2.25)
 
 			# The PSD
 			psd_freq = numpy.arange(self.psd.data.length / 4) * self.psd.deltaF * 4
@@ -80,35 +83,19 @@ class PSDHandler(simplehandler.Handler):
 			del buf
 			return Gst.FlowReturn.OK
 
-
-		# Save a "latest"
-		self.to_hdf5(os.path.join(os.path.join(self.out_path, self.instrument), "psd.hdf5"), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
-		# write out all of the file types
-		for typ in ("min", "median", "max"):
-			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "noise.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.noisedeq)})
-			self.to_hdf5(os.path.join("%s/%s" % (thisdir, typ), "range_history.hdf5"), {"time": numpy.array(self.timedeq), "data": numpy.array(self.range_history)})
-
-		#
-		# FIXME do data reduction by levels here.
-		#
-
 		# Only reduce every 100s
 		if (buftime - self.last_reduce_time) >= 100:
-			logging.info("reducing data and writing PSD snaphot for %d @ %d" % (buftime, int(aggregator.now()))) 
 			self.last_reduce_time = int(round(buftime,-2))
-			for typ, func in (("min", min), ("median", aggregator.median), ("max", max)):
-				for route in ("noise", "range_history"):
-					for level in range(0, aggregator.DIRS-1):
-						thisdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level)), self.instrument), typ)
-						nextdir = os.path.join(os.path.join(self.out_path, os.path.join(aggregator.gps_to_leaf_directory(buftime, level = level+1)), self.instrument), typ)
-						aggregator.makedir(nextdir)
-						this_fname, this_x, this_y = aggregator.get_dataset(thisdir, route)
-						next_fname, next_x, next_y = aggregator.get_dataset(nextdir, route)
-						xarr, yarr = aggregator.reduce_data(numpy.concatenate((this_x,next_x)), numpy.concatenate((this_y, next_y)), func, level = level + 1)
-						self.to_hdf5(next_fname, {"time": numpy.array(xarr), "data": numpy.array(yarr)})
-			# The PSD is special, we just record it. No min/median/max
-			thisdir = os.path.join(os.path.join(self.out_path, aggregator.gps_to_leaf_directory(buftime)), self.instrument)
-			psd_name = "%s-PSD-%d0-100.hdf5" % (self.instrument, int(round(buftime,-2)))
+			logging.info("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(aggregator.now())))
+
+			timedata = {(self.instrument, route): numpy.array(self.timedeq) for route in self.routes}
+			datadata = {(self.instrument, route): numpy.array(self.datadeq[route]) for route in self.routes}
+			self.prevdataspan = io.hdf5.reduce_by_tag((self.out_path, self.routes, self.instrument, 'instrument', self.datatypes, timedata, datadata, self.prevdataspan))
+
+			# Save a "latest" psd
+			# NOTE: The PSD is special, we just record it. No min/median/max
+			thisdir = os.path.join(self.out_path, io.hdf5.gps_to_leaf_directory(buftime), 'by_instrument', self.instrument)
+			psd_name = "%s-PSD-%d-100.hdf5" % (self.instrument, int(round(buftime,-2)))
 			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
 
 		buf.unmap(mapinfo)
@@ -122,7 +109,6 @@ class PSDHandler(simplehandler.Handler):
 
 	def to_hdf5(self, path, datadict):
 		tmppath = "/dev/shm/%s" % path.replace("/","_") + ".tmp"
-		print tmppath
 		f = h5py.File(tmppath, "w")
 		for k, v in datadict.items():
 			f[k] = v

@@ -32,8 +32,10 @@ import urllib2
 import shutil
 import collections
 from multiprocessing import Pool
-from gstlal import aggregator
 import json
+
+from datamon import aggregator
+from datamon import io
 
 MIN_TIME_QUANTA = 10000
 DIRS = 6
@@ -82,10 +84,9 @@ def parse_command_line():
 #
 
 if __name__ == '__main__':
-
 	options = parse_command_line()
-	# FIXME don't hardcode some of these?
 
+	# FIXME don't hardcode some of these?
 	datatypes = [x for x in [("min", min), ("max", max), ("median", aggregator.median)] if x[0] in options.data_type]
 	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
 	routes = options.route
@@ -94,12 +95,14 @@ if __name__ == '__main__':
 
 	pool = Pool(options.num_threads)
 	prevdataspan = set()
+
 	# We instantiate a single - NOT THREAD SAFE - consumer to subscribe to all of our topics, i.e., jobs
 	if options.kafka_server is not None:
 		from kafka import KafkaConsumer
 		consumer = KafkaConsumer(*jobs, bootstrap_servers=[options.kafka_server], value_deserializer=lambda m: json.loads(m.decode('ascii')), auto_offset_reset='latest')
 	else:
 		consumer = None
+
 	# start an infinite loop to keep updating and aggregating data
 	while True:
 		logging.info("sleeping")
@@ -109,29 +112,23 @@ if __name__ == '__main__':
 		if consumer is not None:
 			# this is not threadsafe!
 			logging.info("getting data from kafka")
-			timedata, datadata = aggregator.get_data_from_kafka(jobs, routes, consumer)
+			timedata, datadata = io.kafka.retrieve_timeseries(consumer, jobs, routes)
 		else:
-			timedata, datadata = None, None
+			timedata, datadata = io.http.retrieve_timeseries(options.base_dir, jobs, routes, options.job_id, num_threads=options.num_threads)
 
 		# First get the raw and reduced data for each job in parallel
-		mapargs = [(job, options.job_tag, routes, datatypes, prevdataspan, options.base_dir, jobs, timedata, datadata) for job in jobs]
-		for ds in pool.map(aggregator.get_data_from_job_and_reduce, mapargs):
-		#for ds in map(aggregator.get_data_from_job_and_reduce, mapargs):
+		mapargs = [(options.base_dir, routes, job, 'job', datatypes, timedata, datadata, prevdataspan) for job in jobs]
+		for ds in pool.map(io.hdf5.reduce_by_tag, mapargs):
 			dataspan.update(ds)
 		prevdataspan = dataspan.copy()
+
 		# Then reduce the data across jobs at each level
 		mapargs = []
 		for start, end in zip(*aggregator.job_expanse(dataspan)):
-			# FIXME don't hardcode this range
-			for level in range(DIRS):
-				this_level_dir = "/".join([options.base_dir, aggregator.gps_to_leaf_directory(start, level = level)])
-				mapargs = []
-				for route in routes:
-					for (typ,func) in datatypes:
-						aggregator.setup_dir_across_job_by_level(start, typ, route, options.base_dir, verbose = True, level = level)
-						mapargs.append((jobs, this_level_dir, typ, route, func, level, start, end))
-				pool.map(aggregator.reduce_across_jobs, mapargs)
-				#map(aggregator.reduce_across_jobs, mapargs)
+			mapargs = []
+			for route in routes:
+				mapargs.append((options.base_dir, route, jobs, 'job', datatypes, start, end))
+			pool.map(io.hdf5.reduce_across_tags, mapargs)
 			logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
 
 	#
