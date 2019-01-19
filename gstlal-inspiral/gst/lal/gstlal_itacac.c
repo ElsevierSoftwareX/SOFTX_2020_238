@@ -952,7 +952,7 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), NULL);
 			}
 		//
-		/ L1H1
+		// L1H1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "H1") == 0) {
 			if(srcbuf == NULL) {
