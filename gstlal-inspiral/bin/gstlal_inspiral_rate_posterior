@@ -47,6 +47,7 @@ matplotlib.rcParams.update({
 	"text.usetex": True
 })
 from matplotlib import figure
+from matplotlib import ticker
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 from optparse import OptionParser
@@ -210,17 +211,22 @@ def plot_rates(signal_rate_ln_pdf, credible_intervals = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., 4. / golden_ratio))
-	signal_axes = fig.gca()
+	axes = fig.gca()
 
 	x, = signal_rate_ln_pdf.centres()
 	y = numpy.exp(signal_rate_ln_pdf.at_centres())
-	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
-	signal_axes.set_title("Event Rate Posterior")
-	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
-	signal_axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
-	signal_axes.loglog()
+	line1, = axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
+	axes.set_title("Event Rate Posterior Probability Density")
+	axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
+	axes.set_ylabel(r"$P(\mathrm{signals} / \mathrm{experiment})$")
 
-	signal_axes.set_ylim((1e-8, 1.))
+	axes.semilogy()
+	#axes.set_ylim((1e-8, 1.))
+	axes.set_xlim((0., axes.get_xlim()[1]))
+
+	axes.yaxis.set_minor_locator(ticker.LogLocator(10., subs = (0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9)))
+	axes.minorticks_on()
+	axes.grid(which = "both", linestyle = "-", linewidth = 0.2)
 
 	if credible_intervals is not None:
 		alphas = dict(zip(sorted(credible_intervals), [.6, .4, .2]))
@@ -233,7 +239,7 @@ def plot_rates(signal_rate_ln_pdf, credible_intervals = None):
 
 		for cred, segs in credible_intervals:
 			for lo, hi in segs:
-				signal_axes.fill_between(x[lo:hi+1], y[lo:hi+1], 1e-8, color = "k", alpha = alphas[cred])
+				axes.fill_between(x[lo:hi+1], y[lo:hi+1], 1e-8, color = "k", alpha = alphas[cred])
 
 	fig.tight_layout()
 	return fig
