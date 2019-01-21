@@ -19,6 +19,7 @@
 import sys
 import os
 import urlparse
+import re
 from gstlal import plotutil
 from glue import markup
 from optparse import OptionParser
@@ -29,13 +30,15 @@ matplotlib.use('Agg')
 import matplotlib.dates as md
 import matplotlib.pyplot as plt
 
+from functools import partial
+
 matplotlib.rcParams.update({
-    "font.size": 10.0,
-    "axes.titlesize": 10.0,
-    "axes.labelsize": 10.0,
-    "xtick.labelsize": 8.0,
-    "ytick.labelsize": 8.0,
-    "legend.fontsize": 8.0,
+    "font.size": 12.0,
+    "axes.titlesize": 14.0,
+    "axes.labelsize": 14.0,
+    "xtick.labelsize": 12.0,
+    "ytick.labelsize": 12.0,
+    "legend.fontsize": 12.0,
     "figure.dpi": 300,
     "savefig.dpi": 300,
     "text.usetex": False,
@@ -193,9 +196,11 @@ options, filenames = parse_command_line()
 # Collect two dictionaries of all job start and stop times
 jobstartdict = {}
 jobstopdict = {}
+jobholdstartdict = {}
+jobholdstopdict = {}
 for line in open(options.input_file):
-	# 09/20/16 22:11:04 Event: ULOG_SUBMIT for HTCondor Node gstlal_inspiral_0001 (472899.0.0) {09/20/16 22:09:49}
-	if "ULOG_SUBMIT" in line:
+	# 09/20/16 22:11:04 Event: ULOG_EXECUTE for HTCondor Node gstlal_inspiral_0001 (472899.0.0) {09/20/16 22:09:49}
+	if "ULOG_EXECUTE" in line:
 		if "[recovery mode]" in line:
 			continue
 		date, time, _, _, _, _, _, jobname, _, _, _ = line.split() 
@@ -206,21 +211,62 @@ for line in open(options.input_file):
 		if jobname in jobstopdict:
 			continue
 		jobstopdict[jobname] = datetime.strptime("%s %s" % (date, time), "%x %X")
+	# 01/08/19 12:06:30 Event: ULOG_JOB_HELD for HTCondor Node gstlal_inspiral_1663 (12200873.0.0) {01/08/19 12:06:27}
+	if "ULOG_JOB_HELD" in line:
+		date, time, _, _, _, _, _, jobname, _, _, _ = line.split()
+		if jobname in jobholdstartdict:
+			jobholdstartdict[jobname].append(datetime.strptime("%s %s" % (date, time), "%x %X"))
+		else:
+			jobholdstartdict[jobname] = [datetime.strptime("%s %s" % (date, time), "%x %X")]
+	# 01/08/19 12:59:30 Event: ULOG_JOB_RELEASED for HTCondor Node gstlal_inspiral_1663 (12200873.0.0) {01/08/19 12:59:21}
+	if "ULOG_JOB_RELEASED" in line:
+		date, time, _, _, _, _, _, jobname, _, _, _ = line.split()
+		if jobname in jobholdstopdict:
+			jobholdstopdict[jobname].append(datetime.strptime("%s %s" % (date, time), "%x %X"))
+		else:
+			jobholdstopdict[jobname] = [datetime.strptime("%s %s" % (date, time), "%x %X")]
 
 # Collect jobs that have both start and stop times
 correctKeys = set(jobstartdict.keys()) & set(jobstopdict.keys())
+holdKeys = set(jobstartdict.keys()) & set(jobstopdict.keys()) & set(jobholdstartdict.keys()) & set(jobholdstopdict.keys())
+
+if options.verbose:
+	print "Number of jobs help:", len(jobholdstartdict)
+	print "Number of jobs released:", len(jobholdstopdict)
+	print "Number of these completed:", len(holdKeys)
 
 # Calculate each job duration
 duration = {}
 for k in correctKeys:
 	duration[k] = (jobstopdict[k] - jobstartdict[k]).total_seconds()
 
+# Calculate job hold times
+holdduration = {}
+for k in holdKeys:
+	holddur = 0
+	for holdstart, holdstop in zip(jobholdstartdict[k], jobholdstopdict[k]):
+		holddur += (holdstop - holdstart).total_seconds()
+	holdduration[k] = holddur
+
+# Subtract job hold time from full duration
+for k,v in holdduration.items():
+	duration[k] -= v
+
 # print any jobs that takes longer than 24 hours
 if options.verbose:
-	print "gstlal_inspiral_inj jobs with runtimes > 86400s"
+	print "Jobs with runtimes > 86400s"
 	for k,v in sorted(duration.items()):
-		if "gstlal_inspiral_inj_0" in k and v > 86400:
+		if v > 86400:
 			print k, v
+	# FIXME Add regular expresion search to match id numbers to split up by job type
+	#print "gstlal_inspiral jobs with runtimes > 86400s"
+	#for k,v in sorted(duration.items()):
+	#	if "gstlal_inspiral_0" in k and v > 86400:
+	#		print k, v
+	#print "gstlal_inspiral_inj jobs with runtimes > 86400s"
+	#for k,v in sorted(duration.items()):
+	#	if "gstlal_inspiral_inj_0" in k and v > 86400:
+	#		print k, v
 
 # Create dictinaries, keyed by job type
 jobtypes = dict([(k[:-5],[]) for k in duration])
