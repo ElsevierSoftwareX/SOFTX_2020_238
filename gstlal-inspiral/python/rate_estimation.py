@@ -340,7 +340,7 @@ def binned_rates_from_samples(samples):
 	"""
 	lo, hi = math.floor(samples.min()), math.ceil(samples.max())
 	nbins = int(math.sqrt(len(samples)) / 40.)
-	binnedarray = rate.BinnedArray(rate.NDBins((rate.LogarithmicPlusOverflowBins(lo if lo !=0. else samples.min(), hi, nbins),)))
+	binnedarray = rate.BinnedArray(rate.NDBins((rate.LogarithmicBins(lo, hi, nbins),)))
 	for sample in samples:
 		binnedarray[sample,] += 1.
 	rate.filter_array(binnedarray.array, rate.gaussian_window(5), use_fft = False)
