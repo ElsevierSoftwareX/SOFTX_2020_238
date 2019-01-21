@@ -164,7 +164,6 @@ def load_ranking_data(filenames, verbose = False):
 
 
 def load_search_results(filenames, ln_likelihood_ratio_threshold, tmp_path = None, verbose = False):
-	background_ln_likelihood_ratios = []
 	zerolag_ln_likelihood_ratios = []
 
 	for n, filename in enumerate(filenames, 1):
@@ -176,10 +175,17 @@ def load_search_results(filenames, ln_likelihood_ratio_threshold, tmp_path = Non
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 
-		for ln_likelihood_ratio, is_background in connection.cursor().execute("""
+		for ln_likelihood_ratio in connection.cursor().execute("""
 SELECT
 	coinc_event.likelihood,
-	EXISTS (
+FROM
+	coinc_event
+	JOIN coinc_inspiral ON (
+		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
+	)
+WHERE
+	coinc_event.coinc_def_id == ?
+	AND NOT EXISTS (
 		SELECT
 			*
 		FROM
@@ -188,24 +194,14 @@ SELECT
 			time_slide.time_slide_id == coinc_event.time_slide_id
 			AND time_slide.offset != 0
 	)
-FROM
-	coinc_event
-	JOIN coinc_inspiral ON (
-		coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
-	)
-WHERE
-	coinc_event.coinc_def_id == ?
 	AND coinc_event.likelihood >= ?"""
 	, (definer_id, (ln_likelihood_ratio_threshold if ln_likelihood_ratio_threshold is not None else NegInf))):
-			if is_background:
-				background_ln_likelihood_ratios.append(ln_likelihood_ratio)
-			else:
-				zerolag_ln_likelihood_ratios.append(ln_likelihood_ratio)
+			zerolag_ln_likelihood_ratios.append(ln_likelihood_ratio)
 
 		connection.close()
 		dbtables.discard_connection_filename(filename, working_filename, verbose = verbose)
 
-	return background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios
+	return zerolag_ln_likelihood_ratios
 
 
 def plot_rates(signal_rate, credible_intervals = None):
@@ -274,7 +270,7 @@ else:
 #
 
 
-background_ln_likelihood_ratios, zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = ln_likelihood_ratio_threshold, tmp_path = options.tmp_space, verbose = options.verbose)
+zerolag_ln_likelihood_ratios = load_search_results(filenames, ln_likelihood_ratio_threshold = ln_likelihood_ratio_threshold, tmp_path = options.tmp_space, verbose = options.verbose)
 
 
 #
