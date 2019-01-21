@@ -206,14 +206,14 @@ WHERE
 	return zerolag_ln_likelihood_ratios
 
 
-def plot_rates(signal_rate, credible_intervals = None):
+def plot_rates(signal_rate_ln_pdf, credible_intervals = None):
 	fig = figure.Figure()
 	FigureCanvas(fig)
 	fig.set_size_inches((4., 4. / golden_ratio))
 	signal_axes = fig.gca()
 
-	x = signal_rate.bins[0].centres()
-	y = signal_rate.array
+	x, = signal_rate_ln_pdf.centres()
+	y = numpy.exp(signal_rate_ln_pdf.at_centres())
 	line1, = signal_axes.plot(x, y, color = "k", linestyle = "-", label = "Signal")
 	signal_axes.set_title("Event Rate Posterior")
 	signal_axes.set_xlabel("Event Rate ($\mathrm{signals} / \mathrm{experiment}$)")
@@ -290,7 +290,7 @@ if options.chain_file is not None:
 	kwargs["chain_file"] = h5py.File(options.chain_file)
 if options.samples is not None:
 	kwargs["nsample"] = options.samples
-signal_rate_pdf, noise_rate_pdf = rate_estimation.calculate_rate_posteriors(rankingstatpdf, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
+signal_rate_ln_pdf, noise_rate_ln_pdf = rate_estimation.calculate_rate_posteriors(rankingstatpdf, zerolag_ln_likelihood_ratios, progressbar = progressbar, **kwargs)
 #p_signal = rate_estimation.calculate_psignal_posteriors_from_rate_samples(rankingstatpdf, zerolag_ln_likelihood_ratios, progressbar = progressbar)
 #while open("p_signal.txt", "w") as f:
 #	for vals in zip(zerolag_ln_likelihood_ratios, p_signal):
@@ -306,12 +306,12 @@ del progressbar
 if options.credible_intervals:
 	if options.verbose:
 		print >>sys.stderr, "determining credible intervals ..."
-	credible_intervals = dict((cred, rate_estimation.confidence_interval_from_binnedarray(signal_rate_pdf, cred)) for cred in options.credible_intervals)
+	credible_intervals = dict((cred, rate_estimation.confidence_interval_from_lnpdf(signal_rate_ln_pdf, cred)) for cred in options.credible_intervals)
 else:
 	credible_intervals = None
 if options.verbose and credible_intervals is not None:
-	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % rate_estimation.mean_from_pdf(signal_rate_pdf)
-	print >>sys.stderr, "rate posterior median = %g signals/experiment" % rate_estimation.median_from_pdf(signal_rate_pdf)
+	print >>sys.stderr, "rate posterior mean = %g signals/experiment" % rate_estimation.mean_from_lnpdf(signal_rate_ln_pdf)
+	print >>sys.stderr, "rate posterior median = %g signals/experiment" % rate_estimation.median_from_lnpdf(signal_rate_ln_pdf)
 	# all modes are the same, pick one and report it
 	print >>sys.stderr, "maximum-likelihood rate = %g signals/experiment" % credible_intervals.values()[0][0]
 	for cred, (mode, lo, hi) in sorted(credible_intervals.items()):
@@ -327,12 +327,12 @@ filename = "rate_posteriors.xml.gz"
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict)
-xmldoc.childNodes[-1].appendChild(signal_rate_pdf.to_xml(u"%s:signal_pdf" % process_name))
-xmldoc.childNodes[-1].appendChild(noise_rate_pdf.to_xml(u"%s:noise_pdf" % process_name))
+xmldoc.childNodes[-1].appendChild(signal_rate_ln_pdf.to_xml(u"%s:signal_ln_pdf" % process_name))
+xmldoc.childNodes[-1].appendChild(noise_rate_ln_pdf.to_xml(u"%s:noise_ln_pdf" % process_name))
 ligolw_utils.write_filename(xmldoc, filename, gz = (filename or stdout).endswith(".gz"), verbose = options.verbose)
 
 
-fig = plot_rates(signal_rate_pdf, credible_intervals = credible_intervals)
+fig = plot_rates(signal_rate_ln_pdf, credible_intervals = credible_intervals)
 for filename in ("rate_posteriors.png", "rate_posteriors.pdf"):
 	if options.verbose:
 		print >>sys.stderr, "writing %s ..." % filename

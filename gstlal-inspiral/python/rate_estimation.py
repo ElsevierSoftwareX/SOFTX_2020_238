@@ -144,37 +144,30 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
 
 
-def moment_from_pdf(binnedarray, moment, c = 0.):
-	if len(binnedarray.bins) != 1:
-		raise ValueError("BinnedArray PDF must have 1 dimension")
-	x = binnedarray.bins.centres()[0]
-	dx = binnedarray.bins.upper()[0] - binnedarray.bins.lower()[0]
-	return ((x - c)**moment * binnedarray.array * dx).sum()
+def moment_from_lnpdf(ln_pdf, moment, c = 0.):
+	if len(ln_pdf.bins) != 1:
+		raise ValueError("BinnedLnPDF must have 1 dimension")
+	x, = ln_pdf.centres()
+	return ((x - c)**moment * (ln_pdf.array / ln_pdf.array.sum())).sum()
 
 
-def mean_from_pdf(binnedarray):
-	return moment_from_pdf(binnedarray, 1.)
+def mean_from_lnpdf(ln_pdf):
+	return moment_from_lnpdf(ln_pdf, 1.)
 
 
-def variance_from_pdf(binnedarray):
-	return moment_from_pdf(binnedarray, 2., mean_from_pdf(binnedarray))
+def variance_from_lnpdf(ln_pdf):
+	return moment_from_pdf(ln_pdf, 2., mean_from_lnpdf(ln_pdf))
 
 
-def median_from_pdf(binnedarray):
-	upper = binnedarray.bins[0].upper()
-	lower = binnedarray.bins[0].lower()
-	bin_widths = upper - lower
-	if (bin_widths <= 0.).any():
-		raise ValueError("PDF bin sizes must be positive")
-	with numpy.errstate(invalid = "ignore"):
-		P = binnedarray.array * bin_widths
-	# fix NaNs in infinite-sized bins
-	P[numpy.isinf(bin_widths)] = 0.
-	# safety checks
+def median_from_lnpdf(ln_pdf):
+	# get bin probabilities from bin counts
+	P = ln_pdf.array / ln_pdf.array.sum()
 	assert (0. <= P).all()
 	assert (P <= 1.).all()
+	if abs(P.sum() - 1.0) > 1e-13:
+		raise ValueError("PDF is not normalized (integral = %g)" % P.sum())
+
 	cdf = P.cumsum()
-	assert abs(cdf[-1] - 1.0) < 1e-13, "PDF is not normalized"
 	# tweak it to clean up the numerics
 	cdf /= cdf[-1]
 
@@ -188,10 +181,12 @@ def median_from_pdf(binnedarray):
 	# answer regardless.
 	#
 
-	binnedarray = rate.BinnedArray(binnedarray.bins)
-	binnedarray.array[:] = cdf - 0.5
-	func = rate.InterpBinnedArray(binnedarray)
-	median = optimize.bisect(func, lower[2], upper[-3], xtol = 1e-14, disp = False)
+	func = rate.InterpBinnedArray(rate.BinnedArray(ln_pdf.bins, cdf - 0.5))
+	median = optimize.bisect(
+		func,
+		ln_pdf.bins[0].lower()[2], ln_pdf.bins[0].upper()[-3],
+		xtol = 1e-14, disp = False
+	)
 
 	#
 	# check result (detects when the root finder has failed for some
@@ -207,39 +202,37 @@ def median_from_pdf(binnedarray):
 	return median
 
 
-def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
+def confidence_interval_from_lnpdf(ln_pdf, confidence = 0.95):
 	"""
 	Constructs a confidence interval based on a BinnedArray object
 	containing a normalized 1-D PDF.  Returns the tuple (mode, lower bound,
 	upper bound).
 	"""
 	# check for funny input
-	if numpy.isnan(binned_array.array).any():
+	if numpy.isnan(ln_pdf.array).any():
 		raise ValueError("NaNs encountered in PDF")
-	if numpy.isinf(binned_array.array).any():
+	if numpy.isinf(ln_pdf.array).any():
 		raise ValueError("infinities encountered in PDF")
-	if (binned_array.array < 0.).any():
+	if (ln_pdf.array < 0.).any():
 		raise ValueError("negative values encountered in PDF")
 	if not 0.0 <= confidence <= 1.0:
 		raise ValueError("confidence must be in [0, 1]")
 
-	mode_index = numpy.argmax(binned_array.array)
+	centres, = ln_pdf.centres()
+	upper = ln_pdf.bins[0].upper()
+	lower = ln_pdf.bins[0].lower()
 
-	centres, = binned_array.centres()
-	upper = binned_array.bins[0].upper()
-	lower = binned_array.bins[0].lower()
-	bin_widths = upper - lower
-	if (bin_widths <= 0.).any():
-		raise ValueError("PDF bin sizes must be positive")
-	pdf = binned_array.array
-	with numpy.errstate(invalid = "ignore"):
-		P = pdf * bin_widths
-	# fix NaNs in infinite-sized bins
-	P[numpy.isinf(bin_widths)] = 0.
+	mode_index = ln_pdf.bins[ln_pdf.argmax()]
+
+	# get bin probabilities from bin counts
+	P = ln_pdf.array / ln_pdf.array.sum()
 	assert (0. <= P).all()
 	assert (P <= 1.).all()
 	if abs(P.sum() - 1.0) > 1e-13:
 		raise ValueError("PDF is not normalized (integral = %g)" % P.sum())
+
+	# don't need ln_pdf anymore.  only need values at bin centres
+	ln_pdf = ln_pdf.at_centres()
 
 	li = ri = mode_index
 	P_sum = P[mode_index]
@@ -248,22 +241,22 @@ def confidence_interval_from_binnedarray(binned_array, confidence = 0.95):
 			raise ValueError("failed to achieve requested confidence")
 
 		if li > 0:
-			pdf_li = pdf[li - 1]
+			ln_pdf_li = ln_pdf[li - 1]
 			P_li = P[li - 1]
 		else:
-			pdf_li = 0.
+			ln_pdf_li = NegInf
 			P_li = 0.
 		if ri < len(P) - 1:
-			pdf_ri = pdf[ri + 1]
+			ln_pdf_ri = ln_pdf[ri + 1]
 			P_ri = P[ri + 1]
 		else:
-			pdf_ri = 0.
+			ln_pdf_ri = NegInf
 			P_ri = 0.
 
-		if pdf_li > pdf_ri:
+		if ln_pdf_li > ln_pdf_ri:
 			li -= 1
 			P_sum += P_li
-		elif pdf_ri > pdf_li:
+		elif ln_pdf_ri > ln_pdf_li:
 			ri += 1
 			P_sum += P_ri
 		else:
@@ -329,7 +322,7 @@ def maximum_likelihood_rates(rankingstatpdf, ln_likelihood_ratios):
 	return tuple(optimize.fmin(f, (1.0, len(ln_likelihood_ratios)), disp = False))
 
 
-def binned_rates_from_samples(samples):
+def rate_posterior_from_samples(samples):
 	"""
 	Construct and return a BinnedArray containing a histogram of a
 	sequence of samples.  If limits is None (default) then the limits
@@ -338,13 +331,17 @@ def binned_rates_from_samples(samples):
 	sequence providing the (low, high) limits, and in that case the
 	sequence can be a generator.
 	"""
-	lo, hi = math.floor(samples.min()), math.ceil(samples.max())
 	nbins = int(math.sqrt(len(samples)) / 40.)
-	binnedarray = rate.BinnedArray(rate.NDBins((rate.LogarithmicBins(lo, hi, nbins),)))
+	assert nbins >= 1, "too few samples to construct histogram"
+	lo = samples.min() * (1. - nbins / len(samples))
+	hi = samples.max() * (1. + nbins / len(samples))
+	ln_pdf = rate.BinnedLnPDF(rate.NDBins((rate.LogarithmicBins(lo, hi, nbins),)))
+	count = ln_pdf.count	# avoid attribute look-up in loop
 	for sample in samples:
-		binnedarray[sample,] += 1.
-	rate.filter_array(binnedarray.array, rate.gaussian_window(5), use_fft = False)
-	return binnedarray
+		count[sample,] += 1.
+	rate.filter_array(ln_pdf.array, rate.gaussian_window(5), use_fft = False)
+	ln_pdf.normalize()
+	return ln_pdf
 
 
 def calculate_rate_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar = None, chain_file = None, nsample = 400000):
@@ -451,9 +448,9 @@ def calculate_rate_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar 
 	# compute marginalized PDFs for the foreground and background
 	# rates.  for each PDF, the samples from the MCMC are histogrammed
 	# and convolved with a density estimation kernel.  the samples have
-	# been drawn from the square root of the correct PDF, so the counts
-	# in the bins must be corrected before converting to a normalized
-	# PDF.  how to correct count:
+	# been drawn from some power of the correct PDF, so the counts in
+	# the bins must be corrected (BinnedLnPDF's internal array always
+	# stores raw counts).  how to correct count:
 	#
 	# correct count = (correct PDF) * (bin size)
 	#               = (measured PDF)^exponent * (bin size)
@@ -463,19 +460,19 @@ def calculate_rate_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar 
 	# this assumes small bin sizes.
 	#
 
-	Rf_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
-	Rf_pdf.array = Rf_pdf.array**exponent / Rf_pdf.bins.volumes()**(exponent - 1.)
-	Rf_pdf.to_pdf()
+	Rf_ln_pdf = rate_posterior_from_samples(samples[:,:,0].flatten())
+	Rf_ln_pdf.array = Rf_ln_pdf.array**exponent / Rf_ln_pdf.bins.volumes()**(exponent - 1.)
+	Rf_ln_pdf.normalize()
 
-	Rb_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
-	Rb_pdf.array = Rb_pdf.array**exponent / Rb_pdf.bins.volumes()**(exponent - 1.)
-	Rb_pdf.to_pdf()
+	Rb_ln_pdf = rate_posterior_from_samples(samples[:,:,1].flatten())
+	Rb_ln_pdf.array = Rb_ln_pdf.array**exponent / Rb_ln_pdf.bins.volumes()**(exponent - 1.)
+	Rb_ln_pdf.normalize()
 
 	#
 	# done
 	#
 
-	return Rf_pdf, Rb_pdf
+	return Rf_ln_pdf, Rb_ln_pdf
 
 
 def calculate_alphabetsoup_rate_posteriors(rankingstatpdf, ln_likelihood_ratios, progressbar = None, nsample = 400000):
@@ -550,17 +547,13 @@ def calculate_alphabetsoup_rate_posteriors(rankingstatpdf, ln_likelihood_ratios,
 	# and convolved with a density estimation kernel.
 	#
 
-	Rf1_pdf = binned_rates_from_samples(samples[:,:,0].flatten())
-	Rf1_pdf.to_pdf()
+	Rf1_pdf = rate_posterior_from_samples(samples[:,:,0].flatten())
 
-	Rf2_pdf = binned_rates_from_samples(samples[:,:,1].flatten())
-	Rf2_pdf.to_pdf()
+	Rf2_pdf = rate_posterior_from_samples(samples[:,:,1].flatten())
 
-	Rf12_pdf = binned_rates_from_samples((samples[:,:,0] + samples[:,:,1]).flatten())
-	Rf12_pdf.to_pdf()
+	Rf12_pdf = rate_posterior_from_samples((samples[:,:,0] + samples[:,:,1]).flatten())
 
-	Rb_pdf = binned_rates_from_samples(samples[:,:,2].flatten())
-	Rb_pdf.to_pdf()
+	Rb_pdf = rate_posterior_from_samples(samples[:,:,2].flatten())
 
 	#
 	# done
