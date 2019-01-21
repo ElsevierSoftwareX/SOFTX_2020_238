@@ -251,7 +251,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# sampler never generates trials with SNRs below the
 		# threshold.
 
-		events = tuple(event for event in events if event.snr > self.snr_min)
+		events = tuple(event for event in events if event.snr >= self.snr_min)
 		assert len(events) >= self.min_instruments, "coincidence engine failed to respect minimum instrument count requirement for candidates:  found candidate with %d < %d instruments" % (len(events), self.min_instruments)
 
 		#
