@@ -298,7 +298,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					ignore[injections].append(int(bgbin_index))
 
 		# FIXME choose better splitting?
-		numchunks = 10
+		numchunks = 20
 
 		# only use a channel dict with the relevant channels
 		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
@@ -587,7 +587,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 
 	
 	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
-	files_to_group = 40
+	files_to_group = 100
 	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
 		# Flatten the nodes for this sub bank
 		nodes = flatten(nodes)
@@ -760,7 +760,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, cpJob, innodes, ligolw_add_nodes, options, instruments):
 
-	num_chunks = 50
+	num_chunks = 100
 
 	if options.vetoes is None:
 		vetoes = []
@@ -943,7 +943,7 @@ def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralCompute
 	margzerolagout = []
 	margnodes = []
 	margzerolagnodes = []
-	margnum = 16
+	margnum = 50
 	for i,n in enumerate(range(0, len(margin), margnum)):
 		margout.append(inspiral_pipe.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
 		margnodes.append(inspiral_pipe.generic_node(marginalizeJob, dag, parent_nodes = parents,
