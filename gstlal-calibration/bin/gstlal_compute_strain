@@ -682,14 +682,14 @@ if compute_calib_statevector:
 	filterclock_channel_list = ChannelNames["filterclockchannellist"].split(';') if "filterclockchannellist" in ChannelNames else [lownoise_channel_name]
 	filterclock_bitmask_list = Bitmasks["filterclockbitmasklist"].split(';') if "filterclockbitmasklist" in Bitmasks else [lownoise_bitmask]
 	hwinj_channel_name = ChannelNames["hwinjchannel"] if "hwinjchannel" in ChannelNames else ChannelNames["inputdqchannel"]
-	cbchwinj_bitmask = int(Bitmasks["cbchwinjbitmask"]) if "cbchwinjbitmask" in Bitmasks else 0
-	cbchwinj_offbitmask = int(Bitmasks["cbchwinjoffbitmask"]) if "cbchwinjoffbitmask" in Bitmasks else 0
-	bursthwinj_bitmask = int(Bitmasks["bursthwinjbitmask"]) if "bursthwinjbitmask" in Bitmasks else 0
-	bursthwinj_offbitmask = int(Bitmasks["bursthwinjoffbitmask"]) if "bursthwinjoffbitmask" in Bitmasks else 0
-	detcharhwinj_bitmask = int(Bitmasks["detcharhwinjbitmask"]) if "detcharhwinjbitmask" in Bitmasks else 0
-	detcharhwinj_offbitmask = int(Bitmasks["detcharhwinjoffbitmask"]) if "detcharhwinjoffbitmask" in Bitmasks else 0
-	stochhwinj_bitmask = int(Bitmasks["stochhwinjbitmask"]) if "stochhwinjbitmask" in Bitmasks else 0
-	stochhwinj_offbitmask = int(Bitmasks["stochhwinjoffbitmask"]) if "stochhwinjoffbitmask" in Bitmasks else 0
+	cbchwinj_bitmask = int(Bitmasks["cbchwinjbitmask"]) if "cbchwinjbitmask" in Bitmasks else None
+	cbchwinj_offbitmask = int(Bitmasks["cbchwinjoffbitmask"]) if "cbchwinjoffbitmask" in Bitmasks else None
+	bursthwinj_bitmask = int(Bitmasks["bursthwinjbitmask"]) if "bursthwinjbitmask" in Bitmasks else None
+	bursthwinj_offbitmask = int(Bitmasks["bursthwinjoffbitmask"]) if "bursthwinjoffbitmask" in Bitmasks else None
+	detcharhwinj_bitmask = int(Bitmasks["detcharhwinjbitmask"]) if "detcharhwinjbitmask" in Bitmasks else None
+	detcharhwinj_offbitmask = int(Bitmasks["detcharhwinjoffbitmask"]) if "detcharhwinjoffbitmask" in Bitmasks else None
+	stochhwinj_bitmask = int(Bitmasks["stochhwinjbitmask"]) if "stochhwinjbitmask" in Bitmasks else None
+	stochhwinj_offbitmask = int(Bitmasks["stochhwinjoffbitmask"]) if "stochhwinjoffbitmask" in Bitmasks else None
 
 	channel_list.append((instrument, obsintent_channel_name))
 	headkeys.append("obsintent")
@@ -705,7 +705,7 @@ if compute_calib_statevector:
 	for i in range(len(filterclock_channel_list)):
 		filterclock_channel_list[i] = filterclock_channel_list[i].split(',')
 		for j in range(len(filterclock_channel_list[i])):
-			if filterclock_channel_list[i][j] != obsintent_channel_name and filterclock_channel_list[i][j] != lownoise_channel_name and filterclock_channel_list[i][j] != hwinj_channel_name:
+			if filterclock_channel_list[i][j] != obsintent_channel_name and filterclock_channel_list[i][j] != lownoise_channel_name:
 				channel_list.append((instrument, filterclock_channel_list[i][j]))
 				headkeys.append(filterclock_channel_list[i][j])
 		filterclock_sr_list[i] = int(filterclock_sr_list[i])
@@ -2037,9 +2037,17 @@ if compute_calib_statevector:
 	filterclock_channels = []
 	for i in range(len(filterclock_channel_list)):
 		for key in headkeys:
-			if key in filterclock_channel_list[i]:
-				filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i],key), "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
-	filtersok = pipeparts.mkadder(pipeline, tuple(filterclock_channels))
+			for j in range(len(filterclock_channel_list[i])):
+				if ((filterclock_channel_list[i][j] != obsintent_channel_name and filterclock_channel_list[i][j] != lownoise_channel_name) and key in filterclock_channel_list[i]):
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i],key), "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
+				elif (filterclock_channel_list[i][j] == obsintent_channel_name and key == "obsintent"):
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
+				elif (filterclock_channel_list[i][j] == lownoise_channel_name and key == "lownoise"):
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, lownoisetee, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
+	if len(filterclock_channel_list) > 1:
+		filtersok = pipeparts.mkadder(pipeline, tuple(filterclock_channels))
+	else:
+		filtersok = filterclock_channels[0]
 	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = 1, threshold=len(filterclock_channels))
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
 	filtersoktee = pipeparts.mktee(pipeline, filtersok)
@@ -2233,16 +2241,36 @@ if compute_calib_statevector:
 
 	hwinjchanneltee = obsintentchanneltee if hwinj_channel_name == obsintent_channel_name else lownoisechanneltee if hwinj_channel_name == lownoise_channel_name else pipeparts.mktee(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict["hwinj"], hwinj_caps, "HW_injections_%s" % instrument))
 
-	hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_bitmask, required_off = cbchwinj_offbitmask, status_out = pow(2,6))
+	if cbchwinj_bitmask is not None:
+		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_bitmask, status_out = pow(2,6))
+	elif cbchwinj_offbitmask is not None:
+		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_off = cbchwinj_offbitmask, status_out = pow(2,6))
+	else:
+		raise ValueError("Must set either CBCHWInjBitmask or CBCHWInjOffBitmask")
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
 
-	hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, required_off = bursthwinj_offbitmask, status_out = pow(2,7))
+	if bursthwinj_bitmask is not None:
+		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,7))
+	elif bursthwinj_offbitmask is not None:
+		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_off = bursthwinj_offbitmask, status_out = pow(2,7))
+	else:
+		raise ValueError("Must set either BurstHWInjBitmask or BurstHWInjOffBitmask")
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, calibstate_caps)
 
-	hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, required_off = detcharhwinj_offbitmask, status_out = pow(2,8))
+	if detcharhwinj_bitmask is not None:
+		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, status_out = pow(2,8))
+	elif detcharhwinj_offbitmask is not None:
+		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_off = detcharhwinj_offbitmask, status_out = pow(2,8))
+	else:
+		raise ValueError("Must set either DetCharHWInjBitmask or DetcharHWInjOffBitmask")
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, calibstate_caps)
 
-	hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, required_off = stochhwinj_offbitmask, status_out = pow(2,5))
+	if stochhwinj_bitmask is not None:
+		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, status_out = pow(2,5))
+	elif stochhwinj_offbitmask is not None:
+		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_off = stochhwinj_offbitmask, status_out = pow(2,5))
+	else:
+		raise ValueError("Must set either StochHWInjBitmask or StochHWInjOffBitmask")
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, calibstate_caps)
 
 	#
