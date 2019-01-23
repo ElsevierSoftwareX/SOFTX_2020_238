@@ -160,15 +160,12 @@ def variance_from_lnpdf(ln_pdf):
 
 
 def median_from_lnpdf(ln_pdf):
+	#
 	# get bin probabilities from bin counts
-	P = ln_pdf.array / ln_pdf.array.sum()
-	assert (0. <= P).all()
-	assert (P <= 1.).all()
-	if abs(P.sum() - 1.0) > 1e-13:
-		raise ValueError("PDF is not normalized (integral = %g)" % P.sum())
+	#
 
-	cdf = P.cumsum()
-	# tweak it to clean up the numerics
+	assert (ln_pdf.array >= 0.).all(), "PDF contains negative counts"
+	cdf = ln_pdf.array.cumsum()
 	cdf /= cdf[-1]
 
 	#
