@@ -27,7 +27,7 @@ if options.channel_list is not None:
 else:
 	raise ValueError('Channel list option must be set.')
 
-data = TimeSeriesDict.read(options.frame_cache, channels = map("%s:%s".__mod__, channel_list), start = start, end = end)
+data = TimeSeriesDict.read(options.frame_cache, map("%s:%s".__mod__, channel_list), start = start, end = end)
 
 segs = DataQualityFlag.query('%s:DMT-CALIBRATED:1' % ifo, start, end)
 

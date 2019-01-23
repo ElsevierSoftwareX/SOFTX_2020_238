@@ -2041,9 +2041,9 @@ if compute_calib_statevector:
 				if ((filterclock_channel_list[i][j] != obsintent_channel_name and filterclock_channel_list[i][j] != lownoise_channel_name) and key in filterclock_channel_list[i]):
 					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i],key), "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
 				elif (filterclock_channel_list[i][j] == obsintent_channel_name and key == "obsintent"):
-					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = pow(2,1), status_out = 1), calibstate_caps)))
 				elif (filterclock_channel_list[i][j] == lownoise_channel_name and key == "lownoise"):
-					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, lownoisetee, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, lownoisetee, "lal_logicalundersample", required_on = pow(2,2), status_out = 1), calibstate_caps)))
 	if len(filterclock_channel_list) > 1:
 		filtersok = pipeparts.mkadder(pipeline, tuple(filterclock_channels))
 	else:

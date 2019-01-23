@@ -25,6 +25,40 @@ calib_state_channel_name = options.calib_state_vector_channel_name
 
 calib_state_vector = StateVector.read(hoft_frames_cache, "%s:%s" % (ifo, calib_state_channel_name), start = start, end = end)
 
+# define list of labels
+labels = [
+	'h(t) OK',
+	'Obs. intent',
+	'Obs. ready',
+	'Filters OK',
+	'No gap',
+	'No Stoch. inj.',
+	'No CBC inj.',
+	'No Burst inj.',
+	'No DetChar inj.',
+	'ktst smooth',
+	'kpum smooth',
+	'kuim smooth',
+	'kc smooth',
+	'fcc smooth',
+	'fs smooth',
+	'qinv smooth',
+	'SUS line3 coh.',
+	'SUS line2 coh.',
+	'SUS line1 coh.',
+	'PCALY line1 coh.',
+	'PCALY line2 coh.',
+	'PCALY line4 coh.',
+	'DARM EP match',
+	'A EP match',
+	'C EP match',
+	'MISC EP match',
+	'Line subtr.',
+	'Noise subtr.',
+	'Noise subtr. gate'
+]
+calib_state_vector.bits = labels
+
 plot = calib_state_vector.plot(format='segments')
 ax = plot.gca()
 ax.set_xscale('seconds')
