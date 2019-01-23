@@ -465,7 +465,16 @@ def smooth_kappas_no_coherence_test(pipeline, head, var, expected, N, Nav, defau
 	pipeparts.mknxydumpsink(pipeline, head, "smooth_kappatst.txt")
 	return head
 
-def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, min_samples, status_out_smooth = 1, starting_rate=16, ending_rate=16):
+def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag, real_ok_var, imag_ok_var, median_samples, avg_samples, status_out_smooth = 1, starting_rate=16, ending_rate=16):
+
+	# Compensate for digital error in the running average
+	expected_real_sum = 0.0
+	expected_imag_sum = 0.0
+	for i in range(0, avg_samples):
+		expected_real_sum = expected_real_sum + expected_real
+		expected_imag_sum = expected_imag_sum + expected_imag
+	expected_real = expected_real_sum / avg_samples
+	expected_imag = expected_imag_sum / avg_samples
 
 	if type(real_ok_var) is list:
 		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [real_ok_var[0], expected_real, expected_real, real_ok_var[1]], insert_gap = True, remove_gap = False)
@@ -488,13 +497,20 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag,
 		smoothIInRange = pipeparts.mkgeneric(pipeline, smoothIInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 		smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 
+	min_samples = int(median_samples / 2) + avg_samples
 	smoothInRange = mkgate(pipeline, smoothRInRangetee, mkadder(pipeline, list_srcs(pipeline, smoothIInRange, smoothRInRangetee)), status_out_smooth * 2, attack_length = -min_samples)
 	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 
 	return smoothInRange
 
-def compute_kappa_bits_only_real(pipeline, smooth, expected, ok_var, min_samples, status_out_smooth = 1, starting_rate=16, ending_rate=16):
+def compute_kappa_bits_only_real(pipeline, smooth, expected, ok_var, median_samples, avg_samples, status_out_smooth = 1, starting_rate=16, ending_rate=16):
+
+	# Compensate for digital error in the running average
+	expected_sum = 0.0
+	for i in range(0, avg_samples):
+		expected_sum = expected_sum + expected
+	expected = expected_sum / avg_samples
 
 	if type(ok_var) is list:
 		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [ok_var[0], expected, expected, ok_var[1]], insert_gap = True, remove_gap = False)
@@ -506,6 +522,7 @@ def compute_kappa_bits_only_real(pipeline, smooth, expected, ok_var, min_samples
 		smoothInRange = pipeparts.mkgeneric(pipeline, smoothInRange, "lal_logicalundersample", required_on = status_out_smooth, status_out = status_out_smooth)
 		smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % ending_rate)
 	smoothInRangetee = pipeparts.mktee(pipeline, smoothInRange)
+	min_samples = int(median_samples / 2) + avg_samples
 	smoothInRange = mkgate(pipeline, smoothInRangetee, smoothInRangetee, status_out_smooth, attack_length = -min_samples)
 	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 
