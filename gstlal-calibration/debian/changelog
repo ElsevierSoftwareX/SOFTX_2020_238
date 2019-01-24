@@ -1,3 +1,11 @@
+gstlal-calibration (1.2.6-1) unstable; urgency=low
+
+  * Changes to CALIB_STATE_VECTOR calculation to allow more flexibility for
+    input state channels
+  * Adjustments to how FILTERS_OK bit is calculated
+
+ -- Madeline Wade <madeline.wade@ligo.org>  Thu, 24 Jan 2019 14:49:10 -0200
+
 gstlal-calibration (1.2.5-1) unstable; urgency=low
 
   * Bug fixes to allow computation of kappa_uim and everything that depends on
