@@ -218,7 +218,7 @@ head = firbank = pipeparts.mkfirbank(pipeline, head, fir_matrix = numpy.zeros((l
 
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_stringsearch", options.__dict__)
+process = ligolw_process.register_to_xmldoc(xmldoc, "StringSearch", options.__dict__)
 
 sngl_burst_table = lsctables.New(lsctables.SnglBurstTable, ["process_id", "event_id","ifo","search","channel","start_time","start_time_ns","peak_time","peak_time_ns","duration","central_freq","bandwidth","amplitude","snr","confidence","chisq","chisq_dof"])
 xmldoc.childNodes[-1].appendChild(sngl_burst_table)
