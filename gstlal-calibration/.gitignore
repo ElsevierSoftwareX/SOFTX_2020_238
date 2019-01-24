@@ -5,3 +5,8 @@ tests/gstlal-calibration-1.2.3-tests/H1/Frames/**
 tests/gstlal-calibration-1.2.3-tests/H1/Filters/**
 tests/gstlal-calibration-1.2.4-tests/H1/Frames/**
 tests/gstlal-calibration-1.2.4-tests/H1/Filters/**
+tests/gstlal-calibration-1.2.6-tests/kappas_test/Filters/**
+tests/gstlal-calibration-1.2.6-tests/kappas_test/Frames/**
+tests/gstlal-calibration-1.2.6-tests/H1/Filters/**
+tests/gstlal-calibration-1.2.6-tests/H1/Frames/**
+

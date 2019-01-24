@@ -2048,6 +2048,9 @@ if compute_calib_statevector:
 		filtersok = pipeparts.mkadder(pipeline, tuple(filterclock_channels))
 	else:
 		filtersok = filterclock_channels[0]
+	lownoise_gate = pipeparts.mkbitvectorgen(pipeline, lownoisetee, bit_vector = len(filterclock_channels), threshold = pow(2,2))
+	lownoise_gate = pipeparts.mkcapsfilter(pipeline, lownoise_gate, calibstate_caps)
+	filtersok = pipeparts.mkadder(pipeline, calibration_parts.list_srcs(lownoise_gate, filtersok))
 	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = 1, threshold=len(filterclock_channels))
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
 	filtersoktee = pipeparts.mktee(pipeline, filtersok)
