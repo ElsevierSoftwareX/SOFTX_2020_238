@@ -834,7 +834,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		sngls_snr_threshold = options.singles_threshold,
 		tag = options.job_tag,
 		kafka_server = options.output_kafka_server,
-		cluster = options.data_source in ("lvshm", "framexmit"),# we cluster when running online within thinca.
+		cluster = True,#options.data_source in ("lvshm", "framexmit"),# If uncommented, we only cluster when running online
 		verbose = options.verbose
 	)
 	if options.verbose:

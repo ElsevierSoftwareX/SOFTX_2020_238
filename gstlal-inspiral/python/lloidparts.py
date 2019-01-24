@@ -691,10 +691,11 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 		if chisq_type == 'autochisq':
 			# FIXME don't hardcode
 			# peak finding window (n) in samples is 1 second at max rate, ie max(rates)
+			nsamps_window = max(max(bank.get_rates()) / 4, 256) # FIXME stupid hack
 			if instrument == 'H1' or instrument == 'L1':
-				head = pipeparts.mkitac(pipeline, snr, 1 * max(bank.get_rates()), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = 4, sigmasq = bank.sigmasq)
+				head = pipeparts.mkitac(pipeline, snr, nsamps_window, bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = 4, sigmasq = bank.sigmasq)
 			else:
-				head = pipeparts.mkitac(pipeline, snr, 1 * max(bank.get_rates()), bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
+				head = pipeparts.mkitac(pipeline, snr, nsamps_window, bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = bank.snr_threshold, sigmasq = bank.sigmasq)
 			if verbose:
 				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
 			triggersrcs[instrument].add(head)
