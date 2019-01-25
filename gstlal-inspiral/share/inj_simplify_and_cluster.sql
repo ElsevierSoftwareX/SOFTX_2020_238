@@ -38,6 +38,7 @@ CREATE TEMPORARY TABLE _idmap_ AS
 		old.process_id;
 DROP INDEX tmpindex;
 CREATE INDEX tmpindex ON _idmap_ (old);
+CREATE INDEX tmpindex2 ON _idmap_ (new, old);
 
 UPDATE coinc_event SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
 UPDATE segment SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
@@ -50,6 +51,7 @@ DELETE FROM process WHERE process_id IN (SELECT old FROM _idmap_ WHERE old != ne
 DELETE FROM process_params WHERE process_id NOT IN (SELECT process_id FROM process);
 
 DROP INDEX tmpindex;
+DROP INDEX tmpindex2;
 DROP TABLE _idmap_;
 
 --
@@ -69,11 +71,13 @@ CREATE TEMPORARY TABLE _idmap_ AS
 	GROUP BY
 		old.coinc_def_id;
 CREATE INDEX tmpindex ON _idmap_ (old);
+CREATE INDEX tmpindex2 ON _idmap_ (new, old);
 
 UPDATE coinc_event SET coinc_def_id = (SELECT new FROM _idmap_ WHERE old == coinc_def_id);
 DELETE FROM coinc_definer WHERE coinc_def_id IN (SELECT old FROM _idmap_ WHERE old != new);
 
 DROP INDEX tmpindex;
+DROP INDEX tmpindex2;
 DROP TABLE _idmap_;
 
 --
@@ -111,6 +115,8 @@ DROP TABLE _idmap_;
 -- references to their IDs in other tables
 --
 
+CREATE INDEX tmpindex ON segment(segment_def_id, start_time, start_time_ns, end_time, end_time_ns);
+
 DELETE FROM
 	segment
 WHERE
@@ -128,6 +134,7 @@ WHERE
 			AND other.segment_id < segment.segment_id
 	);
 
+DROP INDEX tmpindex;
 --
 -- time_slide clean up
 --
