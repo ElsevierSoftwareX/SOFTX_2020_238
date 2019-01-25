@@ -16,6 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+import os
+
 from gstlal import pipeparts
 import numpy
 
@@ -42,8 +44,16 @@ def mkcomplexqueue(pipeline, head, length = 0, min_length = 0):
 	head = pipeparts.mktogglecomplex(pipeline, head)
 	return head
 	
-def mkinsertgap(pipeline, head, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND, chop_length = 0):
-	return pipeparts.mkgeneric(pipeline, head, "lal_insertgap", bad_data_intervals = bad_data_intervals, insert_gap = insert_gap, remove_gap = remove_gap, replace_value = replace_value, fill_discont = fill_discont, block_duration = int(block_duration), chop_length = int(chop_length))
+def mkinsertgap(pipeline, head, **properties):
+	if "bad_data_intervals" in properties:
+		# Make sure the array property bad-data-intervals is formatted correctly
+		intervals = properties.pop("bad_data_intervals")
+		if intervals is not None:
+			bad_data_intervals = []
+			for i in range(0, len(intervals)):
+				bad_data_intervals.append(float(intervals[i]))
+			properties["bad_data_intervals"] = bad_data_intervals
+	return pipeparts.mkgeneric(pipeline, head, "lal_insertgap", **properties)
 
 #def mkupsample(pipeline, head, new_caps):
 #	head = pipeparts.mkgeneric(pipeline, head, "lal_constantupsample")
@@ -65,12 +75,80 @@ def mkresample(pipeline, head, quality, zero_latency, caps):
 	return head
 
 def mkcomplexfirbank(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
+	if fir_matrix is not None:
+		# Make sure the fir matrix is formatted correctly
+		matrix = []
+		for i in range(0, len(fir_matrix)):
+			firfilt = []
+			for j in range(0, len(fir_matrix[i])):
+				firfilt.append(float(fir_matrix[i][j]))
+			matrix.append(firfilt)
+		fir_matrix = matrix
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return pipeparts.mkgeneric(pipeline, src, "lal_complexfirbank", **properties)
 
 def mkcomplexfirbank2(pipeline, src, latency = None, fir_matrix = None, time_domain = None, block_stride = None):
+	if fir_matrix is not None:
+		# Make sure the fir matrix is formatted correctly
+		matrix = []
+		for i in range(0, len(fir_matrix)):
+			firfilt = []
+			for j in range(0, len(fir_matrix[i])):
+				firfilt.append(float(fir_matrix[i][j]))
+			matrix.append(firfilt)
+		fir_matrix = matrix
 	properties = dict((name, value) for name, value in zip(("latency", "fir_matrix", "time_domain", "block_stride"), (latency, fir_matrix, time_domain, block_stride)) if value is not None)
 	return pipeparts.mkgeneric(pipeline, src, "lal_complexfirbank2", **properties)
+
+def mkfccupdate(pipeline, src, **properties):
+	if "fir_matrix" in properties:
+		# Make sure the fir matrix is formatted correctly
+		matrix = properties.pop("fir_matrix")
+		if matrix is not None:
+			fir_matrix = []
+			for i in range(0, len(matrix)):
+				firfilt = []
+				for j in range(0, len(matrix[i])):
+					firfilt.append(float(matrix[i][j]))
+				fir_matrix.append(firfilt)
+			properties["fir_matrix"] = fir_matrix
+	return pipeparts.mkgeneric(pipeline, src, "lal_fcc_update", **properties)
+
+def mktransferfunction(pipeline, src, **properties):
+	if "notch_frequencies" in properties:
+		# Make sure the array property notch-frequencies is formatted correctly
+		freqs = properties.pop("notch_frequencies")
+		if freqs is not None:
+			notch_frequencies = []
+			for i in range(0, len(freqs)):
+				notch_frequencies.append(float(freqs[i]))
+			properties["notch_frequencies"] = notch_frequencies
+	return pipeparts.mkgeneric(pipeline, src, "lal_transferfunction", **properties)
+
+def mkadaptivefirfilt(pipeline, src, **properties):
+	# Make sure each array property is formatted correctly
+	if "static_filter" in properties:
+		staticfilt = properties.pop("static_filter")
+		if staticfilt is not None:
+			static_filter = []
+			for i in range(0, len(staticfilt)):
+				static_filter.append(float(staticfilt[i]))
+			properties["static_filter"] = static_filter
+	if "static_zeros" in properties:
+		staticz = properties.pop("static_zeros")
+		if staticz is not None:
+			static_zeros = []
+			for i in range(0, len(staticz)):
+				static_zeros.append(float(staticz[i]))
+			properties["static_zeros"] = static_zeros
+	if "static_poles" in properties:
+		staticp = properties.pop("static_poles")
+		if staticp is not None:
+			static_poles = []
+			for i in range(0, len(staticp)):
+				static_poles.append(float(staticp[i]))
+			properties["static_poles"] = static_poles
+	return pipeparts.mkgeneric(pipeline, src, "lal_adaptivefirfilt", **properties)
 
 def mkpow(pipeline, src, **properties):
 	return pipeparts.mkgeneric(pipeline, src, "cpow", **properties)
@@ -139,9 +217,9 @@ def write_graph(demux, pipeline, name):
 
 def hook_up(pipeline, demux, channel_name, instrument, buffer_length):
 	if channel_name.endswith("UNCERTAINTY"):
-		head = mkinsertgap(pipeline, None, block_duration = 1000000000 * buffer_length, replace_value = 1)
+		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 1)
 	else:
-		head = mkinsertgap(pipeline, None, block_duration = 1000000000 * buffer_length)
+		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 0)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_static_pad("sink"))
 
 	return head
@@ -477,9 +555,9 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag,
 	expected_imag = expected_imag_sum / avg_samples
 
 	if type(real_ok_var) is list:
-		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [real_ok_var[0], expected_real, expected_real, real_ok_var[1]], insert_gap = True, remove_gap = False)
+		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [real_ok_var[0], expected_real, expected_real, real_ok_var[1]], insert_gap = True, remove_gap = False, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	else:
-		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [expected_real - real_ok_var, expected_real, expected_real, expected_real + real_ok_var], insert_gap = True, remove_gap = False)
+		smoothRInRange = mkinsertgap(pipeline, smoothR, bad_data_intervals = [expected_real - real_ok_var, expected_real, expected_real, expected_real + real_ok_var], insert_gap = True, remove_gap = False, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	smoothRInRange = pipeparts.mkbitvectorgen(pipeline, smoothRInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothRInRange = pipeparts.mkcapsfilter(pipeline, smoothRInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
 	if starting_rate != ending_rate:
@@ -488,9 +566,9 @@ def compute_kappa_bits(pipeline, smoothR, smoothI, expected_real, expected_imag,
 	smoothRInRangetee = pipeparts.mktee(pipeline, smoothRInRange)
 
 	if type(imag_ok_var) is list:
-		smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [imag_ok_var[0], expected_imag, expected_imag, imag_ok_var[1]], insert_gap = True, remove_gap = False)
+		smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [imag_ok_var[0], expected_imag, expected_imag, imag_ok_var[1]], insert_gap = True, remove_gap = False, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	else:
-		smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [expected_imag - imag_ok_var, expected_imag, expected_imag, expected_imag + imag_ok_var], insert_gap = True, remove_gap = False)
+		smoothIInRange = mkinsertgap(pipeline, smoothI, bad_data_intervals = [expected_imag - imag_ok_var, expected_imag, expected_imag, expected_imag + imag_ok_var], insert_gap = True, remove_gap = False, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	smoothIInRange = pipeparts.mkbitvectorgen(pipeline, smoothIInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothIInRange = pipeparts.mkcapsfilter(pipeline, smoothIInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
 	if starting_rate != ending_rate:
@@ -513,9 +591,9 @@ def compute_kappa_bits_only_real(pipeline, smooth, expected, ok_var, median_samp
 	expected = expected_sum / avg_samples
 
 	if type(ok_var) is list:
-		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [ok_var[0], expected, expected, ok_var[1]], insert_gap = True, remove_gap = False)
+		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [ok_var[0], expected, expected, ok_var[1]], insert_gap = True, remove_gap = False, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	else:
-		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [expected - ok_var, expected, expected, expected + ok_var], insert_gap = True, remove_gap = False)
+		smoothInRange = mkinsertgap(pipeline, smooth, bad_data_intervals = [expected - ok_var, expected, expected, expected + ok_var], insert_gap = True, remove_gap = False, replace_value = 0, fill_discont = True, block_duration = Gst.SECOND)
 	smoothInRange = pipeparts.mkbitvectorgen(pipeline, smoothInRange, nongap_is_control = True, bit_vector = status_out_smooth)
 	smoothInRange = pipeparts.mkcapsfilter(pipeline, smoothInRange, "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % starting_rate)
 	if starting_rate != ending_rate:
@@ -969,7 +1047,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	if noisesub_gate_bit is not None:
 		transfer_functions = mkgate(pipeline, transfer_functions, noisesub_gate_bit, 1)
-	transfer_functions = pipeparts.mkgeneric(pipeline, transfer_functions, "lal_transferfunction", fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = high_pass / 2.0, update_after_gap = True, use_median = use_median, parallel_mode = parallel_mode, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = int(delay_time * witness_rate), fir_timeshift = 0, filename = filename)
+	transfer_functions = mktransferfunction(pipeline, transfer_functions, fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = high_pass / 2.0, update_after_gap = True, use_median = use_median, parallel_mode = parallel_mode, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = int(delay_time * witness_rate), fir_timeshift = 0, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		if parallel_mode:

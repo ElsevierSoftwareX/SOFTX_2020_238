@@ -655,9 +655,14 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 			g_free(element->bad_data_intervals);
 			element->bad_data_intervals = NULL;
 		}
-		element->bad_data_intervals = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->array_length);
+		element->array_length = gst_value_array_get_size(value);
 		if(element->array_length % 2)
-			GST_ERROR_OBJECT(element, "Array length for property bad_data_intervals must be even");
+			GST_ERROR_OBJECT(element, "Array length for property bad-data-intervals must be even");
+		element->bad_data_intervals = g_malloc(element->array_length * sizeof(double));
+		int i;
+		for(i = 0; i < element->array_length; i++)
+			element->bad_data_intervals[i] = g_value_get_double(gst_value_array_get_value(value, i));
+
 		break;
 	}
 	case ARG_BLOCK_DURATION:
@@ -700,8 +705,20 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_REPLACE_VALUE:
 		g_value_set_double(value, element->replace_value);
 		break;
-	case ARG_BAD_DATA_INTERVALS:
-		g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->bad_data_intervals, element->array_length));
+	case ARG_BAD_DATA_INTERVALS: ;
+		GValue va = G_VALUE_INIT;
+		g_value_init(&va, GST_TYPE_ARRAY);
+		int i;
+		for(i = 0; i < element->array_length; i++) {
+			GValue v = G_VALUE_INIT;
+			g_value_init(&v, G_TYPE_DOUBLE);
+			g_value_set_double(&v, element->bad_data_intervals[i]);
+			gst_value_array_append_value(&va, &v);
+			g_value_unset(&v);
+		}
+		g_value_copy(&va, value);
+		g_value_unset(&va);
+
 		break;
 	case ARG_BLOCK_DURATION:
 		g_value_set_uint64(value, element->block_duration);
@@ -849,7 +866,7 @@ static void gstlal_insertgap_class_init(GSTLALInsertGapClass *klass)
 	g_object_class_install_property(
 		gobject_class,
 		ARG_BAD_DATA_INTERVALS,
-		g_param_spec_value_array(
+		gst_param_spec_array(
 			"bad-data-intervals",
 			"Bad data intervals",
 			"Array containing minima and maxima of closed intervals in which data is\n\t\t\t"

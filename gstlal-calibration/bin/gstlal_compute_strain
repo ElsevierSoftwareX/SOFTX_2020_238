@@ -1350,7 +1350,7 @@ if compute_kappac or compute_fcc or compute_fs or compute_srcq:
 		smooth_fcctee = pipeparts.mktee(pipeline, smooth_fcc)
 
 #		if apply_fcc:
-#			update_fcc = pipeparts.mkgeneric(pipeline, smooth_fcctee, "lal_fcc_update", data_rate = hoft_sr, fcc_rate = compute_factors_sr, fcc_model = fcc_default, averaging_time = float(TDCFConfigs["fccaveragingtime"]), filter_duration = float(TDCFConfigs["fccfilterduration"]))
+#			update_fcc = calibration_parts.mkfccupdate(pipeline, smooth_fcctee, data_rate = hoft_sr, fcc_rate = compute_factors_sr, fcc_model = fcc_default, averaging_time = float(TDCFConfigs["fccaveragingtime"]), filter_duration = float(TDCFConfigs["fccfilterduration"]))
 #			pipeparts.mkfakesink(pipeline, update_fcc)
 
 # compute f_s and Q
@@ -1468,19 +1468,19 @@ if compute_fs or compute_srcq:
 
 if apply_complex_kappatst:
 	# We will apply an adaptive FIR filter to the TST component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_tst_filter = pipeparts.mkgeneric(pipeline, smooth_ktsttee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = tstfilt, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_tst_filter")
+	adaptive_tst_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_ktsttee, static_filter = tstfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_tst_filter")
 
 if apply_complex_kappapum:
 	# We will apply an adaptive FIR filter to the PUM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pum_filter = pipeparts.mkgeneric(pipeline, smooth_kpumtee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = pumfilt, variable_filter_length = len(pumfilt), adaptive_filter_length = len(pumfilt), tukey_param = 0.5, filter_sample_rate = pumchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pum_filter")
+	adaptive_pum_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kpumtee, static_filter = pumfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, variable_filter_length = len(pumfilt), adaptive_filter_length = len(pumfilt), tukey_param = 0.5, filter_sample_rate = pumchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pum_filter")
 
 if apply_complex_kappauim:
 	# We will apply an adaptive FIR filter to the UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_uim_filter = pipeparts.mkgeneric(pipeline, smooth_kuimtee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, static_filter = uimfilt, variable_filter_length = len(uimfilt), adaptive_filter_length = len(uimfilt), tukey_param = 0.5, filter_sample_rate = uimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_uim_filter")
+	adaptive_uim_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kuimtee, static_filter = uimfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, variable_filter_length = len(uimfilt), adaptive_filter_length = len(uimfilt), tukey_param = 0.5, filter_sample_rate = uimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_uim_filter")
 
 if apply_complex_kappapu:
 	# We will apply an adaptive FIR filter to the PUM/UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pumuim_filter = pipeparts.mkgeneric(pipeline, smooth_kputee, "lal_adaptivefirfilt", update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, static_filter = pumuimfilt, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pumuim_filter")
+	adaptive_pumuim_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kputee, static_filter = pumuimfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pumuim_filter")
 
 if apply_fcc or apply_fs or apply_srcq:
 	# We will apply an adaptive FIR filter to DARM_ERR that allows corrections for poles, zeros, and gain
@@ -1574,7 +1574,7 @@ if apply_fcc or apply_fs or apply_srcq:
 
 	# Now interleave the correction channels in tdep_zpk and feed them into lal_adaptivefirfilt to update the inverse sensing filter
 	tdep_zpk = calibration_parts.mkinterleave(pipeline, tdep_zpk, complex_data = True)
-	adaptive_invsens_filter = pipeparts.mkgeneric(pipeline, tdep_zpk, "lal_adaptivefirfilt", update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, static_poles = static_invsens_poles, static_filter = reschainfilt, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, name = "adaptive_invsens_filter")
+	adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, static_filter = reschainfilt, static_poles = static_invsens_poles, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, variable_filter_length = len(reschainfilt), adaptive_filter_length = len(reschainfilt), tukey_param = 0.5, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, name = "adaptive_invsens_filter")
 
 #
 # CONTROL BRANCH
@@ -1699,7 +1699,7 @@ if test_filters:
 	tst_tf_dur = gps_end_time - tst_tf_start - tst_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 	tst_tf_dur = tst_tf_dur - (tst_tf_dur + 8) % 16
 	num_tst_ffts = int(tst_tf_dur / 8)
-	pipeparts.mkgeneric(pipeline, tst_tf, "lal_transferfunction", fft_length = 16 * tstchainsr, fft_overlap = 8 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
+	calibration_parts.mktransferfunction(pipeline, tst_tf, fft_length = 16 * tstchainsr, fft_overlap = 8 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
 
 # apply kappa_tst if we haven't already
 if apply_kappatst and not apply_complex_kappatst:
@@ -1761,7 +1761,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		pum_tf_dur = gps_end_time - pum_tf_start - pum_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		pum_tf_dur = pum_tf_dur - (pum_tf_dur + 8) % 16
 		num_pum_ffts = int(pum_tf_dur / 8)
-		pipeparts.mkgeneric(pipeline, pum_tf, "lal_transferfunction", fft_length = 16 * pumchainsr, fft_overlap = 8 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
+		calibration_parts.mktransferfunction(pipeline, pum_tf, fft_length = 16 * pumchainsr, fft_overlap = 8 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
 
 	if apply_complex_kappauim:
 		if filter_latency_factor == 0:
@@ -1790,7 +1790,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_tf_dur = gps_end_time - uim_tf_start - uim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		uim_tf_dur = uim_tf_dur - (uim_tf_dur + 8) % 16
 		num_uim_ffts = int(uim_tf_dur / 8)
-		pipeparts.mkgeneric(pipeline, uim_tf, "lal_transferfunction", fft_length = 16 * uimchainsr, fft_overlap = 8 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
+		calibration_parts.mktransferfunction(pipeline, uim_tf, fft_length = 16 * uimchainsr, fft_overlap = 8 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
 
 	# apply kappa_pum if we haven't already
 	if apply_kappapum and not apply_complex_kappapum:
@@ -1856,7 +1856,7 @@ else:
 		pumuim_tf_dur = gps_end_time - pumuim_tf_start - pumuim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 		pumuim_tf_dur = pumuim_tf_dur - (pumuim_tf_dur + 8) % 16
 		num_pumuim_ffts = int(pumuim_tf_dur / 8)
-		pipeparts.mkgeneric(pipeline, pumuim_tf, "lal_transferfunction", fft_length = 16 * pumuimchainsr, fft_overlap = 8 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
+		calibration_parts.mktransferfunction(pipeline, pumuim_tf, fft_length = 16 * pumuimchainsr, fft_overlap = 8 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
 
 	# apply kappa_pu if we haven't already
 	if apply_kappapu and not apply_complex_kappapu:
@@ -1955,7 +1955,7 @@ if test_filters:
 	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
 	res_tf_dur = res_tf_dur - (res_tf_dur + 8) % 16
 	num_res_ffts = int(res_tf_dur / 8)
-	pipeparts.mkgeneric(pipeline, res_tf, "lal_transferfunction", fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf")
+	calibration_parts.mktransferfunction(pipeline, res_tf, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf")
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
@@ -1984,7 +1984,7 @@ if test_filters:
 	response_dur = gps_end_time - response_start - max(res_filter_latency, tst_filter_latency) - 10 if InputConfigs["datasource"] == "frames" else 300
 	response_dur = response_dur - (response_dur + 8) % 16
 	num_response_ffts = int(response_dur / 8)
-	pipeparts.mkgeneric(pipeline, response_function, "lal_transferfunction", fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function")
+	calibration_parts.mktransferfunction(pipeline, response_function, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function")
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))

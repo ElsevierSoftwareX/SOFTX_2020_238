@@ -4,15 +4,15 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = ER13
 
-START = $(shell echo 1231728640 - 715 | bc)
+START = $(shell echo 1231151104 - 715 | bc)
 #1229094912
 #1225967424
 #1185763328
-END = $(shell echo 1231732736 + 715 | bc)
+END = $(shell echo 1231155200 + 715 | bc)
 #1229099008
 #1225968448
 #1185771520
@@ -21,15 +21,15 @@ SHMRUNTIME = 400
 PLOT_WARMUP_TIME = 1715
 PLOT_COOLDOWN_TIME = 715
 
-GDSCONFIGS = Filters/ER13/GDSFilters/H1GDS_TEST_1231802073.ini
-DCSCONFIGS = Filters/ER13/GDSFilters/H1DCS_TEST_1231802073.ini
+GDSCONFIGS = Filters/ER13/GDSFilters/L1GDS_TEST_1231802073.ini
+DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = ../../config_files/PreER13/H1/tests/H1GDS_1222058826_shm2frames.ini
 
-all: noise_subtraction_ASD_GDS noise_subtraction_tf_GDS
+all: noise_subtraction_ASD_DCS filters_tf_DCS noise_subtraction_tf_DCS
 
 ###############################################
 ### These commands should change less often ###

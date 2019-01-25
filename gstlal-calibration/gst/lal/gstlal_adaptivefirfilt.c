@@ -750,9 +750,18 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			g_free(element->static_zeros);
 			element->static_zeros = NULL;
 		}
-		element->static_zeros = (complex double *) gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->num_static_zeros);
+		element->num_static_zeros = gst_value_array_get_size(value);
+		if(element->num_static_zeros % 2)
+			GST_ERROR_OBJECT(element, "Array length for property static-zeros must be even");
+		double *double_static_zeros = g_malloc(element->num_static_zeros * sizeof(double));
+		int i;
+		for(i = 0; i < element->num_static_zeros; i++)
+			double_static_zeros[i] = g_value_get_double(gst_value_array_get_value(value, i));
+		element->static_zeros = (complex double *) double_static_zeros;
+
 		/* Since we passed a complex array as though it were real, there are only half as many zeros */
 		element->num_static_zeros /= 2;
+
 		break;
 
 	case ARG_STATIC_POLES:
@@ -760,9 +769,18 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			g_free(element->static_poles);
 			element->static_poles = NULL;
 		}
-		element->static_poles = (complex double *) gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->num_static_poles);
+		element->num_static_poles = gst_value_array_get_size(value);
+		if(element->num_static_poles % 2)
+			GST_ERROR_OBJECT(element, "Array length for property static-poles must be even");
+		double *double_static_poles = g_malloc(element->num_static_poles * sizeof(double));
+		int j;
+		for(j = 0; j < element->num_static_poles; j++)
+			double_static_poles[j] = g_value_get_double(gst_value_array_get_value(value, j));
+		element->static_poles = (complex double *) double_static_poles;
+
 		/* Since we passed a complex array as though it were real, there are only half as many poles */
 		element->num_static_poles /= 2;
+
 		break;
 
 	case ARG_PHASE_MEASUREMENT_FREQUENCY:
@@ -774,7 +792,11 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			g_free(element->static_filter);
 			element->static_filter = NULL;
 		}
-		element->static_filter = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, (int *) &element->static_filter_length);
+		element->static_filter_length = gst_value_array_get_size(value);
+		element->static_filter = g_malloc(element->static_filter_length * sizeof(double));
+		int k;
+		for(k = 0; k < element->static_filter_length; k++)
+			element->static_filter[k] = g_value_get_double(gst_value_array_get_value(value, k));
 
 		/* If no static filter is provided, the filter is just 1 */
 		if(element->static_filter_length == 0) {
@@ -790,14 +812,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_MINIMIZE_FILTER_LENGTH:
 		element->minimize_filter_length = g_value_get_boolean(value);
-		break;
-
-	case ARG_ADAPTIVE_FILTER:
-		if(element->adaptive_filter) {
-			g_free(element->adaptive_filter);
-			element->adaptive_filter = NULL;
-		}
-		element->adaptive_filter = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, (int *) &element->adaptive_filter_length);
 		break;
 
 	case ARG_ADAPTIVE_FILTER_LENGTH:
@@ -856,29 +870,64 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_int(value, element->num_poles);
 		break;
 
-	case ARG_STATIC_ZEROS:
-		if(element->static_zeros)
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles((double *) element->static_zeros, 2 * element->num_static_zeros));
-		else
-			g_value_take_boxed(value, g_value_array_new(0));
+	case ARG_STATIC_ZEROS: ;
+		GValue staticzeros = G_VALUE_INIT;
+		g_value_init(&staticzeros, GST_TYPE_ARRAY);
+		if(element->static_zeros) {
+			double *double_static_zeros = (double *) element->static_zeros;
+			int i;
+			for(i = 0; i < 2 * element->num_static_zeros; i++) {
+				GValue staticzero = G_VALUE_INIT;
+				g_value_init(&staticzero, G_TYPE_DOUBLE);
+				g_value_set_double(&staticzero, double_static_zeros[i]);
+				gst_value_array_append_value(&staticzeros, &staticzero);
+				g_value_unset(&staticzero);
+			}
+		}
+		g_value_copy(&staticzeros, value);
+		g_value_unset(&staticzeros);
+
 		break;
 
-	case ARG_STATIC_POLES:
-		if(element->static_poles)
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles((double *) element->static_poles, 2 * element->num_static_poles));
-		else
-			g_value_take_boxed(value, g_value_array_new(0));
+	case ARG_STATIC_POLES: ;
+		GValue staticpoles = G_VALUE_INIT;
+		g_value_init(&staticpoles, GST_TYPE_ARRAY);
+		if(element->static_poles) {
+			double *double_static_poles = (double *) element->static_poles;
+			int j;
+			for(j = 0; j < 2 * element->num_static_poles; j++) {
+				GValue staticpole = G_VALUE_INIT;
+				g_value_init(&staticpole, G_TYPE_DOUBLE);
+				g_value_set_double(&staticpole, double_static_poles[j]);
+				gst_value_array_append_value(&staticpoles, &staticpole);
+				g_value_unset(&staticpole);
+			}
+		}
+		g_value_copy(&staticpoles, value); 
+		g_value_unset(&staticpoles);
+
 		break;
 
 	case ARG_PHASE_MEASUREMENT_FREQUENCY:
 		g_value_set_double(value, element->phase_measurement_frequency);
 		break;
 
-	case ARG_STATIC_FILTER:
-		if(element->static_filter)
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->static_filter, element->static_filter_length));
-		else
-			g_value_take_boxed(value, g_value_array_new(0));
+	case ARG_STATIC_FILTER: ;
+		GValue staticfilter = G_VALUE_INIT;
+		g_value_init(&staticfilter, GST_TYPE_ARRAY);
+		if(element->static_filter) {
+			int k;
+			for(k = 0; k < element->static_filter_length; k++) {
+				GValue static_filter_tap = G_VALUE_INIT;
+				g_value_init(&static_filter_tap, G_TYPE_DOUBLE);
+				g_value_set_double(&static_filter_tap, element->static_filter[k]);
+				gst_value_array_append_value(&staticfilter, &static_filter_tap);
+				g_value_unset(&static_filter_tap);
+			}
+		}
+		g_value_copy(&staticfilter, value);
+		g_value_unset(&staticfilter);
+
 		break;
 
 	case ARG_VARIABLE_FILTER_LENGTH:
@@ -889,11 +938,22 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_boolean(value, element->minimize_filter_length);
 		break;
 
-	case ARG_ADAPTIVE_FILTER:
-		if(element->adaptive_filter)
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->adaptive_filter, element->adaptive_filter_length));
-		else
-			g_value_take_boxed(value, g_value_array_new(0));
+	case ARG_ADAPTIVE_FILTER: ;
+		GValue adaptivefilter = G_VALUE_INIT;
+		g_value_init(&adaptivefilter, GST_TYPE_ARRAY);
+		if(element->adaptive_filter) {
+			int m;
+			for(m = 0; m < element->adaptive_filter_length; m++) {
+				GValue adaptive_filter_tap = G_VALUE_INIT;
+				g_value_init(&adaptive_filter_tap, G_TYPE_DOUBLE);
+				g_value_set_double(&adaptive_filter_tap, element->adaptive_filter[m]);
+				gst_value_array_append_value(&adaptivefilter, &adaptive_filter_tap);
+				g_value_unset(&adaptive_filter_tap);
+			}
+		}
+		g_value_copy(&adaptivefilter, value);
+		g_value_unset(&adaptivefilter);
+
 		break;
 
 	case ARG_ADAPTIVE_FILTER_LENGTH:
@@ -1047,7 +1107,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		0, G_MAXINT, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_STATIC_ZEROS] = g_param_spec_value_array(
+	properties[ARG_STATIC_ZEROS] = gst_param_spec_array(
 		"static-zeros",
 		"Static Zeros",
 		"Array of static zeros, which will be included in each computed filter. Since\n\t\t\t"
@@ -1062,7 +1122,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		),
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_STATIC_POLES] = g_param_spec_value_array(
+	properties[ARG_STATIC_POLES] = gst_param_spec_array(
 		"static-poles",
 		"Static Poles",
 		"Array of static poles, which will be included in each computed filter. Since\n\t\t\t"
@@ -1086,7 +1146,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_STATIC_FILTER] = g_param_spec_value_array(
+	properties[ARG_STATIC_FILTER] = gst_param_spec_array(
 		"static-filter",
 		"Static Filter",
 		"A static filter that is convolved with the computed adaptive filter",
@@ -1117,7 +1177,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		FALSE,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_ADAPTIVE_FILTER] = g_param_spec_value_array(
+	properties[ARG_ADAPTIVE_FILTER] = gst_param_spec_array(
 		"adaptive-filter",
 		"Adaptive Filter",
 		"The computed adaptive filter. This includes both time-varying parameters like\n\t\t\t"

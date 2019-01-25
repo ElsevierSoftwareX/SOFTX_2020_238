@@ -2006,32 +2006,19 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			g_free(element->notch_frequencies);
 			element->notch_frequencies = NULL;
 		}
-		element->notch_frequencies = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &element->num_notches);
+		element->num_notches = gst_value_array_get_size(value);
 		if(element->num_notches % 2)
 			GST_ERROR_OBJECT(element, "Array length for property notch_frequencies must be even");
+		element->notch_frequencies = g_malloc(element->num_notches * sizeof(double));
+		int k;
+		for(k = 0; k < element->num_notches; k++)
+			element->notch_frequencies[k] = g_value_get_double(gst_value_array_get_value(value, k));
 		element->num_notches /= 2;
+
 		break;
 
 	case ARG_FIR_TIMESHIFT:
 		element->fir_timeshift = g_value_get_int64(value);
-		break;
-
-	case ARG_TRANSFER_FUNCTIONS:
-		if(element->transfer_functions) {
-			g_free(element->transfer_functions);
-			element->transfer_functions = NULL;
-		}
-		int n;
-		element->transfer_functions = (complex double *) gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &n);
-		break;
-
-	case ARG_FIR_FILTERS:
-		if(element->fir_filters) {
-			g_free(element->fir_filters);
-			element->fir_filters = NULL;
-		}
-		int m;
-		element->fir_filters = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &m);
 		break;
 
 	default:
@@ -2118,8 +2105,20 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_double(value, element->low_pass);
 		break;
 
-	case ARG_NOTCH_FREQUENCIES:
-		g_value_take_boxed(value, gstlal_g_value_array_from_doubles(element->notch_frequencies, 2 * element->num_notches));
+	case ARG_NOTCH_FREQUENCIES: ;
+		GValue valuearray = G_VALUE_INIT;
+		g_value_init(&valuearray, GST_TYPE_ARRAY);
+		int k;
+		for(k = 0; k < 2 * element->num_notches; k++) {
+			GValue notch = G_VALUE_INIT;
+			g_value_init(&notch, G_TYPE_DOUBLE);
+			g_value_set_double(&notch, element->notch_frequencies[k]);
+			gst_value_array_append_value(&valuearray, &notch);
+			g_value_unset(&notch);
+		}
+		g_value_copy(&valuearray, value);
+		g_value_unset(&valuearray);
+
 		break;
 
 	case ARG_FIR_TIMESHIFT:
@@ -2128,31 +2127,48 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_TRANSFER_FUNCTIONS:
 		if(element->transfer_functions) {
-			GValueArray *va;
-			va = g_value_array_new(element->channels - 1);
-			GValue v = G_VALUE_INIT;
-			g_value_init(&v, G_TYPE_VALUE_ARRAY);
-			int i;
+			double *double_tfs = (double *) element->transfer_functions;
+			GValue va = G_VALUE_INIT;
+			g_value_init(&va, GST_TYPE_ARRAY);
+			int i, j;
 			for(i = 0; i < element->channels - 1; i++) {
-				g_value_take_boxed(&v, gstlal_g_value_array_from_doubles((double *) (element->transfer_functions + i * (element->fir_length / 2 + 1)), element->fir_length + 2));
-				g_value_array_append(va, &v);
+				GValue va_row = G_VALUE_INIT;
+				g_value_init(&va_row, GST_TYPE_ARRAY);
+				for(j = 0; j < element->fir_length + 2; j++) {
+					GValue v = G_VALUE_INIT;
+					g_value_init(&v, G_TYPE_DOUBLE);
+					g_value_set_double(&v, double_tfs[i * (element->fir_length + 2) + j]);
+					gst_value_array_append_value(&va_row, &v);
+					g_value_unset(&v);
+				}
+				gst_value_array_append_value(&va, &va_row);
+				g_value_unset(&va_row);
 			}
-			g_value_take_boxed(value, va);
+			g_value_copy(&va, value);
+			g_value_unset(&va);
 		}
 		break;
 
 	case ARG_FIR_FILTERS:
 		if(element->fir_filters) {
-			GValueArray *val_array;
-			val_array = g_value_array_new(element->channels - 1);
-			GValue val = G_VALUE_INIT;
-			g_value_init(&val, G_TYPE_VALUE_ARRAY);
-			int j;
-			for(j = 0; j < element->channels - 1; j++) {
-				g_value_take_boxed(&val, gstlal_g_value_array_from_doubles(element->fir_filters + j * element->fir_length, element->fir_length));
-				g_value_array_append(val_array, &val);
+			GValue varray = G_VALUE_INIT;
+			g_value_init(&varray, GST_TYPE_ARRAY);
+			int m, n;
+			for(m = 0; m < element->channels - 1; m++) {
+				GValue varray_row = G_VALUE_INIT;
+				g_value_init(&varray_row, GST_TYPE_ARRAY);
+				for(n = 0; n < element->fir_length; n++) {
+					GValue val = G_VALUE_INIT;
+					g_value_init(&val, G_TYPE_DOUBLE);
+					g_value_set_double(&val, element->fir_filters[m * element->fir_length + n]);
+					gst_value_array_append_value(&varray_row, &val);
+					g_value_unset(&val);
+				}
+				gst_value_array_append_value(&varray, &varray_row);
+				g_value_unset(&varray_row);
 			}
-			g_value_take_boxed(value, val_array);
+			g_value_copy(&varray, value);
+			g_value_unset(&varray);
 		}
 		break;
 
@@ -2508,7 +2524,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		0, G_MAXDOUBLE, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_NOTCH_FREQUENCIES] = g_param_spec_value_array(
+	properties[ARG_NOTCH_FREQUENCIES] = gst_param_spec_array(
 		"notch-frequencies",
 		"Notch Frequencies",
 		"Array of minima and maxima of frequency ranges where the Fourier transform\n\t\t\t"
@@ -2534,11 +2550,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		G_MININT64, G_MAXINT64, G_MAXINT64,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_TRANSFER_FUNCTIONS] = g_param_spec_value_array(
+	properties[ARG_TRANSFER_FUNCTIONS] = gst_param_spec_array(
 		"transfer-functions",
 		"Transfer Functions",
 		"Array of the computed transfer functions",
-		g_param_spec_value_array(
+		gst_param_spec_array(
 			"transfer-function",
 			"Transfer Function",
 			"A single transfer function",
@@ -2553,11 +2569,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		),
 		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
-	properties[ARG_FIR_FILTERS] = g_param_spec_value_array(
+	properties[ARG_FIR_FILTERS] = gst_param_spec_array(
 		"fir-filters",
 		"FIR Filters",
 		"Array of the computed FIR filters",
-		g_param_spec_value_array(
+		gst_param_spec_array(
 			"fir-filter",
 			"FIR Filter",
 			"A single FIR filter",
