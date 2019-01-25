@@ -37,7 +37,6 @@
 #include <glib.h>
 #include <gmodule.h>
 #include <gst/gst.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstaggregator.h>
 #include <gst/controller/controller.h>
 #include <math.h>
@@ -57,8 +56,6 @@
 #include <gstlal/gstlal_tags.h>
 #include <gstlal/gstlal_autocorrelation_chi2.h>
 #include <gstlal_snglinspiral.h>
-#include <lal/LIGOMetadataUtils.h>
-#include <lal/TimeDelay.h>
 
 /*
  * ============================================================================
@@ -490,7 +487,7 @@ static void update_state(GSTLALItacac *itacac, GstBuffer *srcbuf) {
 }
 
 
-static GstFlowReturn *push_buffer(GstAggregator *agg, GstBuffer *srcbuf) {
+static GstFlowReturn push_buffer(GstAggregator *agg, GstBuffer *srcbuf) {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	update_state(itacac, srcbuf);
 
