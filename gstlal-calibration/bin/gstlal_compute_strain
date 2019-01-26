@@ -516,6 +516,41 @@ if dewhitening:
 		derr_dewhiten_at_esd_act_freq_imag = 0.0
 
 # If we're reading the reference model factors from the filters file or comparing them to the front-end factors, load them
+
+# The gstlal calibration pipeline uses a historical numbering of the EPICS records
+# in order to maintain backwards compatibility. The pyDARM code has a different numbering.
+# Here are the conversions:
+#
+# pyDARM | gstlal
+# -------|-------
+#    EP0 | ka_pcal_corr
+#    EP1 | EP1
+#    EP2 | EP15
+#    EP3 | EP22
+#    EP4 | EP6
+#    EP5 | EP7
+#    EP6 | EP8
+#    EP7 | EP18
+#    EP8 | EP19
+#    EP9 | kc_pcal_corr
+#   EP10 | EP11
+#   EP11 | EP12
+#   EP12 | EP13
+#   EP13 | EP20
+#   EP14 | EP21
+#   EP15 | pcal_corr_at_src_freq
+#   EP16 | EP24
+#   EP17 | EP23
+#   EP18 | EP10
+# absent | EP2
+# absent | EP3
+# absent | EP4
+# absent | EP5
+# absent | EP9
+# absent | EP14
+# absent | EP16
+# absent | EP17
+
 if factors_from_filters_file or compute_calib_statevector:
 	try:
 		EP1_real = float(filters["EP1_real"])
