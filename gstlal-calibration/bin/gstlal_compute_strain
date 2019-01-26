@@ -464,6 +464,9 @@ try:
 	pcal_corr_at_src_freq_imag = float(filters["src_pcal_corr_im"])
 	if src_pcal_line_freq > 10.0 and src_pcal_line_freq != act_pcal_line_freq:
 		pcal_line_removal_dict["pcal4_linefreq"] = [None, src_pcal_line_freq, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag, False]
+	elif src_pcal_line_freq == act_pcal_line_freq and "low_pcal_line_freq" in filters:
+		pcal_line_removal_dict["pcal4_linefreq"] = [None, float(filters["low_pcal_line_freq"]), float(filters["low_pcal_corr_re"]), float(filters["low_pcal_corr_im"]), False]
+
 except:
 	if compute_srcq or compute_fs:
 		raise ValueError("Cannot compute SRC spring frequency or Q, as the calibration line frequency is not contained in the specified filters file.")
@@ -815,9 +818,10 @@ if use_coherence:
 	if compute_kappac or compute_fcc or compute_fs or compute_srcq:
 		channel_list.append((instrument, ChannelNames["cohuncpcalyline2channel"]))
 		headkeys.append("pcaly_line2_coh")
-	if (compute_fs or compute_srcq) and (src_pcal_line_freq != act_pcal_line_freq):
-		channel_list.append((instrument, ChannelNames["cohuncpcalyline4channel"]))
-		headkeys.append("pcaly_line4_coh")
+	if compute_fs or compute_srcq:
+		if src_pcal_line_freq != act_pcal_line_freq:
+			channel_list.append((instrument, ChannelNames["cohuncpcalyline4channel"]))
+			headkeys.append("pcaly_line4_coh")
 
 # We also need excitation channels for computing kappas
 if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or (remove_cal_lines and "tstexc_linefreq" in act_line_removal_dict.keys()):
@@ -1420,10 +1424,10 @@ if compute_fs or compute_srcq:
 	else:
 		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_src_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_src_freq_imag, freq_update = [head_dict["pcal4_linefreq"], head_dict["pcal4_line_corr_real"], head_dict["pcal4_line_corr_imag"]] if "pcal4_linefreq" in head_dict else None)
 		pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
-	if "pcal4_linefreq" in pcal_line_removal_dict:
-		# This will save having to demodulate it again
-		pcal_line_removal_dict["pcal4_linefreq"][0] = pcal_at_src_freq
-		pcal_line_removal_dict["pcal4_linefreq"][4] = True
+		if "pcal4_linefreq" in pcal_line_removal_dict:
+			# This will save having to demodulate it again
+			pcal_line_removal_dict["pcal4_linefreq"][0] = pcal_at_src_freq
+			pcal_line_removal_dict["pcal4_linefreq"][4] = True
 
 	# demodulate DARM_ERR at SRC detuning line frequency
 	if src_pcal_line_freq == act_pcal_line_freq:
@@ -1496,12 +1500,12 @@ if compute_fs or compute_srcq:
 	if compute_fs:
 		smooth_fs = pipeparts.mkaudioamplify(pipeline, smooth_sqrtXiR, src_pcal_line_freq)
 		smooth_fs_nogate = pipeparts.mkaudioamplify(pipeline, smooth_sqrtXiR_nogate, src_pcal_line_freq)
-		if "pcal4_linefreq" in head_dict:
+		if src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
+                        head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
+                        head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
+		elif src_pcal_line_freq != act_pcal_line_freq and "pcal4_linefreq" in head_dict:
 			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
 			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
-		elif src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
 
 		if compute_calib_statevector or apply_fs:
 			smooth_fs = pipeparts.mktee(pipeline, smooth_fs)
