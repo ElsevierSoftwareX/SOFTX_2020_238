@@ -1444,6 +1444,9 @@ if compute_fs or compute_srcq:
 		if "pcal4_linefreq" in head_dict:
 			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
 			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
+		elif src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
 
 		if compute_calib_statevector or apply_fs:
 			smooth_fs = pipeparts.mktee(pipeline, smooth_fs)
