@@ -857,23 +857,40 @@ if compute_kappapu:
 if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or remove_cal_lines:
 	channel_list.append((instrument, ChannelNames["pcalchannel"]))
 	headkeys.append("pcal")
-	# If reading EPICS from the frames, also read the line frequencies from the frames if we can
-	if not factors_from_filters_file and "pcalline1freqchannel" in ChannelNames:
-		if ChannelNames["pcalline1freqchannel"] != "None":
+	# If reading EPICS from the frames, also read the line frequencies from the frames if we can.
+	# We need the pcal correction factors as well if we are going to update pcal line frequencies.
+	if not factors_from_filters_file and "pcalline1freqchannel" in ChannelNames and "pcalline1corrrealchannel" in ChannelNames and "pcalline1corrimagchannel" in ChannelNames:
+		if ChannelNames["pcalline1freqchannel"] != "None" and ChannelNames["pcalline1corrrealchannel"] != "None" and ChannelNames["pcalline1corrimagchannel"] != "None":
 			channel_list.append((instrument, ChannelNames["pcalline1freqchannel"]))
 			headkeys.append("pcal1_linefreq")
-	if not factors_from_filters_file and "pcalline2freqchannel" in ChannelNames:
-		if ChannelNames["pcalline2freqchannel"] != "None":
+			channel_list.append((instrument, ChannelNames["pcalline1corrrealchannel"]))
+			headkeys.append("pcal1_line_corr_real")
+			channel_list.append((instrument, ChannelNames["pcalline1corrimagchannel"]))
+			headkeys.append("pcal1_line_corr_imag")
+	if not factors_from_filters_file and "pcalline2freqchannel" in ChannelNames and "pcalline2corrrealchannel" in ChannelNames and "pcalline2corrimagchannel" in ChannelNames:
+		if ChannelNames["pcalline2freqchannel"] != "None" and ChannelNames["pcalline2corrrealchannel"] != "None" and ChannelNames["pcalline2corrimagchannel"] != "None":
 			channel_list.append((instrument, ChannelNames["pcalline2freqchannel"]))
 			headkeys.append("pcal2_linefreq")
-	if not factors_from_filters_file and "pcalline3freqchannel" in ChannelNames:
-		if ChannelNames["pcalline3freqchannel"] != "None":
+			channel_list.append((instrument, ChannelNames["pcalline2corrrealchannel"]))
+			headkeys.append("pcal2_line_corr_real")
+			channel_list.append((instrument, ChannelNames["pcalline2corrimagchannel"]))
+			headkeys.append("pcal2_line_corr_imag")
+	if not factors_from_filters_file and "pcalline3freqchannel" in ChannelNames and "pcalline3corrrealchannel" in ChannelNames and "pcalline3corrimagchannel" in ChannelNames:
+		if ChannelNames["pcalline3freqchannel"] != "None" and ChannelNames["pcalline3corrrealchannel"] != "None" and ChannelNames["pcalline3corrimagchannel"] != "None":
 			channel_list.append((instrument, ChannelNames["pcalline3freqchannel"]))
 			headkeys.append("pcal3_linefreq")
-	if not factors_from_filters_file and "pcalline4freqchannel" in ChannelNames:
-		if ChannelNames["pcalline4freqchannel"] != "None":
+			channel_list.append((instrument, ChannelNames["pcalline3corrrealchannel"]))
+			headkeys.append("pcal3_line_corr_real")
+			channel_list.append((instrument, ChannelNames["pcalline3corrimagchannel"]))
+			headkeys.append("pcal3_line_corr_imag")
+	if not factors_from_filters_file and "pcalline4freqchannel" in ChannelNames and "pcalline4corrrealchannel" in ChannelNames and "pcalline4corrimagchannel" in ChannelNames:
+		if ChannelNames["pcalline4freqchannel"] != "None" and ChannelNames["pcalline4corrrealchannel"] != "None" and ChannelNames["pcalline4corrimagchannel"] != "None":
 			channel_list.append((instrument, ChannelNames["pcalline4freqchannel"]))
 			headkeys.append("pcal4_linefreq")
+			channel_list.append((instrument, ChannelNames["pcalline4corrrealchannel"]))
+			headkeys.append("pcal4_line_corr_real")
+			channel_list.append((instrument, ChannelNames["pcalline4corrimagchannel"]))
+			headkeys.append("pcal4_line_corr_imag")
 
 # We also need DARM_ERR if we are computing the kappas
 if (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or test_filters) and CalibrationConfigs["calibrationmode"] == "Partial":
@@ -995,6 +1012,9 @@ for key in headkeys:
 	if key.endswith("linefreq"):
 		head_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		head_dict[key] = pipeparts.mkgeneric(pipeline, head_dict[key], "lal_property", update_when_change = True)
+	elif key.endswith("line_corr_real") or key.endswith("line_corr_imag"):
+		head_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
+		head_dict[key] = pipeparts.mkgeneric(pipeline, head_dict[key], "lal_property", update_when_change = True)
 	elif key.startswith("EP6_") or key.startswith("EP11_"):
 		C_epics_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		C_epics_dict[key] = calibration_parts.mkresample(pipeline, C_epics_dict[key], 0, False, compute_calib_factors_caps)
@@ -1068,7 +1088,7 @@ if compute_kappapu:
 if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
 
 	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
-	pcal_at_act_pcal_freq = calibration_parts.demodulate(pipeline, pcaltee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_act_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_act_freq_imag, freq_update = head_dict["pcal1_linefreq"] if "pcal1_linefreq" in head_dict else None)
+	pcal_at_act_pcal_freq = calibration_parts.demodulate(pipeline, pcaltee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_act_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_act_freq_imag, freq_update = [head_dict["pcal1_linefreq"], head_dict["pcal1_line_corr_real"], head_dict["pcal1_line_corr_imag"]] if "pcal1_linefreq" in head_dict else None)
 	pcal_at_act_pcal_freq = pipeparts.mktee(pipeline, pcal_at_act_pcal_freq)
 	if remove_cal_lines:
 		# This will save having to demodulate it again
@@ -1283,7 +1303,7 @@ if compute_kappapu:
 # Compute \kappa_c and f_cc
 if compute_kappac or compute_fcc or compute_fs or compute_srcq:
 	# demodulate the PCAL channel and apply the PCAL correction factor at optical gain and f_cc line frequency
-	pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_imag, freq_update = head_dict["pcal2_linefreq"] if "pcal2_linefreq" in head_dict else None)
+	pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_imag, freq_update = [head_dict["pcal2_linefreq"], head_dict["pcal2_line_corr_real"], head_dict["pcal2_line_corr_imag"]] if "pcal2_linefreq" in head_dict else None)
 	if remove_cal_lines:
 		# This will save having to demodulate it again
 		pcal_at_opt_gain_freq = pipeparts.mktee(pipeline, pcal_at_opt_gain_freq)
@@ -1398,7 +1418,7 @@ if compute_fs or compute_srcq:
 	if src_pcal_line_freq == act_pcal_line_freq:
 		pcal_at_src_freq = pcal_at_act_pcal_freq
 	else:
-		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_src_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_src_freq_imag, freq_update = head_dict["pcal4_linefreq"] if "pcal4_linefreq" in head_dict else None)
+		pcal_at_src_freq = calibration_parts.demodulate(pipeline, pcaltee, src_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_src_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_src_freq_imag, freq_update = [head_dict["pcal4_linefreq"], head_dict["pcal4_line_corr_real"], head_dict["pcal4_line_corr_imag"]] if "pcal4_linefreq" in head_dict else None)
 		pcal_at_src_freq = pipeparts.mktee(pipeline, pcal_at_src_freq)
 	if "pcal4_linefreq" in pcal_line_removal_dict:
 		# This will save having to demodulate it again
@@ -2416,7 +2436,7 @@ if remove_cal_lines:
 	for pcal_line_name in pcal_line_removal_dict:
 		if not pcal_line_removal_dict[pcal_line_name][4]:
 			# This line still needs to be demodulated
-			pcal_line_removal_dict[pcal_line_name][0] = calibration_parts.demodulate(pipeline, pcal_line_removal_dict[pcal_line_name][0], pcal_line_removal_dict[pcal_line_name][1], td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_line_removal_dict[pcal_line_name][2], prefactor_imag = pcal_sign * pcal_line_removal_dict[pcal_line_name][3], freq_update = head_dict[pcal_line_name] if pcal_line_name in head_dict else None)
+			pcal_line_removal_dict[pcal_line_name][0] = calibration_parts.demodulate(pipeline, pcal_line_removal_dict[pcal_line_name][0], pcal_line_removal_dict[pcal_line_name][1], td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_line_removal_dict[pcal_line_name][2], prefactor_imag = pcal_sign * pcal_line_removal_dict[pcal_line_name][3], freq_update = [head_dict[pcal_line_name], head_dict[pcal_line_name.replace('freq', '_corr_real')], head_dict[pcal_line_name.replace('freq', '_corr_imag')]] if pcal_line_name in head_dict else None)
 		# Reconstruct a pcal signal at only this pcal line
 		pcal_line_removal_dict[pcal_line_name][0] = calibration_parts.mkresample(pipeline, pcal_line_removal_dict[pcal_line_name][0], 3, False, "audio/x-raw, format=Z128LE, rate=%d, channel-mask=(bitmask)0x0" % hoft_sr)
 		pcal_line_removal_dict[pcal_line_name][0] = pipeparts.mkgeneric(pipeline, pcal_line_removal_dict[pcal_line_name][0], "lal_demodulate", line_frequency = -1.0 * pcal_line_removal_dict[pcal_line_name][1], prefactor_real = 2.0)

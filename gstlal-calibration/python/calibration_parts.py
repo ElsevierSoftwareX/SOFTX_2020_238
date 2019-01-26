@@ -250,7 +250,11 @@ def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, pref
 	# demodulate input at a given frequency freq
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
-	if freq_update is not None:
+	if type(freq_update) is list:
+		freq_update[0].connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency")
+		freq_update[1].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_real")
+		freq_update[2].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_imag")
+	elif freq_update is not None:
 		freq_update.connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency")
 	head = mkresample(pipeline, head, 5, filter_latency == 0.0, rate)
 	if filter_latency != 0:
