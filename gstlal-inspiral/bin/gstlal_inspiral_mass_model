@@ -54,7 +54,8 @@ options = parser.parse_args()
 # Read the template bank file
 xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
+if options.model == "detected-logm":
+	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.get_column("mass1"), sngl_inspiral_table.get_column("mass2"))
 
