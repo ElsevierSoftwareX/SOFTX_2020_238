@@ -9,4 +9,9 @@ tests/gstlal-calibration-1.2.6-tests/kappas_test/Filters/**
 tests/gstlal-calibration-1.2.6-tests/kappas_test/Frames/**
 tests/gstlal-calibration-1.2.6-tests/H1/Filters/**
 tests/gstlal-calibration-1.2.6-tests/H1/Frames/**
-
+tests/H1GDS_1232821094_filter_tests/H1/Frames/**
+tests/H1GDS_1232821094_filter_tests/H1/Filters/**
+tests/H1GDS_1232821094_filter_tests/H1/raw_frames/**
+tests/L1GDS_1232821094_filter_tests/L1/Frames/**
+tests/L1GDS_1232821094_filter_tests/L1/Filters/**
+tests/L1GDS_1232821094_filter_tests/L1/raw_frames/**

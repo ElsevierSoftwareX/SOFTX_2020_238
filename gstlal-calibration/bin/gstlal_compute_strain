@@ -2309,15 +2309,17 @@ if compute_calib_statevector:
 	if cbchwinj_bitmask is not None:
 		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_bitmask, status_out = pow(2,6))
 	elif cbchwinj_offbitmask is not None:
-		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_off = cbchwinj_offbitmask, status_out = pow(2,6))
+		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_offbitmask, invert_result = True, status_out = pow(2,6))
 	else:
 		raise ValueError("Must set either CBCHWInjBitmask or CBCHWInjOffBitmask")
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
+	hwinjcbc = pipeparts.mktee(pipeline, hwinjcbc)
+	pipeparts.mknxydumpsink(pipeline, hwinjcbc, "hwinjcbc.txt")
 
 	if bursthwinj_bitmask is not None:
 		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,7))
 	elif bursthwinj_offbitmask is not None:
-		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_off = bursthwinj_offbitmask, status_out = pow(2,7))
+		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_offbitmask, invert_result = True, status_out = pow(2,7))
 	else:
 		raise ValueError("Must set either BurstHWInjBitmask or BurstHWInjOffBitmask")
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, calibstate_caps)
@@ -2325,7 +2327,7 @@ if compute_calib_statevector:
 	if detcharhwinj_bitmask is not None:
 		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, status_out = pow(2,8))
 	elif detcharhwinj_offbitmask is not None:
-		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_off = detcharhwinj_offbitmask, status_out = pow(2,8))
+		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_on = detcharhwinj_offbitmask, invert_result = True, status_out = pow(2,8))
 	else:
 		raise ValueError("Must set either DetCharHWInjBitmask or DetcharHWInjOffBitmask")
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, calibstate_caps)
@@ -2333,7 +2335,7 @@ if compute_calib_statevector:
 	if stochhwinj_bitmask is not None:
 		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, status_out = pow(2,5))
 	elif stochhwinj_offbitmask is not None:
-		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_off = stochhwinj_offbitmask, status_out = pow(2,5))
+		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_on = stochhwinj_offbitmask, invert_result = True, status_out = pow(2,5))
 	else:
 		raise ValueError("Must set either StochHWInjBitmask or StochHWInjOffBitmask")
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, calibstate_caps)
