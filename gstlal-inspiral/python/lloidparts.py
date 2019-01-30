@@ -242,7 +242,7 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	@param gate_hold_length The hold length in samples for the lal_gate element that controls the reconstruction of physical SNRs
 	@param block_duration The characteristic buffer size that is passed around, which is useful for constructing queues.
 	@param nxydump_segment Not used
-	@param fir_stride The target length of output buffers from lal_firbank.  Directly effects latency.  Making this short will force time-domain convolution. Otherwise FFT convolution will be done to save CPU cycles, but at higher latency.
+	@param fir_stride The target length of output buffers from lal_firbank in seconds.  Directly effects latency.  Making this short will force time-domain convolution. Otherwise FFT convolution will be done to save CPU cycles, but at higher latency.
 	@param control_peak_time The window over which to find peaks in the control signal.  Shorter windows increase computational cost but probably also detection efficiency.
 	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	"""
