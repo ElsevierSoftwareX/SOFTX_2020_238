@@ -28,10 +28,11 @@ import os, re
 import time
 import subprocess
 
-def call_update_map(output, ifo_horizons, gps_time, chealpix_order, verbose = False):
+def call_update_map(output_coh, output_prob, ifo_horizons, gps_time, chealpix_order, verbose = False):
 	cmd = []
 	cmd += ["gstlal_postcoh_gen_detrsp_map"]
-	cmd += ["--output-filename", output]
+	cmd += ["--output-coh-coeff", output_coh]
+	cmd += ["--output-prob-coeff", output_prob]
 	cmd += ["--ifo-horizons", ifo_horizons]
 	cmd += ["--gps-time", gps_time]
 	cmd += ["--chealpix-order", chealpix_order]
@@ -46,7 +47,8 @@ def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
 	parser.add_option("--data-loc", metavar = "path", default = "/dev/shm/llhoft/H1", help = "Online data location (required)")
 	parser.add_option("--data-keyword", metavar = "name", default = "H1", help = "Online data keyword (optional)")
-	parser.add_option("--output", metavar = "filename", default = "H1L1V1_detrsp_map.xml", help = "Online detrsp map filename (required)")
+	parser.add_option("--output-coh-coeff", metavar = "filename", default = "H1L1V1_detrsp_map.xml", help = "Online detrsp map filename (required)")
+	parser.add_option("--output-prob-coeff", metavar = "filename", default = "H1L1V1_probcoeff_map.xml", help = "Online detrsp map filename (required)")
 	parser.add_option("--ifo-horizons", metavar = "H1:xx,L1:xx", help = "IFO horizons in MPC (required)")
 	parser.add_option("--chealpix-order", metavar = "N", default = "4", help = "Set the chealpix order, 4 = 3072 pixels, 5 = 12228 pixels. (requied).")
 	parser.add_option("--period", metavar = "N", help = "Update interval (required).")
@@ -54,7 +56,7 @@ def parse_command_line():
 
 	options, tmp = parser.parse_args()
 
-	required_options = ["data_loc", "output", "ifo_horizons", "chealpix_order", "period"]
+	required_options = ["data_loc", "output_coh_coeff", "output_prob_coeff", "ifo_horizons", "chealpix_order", "period"]
 	missing_options = []
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
@@ -84,7 +86,7 @@ while True:
 	if options.verbose:
 		print "generating detrsp map at %s gps time" % str(gps_time)
 
-	call_update_map(options.output, options.ifo_horizons, gps_time, options.chealpix_order, verbose = False)
+	call_update_map(options.output_coh_coeff, options.output_prob_coeff, options.ifo_horizons, gps_time, options.chealpix_order, verbose = False)
 
 	if options.verbose:
 		print "finished detrsp map at %s gps time" % str(gps_time)
