@@ -2313,8 +2313,6 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either CBCHWInjBitmask or CBCHWInjOffBitmask")
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
-	hwinjcbc = pipeparts.mktee(pipeline, hwinjcbc)
-	pipeparts.mknxydumpsink(pipeline, hwinjcbc, "hwinjcbc.txt")
 
 	if bursthwinj_bitmask is not None:
 		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,7))
