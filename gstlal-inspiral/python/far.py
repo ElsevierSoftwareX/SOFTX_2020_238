@@ -170,12 +170,17 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		if self.fast_path_cut(**kwargs):
 			return NegInf
 
+		# FIXME NOTE
+		# Here we put in a penalty for single detector triggers.
+		# Motivated sort of by the coincidence probability.
+		lnP = 0. if len(kwargs["snrs"]) > 1 else -5.
+
 		# full ln L ranking stat.  we define the ranking statistic
 		# to be the largest ln L from all allowed subsets of
 		# triggers
 		# FIXME:  temporarily disabled due to performance concerns.
 		# just chain to parent class
-		return super(RankingStat, self).__call__(**kwargs)
+		return lnP + super(RankingStat, self).__call__(**kwargs)
 		#return max(super(RankingStat, self).__call__(**kwargs) for kwargs in kwarggen(min_instruments = self.min_instruments, **kwargs))
 
 	@property

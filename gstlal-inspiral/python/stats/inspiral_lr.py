@@ -367,12 +367,6 @@ class LnSignalDensity(LnLRDensity):
 		except ValueError:
 			return NegInf
 
-		# FIXME NOTE
-		# Here we put in a penalty for single detector triggers.
-		# Motivated sort of by the coincidence probability.
-		if len(snrs) == 1:
-			lnP -= 5
-
 		# evaluate population model
 		lnP += self.population_model.lnP_template_signal(template_id, max(snrs.values()))
 
