@@ -164,7 +164,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		# the threshold.  modern gstlal_inspiral generates
 		# sub-threshold triggers for Bayestar and we need to be
 		# ceratin they don't leak into here.
-		assert all(snr >= self.min_snr for snr in kwargs["snrs"].values())
+		assert all(snr >= self.snr_min for snr in kwargs["snrs"].values())
 
 		# fast-path cut
 		if self.fast_path_cut(**kwargs):
