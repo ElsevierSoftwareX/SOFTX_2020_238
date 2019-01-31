@@ -1,3 +1,15 @@
+gstlal-ugly (1.5.6-1) unstable; urgency=low
+
+  * more porting to ligo.segments
+  * remove references to libgsl0 from Debian packaging
+  * lvshmsrc update for gds api changes
+  * lal_tdwhiten:  temporary hack to synchronize filter updates with time stamps (do not rely on this, use the GstController feature).
+  * misc adjustments to inspiral debug tools
+  * add h5py as a dependency (not really needed, gstlal-inpsiral needs it,
+    but there's experimental code here, so added it just in case)
+
+ -- Kipp Cannon <kipp.cannon@ligo.org>  Wed, 30 Jan 2019 15:00:34 +0900
+
 gstlal-ugly (1.5.5-1) unstable; urgency=low
 
   * remove files accidentally included in 1.5.4

@@ -17,6 +17,7 @@ Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-bad-free
+Requires: h5py
 Requires: numpy
 Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
