@@ -160,6 +160,12 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		"""
 		Evaluate the ranking statistic.
 		"""
+		# ranking statistic is only defined for SNRs at or above
+		# the threshold.  modern gstlal_inspiral generates
+		# sub-threshold triggers for Bayestar and we need to be
+		# ceratin they don't leak into here.
+		assert all(snr >= self.min_snr for snr in kwargs["snrs"].values())
+
 		# fast-path cut
 		if self.fast_path_cut(**kwargs):
 			return NegInf
@@ -235,22 +241,11 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		*_from_triggers() methods.
 		"""
 		#
-		# exclude triggers that are below the SNR threshold
+		# exclude triggers that are below the SNR threshold.  this
+		# is easier to do here, when what we have is triggers, than
+		# in the .__call__() method where their parameters have
+		# already been mixed into the kwargs.
 		#
-		# FIXME:  this alters the mapping from triggers to ln L
-		# density parameters, but it does not alter the definition
-		# of ln L itself, i.e., it does not affect what the
-		# .__call__() method would return for candidates with SNRs
-		# below the threshold, say, in the context of the
-		# importance-weighted sampler used to construct P(ln L).
-		# that would perhaps be a more sound approach but would
-		# have to be done more carefully, to ensure the behaviour
-		# it introduces maintains the numerator and denominator as
-		# proper probability densities.  think about this some
-		# more.  in the meantime, there are no problems created by
-		# this because, for example, the importance-weighted
-		# sampler never generates trials with SNRs below the
-		# threshold.
 
 		events = tuple(event for event in events if event.snr >= self.snr_min)
 		assert len(events) >= self.min_instruments, "coincidence engine failed to respect minimum instrument count requirement for candidates:  found candidate with %d < %d instruments" % (len(events), self.min_instruments)
