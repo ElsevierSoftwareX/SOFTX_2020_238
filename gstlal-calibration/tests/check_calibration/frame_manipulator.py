@@ -282,7 +282,7 @@ channel_list.append("CAL-CS_TDEP_F_S_OUTPUT")
 channel_list.append("CAL-CS_TDEP_Q_S_OUTPUT")
 channel_list.append("GRD-IFO_OK")
 #channel_list.append("ISC_LOCK_STATE_N")
-channel_list.append("ISC_LOCK_STATUS")
+#channel_list.append("ISC_LOCK_STATUS")
 channel_list.append("GRD-ISC_LOCK_OK")
 channel_list.append("GRD-ISC_LOCK_ERROR")
 temp_list = channel_list
