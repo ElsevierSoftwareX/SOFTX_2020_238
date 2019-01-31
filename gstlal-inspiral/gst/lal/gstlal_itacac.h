@@ -71,6 +71,12 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_ITACAC_TYPE))
 
 struct data_container {
+	union {
+		float complex *as_complex;
+		double complex *as_double_complex;
+		void *as_void;
+	} dataptr;
+
 	gsl_matrix *duration_dataoffset_trigwindowoffset_peakfindinglength_matrix;
 	void *data;
 };
@@ -111,6 +117,7 @@ typedef struct {
 	gboolean EOS;
 	gboolean waiting;
 
+	GstClockTime initial_timestamp;
 	guint adjust_window;
 	GList *next_in_coinc_order;
 
@@ -128,7 +135,7 @@ typedef struct {
 	gint rate;
 	guint channels;
 	gstlal_peak_type_specifier peak_type;
-	guint64 initial_output_offset;
+	GstClockTime initial_output_timestamp;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
 	GstClockTimeDiff difftime;
