@@ -280,13 +280,10 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
 		}
 		case GST_EVENT_EOS:
 		{
-			fprintf(stderr, "%s EOS\n", itacacpad->instrument);
 			itacacpad->EOS = TRUE;
 			itacac->EOS = TRUE;
 			for(padlist = GST_ELEMENT(agg)->sinkpads; padlist != NULL; padlist = padlist->next)
 				itacac->EOS = GSTLAL_ITACAC_PAD(padlist->data)->EOS && itacac->EOS;
-			if(itacac->EOS)
-				fprintf(stderr, "itacac->EOS == TRUE\n");
 			break;
 		}
 		default:
@@ -637,14 +634,11 @@ static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 	gsl_matrix_set(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, data_container_index, 3, (double) peak_finding_length);
 
 	// copy the samples that we will call the peak finding library on (if no events are found the result will be a GAP)
-        if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
-		//gst_audioadapter_copy_samples(itacacpad->adapter, (float complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
-		itacacpad->data->dataptr.as_complex = (float complex *) itacacpad->data->data;
-		gst_audioadapter_copy_samples(itacacpad->adapter, itacacpad->data->dataptr.as_complex + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
-        } else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
-		fprintf(stderr, "using GSTLAL_PEAK_DOUBLE_COMPLEX\n\n\n\n\n");
+        if (itacac->peak_type == GSTLAL_PEAK_COMPLEX)
+		gst_audioadapter_copy_samples(itacacpad->adapter, (float complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
+        else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
 		gst_audioadapter_copy_samples(itacacpad->adapter, (double complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
-	}
+
 
 }
 
@@ -699,12 +693,6 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 				}
 			}
 		}
-		/*
-		for(channel = 0; channel < this_maxdata->channels; channel++) {
-			if(cabs((double complex) (this_maxdata->interpvalues).as_float_complex[channel]) > 0 && cabs((double complex) (this_maxdata->interpvalues).as_float_complex[channel]) < 6)
-				fprintf(stderr, "%s snr = %lf < 6\n", itacacpad->instrument, cabs((double complex) (this_maxdata->interpvalues).as_float_complex[channel]) );
-		}
-		*/
 	}
         else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
                 // Find the peak, making sure to put the data pointer at the start of the interval we care about
@@ -1378,12 +1366,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		}
 
 		if(triggers_generated && itacacpad->autocorrelation_matrix) {
-			/*
-			if(srcbuf == NULL)
-				fprintf(stderr, "%s about to create srcbuf, next_output_timestamp = %lu + 1e-9*%lu\n", itacacpad->instrument, itacac->next_output_timestamp / 1000000000, itacac->next_output_timestamp - (itacac->next_output_timestamp / 1000000000) * 1000000000);
-			else
-				fprintf(stderr, "%s about to append to srcbuf, next_output_timestamp = %lu + 1e-9*%lu\n", itacacpad->instrument, itacac->next_output_timestamp / 1000000000, itacac->next_output_timestamp - (itacac->next_output_timestamp / 1000000000) * 1000000000);
-			*/
 			srcbuf = hardcoded_srcbuf_crap(itacac, itacacpad, srcbuf);
 		} else if(triggers_generated) {
 			if(srcbuf == NULL) {
@@ -1532,10 +1514,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		gst_audioadapter_push(itacacpad->adapter, sinkbuf);
 		gst_aggregator_pad_drop_buffer(GST_AGGREGATOR_PAD(itacacpad));
 
-		/*
-		if(gst_audioadapter_available_samples(itacacpad->adapter) > samples_before)
-			fprintf(stderr, "pushed samples from %s sinkbuf to adapter, sinkbuf timestamp = %lu + 1e-9*%lu, duration = %lu ns, available samples = %u\n", itacacpad->instrument, GST_BUFFER_PTS(sinkbuf) / 1000000000, GST_BUFFER_PTS(sinkbuf) - (GST_BUFFER_PTS(sinkbuf) / 1000000000) * 1000000000, GST_BUFFER_DURATION(sinkbuf), gst_audioadapter_available_samples(itacacpad->adapter));
-		*/
 		gst_buffer_unref(sinkbuf);
 
 	}
@@ -1558,11 +1536,8 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 				GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 				if(itacacpad->initial_timestamp == itacac->next_output_timestamp && gst_audioadapter_available_samples(itacacpad->adapter) > 0) {
 					itacacpad->waiting = FALSE;
-					fprintf(stderr, "Setting %s itacacpad->waiting to FALSE\n", itacacpad->instrument);
-					if(itacac->waiting) {
+					if(itacac->waiting)
 						itacac->waiting = FALSE;
-						fprintf(stderr, "Setting itacac->waiting to FALSE\n");
-					}
 				}
 			}
 			if(!itacac->waiting)
@@ -1593,7 +1568,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 				itacacpad->adjust_window = num_samples_behind;
 
 			itacacpad->waiting = FALSE;
-			fprintf(stderr, "Setting %s itacacpad->waiting to FALSE in second loop\n", itacacpad->instrument);
 			if(itacacpad->initial_timestamp != itacac->next_output_timestamp)
 				itacacpad->last_gap = FALSE;
 		}
