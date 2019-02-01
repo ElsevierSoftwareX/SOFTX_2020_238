@@ -38,8 +38,8 @@ if options.analyze_additional_hoft_channel:
 	additional_hoft_data = TimeSeries.read(options.additional_hoft_frame_cache, "%s:%s" % (options.ifo, options.additional_hoft_channel_name), start = start_time, end = end_time)
 
 # make asds
-calcs_asd = calcs_data.asd(4,2)
-hoft_asd = hoft_data.asd(4,2)
+calcs_asd = calcs_data.asd(4, 2, method = 'lal_median_mean')
+hoft_asd = hoft_data.asd(4, 2, method = 'lal_median_mean')
 if options.analyze_additional_hoft_channel:
 	additional_hoft_asd = additional_hoft_data.asd(4,2)
 
@@ -54,7 +54,7 @@ if options.analyze_additional_hoft_channel:
 ax = plot.gca()
 ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
 ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-ax.legend([r'CALCS h(t) ASD', r'GDS h(t) ASD', r'DCS h(t) ASD'], loc='upper right', fontsize='small')
+ax.legend(['GDS-CALIB\_STRAIN', 'GDS-CALIB\_STRAIN\_CLEAN', 'GDS-CALIB\_STRAIN\_CLEAN'], loc='upper right', fontsize='small')
 ax.set_xlim(0.5,8192)
 ax.set_ylim(1e-24,1e-16)
 plot.save('%s_%s_%s_spectrum_comparison.png' % (options.ifo, start_time, end_time))
