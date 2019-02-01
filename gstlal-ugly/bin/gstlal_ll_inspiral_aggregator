@@ -65,14 +65,20 @@ def parse_command_line():
 	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
 	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently, default 16.")
 	parser.add_argument("--kafka-server", action="store", help="Specify kakfa server to read data from, example: 10.14.0.112:9092")
+	parser.add_argument("--data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
+	parser.add_argument("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
+	parser.add_argument("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
+	parser.add_argument("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
 
 	args = parser.parse_args()
 
 	#FIXME do error checking
 	if args.data_type is None:
 		args.data_type = ["min", "max", "median"]
-	return args
 
+	assert args.data_backend in ('hdf5', 'influx'), '--data-backend must be one of [hdf5|influx]'
+
+	return args
 
 
 #
@@ -103,6 +109,12 @@ if __name__ == '__main__':
 	else:
 		consumer = None
 
+	# Instantiate influxDB connection if data backend is influx
+	if options.data_backend == 'influx':
+		influx_client = io.influx.create_client(options.influx_hostname, options.influx_port)
+	else:
+		influx_client = None
+
 	# start an infinite loop to keep updating and aggregating data
 	while True:
 		logging.info("sleeping")
@@ -116,20 +128,24 @@ if __name__ == '__main__':
 		else:
 			timedata, datadata = io.http.retrieve_timeseries(options.base_dir, jobs, routes, options.job_id, num_threads=options.num_threads)
 
-		# First get the raw and reduced data for each job in parallel
-		mapargs = [(options.base_dir, routes, job, 'job', datatypes, timedata, datadata, prevdataspan) for job in jobs]
-		for ds in pool.map(io.hdf5.reduce_by_tag, mapargs):
-			dataspan.update(ds)
-		prevdataspan = dataspan.copy()
+		for route in routes:
+			# First get the raw and reduced data for each job in parallel
+			if influx_client:
+				io.influx.store_and_reduce_timeseries(influx_client, options.influx_database_name, route, timedata[route], datadata[route], 'data', 'job')
+			else:
+				mapargs = [(options.base_dir, route, job, 'job', datatypes, timedata[route], datadata[route], prevdataspan) for job in jobs]
+				for ds in pool.map(io.hdf5.reduce_by_tag, mapargs):
+					dataspan.update(ds)
+				prevdataspan = dataspan.copy()
 
-		# Then reduce the data across jobs at each level
-		mapargs = []
-		for start, end in zip(*aggregator.job_expanse(dataspan)):
-			mapargs = []
-			for route in routes:
-				mapargs.append((options.base_dir, route, jobs, 'job', datatypes, start, end))
-			pool.map(io.hdf5.reduce_across_tags, mapargs)
-			logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
+				# Then reduce the data across jobs at each level
+				mapargs = []
+				for start, end in zip(*aggregator.job_expanse(dataspan)):
+					mapargs = []
+					for route in routes:
+						mapargs.append((options.base_dir, route, jobs, 'job', datatypes, start, end))
+					pool.map(io.hdf5.reduce_across_tags, mapargs)
+					logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
 
 	#
 	# always end on an error so that condor won't think we're done and will

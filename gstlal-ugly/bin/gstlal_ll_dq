@@ -30,8 +30,14 @@ def parse_command_line():
 	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 16384 Hz")
 	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 8s")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+	parser.add_option("--data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
+	parser.add_option("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
+	parser.add_option("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
+	parser.add_option("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
 
 	options, filenames = parser.parse_args()
+
+	assert options.data_backend in ('hdf5', 'influx'), '--data-backend must be one of [hdf5|influx]'
 
 	return options, filenames
 
@@ -40,8 +46,10 @@ class PSDHandler(simplehandler.Handler):
 		self.psd = None
 		self.out_path = kwargs["out_path"]
 		self.instrument = kwargs["instrument"]
+		self.influx_client = kwargs["influx_client"]
 		del kwargs["out_path"]
 		del kwargs["instrument"]
+		del kwargs["influx_client"]
 		simplehandler.Handler.__init__(self, *args, **kwargs)
 		self.horizon_distance_func = reference_psd.HorizonDistance(20., 2048., 1./16., 1.4, 1.4)
 
@@ -88,9 +96,14 @@ class PSDHandler(simplehandler.Handler):
 			self.last_reduce_time = int(round(buftime,-2))
 			logging.info("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(aggregator.now())))
 
-			timedata = {(self.instrument, route): numpy.array(self.timedeq) for route in self.routes}
-			datadata = {(self.instrument, route): numpy.array(self.datadeq[route]) for route in self.routes}
-			self.prevdataspan = io.hdf5.reduce_by_tag((self.out_path, self.routes, self.instrument, 'instrument', self.datatypes, timedata, datadata, self.prevdataspan))
+			timedata = {route: {self.instrument: numpy.array(self.timedeq)} for route in self.routes}
+			datadata = {route: {self.instrument: numpy.array(self.datadeq[route])} for route in self.routes}
+
+			for route in self.routes:
+				if self.influx_client:
+					io.influx.store_and_reduce_timeseries(influx_client, options.influx_database_name, route, timedata[route], datadata[route], 'data', 'job')
+				else:
+					self.prevdataspan = io.hdf5.reduce_by_tag((self.out_path, route, self.instrument, 'instrument', self.datatypes, timedata[route], datadata[route], self.prevdataspan))
 
 			# Save a "latest" psd
 			# NOTE: The PSD is special, we just record it. No min/median/max
@@ -125,6 +138,12 @@ options, filenames = parse_command_line()
 
 logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
 
+# Instantiate influxDB connection if data backend is influx
+if options.data_backend == 'influx':
+	influx_client = io.influx.create_client(options.influx_hostname, options.influx_port)
+else
+	influx_client = None
+
 # parse the generic "source" options, check for inconsistencies is done inside
 # the class init method
 gw_data_source_info = datasource.GWDataSourceInfo(options)
@@ -142,7 +161,7 @@ if options.verbose:
 	print >>sys.stderr, "building pipeline ..."
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(name="DQ")
-handler = PSDHandler(mainloop, pipeline, out_path = options.out_path, instrument = instrument)
+handler = PSDHandler(mainloop, pipeline, out_path = options.out_path, instrument = instrument, influx_client = influx_client)
 
 head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 head = pipeparts.mkresample(pipeline, head, quality = 9)
