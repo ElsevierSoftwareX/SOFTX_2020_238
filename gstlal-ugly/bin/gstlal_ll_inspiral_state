@@ -56,6 +56,7 @@ def parse_command_line():
 	parser.add_argument("--dump-period", type = float, default = 180., help = "Wait this many seconds between dumps of the URLs (default = 180., set to 0 to disable)")
 	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
 	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
+	parser.add_argument("--data-type", action="append", help="Specify datatypes to aggregate from 'min', 'max', 'median'. Can be given multiple times. Default all")
 	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently")
 	parser.add_argument("--instrument", action = "append", help = "Number of threads to use concurrently")
 	parser.add_argument("--kafka-server", action="store", help="Specify kakfa server to read data from, example: 10.14.0.112:9092")
@@ -65,6 +66,10 @@ def parse_command_line():
 	parser.add_argument("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
 
 	args = parser.parse_args()
+
+	#FIXME do error checking
+	if args.data_type is None:
+		args.data_type = ["min", "max", "median"]
 
 	assert args.data_backend in ('hdf5', 'influx'), '--data-backend must be one of [hdf5|influx]'
 
@@ -82,6 +87,8 @@ def parse_command_line():
 if __name__ == '__main__':
 
 	options = parse_command_line()
+	# FIXME don't hardcode some of these?
+	datatypes = [x for x in [("min", min), ("max", max), ("median", aggregator.median)] if x[0] in options.data_type]
 	jobs = ["%04d" % b for b in numpy.arange(0, options.num_jobs)]
 	routes = ["ram_history"]
 	for ifo in options.instrument:
@@ -144,7 +151,7 @@ if __name__ == '__main__':
 				for start, end in zip(*aggregator.job_expanse(dataspan)):
 					mapargs = []
 					for route in routes:
-						mapargs.append((options.base_dir, route, jobs, 'job', datatypes, start, end))
+						mapargs.append((options.base_dir, route.replace("/","_"), jobs, 'job', datatypes, start, end))
 					pool.map(io.hdf5.reduce_across_tags, mapargs)
 					logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
 

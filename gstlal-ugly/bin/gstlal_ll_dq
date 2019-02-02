@@ -101,13 +101,13 @@ class PSDHandler(simplehandler.Handler):
 
 			for route in self.routes:
 				if self.influx_client:
-					io.influx.store_and_reduce_timeseries(influx_client, options.influx_database_name, route, timedata[route], datadata[route], 'data', 'job')
+					io.influx.store_and_reduce_timeseries(influx_client, options.influx_database_name, route, timedata[route], datadata[route], 'data', 'ifo')
 				else:
-					self.prevdataspan = io.hdf5.reduce_by_tag((self.out_path, route, self.instrument, 'instrument', self.datatypes, timedata[route], datadata[route], self.prevdataspan))
+					self.prevdataspan = io.hdf5.reduce_by_tag((self.out_path, route, self.instrument, 'ifo', self.datatypes, timedata[route], datadata[route], self.prevdataspan))
 
 			# Save a "latest" psd
 			# NOTE: The PSD is special, we just record it. No min/median/max
-			thisdir = os.path.join(self.out_path, io.hdf5.gps_to_leaf_directory(buftime), 'by_instrument', self.instrument)
+			thisdir = os.path.join(self.out_path, io.hdf5.gps_to_leaf_directory(buftime))
 			psd_name = "%s-PSD-%d-100.hdf5" % (self.instrument, int(round(buftime,-2)))
 			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
 
@@ -141,7 +141,7 @@ logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(
 # Instantiate influxDB connection if data backend is influx
 if options.data_backend == 'influx':
 	influx_client = io.influx.create_client(options.influx_hostname, options.influx_port)
-else
+else:
 	influx_client = None
 
 # parse the generic "source" options, check for inconsistencies is done inside
@@ -150,8 +150,6 @@ gw_data_source_info = datasource.GWDataSourceInfo(options)
 
 # only support one channel
 instrument = gw_data_source_info.channel_dict.keys()[0]
-
-aggregator.makedir(os.path.join(options.out_path, instrument))
 
 #
 # build pipeline

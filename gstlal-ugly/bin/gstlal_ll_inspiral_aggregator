@@ -145,7 +145,7 @@ if __name__ == '__main__':
 					for route in routes:
 						mapargs.append((options.base_dir, route, jobs, 'job', datatypes, start, end))
 					pool.map(io.hdf5.reduce_across_tags, mapargs)
-					logging.info("processed reduced data in [%d %d) at %d" % (int(start), int(end), int(aggregator.now())))
+					logging.info("processed reduced data in [%d %d) at %d for route %s" % (int(start), int(end), int(aggregator.now()), route))
 
 	#
 	# always end on an error so that condor won't think we're done and will
