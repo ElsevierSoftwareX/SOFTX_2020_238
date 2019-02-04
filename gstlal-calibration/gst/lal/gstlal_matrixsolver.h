@@ -70,6 +70,21 @@ struct _GSTLALMatrixSolver {
 	guint64 next_in_offset;
 	guint64 next_out_offset;
 	gboolean need_discont;
+
+	/* gsl stuff for solving systens of linear equations */
+	union {
+		struct {
+			gsl_vector *invec;
+			gsl_vector *outvec;
+			gsl_matrix *matrix;
+		} real;
+		struct {
+			gsl_vector_complex *invec;
+			gsl_vector_complex *outvec;
+			gsl_matrix_complex *matrix;
+		} cplx;
+	} workspace;
+	gsl_permutation *permutation;
 };
 
 
