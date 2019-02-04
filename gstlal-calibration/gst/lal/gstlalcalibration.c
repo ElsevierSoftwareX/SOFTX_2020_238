@@ -71,6 +71,7 @@
 #include <gstlal_dqtukey.h>
 #include <gstlal_property.h>
 #include <gstlal_typecast.h>
+#include <gstlal_matrixsolver.h>
 
 
 /*
@@ -106,6 +107,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_dqtukey", GSTLAL_DQTUKEY_TYPE},
 		{"lal_property", GSTLAL_PROPERTY_TYPE},
 		{"lal_typecast", GSTLAL_TYPECAST_TYPE},
+		{"lal_matrixsolver", GSTLAL_MATRIXSOLVER_TYPE},
 		{NULL, 0},
 	};
 
