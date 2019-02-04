@@ -235,7 +235,7 @@ class EyeCandy(object):
 					except TypeError as e:
 						pass#print >>sys.stderr, e, attr, getattr(coinc_event_index[coinc_event_id], attr)
 				for sngl_row in sngl_inspiral_index[coinc_event_id]:
-					for attr in ("snr", "chisq", "mass1", "mass2", "spin1z", "spin2z"):
+					for attr in ("snr", "chisq", "mass1", "mass2", "spin1z", "spin2z", "coa_phase"):
 						coinc_dict["%s_%s" % (sngl_row.ifo, attr)] = float(getattr(sngl_row, attr))
 					coinc_dict["%s_end" % sngl_row.ifo] = float(sngl_row.end)
 				coinc_dict_list.append(coinc_dict)
