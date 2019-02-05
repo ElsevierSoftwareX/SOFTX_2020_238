@@ -68,7 +68,7 @@ U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz:
 tisi.xml :
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
 
-dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz
+dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz online-web-deploy
 	gstlal_ll_inspiral_pipe \
 		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE) \
 		--max-jobs 1000 \
@@ -148,6 +148,12 @@ dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.s
 		--injection-file $(NSBHINJFILE) \
 		--injection-file $(BBHINJFILE) \
 		--time-slide-file tisi.xml
+
+online-web-deploy : inspiral.yml
+	datamon deploy -c inspiral.yml -o ~/public_html
+
+inspiral.yml:
+	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/inspiral.yml
 
 ll_simplify_and_cluster.sql:
 	wget http://versions.ligo.org/cgit/gstlal/plain/gstlal-inspiral/share/ll_simplify_and_cluster.sql

@@ -1,0 +1,212 @@
+# configuration file for monitoring
+dashboard:
+  title: GstLAL
+  image: yes
+  tabs:
+    - name: Summary
+      url: /
+    - name: Shifts
+      url: /
+    - name: Docs
+      url: https://lscsoft.docs.ligo.org/gstlal
+    - name: Git
+      url: https://git.ligo.org/lscsoft/gstlal
+  GPS: -1
+  Duration: 600
+
+plots:
+  # likelihood history timeseries
+  - title: Likelihood
+    type: TimeSeries
+    measurement: likelihood_history
+    column: data
+    aggregate: max
+    dt: 1
+    value: checked 
+
+  # likelihood history heatmap (by job)
+  - title: Likelihood by Job
+    type: TimeHeatMap
+    measurement: likelihood_history
+    column: data
+    aggregate: max
+    dt: 1
+    value:
+
+  # FAR history
+  - title: FAR
+    type: TimeSeries
+    measurement: far_history
+    column: data
+    aggregate: min
+    dt: 1
+    value:
+
+  # FAR history heatmap (by job)
+  - title: FAR by Job
+    type: TimeHeatMap
+    measurement: far_history
+    column: data
+    aggregate: min
+    dt: 1
+    value:
+
+  # latency history
+  - title: Latency
+    type: TimeSeries
+    measurement: latency_history
+    column: data
+    aggregate: max
+    dt: 1
+    value:
+
+  # latency history heatmap (by job)
+  - title: Latency by Job
+    type: TimeHeatMap
+    measurement: latency_history
+    column: data
+    aggregate: max
+    dt: 1
+    value:
+
+  # snr history
+  - title: SNR
+    type: TimeSeries
+    measurement: snr_history
+    column: data
+    aggregate: max
+    dt: 1
+    params:
+      - - ifo
+        - H1
+      - - ifo
+        - L1
+      - - ifo
+        - V1
+    value:
+
+  # ram history heatmap (by job)
+  - title: RAM Usage by Job
+    type: TimeHeatMap
+    measurement: ram_history
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+
+  # noise
+  - title: Noise
+    type: TimeSeries
+    measurement: noise
+    column: data
+    aggregate: max
+    dt: 1
+    params:
+      - - ifo
+        - H1
+      - - ifo
+        - L1
+      - - ifo
+        - V1
+    value:
+
+  # range history
+  - title: Range History
+    type: TimeSeries
+    measurement: range_history
+    column: data
+    aggregate: max
+    dt: 1
+    params:
+      - - ifo
+        - H1
+      - - ifo
+        - L1
+      - - ifo
+        - V1
+    value:
+
+  # uptime heatmaps (by job)
+  - title: H1 Uptime by Job
+    type: TimeHeatMap
+    measurement: H1_statevector_on
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+  - title: L1 Uptime by Job
+    type: TimeHeatMap
+    measurement: L1_statevector_on
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+  - title: V1 Uptime by Job
+    type: TimeHeatMap
+    measurement: V1_statevector_on
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+
+  # downtime heatmaps (by job)
+  - title: H1 Downtime by Job
+    type: TimeHeatMap
+    measurement: H1_statevector_off
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+  - title: L1 Downtime by Job
+    type: TimeHeatMap
+    measurement: L1_statevector_off
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+  - title: V1 Downtime by Job
+    type: TimeHeatMap
+    measurement: V1_statevector_off
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+
+  # strain dropped heatmaps (by job)
+  - title: H1 Strain Dropped by Job
+    type: TimeHeatMap
+    measurement: H1_strain_dropped
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+  - title: L1 Strain Dropped by Job
+    type: TimeHeatMap
+    measurement: L1_strain_dropped
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+  - title: V1 Strain Dropped by Job
+    type: TimeHeatMap
+    measurement: V1_strain_dropped
+    column: data
+    aggregate: max
+    dt: 10
+    value:
+
+  # FIXME: add 'time since last' plot
+  # FIXME: add time since trigger plot
+  # FIXME: add 'latest by job' plots
+
+nagios:
+  lookback: 600
+  measurement: ram_history
+  column: data
+  aggregate: max
+  dt: 1
+  num_jobs: 328
+
+database:
+  backend: hdf5
+  rootdir: /home/gstlalcbc/replay/last_2_wks_o2/trigs.hyper
