@@ -366,7 +366,7 @@ def remove_harmonics_with_witnesses(pipeline, signal, witnesses, f0, num_harmoni
 			for j in range(0, len(witnesses)):
 				if(i != j):
 					# Find transfer function between 2 witness channels and at this frequency
-					tf_at_f = complex_division(pipeline, line_in_witnesses[j], line_in_witness[i])
+					tf_at_f = complex_division(pipeline, line_in_witnesses[j], line_in_witnesses[i])
 					# It may be necessary to remove the first few samples since
 					# denominator samples may have arrived before numerator samples,
 					# in which case the adder assumes the numerator is one.
