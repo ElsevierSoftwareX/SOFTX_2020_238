@@ -172,8 +172,8 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 		# FIXME NOTE
 		# Here we put in a penalty for single detector triggers.
-		# Motivated sort of by the coincidence probability.
-		lnP = 0. if len(kwargs["snrs"]) > 1 else -5.
+		# This is a tuned parameter.
+		lnP = 0. if len(kwargs["snrs"]) > 1 else -7.
 
 		# full ln L ranking stat.  we define the ranking statistic
 		# to be the largest ln L from all allowed subsets of
