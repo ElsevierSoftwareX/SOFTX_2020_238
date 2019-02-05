@@ -126,7 +126,7 @@ if __name__ == '__main__':
 			logging.info("getting data from kafka")
 			timedata, datadata = io.kafka.retrieve_timeseries(consumer, jobs, routes)
 		else:
-			timedata, datadata = io.http.retrieve_timeseries(options.base_dir, jobs, routes, options.job_id, num_threads=options.num_threads)
+			timedata, datadata = io.http.retrieve_timeseries(options.base_dir, jobs, routes, options.job_tag, num_threads=options.num_threads)
 
 		for route in routes:
 			# First get the raw and reduced data for each job in parallel

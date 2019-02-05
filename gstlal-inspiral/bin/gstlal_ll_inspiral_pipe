@@ -29,6 +29,7 @@ __author__ = 'Chad Hanna <channa@caltech.edu>'
 # import standard modules and append the lalapps prefix to the python path
 #
 
+import itertools
 import sys, os, stat
 import shutil
 import socket
@@ -546,13 +547,25 @@ margNode = dagparts.DAGNode(margJob, dag, [], opts = {}, input_files = {"":[opti
 # job tag, but this should be made to be more flexible
 #
 
+# define routes used for aggregation jobs
 snr_routes = ["%s_snr_history" % ifo for ifo in channel_dict]
-aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": snr_routes, "kafka-server": options.output_kafka_server})
-aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type":["max"], "job-start":0, "route": ["likelihood_history", "snr_history", "latency_history"], "kafka-server": options.output_kafka_server})
-aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir":"aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "job-start":0, "route": ["far_history", "latency_history"], "data-type":["min"], "kafka-server": options.output_kafka_server})
+network_routes = ["likelihood_history", "snr_history", "latency_history", "far_history"]
+usage_routes = ["ram_history"]
+agg_routes = list(itertools.chain(snr_routes, network_routes, usage_routes))
 
-for instrument in channel_dict.keys():
-	analysisStateNode = dagparts.DAGNode(analysisStateJob, dag, [], opts = {"dump-period": 1, "job-tag": os.getcwd(), "num-jobs": len(jobTags), "num-threads": 2, "instrument": instrument, "kafka-server": options.output_kafka_server})
+state_routes = []
+for ifo in channel_dict.keys():
+    state_routes.extend(["%s/dqvector_%s" % (ifo, state) for state in ["on", "off", "gap"]])
+    state_routes.extend(["%s/statevector_%s" % (ifo, state) for state in ["on", "off", "gap"]])
+    state_routes.append("%s/strain_dropped" % ifo)
+
+# analysis-based aggregation jobs
+for route in agg_routes:
+	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = {"dump-period": 1, "base-dir": "aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type": ["max", "min"], "job-start": 0, "route": route, "kafka-server": options.output_kafka_server})
+
+# state-based aggregation jobs
+for route in state_routes:
+	analysisStateNode = dagparts.DAGNode(analysisStateJob, dag, [], opts = {"dump-period": 1, "base-dir": "aggregator", "job-tag": os.getcwd(), "num-jobs": len(jobTags), "data-type": ["max", "min"], "job-start": 0, "route": route, "kafka-server": options.output_kafka_server})
 
 # summary page
 if options.injection_file:

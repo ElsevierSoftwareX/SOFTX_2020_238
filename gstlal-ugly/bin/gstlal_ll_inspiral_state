@@ -53,12 +53,13 @@ def parse_command_line():
 
 	# directory to put everything in
 	parser.add_argument("--base-dir", action="store", default="aggregator", help="Specify output path")
+	parser.add_argument("--job-start", type=int, help="job id to start aggregating from")
+	parser.add_argument("--route", action="append", help="Specify routes to download. Can be given multiple times.")
+	parser.add_argument("--data-type", action="append", help="Specify datatypes to aggregate from 'min', 'max', 'median'. Can be given multiple times. Default all")
 	parser.add_argument("--dump-period", type = float, default = 180., help = "Wait this many seconds between dumps of the URLs (default = 180., set to 0 to disable)")
 	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
 	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
-	parser.add_argument("--data-type", action="append", help="Specify datatypes to aggregate from 'min', 'max', 'median'. Can be given multiple times. Default all")
 	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently")
-	parser.add_argument("--instrument", action = "append", help = "Number of threads to use concurrently")
 	parser.add_argument("--kafka-server", action="store", help="Specify kakfa server to read data from, example: 10.14.0.112:9092")
 	parser.add_argument("--data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
 	parser.add_argument("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
@@ -89,16 +90,8 @@ if __name__ == '__main__':
 	options = parse_command_line()
 	# FIXME don't hardcode some of these?
 	datatypes = [x for x in [("min", min), ("max", max), ("median", aggregator.median)] if x[0] in options.data_type]
-	jobs = ["%04d" % b for b in numpy.arange(0, options.num_jobs)]
-	routes = ["ram_history"]
-	for ifo in options.instrument:
-		routes.append("%s/statevector_on" % ifo)
-		routes.append("%s/statevector_off" % ifo)
-		routes.append("%s/statevector_gap" % ifo)
-		routes.append("%s/dqvector_on" % ifo)
-		routes.append("%s/dqvector_off" % ifo)
-		routes.append("%s/dqvector_gap" % ifo)
-		routes.append("%s/strain_dropped" % ifo)
+	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
+	routes = options.route
 
 	for job in jobs: aggregator.makedir("%s/by_job/%s" % (options.base_dir, job))
 
