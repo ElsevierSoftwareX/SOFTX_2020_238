@@ -82,7 +82,7 @@ parser.add_option("--demodulation-time", metavar = "seconds", type = int, defaul
 parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.9,1.1;0.9,1.1;0.9,1.1", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.0,6.0;-6.0,6.0;-6.0,6.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
-parser.add_option("--file-name-prefix", metavar = "name", type = str, help = "Prefix for naming unique file.")
+parser.add_option("--file-name-suffix", metavar = "name", type = str, default = None, help = "Suffix for naming unique file.")
 
 options, filenames = parser.parse_args()
 
@@ -280,6 +280,7 @@ for i in range(0, len(frequencies)):
 	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[0].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 	t_start = data[0][0]
 	dur = data[len(data) - 1][0] - t_start
+	dur_in_seconds = dur
 	t_unit = 'seconds'
 	sec_per_t_unit = 1.0
 	if dur > 60 * 60 * 100:
@@ -339,6 +340,6 @@ for i in range(0, len(frequencies)):
 		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = r'%s [$\mu$ = %0.3f$^{\circ}$, $\sigma$ = %0.3f$^{\circ}$]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
 		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
-plt.savefig("%s_%s_deltal_over_pcal_%d.png" % (options.file_name_prefix, ifo, options.gps_start_time))
-plt.savefig("%s_%s_deltal_over_pcal_%d.pdf" % (options.file_name_prefix, ifo, options.gps_start_time))
+plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
+plt.savefig("%s_deltal_over_pcal%s_%d-%d.pdf" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
 

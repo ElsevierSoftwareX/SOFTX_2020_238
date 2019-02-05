@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+import matplotlib
+matplotlib.use('Agg')
+from gwpy.timeseries import TimeSeriesDict
+from gwpy.timeseries import TimeSeries
+import glob
+from math import pi
+from gwpy.plotter import BodePlot
+import numpy
+from optparse import OptionParser, Option
+from glue import datafind
+
+parser = OptionParser()
+
+parser.add_option("--ifo", metavar = "name", help = "Name of the IFO")
+parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time.")
+parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the GPS end time.")
+parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
+parser.add_option("--hoft-frame-cache", metavar = "name", help = "h(t) frame cache file.")
+parser.add_option("--hoft-channel-name", metavar = "name", default = "GDS-CALIB_STRAIN", help = "Channel name for h(t) channel in frames. (Default = GDS-CALIB_STRAIN)")
+parser.add_option("--analyze-additional-hoft-channel", action="store_true", help = "Set this option to analyze an additional h(t) channel")
+parser.add_option("--additional-hoft-channel-name", metavar = "name", default = "DCS-CALIB_STRAIN", help = "Channel name for additional h(t) channel frames. (Default = DCS-CALIB_STRAIN)")
+parser.add_option("--additional-hoft-frame-cache", metavar = "name", help = "additional h(t) frame cache file.")
+parser.add_option("--calcs-channel-name", metavar = "name", default = "CAL-DELTAL_EXTERNAL_DQ", help = "Channel name for h(t) channel in raw frames. (Default = CAL-DELTAL_EXTERNAL_DQ)")
+parser.add_option("--filename-suffix", type = str, default = None, help = "Suffix to add to the end of filenames")
+
+options, filenames = parser.parse_args()
+
+start_time = int(options.gps_start_time)
+end_time = int(options.gps_end_time)
+
+# Grab CALCS data
+calcs_data=TimeSeries.read(options.raw_frame_cache, '%s:%s' % (options.ifo, options.calcs_channel_name), start = start_time, end = end_time)
+
+# grab h(t) data
+hoft_data = TimeSeries.read(options.hoft_frame_cache, "%s:%s" % (options.ifo, options.hoft_channel_name), start = start_time, end = end_time)
+if options.analyze_additional_hoft_channel:
+	additional_hoft_data = TimeSeries.read(options.additional_hoft_frame_cache, "%s:%s" % (options.ifo, options.additional_hoft_channel_name), start = start_time, end = end_time)
+
+# make asds
+calcs_asd = calcs_data.asd(4,2)
+hoft_asd = hoft_data.asd(4,2)
+if options.analyze_additional_hoft_channel:
+	additional_hoft_asd = additional_hoft_data.asd(4,2)
+
+#plot spectrum
+plot=calcs_asd.plot(label='CALCS h(t) ASD')
+plot.gca().plot(hoft_asd,label='GDS h(t) ASD')
+if options.analyze_additional_hoft_channel:
+	plot.gca().plot(additional_hoft_asd,label='DCS h(t) ASD')
+ax = plot.gca()
+ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
+ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
+ax.legend(['DCS-CALIB\_STRAIN', 'DCS-CALIB\_STRAIN\_CLEAN', r'DCS h(t) ASD'], loc='upper right', fontsize='small')
+ax.set_xlim(0.5,8192)
+ax.set_ylim(1e-24,1e-16)
+plot.save('%s_%s_%s_spectrum_comparison%s.png' % (options.ifo, start_time, end_time, options.filename_suffix))
+
+diff1 = calcs_asd / hoft_asd
+if options.analyze_additional_hoft_channel:
+	diff2 = calcs_asd / additional_hoft_asd
+	diff3 = hoft_asd / additional_hoft_asd
+plot = diff1.plot(label="ASD ratios")
+if options.analyze_additional_hoft_channel:
+	plot.gca().plot(diff2)
+	plot.gca().plot(diff3)
+ax = plot.gca()
+ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
+ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
+ax.legend([r'CALCS h(t) ASD / GDS h(t) ASD', r'CALCS h(t) ASD / DCS h(t) ASD', r'GDS h(t) ASD / DCS h(t) ASD'], loc='upper right', fontsize='small')
+ax.set_xlim(0.5,5000)
+ax.set_ylim(0.0, 10)
+plot.save('%s_%s_%s_ASD_residual%s.png' % (options.ifo, start_time, end_time, options.filename_suffix))
