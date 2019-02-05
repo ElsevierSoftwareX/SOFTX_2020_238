@@ -19,9 +19,9 @@
 
 
 from ligo import segments
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
 from lal import LIGOTimeGPS
 import math
 

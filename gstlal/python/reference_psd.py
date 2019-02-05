@@ -48,7 +48,7 @@ GObject.threads_init()
 Gst.init(None)
 
 
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 import lal
 import lal.series
 from lal import LIGOTimeGPS

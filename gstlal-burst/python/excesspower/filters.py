@@ -25,7 +25,7 @@ from pylal import lalburst
 from pylal.lalfft import XLALCreateForwardREAL8FFTPlan, XLALCreateReverseREAL8FFTPlan, XLALREAL8FreqTimeFFT
 from pylal import datatypes as laltypes
 
-from glue.ligolw import ligolw, utils, ilwd, lsctables
+from ligo.lw import ligolw, utils, ilwd, lsctables
 
 from gstlal.excesspower import utils
 

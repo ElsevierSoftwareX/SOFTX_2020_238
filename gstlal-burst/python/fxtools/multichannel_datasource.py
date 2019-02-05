@@ -39,8 +39,8 @@ Gst.init(None)
 
 from gstlal import pipeparts
 from gstlal import datasource
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import segments as ligolw_segments
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import segments as ligolw_segments
 from ligo import segments
 import lal
 from lal import LIGOTimeGPS

@@ -69,8 +69,8 @@ static struct PyMemberDef members[] = {
 	{"confidence", T_FLOAT, offsetof(gstlal_GSTLALSnglBurst, row.confidence), 0, "confidence"},
 	{"chisq", T_DOUBLE, offsetof(gstlal_GSTLALSnglBurst, row.chisq), 0, "chisq"},
 	{"chisq_dof", T_DOUBLE, offsetof(gstlal_GSTLALSnglBurst, row.chisq_dof), 0, "chisq_dof"},
-	{"_process_id", T_LONG, offsetof(gstlal_GSTLALSnglBurst, row.process_id), 0, "process_id (long)"},
-	{"_event_id", T_LONG, offsetof(gstlal_GSTLALSnglBurst, row.event_id), 0, "event_id (long)"},
+	{"process_id", T_LONG, offsetof(gstlal_GSTLALSnglBurst, row.process_id), 0, "process_id (long)"},
+	{"event_id", T_LONG, offsetof(gstlal_GSTLALSnglBurst, row.event_id), 0, "event_id (long)"},
 	{NULL,}
 };
 

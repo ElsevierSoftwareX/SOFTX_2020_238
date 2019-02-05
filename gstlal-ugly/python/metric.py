@@ -21,7 +21,7 @@ from lal import series
 from scipy import integrate
 import numpy
 from gstlal import reference_psd
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 import itertools
 import scipy
 from lal import LIGOTimeGPS

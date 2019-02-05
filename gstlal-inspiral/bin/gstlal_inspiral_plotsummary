@@ -59,9 +59,9 @@ from lal.utils import CacheEntry
 
 from glue import iterutils
 from ligo import segments
-from glue.ligolw import dbtables
-from glue.ligolw import lsctables
-from glue.ligolw.utils import segments as ligolw_segments
+from ligo.lw import dbtables
+from ligo.lw import lsctables
+from ligo.lw.utils import segments as ligolw_segments
 from gstlal import far
 from gstlal import dagparts
 from gstlal import gviz_api

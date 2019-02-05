@@ -163,10 +163,10 @@ from ligo.gracedb.rest import DEFAULT_SERVICE_URL as gracedb_default_service_url
 
 from ligo import segments
 from ligo.segments import utils as segmentsUtils
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import segments as ligolw_segments
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import segments as ligolw_segments
 from gstlal import bottle
 from gstlal import datasource
 from gstlal import far

@@ -28,13 +28,13 @@ Gst.init(None)
 
 import lal
 
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw import lsctables, ligolw
+from ligo.lw.utils import segments as ligolw_segments
+from ligo.lw import lsctables, ligolw
 
 ### This program will play data in a variety of ways
 ###

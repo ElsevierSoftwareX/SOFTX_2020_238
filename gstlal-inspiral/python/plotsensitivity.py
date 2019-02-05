@@ -34,7 +34,7 @@ from matplotlib import pyplot as plt
 from matplotlib import ticker as tkr
 import numpy
 
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 from gstlal import plotsegments
 from lal import GPSToUTC
 from lal import rate

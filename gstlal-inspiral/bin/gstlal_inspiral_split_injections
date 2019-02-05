@@ -22,10 +22,10 @@
 
 from optparse import OptionParser
 
-from glue.ligolw import ilwd, ligolw, lsctables
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import ligolw_add
+from ligo.lw import ilwd, ligolw, lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
+from ligo.lw.utils import ligolw_add
 
 import numpy
 

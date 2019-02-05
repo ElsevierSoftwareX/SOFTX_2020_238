@@ -19,10 +19,10 @@
 import h5py
 import argparse
 import numpy
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables, param as ligolw_param, array as ligolw_array
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import ligolw
+from ligo.lw import lsctables, param as ligolw_param, array as ligolw_array
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
 import lal.series
 from lal import rate
 from gstlal import reference_psd

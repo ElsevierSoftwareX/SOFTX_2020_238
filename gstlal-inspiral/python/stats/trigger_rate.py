@@ -31,8 +31,8 @@ import numpy
 import random
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import array as ligolw_array
+from ligo.lw import ligolw
+from ligo.lw import array as ligolw_array
 
 
 __all__ = ["ratebin", "ratebinlist", "triggerrates"]

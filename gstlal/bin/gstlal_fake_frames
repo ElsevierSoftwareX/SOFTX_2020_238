@@ -34,7 +34,7 @@ from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import datasource
 from gstlal import multirate_datasource
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 
 ### This program will make fake data in a variety of ways.  Its input is anything
 ### supported by datasource.py.  You can additionally whiten the data or apply a

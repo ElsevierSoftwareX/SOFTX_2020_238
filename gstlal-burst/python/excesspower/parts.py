@@ -49,12 +49,12 @@ from lalburst import bucluster
 
 from glue import datafind
 
-from glue.ligolw import ligolw, lsctables
+from ligo.lw import ligolw, lsctables
 lsctables.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw.utils import search_summary as ligolw_search_summary
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
+from ligo.lw.utils import segments as ligolw_segments
+from ligo.lw.utils import search_summary as ligolw_search_summary
 
 from ligo.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue.lal import Cache
@@ -515,7 +515,7 @@ class EPHandler(Handler):
 
 		# What comes out of SnglBurst.from_buffer is a
 		# pylal.xlal.datatypes.snglburst.SnglBurst object. It does not have
-		# all the trappings of its glue.ligolw.lsctables cousin, so we
+		# all the trappings of its ligo.lw.lsctables cousin, so we
 		# convert it here first
 		for event in [utils.convert_sngl_burst(sb, self.triggers) for sb in SnglBurst.from_buffer(buf)]:
 

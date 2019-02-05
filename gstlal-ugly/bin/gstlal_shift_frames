@@ -24,8 +24,8 @@ import pygst
 pygst.require("0.10")
 
 import lal
-from glue.ligolw import ligolw
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
 
 # This mess is to make gstreamer stop eating our help messages.
 if "--help" in sys.argv or "-h" in sys.argv:

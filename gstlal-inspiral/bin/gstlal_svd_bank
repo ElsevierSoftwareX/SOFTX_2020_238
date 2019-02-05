@@ -35,7 +35,7 @@ import numpy
 
 import lal.series
 from lal.utils import CacheEntry
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 from gstlal import svd_bank
 from gstlal.stats import inspiral_lr
 

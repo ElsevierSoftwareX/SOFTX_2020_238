@@ -19,12 +19,12 @@
 
 import itertools
 import numpy
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import table
-from glue.ligolw import utils
-from glue.ligolw import ilwd
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import table
+from ligo.lw import utils
+from ligo.lw import ilwd
+from ligo.lw.utils import process as ligolw_process
 from gstlal import metric as metric_module
 from gstlal import tree
 # FIXME dont do this

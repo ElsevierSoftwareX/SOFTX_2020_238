@@ -35,9 +35,9 @@ import sys
 import warnings
 import numpy
 from gstlal import far
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
+from ligo.lw import ligolw
 from ligo import segments
 from lal import LIGOTimeGPS
 from optparse import OptionParser

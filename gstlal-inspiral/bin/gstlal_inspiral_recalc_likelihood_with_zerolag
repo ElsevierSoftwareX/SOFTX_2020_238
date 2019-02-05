@@ -25,10 +25,10 @@ from optparse import OptionParser
 import sqlite3
 from time import gmtime
 
-from glue.ligolw import dbtables
-from glue.ligolw import lsctables
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import ligolw_sqlite
+from ligo.lw import dbtables
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import ligolw_sqlite
 from lalburst.offsetvector import offsetvector
 from ligo import segments
 from gstlal import inspiral

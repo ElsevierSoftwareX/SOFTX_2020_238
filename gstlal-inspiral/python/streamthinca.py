@@ -45,8 +45,8 @@ from bisect import bisect_left
 import time
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
+from ligo.lw import ligolw
+from ligo.lw import lsctables
 from gstlal.snglinspiraltable import GSTLALSnglInspiral as SnglInspiral
 import lal
 from lalburst import snglcoinc

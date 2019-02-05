@@ -53,10 +53,10 @@ import lal.series
 from lal.utils import CacheEntry
 from glue import pipeline
 from ligo import segments
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-import glue.ligolw.utils as ligolw_utils
-import glue.ligolw.utils.segments as ligolw_segments
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+import ligo.lw.utils as ligolw_utils
+import ligo.lw.utils.segments as ligolw_segments
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource

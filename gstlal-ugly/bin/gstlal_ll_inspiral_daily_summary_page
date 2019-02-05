@@ -2,10 +2,10 @@
 
 import heapq
 import sys, glob, os, time
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils
-from glue.ligolw import table
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils
+from ligo.lw import table
 from ligo import segments
 from glue.lal import Cache
 import lal

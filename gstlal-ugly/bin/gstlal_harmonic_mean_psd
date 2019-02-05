@@ -23,7 +23,7 @@ from optparse import OptionParser
 
 import lal
 
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 
 __author__ = "Drew Keppel <drew.keppel@ligo.org>"
 

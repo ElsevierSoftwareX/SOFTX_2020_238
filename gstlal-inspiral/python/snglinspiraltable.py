@@ -15,8 +15,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from glue.ligolw import ilwd
-from glue.ligolw import lsctables
+from ligo.lw import lsctables
 import lal
 from . import _snglinspiraltable
 
@@ -27,27 +26,8 @@ __all__ = ["GSTLALSnglInspiral"]
 class GSTLALSnglInspiral(_snglinspiraltable.GSTLALSnglInspiral):
 	__slots__ = ()
 
-	process_id_type = ilwd.get_ilwdchar_class("process", "process_id")
-	event_id_type = ilwd.get_ilwdchar_class("sngl_inspiral", "event_id")
-
 	spin1 = lsctables.SnglInspiral.spin1
 	spin2 = lsctables.SnglInspiral.spin2
-
-	@property
-	def process_id(self):
-		return self.process_id_type(self._process_id)
-
-	@process_id.setter
-	def process_id(self, val):
-		self._process_id = int(val)
-
-	@property
-	def event_id(self):
-		return self.event_id_type(self._event_id)
-
-	@event_id.setter
-	def event_id(self, val):
-		self._event_id = int(val)
 
 	@property
 	def snr_time_series(self):

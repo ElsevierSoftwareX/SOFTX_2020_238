@@ -22,7 +22,7 @@ import sys
 import lal
 from gstlal import reference_psd
 from optparse import OptionParser
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 
 ### A program to fit a PSD to a polynomial
 ###

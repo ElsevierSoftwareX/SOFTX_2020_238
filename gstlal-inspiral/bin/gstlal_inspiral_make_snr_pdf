@@ -37,9 +37,9 @@ from optparse import OptionParser
 import time
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
 from glue.text_progress_bar import ProgressBar
 from gstlal import reference_psd
 from gstlal.stats import inspiral_extrinsics

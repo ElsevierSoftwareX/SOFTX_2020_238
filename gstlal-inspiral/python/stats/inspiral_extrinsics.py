@@ -45,11 +45,11 @@ from scipy import spatial
 import sys
 import h5py
 
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import array as ligolw_array
+from ligo.lw import param as ligolw_param
+from ligo.lw import utils as ligolw_utils
 from glue.text_progress_bar import ProgressBar
 from gstlal import stats as gstlalstats
 import lal

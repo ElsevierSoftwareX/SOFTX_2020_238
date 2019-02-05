@@ -41,10 +41,10 @@ import math
 
 import itertools
 
-from glue.ligolw import utils
-from glue.ligolw import lsctables
-from glue.ligolw import table
-from glue.ligolw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw import lsctables
+from ligo.lw import table
+from ligo.lw import ligolw
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from ligo import segments
 from lal import LIGOTimeGPS
@@ -83,14 +83,14 @@ def get_sim_inspirals_from_file(filename):
 	"""
 	Get a sim inspiral table from the file name."
 	"""
-	xmldoc = utils.load_filename(filename)
+	xmldoc = ligolw_utils.load_filename(filename)
 	return table.get_table( xmldoc, lsctables.SimInspiralTable.tableName )
 
 def get_sim_burst_from_file( filename ):
 	"""
 	Get a sim burst table from the file name."
 	"""
-	xmldoc = utils.load_filename(filename)
+	xmldoc = ligolw_utils.load_filename(filename)
 	return table.get_table( xmldoc, lsctables.SimBurstTable.tableName )
 	
 def plot_wnb( sim_burst ):
@@ -189,7 +189,7 @@ analyzed_segments = segments.segmentlistdict()
 search_map = defaultdict(list)
 event_map = defaultdict(list)
 for arg in args:
-	xmldoc = utils.load_filename( arg )
+	xmldoc = ligolw_utils.load_filename( arg )
 
 	for tbl in lsctables.getTablesByType( xmldoc, lsctables.SnglBurstTable ):
 		for sb in tbl:
@@ -247,7 +247,7 @@ segs = segments.segmentlistdict()
 searches = lsctables.SearchSummaryTable()
 for arg in args:
 
-	xmldoc = utils.load_filename( arg )
+	xmldoc = ligolw_utils.load_filename( arg )
 	def_id_pair = []
 	if segment_defs is not None:
 		segtables = lsctables.SegmentDefTable()

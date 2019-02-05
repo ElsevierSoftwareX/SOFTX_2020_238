@@ -61,18 +61,18 @@ import httplib
 import tempfile
 
 from glue import iterutils
-from glue.ligolw import ligolw
-from glue.ligolw import dbtables
-from glue.ligolw import ilwd
-from glue.ligolw import lsctables
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import ligolw_sqlite
-from glue.ligolw.utils import ligolw_add
-from glue.ligolw.utils import process as ligolw_process
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw.utils import time_slide as ligolw_time_slide
+from ligo.lw import ligolw
+from ligo.lw import dbtables
+from ligo.lw import ilwd
+from ligo.lw import lsctables
+from ligo.lw import array as ligolw_array
+from ligo.lw import param as ligolw_param
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import ligolw_sqlite
+from ligo.lw.utils import ligolw_add
+from ligo.lw.utils import process as ligolw_process
+from ligo.lw.utils import segments as ligolw_segments
+from ligo.lw.utils import time_slide as ligolw_time_slide
 import lal
 from lal import LIGOTimeGPS
 from lal import series as lalseries
@@ -88,7 +88,7 @@ from gstlal import svd_bank
 #
 # =============================================================================
 #
-#                         glue.ligolw Content Handlers
+#                           ligo.lw Content Handlers
 #
 # =============================================================================
 #

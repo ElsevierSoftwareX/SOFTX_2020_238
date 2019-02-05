@@ -63,8 +63,8 @@ import base64
 import urlparse
 
 import lal
-from glue.ligolw import ligolw
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
 from gstlal import far
 from gstlal import plotpsd
 from gstlal import plotfar

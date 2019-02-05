@@ -25,7 +25,7 @@ import os
 
 
 import lal
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 from gstlal import plotpsd
 
 

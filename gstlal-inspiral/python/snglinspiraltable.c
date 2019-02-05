@@ -124,8 +124,8 @@ static struct PyMemberDef members[] = {
 	{"spin2x", T_FLOAT, offsetof(gstlal_GSTLALSnglInspiral, row.spin2x), 0, "spin2x"},
 	{"spin2y", T_FLOAT, offsetof(gstlal_GSTLALSnglInspiral, row.spin2y), 0, "spin2y"},
 	{"spin2z", T_FLOAT, offsetof(gstlal_GSTLALSnglInspiral, row.spin2z), 0, "spin2z"},
-	{"_process_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, row.process_id), 0, "process_id (long)"},
-	{"_event_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, row.event_id), 0, "event_id (long)"},
+	{"process_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, row.process_id), 0, "process_id (long)"},
+	{"event_id", T_LONG, offsetof(gstlal_GSTLALSnglInspiral, row.event_id), 0, "event_id (long)"},
 	{NULL,}
 };
 

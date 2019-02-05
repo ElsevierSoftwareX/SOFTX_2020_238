@@ -15,27 +15,27 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import sys
-from glue.ligolw import lsctables
-from glue.ligolw import dbtables
-from glue.ligolw import table
+from ligo.lw import lsctables
+from ligo.lw import dbtables
+from ligo.lw import table
 from lal import rate
 from ligo import segments
 from ligo.segments import utils as segmentsUtils
 import numpy
 import math
 import copy
-from glue.ligolw.utils import search_summary as ligolw_search_summary
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw.utils import process
+from ligo.lw.utils import search_summary as ligolw_search_summary
+from ligo.lw.utils import segments as ligolw_segments
+from ligo.lw.utils import process
 from lalsimulation import SimInspiralTaylorF2ReducedSpinComputeChi, SimIMRPhenomBComputeChi
 
 import sqlite3
 
 def get_thinca_zero_lag_segments(connection, program_name = "thinca"):
 	"""
-	Return the thinca rings from the database at the given connection.  The
-	rings are returned as a coalesced glue.segments.segmentlistdict indexed
-	by instrument.
+	Return the thinca rings from the database at the given connection.
+	The rings are returned as a coalesced ligo.segments.segmentlistdict
+	indexed by instrument.
 
 	Example:
 
@@ -45,7 +45,7 @@ def get_thinca_zero_lag_segments(connection, program_name = "thinca"):
 
 	This function is most useful if only zero-lag segments are desired
 	because it allows for more convenient manipulation of the segment lists
-	using the methods in glue.segments.  If information about background
+	using the methods in ligo.segments.  If information about background
 	segments or the original ring boundaries is desired the data returned by
 	get_thinca_rings_by_available_instruments() is required.
 	"""
@@ -75,7 +75,7 @@ def get_thinca_zero_lag_segments(connection, program_name = "thinca"):
 
 def get_veto_segments(connection, name):
 	"""
-	Return a coalesced glue.segments.segmentlistdict object containing the
+	Return a coalesced ligo.segments.segmentlistdict object containing the
 	segments of the given name extracted from the database at the given
 	connection.
 	"""

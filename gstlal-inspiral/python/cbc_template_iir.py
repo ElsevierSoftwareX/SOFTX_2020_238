@@ -32,7 +32,7 @@ import math
 import lal
 import pdb
 import csv
-from glue.ligolw import ligolw, lsctables, array, param, utils, types
+from ligo.lw import ligolw, lsctables, array, param, utils, types
 from gstlal.pipeio import repack_complex_array_to_real, repack_real_array_to_complex
 import pdb
 

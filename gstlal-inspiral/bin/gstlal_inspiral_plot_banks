@@ -49,9 +49,9 @@ from optparse import OptionParser
 from matplotlib.patches import Rectangle, Polygon
 from matplotlib.collections import PatchCollection
 
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
 from glue.lal import CacheEntry
 
 from gstlal import svd_bank

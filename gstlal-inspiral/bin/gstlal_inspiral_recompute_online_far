@@ -29,8 +29,8 @@ except ImportError:
 sqlite3.enable_callback_tracebacks(True)
 
 
-from glue.ligolw import dbtables
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import dbtables
+from ligo.lw import utils as ligolw_utils
 from gstlal import far
 from ligo.segments.utils import vote
 

@@ -38,11 +38,11 @@ from xml.sax import SAXParseException
 
 
 from ligo import segments
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils
-from glue.ligolw.utils import segments as ligolw_segments
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import segments as ligolw_segments
+from ligo.lw.utils import process as ligolw_process
 
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chris Pankow <chris.pankow@ligo.org>, Chad Hanna <chad.hanna@ligo.org>"
@@ -108,7 +108,7 @@ for filename in filenames:
 		# try parsing injection list as an XML document
 		#
 
-		for trig in lsctables.table.get_table(utils.load_filename(filename, verbose = options.verbose), lsctables.SnglBurstTable.tableName):
+		for trig in lsctables.table.get_table(ligolw_utils.load_filename(filename, verbose = options.verbose), lsctables.SnglBurstTable.tableName):
 			t = trig.get_start()
 			if trig.duration is None or math.isnan(trig.duration):
 				duration = options.default_duration
@@ -139,4 +139,4 @@ for r in segdef:
 	r.version = 0
 	r.insertion_time = 0
 
-utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

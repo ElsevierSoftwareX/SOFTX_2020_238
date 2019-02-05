@@ -42,11 +42,11 @@ import warnings
 import json
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import array as ligolw_array
+from ligo.lw import param as ligolw_param
+from ligo.lw import utils as ligolw_utils
 from ligo import segments
 from gstlal.stats import horizonhistory
 from gstlal.stats import inspiral_extrinsics
@@ -445,7 +445,7 @@ class LnSignalDensity(LnLRDensity):
 		generated parameter dictionaries drawn from the
 		distribution of parameters expected for the given
 		injection, which is an instance of a SimInspiral table row
-		object (see glue.ligolw.lsctables.SimInspiral for more
+		object (see ligo.lw.lsctables.SimInspiral for more
 		information).  Each value in the sequence is a tuple, the
 		first element of which is the random parameter dictionary
 		and the second is 0.

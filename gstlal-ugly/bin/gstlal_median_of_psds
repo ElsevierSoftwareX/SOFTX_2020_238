@@ -22,7 +22,7 @@ import glob
 import lal
 import lal.series
 from lal.utils import CacheEntry
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 from gstlal import reference_psd
 from optparse import OptionParser
 

@@ -29,14 +29,14 @@ Gst.init(None)
 
 
 import lal
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
+from ligo.lw import ligolw
+from ligo.lw import lsctables
 lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 
 # modules for uploading to GraceDB
 import threading
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw.utils import process as ligolw_process
 import urllib2  # for HTTPError:
 import StringIO
 
@@ -207,7 +207,7 @@ class GraceDBThread ( threading.Thread ):
         self.inj = inj
         threading.Thread.__init__ ( self )
     def run ( self ):
-       # This follows the code at the end of lalsuite/glue/glue/ligolw/utils/process.py
+       # This follows the code at the end of ligo.lw.utils.process
         print 'Notifying GraceDB now'
        # Create an empty XML document to send to GraceDB
         xmldoc = ligolw.Document()

@@ -1,5 +1,4 @@
-from glue.ligolw import ilwd
-from glue.ligolw import lsctables
+from ligo.lw import lsctables
 import lal
 from gstlal import _sngltriggertable
 

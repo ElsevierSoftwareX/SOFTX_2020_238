@@ -38,8 +38,8 @@
 
 import socket, copy, doctest
 from ligo import segments
-from glue.ligolw import lsctables, ligolw
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import lsctables, ligolw
+from ligo.lw import utils as ligolw_utils
 from gstlal import svd_bank
 from lal.utils import CacheEntry
 

@@ -25,7 +25,7 @@ import ConfigParser
 from ConfigParser import SafeConfigParser
 
 import lal
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 
 from parts import EPHandler
 

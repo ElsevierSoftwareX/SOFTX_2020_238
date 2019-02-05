@@ -38,7 +38,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib import ticker
 import numpy
 from gstlal import plotutil
-from glue.ligolw import lsctables
+from ligo.lw import lsctables
 from gstlal import reference_psd
 
 

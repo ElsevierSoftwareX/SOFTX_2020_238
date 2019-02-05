@@ -21,9 +21,9 @@
 ### gstlal_inspiral_mass_model.
 
 import sys
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables, param as ligolw_param, array as ligolw_array
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import ligolw
+from ligo.lw import lsctables, param as ligolw_param, array as ligolw_array
+from ligo.lw import utils as ligolw_utils
 
 @ligolw_array.use_in
 @ligolw_param.use_in

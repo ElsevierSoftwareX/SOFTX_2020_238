@@ -50,7 +50,7 @@ import os
 
 
 from glue.text_progress_bar import ProgressBar
-from glue.ligolw.lsctables import instrumentsproperty
+from ligo.lw.lsctables import instrumentsproperty
 from gstlal import dagfile
 from lal.utils import CacheEntry
 from ligo import segments

@@ -34,10 +34,10 @@ import random
 import lal
 
 
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import utils
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils
+from ligo.lw.utils import process as ligolw_process
 
 LIGOTimeGPS = lsctables.LIGOTimeGPS = lal.LIGOTimeGPS
 

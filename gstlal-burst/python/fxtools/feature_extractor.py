@@ -48,8 +48,8 @@ import lal
 from lal import LIGOTimeGPS
 
 from ligo import segments
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
 
 from gstlal import aggregator
 from gstlal import bottle

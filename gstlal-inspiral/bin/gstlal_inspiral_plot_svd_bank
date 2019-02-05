@@ -33,7 +33,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
 
-from glue.ligolw import lsctables
+from ligo.lw import lsctables
 
 print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
 print >>sys.stdout, 'Content-type: text/html\r\n'
