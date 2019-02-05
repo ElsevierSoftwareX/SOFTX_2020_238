@@ -731,7 +731,10 @@ WHERE
 		# that have too small a count to have been well measured,
 		# and/or can't be modelled correctly by this fit anyway.
 		mode, = zl.argmax()
-		mask = (x < mode) | (zl.at_centres() < zl[mode,] - 15.)
+		zlcumsum = zl.array.cumsum()
+		assert zlcumsum[-1] > 1000, "Need at least 1000 zero lag events to compute extinction model"
+		one_hundred_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 100)]
+		mask = (x < mode) | (x > one_hundred_events_lr)
 		zl = numpy.ma.masked_array(zl.array, mask)
 		bg = numpy.ma.masked_array(bg, mask)
 
