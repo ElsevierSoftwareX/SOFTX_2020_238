@@ -21,7 +21,6 @@ plots:
     measurement: likelihood_history
     column: data
     aggregate: max
-    dt: 1
     value: checked 
 
   # likelihood history heatmap (by job)
@@ -30,7 +29,6 @@ plots:
     measurement: likelihood_history
     column: data
     aggregate: max
-    dt: 1
     value:
 
   # FAR history
@@ -39,7 +37,6 @@ plots:
     measurement: far_history
     column: data
     aggregate: min
-    dt: 1
     value:
 
   # FAR history heatmap (by job)
@@ -48,7 +45,6 @@ plots:
     measurement: far_history
     column: data
     aggregate: min
-    dt: 1
     value:
 
   # latency history
@@ -57,7 +53,6 @@ plots:
     measurement: latency_history
     column: data
     aggregate: max
-    dt: 1
     value:
 
   # latency history heatmap (by job)
@@ -66,7 +61,6 @@ plots:
     measurement: latency_history
     column: data
     aggregate: max
-    dt: 1
     value:
 
   # snr history
@@ -75,7 +69,6 @@ plots:
     measurement: snr_history
     column: data
     aggregate: max
-    dt: 1
     params:
       - - ifo
         - H1
@@ -91,7 +84,6 @@ plots:
     measurement: ram_history
     column: data
     aggregate: max
-    dt: 10
     value:
 
   # noise
@@ -100,7 +92,6 @@ plots:
     measurement: noise
     column: data
     aggregate: max
-    dt: 1
     params:
       - - ifo
         - H1
@@ -116,7 +107,6 @@ plots:
     measurement: range_history
     column: data
     aggregate: max
-    dt: 1
     params:
       - - ifo
         - H1
@@ -132,21 +122,18 @@ plots:
     measurement: H1_statevector_on
     column: data
     aggregate: max
-    dt: 10
     value:
   - title: L1 Uptime by Job
     type: TimeHeatMap
     measurement: L1_statevector_on
     column: data
     aggregate: max
-    dt: 10
     value:
   - title: V1 Uptime by Job
     type: TimeHeatMap
     measurement: V1_statevector_on
     column: data
     aggregate: max
-    dt: 10
     value:
 
   # downtime heatmaps (by job)
@@ -155,21 +142,18 @@ plots:
     measurement: H1_statevector_off
     column: data
     aggregate: max
-    dt: 10
     value:
   - title: L1 Downtime by Job
     type: TimeHeatMap
     measurement: L1_statevector_off
     column: data
     aggregate: max
-    dt: 10
     value:
   - title: V1 Downtime by Job
     type: TimeHeatMap
     measurement: V1_statevector_off
     column: data
     aggregate: max
-    dt: 10
     value:
 
   # strain dropped heatmaps (by job)
@@ -178,21 +162,18 @@ plots:
     measurement: H1_strain_dropped
     column: data
     aggregate: max
-    dt: 10
     value:
   - title: L1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: L1_strain_dropped
     column: data
     aggregate: max
-    dt: 10
     value:
   - title: V1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: V1_strain_dropped
     column: data
     aggregate: max
-    dt: 10
     value:
 
   # FIXME: add 'time since last' plot
@@ -204,7 +185,6 @@ nagios:
   measurement: ram_history
   column: data
   aggregate: max
-  dt: 1
   num_jobs: 328
 
 database:
