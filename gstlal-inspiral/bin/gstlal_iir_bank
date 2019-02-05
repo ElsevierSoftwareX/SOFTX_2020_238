@@ -68,7 +68,6 @@ from glue.ligolw import array
 from glue.ligolw import param
 array.use_in(ligolw.LIGOLWContentHandler)
 param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
 from gstlal import cbc_template_iir
 from pylal.series import read_psd_xmldoc
 from glue.ligolw import utils, lsctables
