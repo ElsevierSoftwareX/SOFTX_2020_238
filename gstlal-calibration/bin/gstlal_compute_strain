@@ -2244,7 +2244,7 @@ if compute_calib_statevector:
 	#
 	# COHERENCE BITS BRANCH
 	#
-	if use_coherence:
+	if use_coherence and (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq):
 		coherence_ok_list = []
 		if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
 			# PCALY_LINE1 is used for all time-dependence calculations

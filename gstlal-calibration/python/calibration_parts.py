@@ -329,6 +329,7 @@ def remove_harmonics_with_witnesses(pipeline, signal, witnesses, f0, num_harmoni
 			phase_shift = pipeparts.mkmatrixmixer(pipeline, f0_beat_frequency, matrix=[[0, two_n_pi_delta_t]])
 			phase_shift = pipeparts.mktogglecomplex(pipeline, phase_shift)
 			phase_factor = pipeparts.mkgeneric(pipeline, phase_shift, "cexp")
+			phase_factor = pipeparts.mktee(pipeline, phase_factor)
 
 		# Find amplitude and phase of line in signal
 		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = n * f0)
@@ -359,7 +360,7 @@ def remove_harmonics_with_witnesses(pipeline, signal, witnesses, f0, num_harmoni
 			# Remove worthless data from computation of transfer function if we can
 			if noisesub_gate_bit is not None:
 				tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d" % (n, i))
-			tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
+			tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 1e-35 * numpy.random.rand(), default_kappa_im = 1e-35 * numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 			tfs_at_f[(i + 1) * len(witnesses) + i] = ones
 
 		for i in range(0, len(witnesses)):
@@ -375,7 +376,7 @@ def remove_harmonics_with_witnesses(pipeline, signal, witnesses, f0, num_harmoni
 					# Remove worthless data from computation of transfer function if we can
 					if noisesub_gate_bit is not None:
 						tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d" % (n, i, j))
-					tfs_at_f[(i + 1) * len(witnesses) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0, array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
+					tfs_at_f[(i + 1) * len(witnesses) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = numpy.random.rand(), default_kappa_im = numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 		tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
 		tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_matrixsolver")
