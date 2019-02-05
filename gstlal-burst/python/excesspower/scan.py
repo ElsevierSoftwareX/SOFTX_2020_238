@@ -28,8 +28,7 @@ import tempfile
 
 import numpy
 
-from glue.segments import segment
-from glue.lal import LIGOTimeGPS, Cache, CacheEntry
+from ligo.segments import segment
 
 from gstlal import pipeparts
 from gstlal.excesspower.utils import EXCESSPOWER_UNIT_SCALE

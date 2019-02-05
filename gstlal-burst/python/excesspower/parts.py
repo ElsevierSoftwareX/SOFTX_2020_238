@@ -56,7 +56,7 @@ from glue.ligolw.utils import process as ligolw_process
 from glue.ligolw.utils import segments as ligolw_segments
 from glue.ligolw.utils import search_summary as ligolw_search_summary
 
-from glue.segments import segment, segmentlist, segmentlistdict, PosInfinity
+from ligo.segments import segment, segmentlist, segmentlistdict, PosInfinity
 from glue.lal import Cache
 
 from pylal import datatypes as laltypes

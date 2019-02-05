@@ -49,7 +49,7 @@ __all__ = ["ratebin", "ratebinlist", "triggerrates"]
 
 class ratebin(segments.segment):
 	"""
-	A version of the segment class (see glue.segments) that carries a
+	A version of the segment class (see ligo.segments) that carries a
 	count of things.  Arithmetic operations update the count by
 	interpreting the count as a uniform density of things throughout
 	the interval spanned by the segment.  For example, the intersection
@@ -217,7 +217,7 @@ class ratebin(segments.segment):
 
 class ratebinlist(segments.segmentlist):
 	"""
-	Modified version of the segmentlist type (see glue.segments) whose
+	Modified version of the segmentlist type (see ligo.segments) whose
 	arithmetic operations implement the segment-and-count arithmetic
 	operations defined by the ratebin type.
 

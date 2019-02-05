@@ -47,7 +47,7 @@ from glue.ligolw import table
 from glue.ligolw import ligolw
 lsctables.use_in(ligolw.LIGOLWContentHandler)
 from ligo import segments
-from glue.lal import LIGOTimeGPS
+from lal import LIGOTimeGPS
 from glue.lal import Cache
 
 from optparse import OptionParser
