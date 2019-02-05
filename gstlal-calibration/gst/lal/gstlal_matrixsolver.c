@@ -263,7 +263,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 */
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			GstStructure *str = gst_caps_get_structure(caps, n);
-			const GValue *v = gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels");
+			const GValue *v = gst_structure_get_value(str, "channels");
 			if(GST_VALUE_HOLDS_INT_RANGE(v)) {
 				gint channels_in_min, channels_out_min, channels_out_max;
 				guint64 channels_in_max;
@@ -292,7 +292,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 		 */
 		for(n = 0; n < gst_caps_get_size(caps); n++) {
 			GstStructure *str = gst_caps_get_structure(caps, n);
-			const GValue *v = gst_structure_get_value(gst_caps_get_structure(caps, 0), "channels");
+			const GValue *v = gst_structure_get_value(str, "channels");
 			if(GST_VALUE_HOLDS_INT_RANGE(v)) {
 				int channels_in_min, channels_in_max, channels_out_min, channels_out_max;
 				channels_in_min = gst_value_get_int_range_min(v);

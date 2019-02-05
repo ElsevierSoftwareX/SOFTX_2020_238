@@ -274,8 +274,8 @@ cleaning_check_range_low_max = float(DataCleaningConfigs["cleaningcheckrangelowm
 cleaning_check_range_mid_min = float(DataCleaningConfigs["cleaningcheckrangemidmin"])
 cleaning_check_range_mid_max = float(DataCleaningConfigs["cleaningcheckrangemidmax"])
 powerlines_tf_median_time = float(DataCleaningConfigs["powerlinestfmediantime"]) if "powerlinestfmediantime" in DataCleaningConfigs else 1
-powerlines_tf_averaging_time = float(DataCleaningConfigs["powerlinestfaveragingtime"])
-powerlines_freq_var = float(DataCleaningConfigs["powerlinesfreqvar"])
+powerlines_tf_averaging_time = float(DataCleaningConfigs["powerlinestfaveragingtime"]) if "powerlinestfaveragingtime" in DataCleaningConfigs else 128
+powerlines_freq_var = float(DataCleaningConfigs["powerlinesfreqvar"]) if "powerlinesfreqvar" in DataCleaningConfigs else 0.02
 witness_channel_fft_time = float(DataCleaningConfigs["witnesschannelffttime"])
 num_witness_ffts = int(DataCleaningConfigs["numwitnessffts"])
 min_witness_ffts = int(DataCleaningConfigs["minwitnessffts"])
@@ -357,7 +357,7 @@ compute_calib_statevector = Config.getboolean("CalibrationConfigurations", "comp
 factors_from_filters_file = Config.getboolean("TDCFConfigurations", "factorsfromfiltersfile")
 # Boolean for removing calibration lines, power lines, DC component, using median in witness transfer functions
 remove_cal_lines = Config.getboolean("DataCleaningConfigurations", "removecallines")
-remove_power_lines = Config.getboolean("DataCleaningConfigurations", "removepowerlines")
+remove_power_lines = Config.getboolean("DataCleaningConfigurations", "removepowerlines") if "removepowerlines" in DataCleaningConfigs else False
 remove_dc = Config.getboolean("DataCleaningConfigurations", "removedc")
 witness_tf_use_median = Config.getboolean("DataCleaningConfigurations", "witnesstfusemedian")
 witness_tf_parallel_mode = Config.getboolean("DataCleaningConfigurations", "witnesstfparallelmode") if "witnesstfparallelmode" in DataCleaningConfigs else False
@@ -910,12 +910,45 @@ elif CalibrationConfigs["calibrationmode"] == "Partial":
 	channel_list.extend(((instrument, ChannelNames["deltalreschannel"]), (instrument, ChannelNames["deltaltstchannel"]), (instrument, ChannelNames["deltalpumchannel"]), (instrument, ChannelNames["deltaluimchannel"])))
 	headkeys.extend(("res", "tst", "pum", "uim"))
 
-# If we are removing 60 Hz lines and harmonics, add the witness channel
-if remove_power_lines:
+# If we are removing lines using witness channels (e.g., 60 Hz lines and harmonics), add the witness channels
+line_witness_channel_list = []
+line_witness_fundamental_freqs = []
+line_witness_harmonics = []
+line_witness_tf_median_times = []
+line_witness_tf_averaging_times = []
+line_witness_freq_vars = []
+if (ChannelNames["linewitnesschannellist"] != "None") if "linewitnesschannellist" in ChannelNames else False:
+	line_witness_channel_list = ChannelNames["linewitnesschannellist"].split(';')
+	line_witness_fundamental_freqs = DataCleaningConfigs["linewitnessfundamentalfreqs"].split(';')
+	line_witness_harmonics = DataCleaningConfigs["linewitnessharmonics"].split(';')
+	line_witness_tf_median_times = DataCleaningConfigs["linewitnesstfmediantimes"].split(';')
+	line_witness_tf_averaging_times = DataCleaningConfigs["linewitnesstfaveragingtimes"].split(';')
+	line_witness_freq_vars = DataCleaningConfigs["linewitnessfreqvars"].split(';')
+	if len(line_witness_channel_list) != len(line_witness_fundamental_freqs) or len(line_witness_channel_list) != len(line_witness_harmonics) or len(line_witness_channel_list) != len(line_witness_tf_median_times) or len(line_witness_channel_list) != len(line_witness_tf_averaging_times) or len(line_witness_channel_list) != len(line_witness_freq_vars):
+		raise ValueError("LineWitnessChannelList, LineWitnessFundamentalFreqs, LineWitnessHarmonics, LineWitnessTFMedianTimes, LineWitnessTFAveragingTimes, LineWitnessFreqVars, and LineWitnessChannelSR must all be the same length, i.e., they must all have the same number of semicolons (;)")
+	for i in range(0, len(line_witness_channel_list)):
+		line_witness_channel_list[i] = line_witness_channel_list[i].split(',')
+		for j in range(0, len(line_witness_channel_list[i])):
+			channel_list.append((instrument, line_witness_channel_list[i][j]))
+			headkeys.append(line_witness_channel_list[i][j])
+		line_witness_fundamental_freqs[i] = float(line_witness_fundamental_freqs[i])
+		line_witness_harmonics[i] = int(line_witness_harmonics[i])
+		line_witness_tf_median_times[i] = float(line_witness_tf_median_times[i])
+		line_witness_tf_averaging_times[i] = float(line_witness_tf_averaging_times[i])
+		line_witness_freq_vars[i] = float(line_witness_freq_vars[i])
+
+if (ChannelNames["powerlineschannel"] not in headkeys) if remove_power_lines else False:
 	channel_list.append((instrument, ChannelNames["powerlineschannel"]))
-	headkeys.append("powerlines")
+	headkeys.append(ChannelNames["powerlineschannel"])
+	line_witness_channel_list.append([ChannelNames["powerlineschannel"]])
+	line_witness_fundamental_freqs.append(60.0)
+	line_witness_harmonics.append(5)
+	line_witness_tf_median_times.append(float(powerlines_tf_median_time))
+	line_witness_tf_averaging_times.append(float(powerlines_tf_averaging_time))
+	line_witness_freq_vars.append(float(powerlines_freq_var))
 
 # If we are using witness channels to clean h(t), add those to the channel list
+witness_channel_list = []
 if ChannelNames["witnesschannellist"] != "None":
 	witness_channel_list = ChannelNames["witnesschannellist"].split(';')
 	witness_notch_frequencies = DataCleaningConfigs["witnessnotchfrequencies"].split(';')
@@ -936,14 +969,12 @@ if ChannelNames["witnesschannellist"] != "None":
 		else:
 			for j in range(0, len(witness_notch_frequencies[i])):
 				witness_notch_frequencies[i][j] = float(witness_notch_frequencies[i][j])
-else:
-	witness_channel_list = None
 
 # If we are gating the noise or 60 Hz line subtraction with something other than the ODC state vector, add that channel
 if compute_calib_statevector:
 	noisesub_gate_channel = ChannelNames["noisesubgatechannel"] if "noisesubgatechannel" in ChannelNames else lownoise_channel_name 
 	noisesub_gate_bitmask = int(Bitmasks["noisesubgatebitmask"]) if "noisesubgatebitmask" in Bitmasks else lownoise_bitmask
-if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_bitmask >= 0:
+if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_bitmask >= 0:
 	channel_list.append((instrument, noisesub_gate_channel))
 	headkeys.append("noisesubgatechannel")
 
@@ -1503,8 +1534,8 @@ if compute_fs or compute_srcq:
 		smooth_fs = pipeparts.mkaudioamplify(pipeline, smooth_sqrtXiR, src_pcal_line_freq)
 		smooth_fs_nogate = pipeparts.mkaudioamplify(pipeline, smooth_sqrtXiR_nogate, src_pcal_line_freq)
 		if src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
-                        head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
-                        head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
 		elif src_pcal_line_freq != act_pcal_line_freq and "pcal4_linefreq" in head_dict:
 			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
 			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
@@ -2059,7 +2090,7 @@ strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instr
 
 # Put the units back to strain before writing to frames
 straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
+if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
 	straintee = pipeparts.mktee(pipeline, strain)
 	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 else:
@@ -2488,7 +2519,7 @@ if remove_cal_lines:
 	clean_strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, straintee, calibration_lines))
 
 # Set up gating for the power mains and noise subtraction
-if compute_calib_statevector and (remove_power_lines or witness_channel_list is not None) and noisesub_gate_bitmask > 0:
+if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_bitmask > 0:
 	noisesubgate = obsintentchanneltee if noisesub_gate_channel == obsintent_channel_name else lownoisechanneltee if noisesub_gate_channel == lownoise_channel_name else hwinjtee if noisesub_gate_channel == hwinj_channel_name else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
 	noisesubgate = pipeparts.mkgeneric(pipeline, noisesubgate, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,28))
 	noisesubgate = pipeparts.mkcapsfilter(pipeline, noisesubgate, calibstate_caps)
@@ -2496,23 +2527,30 @@ if compute_calib_statevector and (remove_power_lines or witness_channel_list is 
 else:
 	noisesubgatetee = None
 
-# Next, remove 60 Hz power lines and harmonics
-if remove_power_lines:
+# Next, remove lines using witness channels, such as 60 Hz power lines and harmonics
+if any(line_witness_channel_list):
 	if not remove_cal_lines:
 		clean_strain = straintee
-	powerlines = calibration_parts.caps_and_progress(pipeline, head_dict["powerlines"], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", "powerlines")
-	if remove_cal_lines and filter_latency_factor > 0:
-		powerlines = pipeparts.mkgeneric(pipeline, powerlines, "lal_insertgap", chop_length = int(1000000000 * filter_latency_factor * demodulation_filter_time))
-	clean_strain = calibration_parts.remove_harmonics_with_witness(pipeline, clean_strain, powerlines, 60, 5, powerlines_freq_var, filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_median = powerlines_tf_median_time, num_avg = powerlines_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
+	for i in range(0, len(line_witness_channel_list)):
+		line_witnesses = []
+		for key in headkeys:
+			if key in line_witness_channel_list[i]:
+				line_witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
+				if remove_cal_lines and filter_latency_factor > 0:
+					head_dict[key] = pipeparts.mkgeneric(pipeline, head_dict[key], "lal_insertgap", chop_length = int(1000000000 * filter_latency_factor * demodulation_filter_time))
+		if len(line_witnesses) != len(line_witness_channel_list[i]):
+			print "WARNING: Not all requested line witness channels are being used"
+
+		clean_strain = calibration_parts.remove_harmonics_with_witnesses(pipeline, clean_strain, line_witnesses, line_witness_fundamental_freqs[i], line_witness_harmonics[i], line_witness_freq_vars[i], filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_median = line_witness_tf_median_times[i] * compute_factors_sr, num_avg = line_witness_tf_averaging_times[i] * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
 
 # Remove excess noise using any provided witness channels
-if witness_channel_list is not None:
+if any(witness_channel_list):
 	# Remove initial data from computation of transfer functions and wait until the filters and kappas settle
 	witness_delay_time = witness_tf_time_shift if witness_tf_parallel_mode else (filter_settle_time + (1.0 - filter_latency_factor) * (demodulation_filter_time + median_smoothing_samples / compute_factors_sr + factors_average_samples / compute_factors_sr))
 	# How much does the "delay_time" need to increase per iteration of cleaning?
 	witness_delay_increment = witness_filter_taper_time + witness_channel_fft_time / 2.0 * (num_witness_ffts + 1.0) if not filter_latency_factor else 0.0
 	# If we haven't removed any lines, clean the regular h(t) data
-	if not (remove_cal_lines or remove_power_lines):
+	if not (remove_cal_lines or any(line_witness_channel_list)):
 		clean_strain = straintee
 
 	for i in range(0, len(witness_channel_list)):
@@ -2536,7 +2574,7 @@ if witness_channel_list is not None:
 		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], high_pass = witness_highpasses[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
 		witness_delay_time += witness_delay_increment
 
-if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
+if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
 	if compute_calib_statevector:
@@ -2549,7 +2587,7 @@ if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
 # CALIB_STATE_VECTOR: CALIB_STRAIN_CLEAN
 #
 
-if compute_calib_statevector and (remove_cal_lines or remove_power_lines or witness_channel_list is not None):
+if compute_calib_statevector and (remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list)):
 	low_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_low_max) / numpy.log(2) + 1.01))
 	mid_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_mid_max) / numpy.log(2) + 1.01))
 
@@ -2716,7 +2754,7 @@ if compute_calib_statevector:
 # Link the strain branch to the muxer
 channelmux_input_dict["%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, strain)
 # Link the cleaned strain branch to the muxer if h(t) was cleaned in any way
-if remove_cal_lines or remove_power_lines or witness_channel_list is not None:
+if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
 	channelmux_input_dict["%s:%sCALIB_STRAIN_CLEAN%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, clean_strain)
 # Link the real and imaginary parts of kappa_tst to the muxer
 if compute_kappatst:
