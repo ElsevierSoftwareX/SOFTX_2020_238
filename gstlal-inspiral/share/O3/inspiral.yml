@@ -176,9 +176,15 @@ plots:
     aggregate: max
     value:
 
-  # FIXME: add 'time since last' plot
+  # time since last plot
+  - title: Time Since Last Heartbeat
+    type: Bar
+    measurement: ram_history
+    column: data
+    aggregate: max
+    value:
+
   # FIXME: add time since trigger plot
-  # FIXME: add 'latest by job' plots
 
 nagios:
   lookback: 600
@@ -186,6 +192,11 @@ nagios:
   column: data
   aggregate: max
   num_jobs: 328
+
+measurements:
+  ram_history:
+    num_jobs: 328
+    default: 1e4
 
 database:
   backend: hdf5
