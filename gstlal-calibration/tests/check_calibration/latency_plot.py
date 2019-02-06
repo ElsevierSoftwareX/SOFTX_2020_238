@@ -14,7 +14,7 @@ parser = OptionParser()
 parser.add_option("--intime-file", metavar = "file", type = str, help = "File that contains data timestamps and real time of input data")
 parser.add_option("--outtime-file", metavar = "file", type = str, help = "File that contains data timestamps and real time of output data")
 parser.add_option("--plot-title", metavar = "name", type = str, help = "Title of the plot")
-parser.add_option("--plot-filename-prefix", metavar = "file", type = str, help = "Start of the name of the file containing the plot. GPS start time, duration of plot, and .pdf are added")
+parser.add_option("--plot-filename-prefix", metavar = "file", type = str, default = "", help = "Start of the name of the file containing the plot. GPS start time, duration of plot, and .pdf are added")
 
 options, filenames = parser.parse_args()
 

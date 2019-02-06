@@ -95,7 +95,7 @@ parser.add_option("--magnitude-max", type = float, default = 1.1, help = "Maximu
 parser.add_option("--phase-min", metavar = "degrees", type = float, default = -6, help = "Minimum for phase plot, in degrees")
 parser.add_option("--phase-max", metavar = "degrees", type = float, default = 6, help = "Maximum for phase plot, in degrees")
 parser.add_option("--labels", metavar = "list", type = str, default = None, help = "Comma-separated list of labels corresponding to each transfer function, to be added to plot legend and txt file names.")
-parser.add_option("--filename-suffix", type = str, default = None, help = "Suffix for filename to make it unique.")
+parser.add_option("--filename-suffix", type = str, default = "", help = "Suffix for filename to make it unique.")
 
 options, filenames = parser.parse_args()
 
