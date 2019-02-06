@@ -14,6 +14,7 @@ pkgpython_PYTHON = \
 	chirptime.py \
 	far.py \
 	hoftcache.py \
+	ilwdify.py \
 	imr_utils.py \
 	inspiral_pipe.py \
 	inspiral.py \

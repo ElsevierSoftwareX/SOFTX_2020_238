@@ -82,6 +82,7 @@ from ligo import gracedb
 
 from gstlal import bottle
 from gstlal import cbc_template_iir
+from gstlal import ilwdify
 from gstlal import svd_bank
 
 
@@ -571,6 +572,9 @@ class GracedBWrapper(object):
 				snr_time_series = event.snr_time_series
 				if snr_time_series is not None:
 					xmldoc.childNodes[-1].appendChild(lalseries.build_COMPLEX8TimeSeries(snr_time_series)).appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+			# translate IDs from integers to ilwd:char for
+			# backwards compatibility
+			ilwdify.do_it_to(xmldoc)
 			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
 			xmldoc.unlink()
