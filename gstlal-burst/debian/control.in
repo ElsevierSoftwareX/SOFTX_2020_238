@@ -22,7 +22,7 @@ Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
- python-glue-segments (>= @MIN_GLUE_VERSION@),
+ python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
  python-gobject,
  python-numpy,
  python-scipy,
