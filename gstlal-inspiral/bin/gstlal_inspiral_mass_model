@@ -72,9 +72,9 @@ prob = {}
 mchirps = {}
 
 ligo_min = 3
-ligo_max = 200
-ligo_peak = 200
-ligo_alpha = -2.5
+ligo_max = 30
+ligo_peak = 30
+ligo_alpha = -1
 ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
 bbh_min = 3
