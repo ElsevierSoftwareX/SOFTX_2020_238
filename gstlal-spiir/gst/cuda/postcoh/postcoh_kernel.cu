@@ -646,7 +646,7 @@ __global__ void ker_coh_max_and_chisq_versatile
     
                 NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
                 // The background cohsnr should be obtained coherently as well.
-                int offset = (j == iifo ? 0 : NtOff - trial_offset);
+                int offset = (j == iifo ? 0 : NtOff - (trial_offset *(j-iifo)) + len);
                 // dk[j] = snr[j][((start_exe + len_cur + offset + len) % len) * ntmplt + tmplt_cur ];     
                 dk[j] = snr[j][len * tmplt_cur + ((start_exe + len_cur + offset + len) % len)];     
             }
@@ -740,7 +740,7 @@ __global__ void ker_coh_max_and_chisq_versatile
             map_idx = iifo * nifo + j;
             NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx_bg[output_offset]] / dt);
 
-            peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff - trial_offset + len);
+            peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff - (trial_offset * (j-iifo)) + len);
 
             // tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * ntmplt + tmplt_cur];
             tmp_maxsnr = snr[j][len * tmplt_cur + ((peak_pos_tmp + len) % len)];
@@ -1051,7 +1051,7 @@ __global__ void ker_coh_max_and_chisq
     
                 NtOff = round (toa_diff_map[map_idx * num_sky_directions + ipix] / dt);
                 // The background cohsnr should be obtained coherently as well.
-                int offset = (j == iifo ? 0 : NtOff - trial_offset);
+                int offset = (j == iifo ? 0 : NtOff - (trial_offset * (j-iifo)));
                 // dk[j] = snr[j][((start_exe + len_cur + offset + len) % len) * ntmplt + tmplt_cur ];     
                 dk[j] = snr[j][len * tmplt_cur + ((start_exe + len_cur + offset + len) % len)];     
             }
@@ -1136,7 +1136,7 @@ __global__ void ker_coh_max_and_chisq
 
             NtOff = round (toa_diff_map[map_idx * num_sky_directions + pix_idx_bg[output_offset]] / dt);
 
-            peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff - trial_offset + len);
+            peak_pos_tmp = start_exe + len_cur + (j == iifo ? 0 : NtOff - (trial_offset * (j-iifo)) + len);
 
             // tmp_maxsnr = snr[j][((peak_pos_tmp + len) % len) * ntmplt + tmplt_cur];
             tmp_maxsnr = snr[j][len * tmplt_cur + ((peak_pos_tmp + len) % len)];
