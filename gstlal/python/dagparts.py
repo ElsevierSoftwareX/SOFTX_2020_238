@@ -64,8 +64,7 @@ def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
 	out = which.stdout.read().strip()
 	if not out:
-		print >>sys.stderr, "ERROR: could not find %s in your path, have you built the proper software and sourced the proper environment scripts?" % (prog,prog)
-		raise ValueError
+		raise ValueError("could not find %s in your path, have you built the proper software and sourced the proper environment scripts?" % prog)
 	return out
 
 
