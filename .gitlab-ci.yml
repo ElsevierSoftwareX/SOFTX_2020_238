@@ -55,6 +55,65 @@ stages:
     - nightly-pages
     - verify
 
+
+#
+# build rpms
+#
+
+.levelN:rpm: &levelN-rpm-package
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
+  variables:
+    RPM_BUILD_CPUS: 4
+  script:
+    - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+    - cd ${CI_JOB_NAME#level?:rpm:}
+    - ./00init.sh
+    - ./configure --enable-gtk-doc
+    - make
+    - make dist
+    - rpmbuild -tb --define "_topdir $CI_PROJECT_DIR/rpmbuild" ${CI_JOB_NAME#level?:rpm:}-*.tar.gz
+  artifacts:
+    expire_in: 18h
+    paths:
+      - rpmbuild/RPMS/x86_64/${CI_JOB_NAME#level?:rpm:}-*.rpm
+      - rpmbuild/RPMS/x86_64/python2-${CI_JOB_NAME#level?:rpm:}-*.rpm
+  only:
+    - pushes
+    - schedules
+    - tags
+    - web
+
+level0:rpm:gstlal:
+  <<: *levelN-rpm-package
+  stage: level0
+  
+level1:rpm:gstlal-ugly:
+  <<: *levelN-rpm-package
+  stage: level1
+  dependencies:
+    - level0:rpm:gstlal
+
+level2:rpm:gstlal-inspiral:
+  <<: *levelN-rpm-package
+  stage: level2
+  dependencies:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
+
+level2:rpm:gstlal-calibration:
+  <<: *levelN-rpm-package
+  stage: level2
+  dependencies:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
+    
+level2:rpm:gstlal-burst:
+  <<: *levelN-rpm-package
+  stage: level2
+  dependencies:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
+
 level0:gstlal:
   image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: level0

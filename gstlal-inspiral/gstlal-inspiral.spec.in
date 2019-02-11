@@ -71,7 +71,7 @@ plugins and programs.
 
 
 %build
-%configure --enable-gtk-doc
+%configure --enable-gtk-doc --disable-massmodel
 %{__make}
 
 
