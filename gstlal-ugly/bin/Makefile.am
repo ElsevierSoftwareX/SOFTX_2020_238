@@ -27,7 +27,6 @@ dist_bin_SCRIPTS = \
 	gstlal_cache_to_segments \
 	gstlal_ll_inspiral_aggregator \
 	gstlal_ll_dq \
-	gstlal_ll_inspiral_state \
 	gstlal_condor_top \
 	gstlal_injsplitter \
 	gstlal_reduce_dag \
