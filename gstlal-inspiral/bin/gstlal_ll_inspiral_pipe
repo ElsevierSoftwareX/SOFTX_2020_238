@@ -391,9 +391,18 @@ for ifo in channel_dict:
 		"dq-vector-on-bits":options.dq_vector_on_bits,
 		"dq-vector-off-bits":options.dq_vector_off_bits,
 		"data-source":options.data_source,
-		"out-path": outpath
+		"out-path": outpath,
+		"data-backend": options.agg_data_backend,
 		}
 	common_opts.update(datasource_opts)
+
+	if options.agg_data_backend == 'influx':
+		common_opts.update({
+			"influx-database-name": options.influx_database_name,
+			"influx-hostname": options.influx_hostname,
+			"influx-port": options.influx_port,
+		})
+
 	dagparts.DAGNode(dqJob, dag, [], opts = common_opts)
 
 #
