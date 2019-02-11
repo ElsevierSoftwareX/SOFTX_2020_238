@@ -573,6 +573,7 @@ agg_options = {
 	"job-start": 0,
 	"kafka-server": options.output_kafka_server,
 	"data-backend": options.agg_data_backend,
+	"data-type": "min",
 }
 
 if options.agg_data_backend == 'influx':
@@ -596,15 +597,17 @@ for ifo in channel_dict.keys():
 
 # analysis-based aggregation jobs
 for routes in groups(agg_routes, 1):
-	all_agg_options = {"route": routes, "data-type": ["min", "max"]}
-	all_agg_options.update(agg_options)
-	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = all_agg_options)
+	agg_options["route"] = routes
+	agg_options["data-type"] = "min"
+	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = agg_options)
+	agg_options["data-type"] = "max"
+	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = agg_options)
 
 # state-based aggregation jobs
 for routes in groups(state_routes, 2):
-	all_agg_options = {"route": routes, "data-type": "max"}
-	all_agg_options.update(agg_options)
-	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = all_agg_options)
+	agg_options["route"] = routes
+	agg_options["data-type"] = "max"
+	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = agg_options)
 
 #
 # summary page
