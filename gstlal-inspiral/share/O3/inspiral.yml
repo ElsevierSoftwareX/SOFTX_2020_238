@@ -18,7 +18,7 @@ plots:
   # likelihood history timeseries
   - title: Likelihood
     type: TimeSeries
-    measurement: likelihood_history
+    measurement: likelihood_history_across_jobs
     column: data
     aggregate: max
     value: checked 
@@ -34,7 +34,7 @@ plots:
   # FAR history
   - title: FAR
     type: TimeSeries
-    measurement: far_history
+    measurement: far_history_across_jobs
     column: data
     aggregate: min
     value:
@@ -50,7 +50,7 @@ plots:
   # latency history
   - title: Latency
     type: TimeSeries
-    measurement: latency_history
+    measurement: latency_history_across_jobs
     column: data
     aggregate: max
     value:
@@ -66,7 +66,7 @@ plots:
   # snr history
   - title: SNR
     type: TimeSeries
-    measurement: snr_history
+    measurement: snr_history_across_jobs
     column: data
     aggregate: max
     params:
@@ -184,6 +184,14 @@ plots:
     aggregate: max
     value:
 
+  # time since last plot
+  - title: Last Latency by Job
+    type: Bar
+    measurement: latency_history
+    column: data
+    aggregate: max
+    value:
+
   # FIXME: add time since trigger plot
 
 nagios:
@@ -191,13 +199,24 @@ nagios:
   measurement: ram_history
   column: data
   aggregate: max
-  num_jobs: 328
+  num_jobs: 327
 
 measurements:
   ram_history:
-    num_jobs: 328
+    num_jobs: 327
     default: 1e4
+    transform: latency
+
+  latency_history:
+    num_jobs: 327
+    default: 1e3
+    transform: none
 
 database:
-  backend: hdf5
+  backend: influxdb
+  #backend: hdf5
+
   rootdir: /home/gstlalcbc/replay/last_2_wks_o2/trigs.hyper
+  name: gstlal_inspiral
+  hostname: 10.9.0.112
+  port: 8086
