@@ -65,19 +65,20 @@
  */
 
 
+#include <lal/Date.h>
+#include <lal/FindChirp.h>
+#include <lal/FrequencySeries.h>
+#include <lal/GenerateBurst.h>
 #include <lal/LALConfig.h>
 #include <lal/LALDatatypes.h>
-#include <lal/LALStdlib.h>
-#include <lal/LALSimulation.h>
 #include <lal/LALSimInspiral.h>
+#include <lal/LALSimulation.h>
+#include <lal/LALStdlib.h>
+#include <lal/LIGOLwXML.h>
+#include <lal/LIGOMetadataTables.h>
+#include <lal/LIGOMetadataUtils.h>
 #include <lal/SnglBurstUtils.h>
-#include <lal/LIGOLwXMLBurstRead.h>
-#include <lal/LIGOLwXMLInspiralRead.h>
-#include <lal/GenerateBurst.h>
-#include <lal/FindChirp.h>
-#include <lal/Date.h>
 #include <lal/TimeSeries.h>
-#include <lal/FrequencySeries.h>
 #include <lal/Units.h>
 
 
@@ -86,6 +87,7 @@
  */
 
 
+#include <gstlal/ezligolw.h>
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_simulation.h>
@@ -148,11 +150,224 @@ static void destroy_injection_document(struct injection_document *doc)
  */
 
 
+static int sim_burst_row_callback(struct ligolw_table *table, struct ligolw_table_row row, void *data)
+{
+	int result_code;
+	SimBurst **head = data;
+	SimBurst *new = XLALCreateSimBurst();
+	struct ligolw_unpacking_spec spec[] = {
+		{&new->process_id, "process_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "waveform", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->ra, "ra", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->dec, "dec", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->psi, "psi", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->time_geocent_gps.gpsSeconds, "time_geocent_gps", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->time_geocent_gps.gpsNanoSeconds, "time_geocent_gps_ns", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->time_geocent_gmst, "time_geocent_gmst", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->duration, "duration", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->frequency, "frequency", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->bandwidth, "bandwidth", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->q, "q", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->pol_ellipse_angle, "pol_ellipse_angle", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->pol_ellipse_e, "pol_ellipse_e", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->amplitude, "amplitude", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->hrss, "hrss", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->egw_over_rsquared, "egw_over_rsquared", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->waveform_number, "waveform_number", ligolw_cell_type_int_8u, LIGOLW_UNPACKING_REQUIRED},
+		{&new->time_slide_id, "time_slide_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->simulation_id, "simulation_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, NULL, -1, 0}
+	};
+
+	/* check for memory allocation failure.  remember to clean up row's
+	 * memory. */
+	if(!new) {
+		XLALPrintError("memory allocation failure\n");
+		free(row.cells);
+		return -1;
+	}
+
+	/* unpack.  have to do the strings manually because they get copied
+	 * by value rather than reference.  ligolw_unpacking_row_builder()
+	 * cleans up row's memory for us. */
+	strncpy(new->waveform, ligolw_row_get_cell(row, "waveform").as_string, LIGOMETA_WAVEFORM_MAX - 1);
+	new->waveform[LIGOMETA_WAVEFORM_MAX - 1] = '\0';
+
+	result_code = ligolw_unpacking_row_builder(table, row, spec);
+	if(result_code > 0) {
+		/* missing required column */
+		XLALPrintError("failure parsing row: missing column \"%s\"\n", spec[result_code - 1].name);
+		free(new);
+		return -1;
+	} else if(result_code < 0) {
+		/* column type mismatch */
+		XLALPrintError("failure parsing row: incorrect type for column \"%s\"\n", spec[-result_code - 1].name);
+		free(new);
+		return -1;
+	}
+
+	/* add new sim to head of linked list.  yes, this means the table's
+	 * rows get reversed.  so what. */
+	new->next = *head;
+	*head = new;
+
+	/* success */
+	return 0;
+}
+
+
+static int time_slide_row_callback(struct ligolw_table *table, struct ligolw_table_row row, void *data)
+{
+	int result_code;
+	TimeSlide **head = data;
+	TimeSlide *new = XLALCreateTimeSlide();
+	struct ligolw_unpacking_spec spec[] = {
+		{&new->process_id, "process_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->time_slide_id, "time_slide_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "instrument", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->offset, "offset", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, NULL, -1, 0}
+	};
+
+	/* check for memory allocation failure.  remember to clean up row's
+	 * memory. */
+	if(!new) {
+		XLALPrintError("memory allocation failure\n");
+		free(row.cells);
+		return -1;
+	}
+
+	/* unpack.  have to do the strings manually because they get copied
+	 * by value rather than reference.  ligolw_unpacking_row_builder()
+	 * cleans up row's memory for us. */
+	strncpy(new->instrument, ligolw_row_get_cell(row, "instrument").as_string, LIGOMETA_STRING_MAX - 1);
+	new->instrument[LIGOMETA_WAVEFORM_MAX - 1] = '\0';
+
+	result_code = ligolw_unpacking_row_builder(table, row, spec);
+	if(result_code > 0) {
+		/* missing required column */
+		XLALPrintError("failure parsing row: missing column \"%s\"\n", spec[result_code - 1].name);
+		free(new);
+		return -1;
+	} else if(result_code < 0) {
+		/* column type mismatch */
+		XLALPrintError("failure parsing row: incorrect type for column \"%s\"\n", spec[-result_code - 1].name);
+		free(new);
+		return -1;
+	}
+
+	/* add new sim to head of linked list.  yes, this means the table's
+	 * rows get reversed.  so what. */
+	new->next = *head;
+	*head = new;
+
+	/* success */
+	return 0;
+}
+
+
+static int sim_inspiral_row_callback(struct ligolw_table *table, struct ligolw_table_row row, void *data)
+{
+	int result_code;
+	SimInspiralTable **head = data;
+	SimInspiralTable *new = LALCalloc(1, sizeof(*new));	/* ugh, lal */
+	struct ligolw_unpacking_spec spec[] = {
+		{&new->process_id, "process_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "waveform", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->geocent_end_time.gpsSeconds, "geocent_end_time", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->geocent_end_time.gpsNanoSeconds, "geocent_end_time_ns", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		/* don't load detector end times:  they're stupid */
+		{NULL, "source", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mass1, "mass1", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mass2, "mass2", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mchirp, "mchirp", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->eta, "eta", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->distance, "distance", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->longitude, "longitude", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->latitude, "latitude", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->inclination, "inclination", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->coa_phase, "coa_phase", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->polarization, "polarization", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->psi0, "psi0", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->psi3, "psi3", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha, "alpha", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha1, "alpha1", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha2, "alpha2", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha3, "alpha3", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha4, "alpha4", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha5, "alpha5", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha6, "alpha6", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->beta, "beta", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin1x, "spin1x", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin1y, "spin1y", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin1z, "spin1z", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin2x, "spin2x", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin2y, "spin2y", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin2z, "spin2z", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->theta0, "theta0", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->phi0, "phi0", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->f_lower, "f_lower", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->f_final, "f_final", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		/* don't load effective distances:  they're stupid */
+		{&new->numrel_mode_min, "numrel_mode_min", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->numrel_mode_max, "numrel_mode_max", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "numrel_data", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->amp_order, "amp_order", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "taper", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->bandpass, "bandpass", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->simulation_id, "simulation_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, NULL, -1, 0}
+	};
+
+	/* check for memory allocation failure.  remember to clean up row's
+	 * memory. */
+	if(!new) {
+		XLALPrintError("memory allocation failure\n");
+		free(row.cells);
+		return -1;
+	}
+
+	/* unpack.  have to do the strings manually because they get copied
+	 * by value rather than reference.  ligolw_unpacking_row_builder()
+	 * cleans up row's memory for us. */
+	strncpy(new->waveform, ligolw_row_get_cell(row, "waveform").as_string, LIGOMETA_WAVEFORM_MAX - 1);
+	new->waveform[LIGOMETA_WAVEFORM_MAX - 1] = '\0';
+	strncpy(new->source, ligolw_row_get_cell(row, "source").as_string, LIGOMETA_SOURCE_MAX - 1);
+	new->source[LIGOMETA_SOURCE_MAX - 1] = '\0';
+	strncpy(new->numrel_data, ligolw_row_get_cell(row, "numrel_data").as_string, LIGOMETA_STRING_MAX - 1);
+	new->numrel_data[LIGOMETA_STRING_MAX - 1] = '\0';
+	strncpy(new->taper, ligolw_row_get_cell(row, "taper").as_string, LIGOMETA_INSPIRALTAPER_MAX - 1);
+	new->taper[LIGOMETA_INSPIRALTAPER_MAX - 1] = '\0';
+
+	result_code = ligolw_unpacking_row_builder(table, row, spec);
+	if(result_code > 0) {
+		/* missing required column */
+		XLALPrintError("failure parsing row: missing column \"%s\"\n", spec[result_code - 1].name);
+		LALFree(new);
+		return -1;
+	} else if(result_code < 0) {
+		/* column type mismatch */
+		XLALPrintError("failure parsing row: incorrect type for column \"%s\"\n", spec[-result_code - 1].name);
+		LALFree(new);
+		return -1;
+	}
+
+	/* add new sim to head of linked list.  yes, this means the table's
+	 * rows get reversed.  so what. */
+	new->next = *head;
+	*head = new;
+
+	/* success */
+	return 0;
+}
+
+
 static struct injection_document *load_injection_document(const char *filename, LIGOTimeGPS start, LIGOTimeGPS end, double longest_injection)
 {
-	int success = 1;
+	ezxml_t xmldoc;
+	ezxml_t elem;
+	struct ligolw_table *table;
 	struct injection_document *new;
-	int nrows; 
 
 	g_assert(filename != NULL);
 
@@ -163,7 +378,7 @@ static struct injection_document *load_injection_document(const char *filename, 
 	new = g_new0(struct injection_document, 1);
 	if(!new) {
 		XLALPrintError("%s(): malloc() failed\n", __func__);
-		XLAL_ERROR_NULL(XLAL_ENOMEM);
+		goto allocfailed;
 	}
 
 	/*
@@ -173,101 +388,94 @@ static struct injection_document *load_injection_document(const char *filename, 
 	XLALGPSAdd(&start, -longest_injection);
 	XLALGPSAdd(&end, longest_injection);
 
+	/* parse the document */
+	xmldoc = ezxml_parse_file(filename);
+	if(!xmldoc) {
+		XLALPrintError("%s(): error parsing \"%s\"\n", __func__, filename);
+		goto parsefailed;
+	}
+
 	/*
-	 * load optional sim_burst and time_slide table
+	 * load optional (sim_burst + time_slide) tables
 	 */
 
-	new->has_sim_burst_table = XLALLIGOLwHasTable(filename, "sim_burst");
-	if(new->has_sim_burst_table < 0) {
-		XLALPrintError("%s(): error searching for sim_burst table in \"%s\": %s\n", __func__, filename, XLALErrorString(xlalErrno));
-		XLALClearErrno();
+	elem = ligolw_table_get(xmldoc, "sim_burst");
+	if(elem) {
+		table = ligolw_table_parse(elem, sim_burst_row_callback, &new->sim_burst_table_head);
+		if(!table) {
+			XLALPrintError("%s(): failure parsing sim_burst table in \"%s\"\n", __func__, filename);
+			goto simburstfailed;
+		}
+		ligolw_table_free(table);
+		new->has_sim_burst_table = 1;
+	} else {
 		new->has_sim_burst_table = 0;
 		new->sim_burst_table_head = NULL;
-		success = 0;
-	} else if(new->has_sim_burst_table) {
-		XLALClearErrno();
-		new->sim_burst_table_head = XLALSimBurstTableFromLIGOLw(filename, &start, &end);
-		if(XLALGetBaseErrno()) {
-			XLALPrintError("%s(): failure reading sim_burst table from \"%s\"\n", __func__, filename);
-			success = 0;
-		} else
-			XLALPrintInfo("%s(): found sim_burst table\n", __func__);
-	} else
-		new->sim_burst_table_head = NULL;
+	}
 
-	new->has_time_slide_table = XLALLIGOLwHasTable(filename, "time_slide");
-	if(new->has_time_slide_table < 0) {
-		XLALPrintError("%s(): error searching for time_slide table in \"%s\": %s\n", __func__, filename, XLALErrorString(xlalErrno));
-		XLALClearErrno();
+	elem = ligolw_table_get(xmldoc, "time_slide");
+	if(elem) {
+		table = ligolw_table_parse(elem, time_slide_row_callback, &new->time_slide_table_head);
+		if(!table) {
+			XLALPrintError("%s(): failure parsing time_slide table in \"%s\"\n", __func__, filename);
+			goto timeslidefailed;
+		}
+		ligolw_table_free(table);
+		new->has_time_slide_table = 1;
+	} else if(new->has_sim_burst_table) {
+		/* document is required to have a time_slide table if it
+		 * has a sim_burst table */
+		XLALPrintError("%s(): sim_burst table requires time_slide table in \"%s\"\n", __func__, filename);
+		goto timeslidefailed;
+	} else {
 		new->has_time_slide_table = 0;
 		new->time_slide_table_head = NULL;
-		success = 0;
-	} else if(new->has_time_slide_table) {
-		XLALClearErrno();
-		new->time_slide_table_head = XLALTimeSlideTableFromLIGOLw(filename);
-		if(XLALGetBaseErrno()) {
-			XLALPrintError("%s(): failure reading time_slide table from \"%s\"\n", __func__, filename);
-			success = 0;
-		} else
-			XLALPrintInfo("%s(): found time_slide table\n", __func__);
-	} else
-		new->time_slide_table_head = NULL;
-
-	/*
-	 * skipping burst injections if no time_slide table present
-	 */
-
-	if(new->has_sim_burst_table && !new->has_time_slide_table) {
-		XLALPrintWarning("%s(): Skipping burst injections since \"%s\" must contain a time_slide table for them.\n", __func__, filename);
-		XLALDestroySimBurstTable(new->sim_burst_table_head);
-		new->sim_burst_table_head = NULL;
 	}
 
 	/*
-	 * load optional sim_inspiral table
+	 * load optional sim_inspiral table.  subsequent code requires it
+	 * to be ordered by geocenter end time.
 	 */
 
-	new->has_sim_inspiral_table = XLALLIGOLwHasTable(filename, "sim_inspiral");
-	if(new->has_sim_inspiral_table < 0) {
-		XLALPrintError("%s(): error searching for sim_inspiral table in \"%s\": %s\n", __func__, filename, XLALErrorString(xlalErrno));
-		XLALClearErrno();
+	elem = ligolw_table_get(xmldoc, "sim_inspiral");
+	if(elem) {
+		table = ligolw_table_parse(elem, sim_inspiral_row_callback, &new->sim_inspiral_table_head);
+		if(!table) {
+			XLALPrintError("%s(): failure parsing sim_inspiral table in \"%s\"\n", __func__, filename);
+			goto siminspiralfailed;
+		}
+		ligolw_table_free(table);
+		new->has_sim_inspiral_table = 1;
+		XLALSortSimInspiral(&new->sim_inspiral_table_head, XLALCompareSimInspiralByGeocentEndTime);
+	} else {
 		new->has_sim_inspiral_table = 0;
 		new->sim_inspiral_table_head = NULL;
-		success = 0;
-	} else if(new->has_sim_inspiral_table) {
-		new->sim_inspiral_table_head = NULL;
-		/* FIXME: we need a smarter way to load the injections. We want to pick up injections that have an end_time
-		 * after end if the beginning of the waveform starts before end.
-		 */
-		nrows = SimInspiralTableFromLIGOLw(&new->sim_inspiral_table_head, filename, start.gpsSeconds - 1, end.gpsSeconds + 1);
-		if(nrows < 0) {
-			XLALPrintError("%s(): failure reading sim_inspiral table from \"%s\"\n", __func__, filename);
-			new->sim_inspiral_table_head = NULL;
-			success = 0;
-		} else {
-			/* FIXME no rows found raises an error we don't care about, but why ? */
-			XLALPrintInfo("%s(): found sim_inspiral table\n", __func__);
-			XLALClearErrno();
-		}
-		XLALSortSimInspiral(&new->sim_inspiral_table_head, XLALCompareSimInspiralByGeocentEndTime);
-	} else
-		new->sim_inspiral_table_head = NULL;
+	}
 
 	/*
-	 * did we get it all?
+	 * clean up
 	 */
 
-	if(!success) {
-		XLALPrintError("%s(): document is incomplete and/or malformed reading \"%s\"\n", __func__, filename);
-		destroy_injection_document(new);
-		XLAL_ERROR_NULL(XLAL_EFUNC);
-	}
+	ezxml_free(xmldoc);
 
 	/*
 	 * success
 	 */
 
 	return new;
+
+	/*
+	 * error
+	 */
+
+siminspiralfailed:
+timeslidefailed:
+simburstfailed:
+	ezxml_free(xmldoc);
+parsefailed:
+allocfailed:
+	destroy_injection_document(new);
+	return NULL;
 }
 
 

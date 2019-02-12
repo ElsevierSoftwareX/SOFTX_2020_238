@@ -27,5 +27,5 @@ lib@GSTPLUGINPREFIX@gstlal_la_SOURCES = \
 	gstlal_whiten.h gstlal_whiten.c \
 	gstlal_shift.h gstlal_shift.c
 lib@GSTPLUGINPREFIX@gstlal_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(FFTW_CFLAGS) $(LAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
-lib@GSTPLUGINPREFIX@gstlal_la_LIBADD = $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltags.la $(top_builddir)/lib/gstlal/libgstlaltypes.la
+lib@GSTPLUGINPREFIX@gstlal_la_LIBADD = $(top_builddir)/lib/gstlal/libezligolw.la $(top_builddir)/lib/gstlal/libgstlal.la $(top_builddir)/lib/gstlal/libgstlaltags.la $(top_builddir)/lib/gstlal/libgstlaltypes.la
 lib@GSTPLUGINPREFIX@gstlal_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(FFTW_LIBS) $(LAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
