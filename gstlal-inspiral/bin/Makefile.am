@@ -29,6 +29,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_marginalize_likelihood \
 	gstlal_inspiral_marginalize_likelihoods_online \
 	gstlal_inspiral_mass_model \
+	gstlal_inspiral_merge_and_reduce \
 	gstlal_inspiral_pipe \
 	gstlal_inspiral_plot_background \
 	gstlal_inspiral_plot_banks \

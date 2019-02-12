@@ -1,0 +1,205 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2007--2014,2016,2017  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+"""
+Transfer table data between LIGO Light Weight XML files and SQLite
+databases.
+"""
+
+
+from __future__ import print_function
+from optparse import OptionParser
+import os
+import sqlite3
+import sys
+
+
+from lal.utils.cache import CacheEntry
+from ligo.lw import __date__, __version__
+from ligo.lw import ligolw
+from ligo.lw import dbtables
+from ligo.lw.utils import local_path_from_url
+from ligo.lw.utils import ligolw_sqlite
+import six
+
+
+# so they can be inserted into a database
+dbtables.ligolwtypes.ToPyType["ilwd:char"] = six.text_type
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	"""
+	Parse the command line, return an options object and a list of file
+	names.
+	"""
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % __version__,
+		usage = "%prog -d|--database filename [options] [url ...]",
+		description = "merge database files applying the sql in --sql-file as you go"
+	)
+	parser.add_option("-d", "--database", metavar = "filename", help = "Set the name of the SQLite3 database file (required).")
+	parser.add_option("--ilwdchar-compat", action = "store_true", help = "Use obsolete ilwd:char based table definitions and ID reassignment algorithm (default = use new int_8s based table definitions and ID reassignment algorithm).")
+	parser.add_option("-i", "--input-cache", metavar = "filename", action = "append", default = [], help = "Get the names of XML documents to insert into the database from this LAL cache.  This option can be given multiple times, and all files from all caches will be loaded.")
+	parser.add_option("-p", "--preserve-ids", action = "store_true", help = "Preserve row IDs from the XML in the database.  The default is to assign new IDs to prevent collisisions.  Inserts will fail if collisions occur.")
+	parser.add_option("-r", "--replace", action = "store_true", help = "If the database file already exists, over-write it instead of inserting into it.")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("-s", "--sql-file", metavar = "filename", help = "Execute this SQL file (required).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, urls = parser.parse_args()
+
+	urls = [CacheEntry(line).url for cache in options.input_cache for line in open(cache)] + urls
+
+	if not options.database:
+		raise ValueError("missing required argument --database")
+
+	return options, (urls or [None])
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# Command line
+#
+
+
+options, urls = parse_command_line()
+
+will_replace_file = options.replace
+will_use_tmp_space = options.tmp_space is not None
+
+if options.ilwdchar_compat:
+	from glue.ligolw import ligolw
+	from glue.ligolw import dbtables
+	from glue.ligolw.utils import local_path_from_url
+	from glue.ligolw.utils import ligolw_sqlite
+
+#
+# Setup sql
+#
+
+# Parse the sql file into something that can be executed in sequence
+sql = [line.strip() for line in open(options.sql_file)]
+# Remove comments and pragmas
+sql = [s for s in sql if not s.startswith("--") and not s.startswith("PRAGMA")]
+sql = "\n".join(sql)
+sql = [statement.strip() for statement in sql.split(";\n")]
+sql = [statement for statement in sql if statement]
+
+
+#
+# Open database
+#
+
+
+@dbtables.use_in
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+
+target = dbtables.get_connection_filename(options.database, tmp_path = options.tmp_space if will_use_tmp_space else None, replace_file = will_replace_file, verbose = options.verbose)
+ContentHandler.connection = sqlite3.connect(target)
+cursor = ContentHandler.connection.cursor()
+
+
+#
+# Insert files
+#
+
+
+for n, url in enumerate(urls, 1):
+	if options.verbose:
+		print("%d/%d:" % (n, len(urls)), end=' ', file=sys.stderr)
+	if url.endswith(".sqlite"):
+		source_filename = dbtables.get_connection_filename(local_path_from_url(url), tmp_path = options.tmp_space, verbose = options.verbose)
+		if options.verbose:
+			print("reading '%s' ..." % source_filename, file=sys.stderr)
+		xmldoc = dbtables.get_xml(sqlite3.connect(source_filename))
+		ligolw_sqlite.insert_from_xmldoc(ContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
+		xmldoc.unlink()
+		dbtables.discard_connection_filename(local_path_from_url(url), source_filename, verbose = options.verbose)
+	else:
+		ligolw_sqlite.insert_from_url(url, contenthandler = ContentHandler, preserve_ids = options.preserve_ids, verbose = options.verbose)
+
+	if options.verbose:
+		print("Executing SQL ...", file=sys.stderr)
+
+	for statement in sql:
+		if options.verbose:
+			print(statement, file=sys.stderr)
+		cursor.execute(statement)
+		ContentHandler.connection.commit()
+
+	if options.verbose:
+		print("... Done.", file=sys.stderr)
+
+
+dbtables.build_indexes(ContentHandler.connection, options.verbose)
+
+
+#
+# Close database
+#
+
+
+ContentHandler.connection.close()
+
+
+#
+# Move database to final location
+#
+
+
+dbtables.put_connection_filename(options.database, target, verbose = options.verbose)
+
+
+#
+# Done
+#
+
+
+if options.verbose:
+	print("done.", file=sys.stderr)
