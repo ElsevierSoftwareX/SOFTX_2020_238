@@ -72,6 +72,8 @@ EXTRA_HFILES=
 # Header files or dirs to ignore when scanning. Use base file/dir names
 # e.g. IGNORE_HFILES=gtkdebug.h gtkintl.h private_code
 IGNORE_HFILES= \
+	ezxml.c ezxml.h \
+	ezligolw.c ezligolw.h \
 	gstlal_peakfinder_top.h \
 	gstlal_peakfinder_types.h
 
