@@ -758,7 +758,7 @@ WHERE
 			# for non-uniform binning.
 			return numpy.trapz(square_error, x)
 
-		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 1.), xtol = 1e-8, ftol = 1e-8, disp = 0)
+		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 10.), xtol = 1e-8, ftol = 1e-8, disp = 0)
 
 		# compute survival probability model from best fit
 		survival_probability = mk_survival_probability(rate_eff, m)
