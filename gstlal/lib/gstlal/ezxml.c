@@ -361,7 +361,13 @@ short ezxml_internal_dtd(ezxml_root_t root, char *s, size_t len)
             else *s = '\0'; // null terminate tag name
             for (i = 0; root->attr[i] && strcmp(n, root->attr[i][0]); i++);
 
-            while (*(n = ++s + strspn(s, EZXML_WS)) && *n != '>') {
+            while (1) {
+                /* this is the loop condition. it must be split into two
+                 * expressions because otherwise the operations on s are
+                 * undefined */
+                s++;
+                if(!(*(n = s + strspn(s, EZXML_WS)) && *n != '>')) break;
+
                 if (*(s = n + strcspn(n, EZXML_WS))) *s = '\0'; // attr name
                 else { ezxml_err(root, t, "malformed <!ATTLIST"); break; }
 
