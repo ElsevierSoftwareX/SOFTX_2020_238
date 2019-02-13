@@ -9,5 +9,5 @@ dist_bin_SCRIPTS = \
 	gstlal_feature_extractor_whitener_check \
 	gstlal_feature_extractor_template_overlap \
 	gstlal_feature_hdf5_sink \
-	gstlal_feature_listener \
+	gstlal_feature_monitor \
 	gstlal_feature_synchronizer
