@@ -11,21 +11,62 @@ dashboard:
       url: https://docs.ligo.org/lscsoft/gstlal/gstlal-burst/gstlal-burst.html
     - name: Git
       url: https://git.ligo.org/lscsoft/gstlal
+  GPS: -1
+  Duration: 600
+
 plots:
-  - title: SNR Timeseries
-    id: tester1
-    url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi/api/target_snr/sqlite/
+  # target SNR timeseries
+  - title: h(t) SNR
     type: TimeSeries
-  - title: Feature Production Latency
-    id: tester2
-    url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi/api/latency/sqlite/
+    measurement: target_snr
+    column: data
+    aggregate: max
+    params:
+      - - job
+        - synchronizer
+    value: checked
+
+  # synchronizer latency timeseries
+  - title: Latency
     type: TimeSeries
-  - title: percent channels missed in packet
-    id: tester3
-    url: https://ldas-jobs.ligo-wa.caltech.edu/~patrick.godwin/cgi-bin/feature_extraction_monitor.cgi/api/percent_missed/sqlite/
+    measurement: latency
+    column: data
+    aggregate: max
+    params:
+      - - job
+        - synchronizer
+    value: checked
+
+  # percent missed timeseries
+  - title: Percent channels missed
     type: TimeSeries
+    measurement: percent_missed
+    column: data
+    aggregate: max
+    params:
+      - - job
+        - synchronizer
+    value: checked
+
+  # latency heatmap (by job)
+  - title: Latency by Job
+    type: TimeHeatMap
+    measurement: latency
+    column: data
+    aggregate: max
+    tag: job
+    value: checked
+
+  # snr heatmap (by channel)
+  - title: SNR by Channel
+    type: TimeHeatMap
+    measurement: snr
+    column: data
+    aggregate: max
+    tag: channel
+    value:
+
 database:
-  backend: sqlite
-  name: fx
-  path: /home/idq/gstlal/online/gstlal_feature_listener
-  table: fxmonitor
+  backend: hdf5
+  rootdir: /home/patrick.godwin/detchar/gstlal_features/test_online
+  basename: aggregator
