@@ -72,8 +72,8 @@ prob = {}
 mchirps = {}
 
 ligo_min = 3
-ligo_max = 30
-ligo_peak = 30
+ligo_max = 40
+ligo_peak = 40
 ligo_alpha = -1
 ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
@@ -150,14 +150,14 @@ coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
 for tid in ids:
 	coefficients[0,0,tid] = numpy.log(prob[tid]) - numpy.log(norm)
 
-import matplotlib
-matplotlib.use('agg')
-from matplotlib import pyplot
-#pyplot.semilogx(chirpmasses, coefficients[0,0,:] + numpy.log((chirpmasses)**(15./6.)), "*")
-pyplot.semilogx(chirpmasses, coefficients[0,0,:], "*")
-pyplot.grid()
-pyplot.ylim([-20, 0])
-pyplot.savefig("blah.png")
+#import matplotlib
+#matplotlib.use('agg')
+#from matplotlib import pyplot
+##pyplot.semilogx(chirpmasses, coefficients[0,0,:] + numpy.log((chirpmasses)**(15./6.)), "*")
+#pyplot.semilogx(chirpmasses, coefficients[0,0,:], "*")
+#pyplot.grid()
+#pyplot.ylim([-20, 0])
+#pyplot.savefig("blah.png")
 
 # Write it out
 f = h5py.File(options.output, "w")
