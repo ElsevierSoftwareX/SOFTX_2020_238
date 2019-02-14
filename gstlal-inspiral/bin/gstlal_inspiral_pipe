@@ -611,7 +611,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				db = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite') 
 				db = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(db).description[:4]]), db)
 				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
 					output_files = {"database":db},
 					input_cache_file_name = os.path.basename(db).replace('.sqlite','.cache')
@@ -638,7 +638,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
 				injdb = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(injdb).description[:4]]), injdb)
 				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 					input_cache_files = {"input-cache":inputs},
 					output_files = {"database":injdb},
 					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -676,7 +676,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 				noninjdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 				# merge all of the dbs from the same subbank
 				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 					input_cache_files = {"input-cache":dbs},
 					output_files = {"database":noninjdb},
 					input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -697,7 +697,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 					injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 					# merge all of the dbs from the same subbank
 					sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-						opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+						opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 						input_cache_files = {"input-cache":dbs},
 						output_files = {"database":injdb},
 						input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -723,7 +723,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 			# merge all of the dbs from the same subbank
 			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 				input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
 				output_files = {"database":noninjdb},
 				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -743,7 +743,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 				# merge all of the dbs from the same subbank
 				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 					input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
 					output_files = {"database":injdb},
 					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -785,7 +785,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		# Merge the final non injection database into chunks
 		noninjdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
 		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = parents,
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 			input_cache_files = {"input-cache": dbs},
 			output_files = {"database":noninjdb},
 			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -811,7 +811,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		for chunk, nodes in enumerate(chunks(innodes[None], 10)):
 			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
 			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = nodes,
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 				input_cache_files = {"input-cache": [node.input_files[""] for node in nodes]},
 				output_files = {"database":noninjdb},
 				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
@@ -826,7 +826,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 		noninjdb = dagparts.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
 		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = final_nodes,
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"": (vetoes + [options.frame_segments_file])},
 			input_cache_files = {"input-cache": [node.input_files[""] for node in final_nodes]},
 			output_files = {"database":noninjdb},
@@ -870,7 +870,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 			# merge
 			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = parents,
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 				input_cache_files = {"input-cache":dbs},
 				output_files = {"database":injdb},
 				input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
@@ -893,7 +893,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 			# merge
 			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = injnodes,
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 				input_cache_files = {"input-cache": [node.input_files[""] for node in injnodes]},
 				output_files = {"database":injdb},
 				input_cache_file_name = injdb.replace('.sqlite','.cache')
@@ -923,7 +923,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 		# merge
 		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = final_nodes + ligolw_add_nodes,
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"": (vetoes + [options.frame_segments_file, injections])},
 			input_cache_files = {"input-cache": [node.input_files[""] for node in final_nodes]},
 			output_files = {"database":injdb},
@@ -938,7 +938,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 
 		clusternode = dagparts.DAGNode(toXMLJob, dag, parent_nodes = [clusternode],
-			opts = {"tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+			opts = {"tmp-space":dagparts.condor_scratch_space()},
 			output_files = {"extract":injxml},
 			input_files = {"database":injdb}
 		)
@@ -949,7 +949,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		)
 
 		sqlitenode = dagparts.DAGNode(toSqliteNoCacheJob, dag, parent_nodes = [inspinjnode],
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space(), "ilwdchar-compat":""},
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 			output_files = {"database":injdb},
 			input_files = {"":xml_input}
 		)
@@ -1434,7 +1434,6 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 
 		addnode = dagparts.DAGNode(ligolwAddJob, dag, parent_nodes=inj_snr_nodes,
 			input_files = {"": ' '.join(["%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i) for i in xrange(num_split_inj_snr_jobs)])},
-			opts = {"ilwdchar-compat":""},
 			output_files = {"output": inj.split(":")[-1]}
 		)
 

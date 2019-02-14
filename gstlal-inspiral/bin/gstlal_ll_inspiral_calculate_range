@@ -92,8 +92,8 @@ else
 	START_FILE=${CUMULATIVE_SEG_FILE}
 fi
 
-SEGMENT_DEF_ID=$(ligolw_print --ilwdchar-compat --table segment_definer --column name --column segment_def_id ${START_FILE} | grep triggersegments | sed -e 's/,/\n/g' | grep segment_definer | head -n 1)
-START=$(ligolw_print --ilwdchar-compat --table segment --column start_time --column segment_def_id ${START_FILE} | grep ${SEGMENT_DEF_ID} | sed -e 's/,/\n/g' | sed -e '/segment_definer/d' | sort -g | head -n 1)
+SEGMENT_DEF_ID=$(ligolw_print --table segment_definer --column name --column segment_def_id ${START_FILE} | grep triggersegments | sed -e 's/,/\n/g' | grep segment_definer | head -n 1)
+START=$(ligolw_print --table segment --column start_time --column segment_def_id ${START_FILE} | grep ${SEGMENT_DEF_ID} | sed -e 's/,/\n/g' | sed -e '/segment_definer/d' | sort -g | head -n 1)
 echo analysis start time read as ${START}
 
 while true; do 
@@ -154,11 +154,11 @@ while true; do
 		gstlal_segments_operations --union --segment-file1 ${TMP_CUMULATIVE_SEG_XML}.gz --segment-file2 ${TMP_TOTAL_SEG_XML_GZ} --output-file ${TRIGGER_SEG_XML} --segment-name1 triggersegments --segment-name2 triggersegments --output-segment-name triggersegments --verbose
 		SEG_FILES=""
 		for SEG_FILE in ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML}; do
-			if [ $(ligolw_print --ilwdchar-compat --table segment ${SEG_FILE} | wc -l) -gt 0 ]; then
+			if [ $(ligolw_print --table segment ${SEG_FILE} | wc -l) -gt 0 ]; then
 				SEG_FILES="${SEG_FILE} ${SEG_FILES}"
 			fi
 		done
-		ligolw_add --ilwdchar-compat ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML_GZ}
+		ligolw_add ${SEG_FILES} --verbose --output ${TMP_TOTAL_SEG_XML_GZ}
 		rm ${STATEVECTOR_SEG_XML} ${WHITEHT_SEG_XML} ${TRIGGER_SEG_XML} ${TMP_CUMULATIVE_SEG_XML}.gz
 	fi
 
@@ -187,7 +187,7 @@ while true; do
 	else
 		cp ${LIGOLW_XML_GZ} ${TMP_LIGOLW_XML_GZ}
 
-		if [ $(ligolw_print --ilwdchar-compat --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | wc -l) -eq 0 ]; then
+		if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | wc -l) -eq 0 ]; then
 			QUERYSTART=${START}
 		else
 			# QUERYSTART is chosen so that the simdb query will
@@ -195,7 +195,7 @@ while true; do
 			# downloaded. This way we avoid any potential issues
 			# with the asynchronous nature of the simdb queries and
 			# the segment updates
-			QUERYSTART=$(ligolw_print --ilwdchar-compat --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | sort -g | tail -n 1)
+			QUERYSTART=$(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | sort -g | tail -n 1)
 		fi
 	fi
 
@@ -208,8 +208,8 @@ while true; do
 	echo querying simdb from ${QUERYSTART} to ${QUERYSTOP}...
 	gracedb --ligolw --service-url=${SIMDB_SERVICE_URL} search ${QUERYSTART}..${QUERYSTOP} ${PIPELINE} ${GROUP} ${SEARCH} > ${TMP_QUERY_XML}
 
-	if [ $(ligolw_print --ilwdchar-compat --table coinc_inspiral --column end_time ${TMP_QUERY_XML} | wc -l) -gt 0 ]; then
-		ligolw_add --ilwdchar-compat ${TMP_LIGOLW_XML_GZ} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML_GZ}
+	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_QUERY_XML} | wc -l) -gt 0 ]; then
+		ligolw_add ${TMP_LIGOLW_XML_GZ} ${TMP_QUERY_XML} --verbose --output ${TMP_LIGOLW_XML_GZ}
 	fi
 
 	rm ${TMP_QUERY_XML}
@@ -219,16 +219,16 @@ while true; do
 	# the events+injections file and then generate the range plot
 	#
 
-	if [ $(ligolw_print --ilwdchar-compat --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
+	if [ $(ligolw_print --table coinc_inspiral --column end_time ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
 
 		# 
 		# Delete old segments from events+injections file, then add new
 		# segments, again using atomic operations
 		# 
-		if [ $(ligolw_print --ilwdchar-compat --table segment ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
+		if [ $(ligolw_print --table segment ${TMP_LIGOLW_XML_GZ} | wc -l) -gt 0 ]; then
 			lalapps_run_sqlite --verbose --sql='DELETE FROM segment; DELETE FROM segment_definer' ${TMP_LIGOLW_XML_GZ}
 		fi
-		ligolw_add --ilwdchar-compat --verbose ${TMP_LIGOLW_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ} --output ${TMP_LIGOLW_XML_GZ}
+		ligolw_add --verbose ${TMP_LIGOLW_XML_GZ} ${TMP_TOTAL_SEG_XML_GZ} --output ${TMP_LIGOLW_XML_GZ}
 
 		# FIXME Find a better way to get the location of simplify_and_cluster.sql
 		lalapps_run_sqlite --verbose --sql-file=$(dirname $(dirname $(which gstlal_inspiral)))/share/gstlal/simplify_and_cluster.sql ${TMP_LIGOLW_XML_GZ}
@@ -257,7 +257,7 @@ while true; do
 		# Try to generate the sqlite database, but if something goes
 		# wrong then delete the database and try again. This should fix
 		# issues with the database locking
-		ligolw_sqlite --ilwdchar-compat --verbose --database ${LIGOLW_SQLITE} --replace ${TMP_LIGOLW_XML_GZ} || { rm ${LIGOLW_SQLITE} && ligolw_sqlite --ilwdchar-compat --verbose --database ${LIGOLW_SQLITE} ${TMP_LIGOLW_XML_GZ}; }
+		ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} --replace ${TMP_LIGOLW_XML_GZ} || { rm ${LIGOLW_SQLITE} && ligolw_sqlite --verbose --database ${LIGOLW_SQLITE} ${TMP_LIGOLW_XML_GZ}; }
 
 		gstlal_inspiral_plot_sensitivity --data-segments-name=statevectorsegments --bin-by-chirp-mass --verbose ${LIGOLW_SQLITE}
 		echo plotting...
