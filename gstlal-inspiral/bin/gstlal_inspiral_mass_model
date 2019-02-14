@@ -57,7 +57,7 @@ sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 if options.model == "detected-logm":
 	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
 
-mchirps_of_tmps = chirpmass(sngl_inspiral_table.get_column("mass1"), sngl_inspiral_table.get_column("mass2"))
+mchirps_of_tmps = chirpmass(sngl_inspiral_table.getColumnByName("mass1").asarray(), sngl_inspiral_table.getColumnByName("mass2").asarray())
 
 # NOTE this next block of code isn't used since we don't actuall have a  PDF in mass space. Maybe some day?
 # num_templates = len(mchirps_of_tmps)
