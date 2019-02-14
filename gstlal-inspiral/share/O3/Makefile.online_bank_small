@@ -13,6 +13,7 @@ all : bank.dag
 
 gstlal_bank.xml.gz : H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.xml.gz
 	lalapps_cbc_sbank --verbose --approximant TaylorF2 --mass1-min 1.1 --mass1-max 1.9 --mass2-min 1.1 --mass2-max 1.9 --flow $(LOW_FREQUENCY_CUTOFF) --reference-psd H1L1-REFERENCE_PSD_HARMONIC_MEAN_FIXED_3-1164686417-32400.xml.gz --instrument H1 --spin1-min 0 --spin1-max 0 --checkpoint 50 --iterative-match-df-max 2.0 --coarse-match-df 2.0 --aligned-spin --output-filename $@ --match-min 0.97 --fhigh-max 1024 --spin2-max 0 --spin2-min 0 --verbose
+	ligolw_no_ilwdchar $@
 
 %_split_bank.cache : gstlal_bank.xml.gz
 	mkdir -p $*_split_bank

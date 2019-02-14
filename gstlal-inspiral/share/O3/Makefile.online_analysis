@@ -56,14 +56,9 @@ L1PRIORRANGE=80
 
 all : dag
 
-U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz:
-	wget https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz
-
-U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz:
-	https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz
-
-U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz:
-	https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz
+U_dVdzo1pz_bns_normal_low_spin_online_injections_O2A_v1.xml.gz U_dVdzo1pz_lnm_online_injections_O2A_v1.xml.gz U_dVdzo1pz_nsbh05_isotropic_online_injections_O2A_v1.xml.gz:
+	wget https://trac.ligo.caltech.edu/cbc/export/9696/gstlal/low_latency_injections/ER10/$@
+	ligolw_no_ilwdchar $@
 
 tisi.xml :
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
