@@ -285,7 +285,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = F
 
 		# Apply clipping option to sngl inspiral table
 		# put the bank table into the output document
-		new_sngl_table = lsctables.New(lsctables.SnglInspiralTable, bank.sngl_inspiral_table.columnnames)
+		new_sngl_table = bank.sngl_inspiral_table.copy()
 		for row in bank.sngl_inspiral_table[clipleft:clipright]:
 			# FIXME need a proper id column
 			row.Gamma1 = int(bank.bank_id.split("_")[0])
