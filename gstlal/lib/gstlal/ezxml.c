@@ -33,6 +33,7 @@
 #include <sys/mman.h>
 #endif // EZXML_NOMMAP
 #include <sys/stat.h>
+#include <zlib.h>
 #include "ezxml.h"
 
 #define EZXML_WS   "\t\r\n "  // whitespace
@@ -632,29 +633,46 @@ ezxml_t ezxml_parse_fp(FILE *fp)
 ezxml_t ezxml_parse_fd(int fd)
 {
     ezxml_root_t root;
-    struct stat st;
-    size_t l;
-    void *m;
+    gzFile gzf;
+    int fd_dup;
+    size_t l = 0;
+    void *m = NULL;
 
     if (fd < 0) return NULL;
-    fstat(fd, &st);
 
-#ifndef EZXML_NOMMAP
-    l = (st.st_size + sysconf(_SC_PAGESIZE) - 1) & ~(sysconf(_SC_PAGESIZE) -1);
-    if ((m = mmap(NULL, l, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0)) !=
-        MAP_FAILED) {
-        madvise(m, l, MADV_SEQUENTIAL); // optimize for sequential access
-        root = (ezxml_root_t)ezxml_parse_str(m, st.st_size);
-        madvise(m, root->len = l, MADV_NORMAL); // put it back to normal
+    fd_dup = dup(fd);
+    if(fd_dup < 0)
+        return NULL;
+    gzf = gzdopen(fd_dup, "rb");
+    if(!gzf) {
+        close(fd_dup);
+        return NULL;
     }
-    else { // mmap failed, read file into memory
-#endif // EZXML_NOMMAP
-        l = read(fd, m = malloc(st.st_size), st.st_size);
-        root = (ezxml_root_t)ezxml_parse_str(m, l);
-        root->len = -1; // so we know to free s in ezxml_free()
-#ifndef EZXML_NOMMAP
-    }
-#endif // EZXML_NOMMAP
+
+    do {
+        int n;
+        void *m_new = realloc(m, l + 8192);
+        if(!m_new) {
+            gzclose(gzf);
+            free(m);
+            return  NULL;
+        }
+        m = m_new;
+        n = gzread(gzf, m + l, 8192);
+        if(n < 0) {
+            gzclose(gzf);
+            free(m);
+            return NULL;
+        }
+        l += n;
+        if(n < 8192)
+            break;
+    } while(1);
+
+    gzclose(gzf);
+
+    root = (ezxml_root_t)ezxml_parse_str(m, l);
+    root->len = -1; // so we know to free s in ezxml_free()
     return &root->xml;
 }
 

@@ -373,6 +373,17 @@ AC_SUBST([ORC_LIBS])
 
 
 #
+# Check for zlib
+#
+
+
+AX_CHECK_ZLIB()
+if test x$HAVE_LIBZ = "xno" ; then
+	AC_MSG_FAILURE([zlib is required])
+fi
+
+
+#
 # Output configure information
 #
 

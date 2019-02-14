@@ -36,6 +36,7 @@ Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
 Requires: python-gobject >= @MIN_PYGOBJECT_VERSION@
 Requires: scipy
+Requires: zlib
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: fftw-devel >= 3
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
@@ -57,6 +58,7 @@ BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
 BuildRequires: pygobject3-devel >= @MIN_PYGOBJECT_VERSION@
+BuildRequires: zlib-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://wiki.ligo.org/DASWG/GstLAL
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
