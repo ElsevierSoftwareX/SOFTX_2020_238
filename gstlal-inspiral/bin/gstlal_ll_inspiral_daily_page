@@ -53,11 +53,10 @@ def process_mass_bin(args):
 	files = sorted([os.path.join(os.path.join(options.directory, d), xml) for xml in os.listdir(os.path.join(options.directory, d)) if pattern.match(xml) and "~" not in xml])
 	for f in files:
 		try:
-			subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--database", "%s" % db, "%s" % f])
+			subprocess.check_call(["gstlal_inspiral_merge_and_reduce", "--sql-file", cluster_file, "--ilwdchar-compat", "--tmp-space", "/dev/shm", "--database", "%s" % db, "%s" % f])
 		except:
 			print >> sys.stderr, "couldn't process %s" % f
 			continue
-		subprocess.check_call(["lalapps_run_sqlite", "--tmp-space", os.environ["TMPDIR"], "--sql-file", cluster_file,  "%s" % db])
 
 	# rename files
 	if os.path.exists(db):
@@ -131,12 +130,12 @@ if __name__ == '__main__':
 		# Parallel process the data reduction
 		args = ([massbin, result_dirs, n, d, options, "ALL_LLOID", 0, cluster_file] for massbin in massbins)
 		# Merge the files of this directory
-		subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--replace", "--verbose", "--database", "%s" % noninjdball] + list(pool.map(process_mass_bin, args)))
+		subprocess.check_call(["gstlal_inspiral_merge_and_reduce", "--sql-file", cluster_file, "--ilwdchar-compat", "--tmp-space", "/dev/shm", "--replace", "--verbose", "--database", "%s" % noninjdball] + list(pool.map(process_mass_bin, args)))
 		noninj_files_to_merge.append(noninjdball)
 
 		for injection_file in inj_file_bins:
 			args = ([massbin, result_dirs, n, d, options, injtag(injection_file), 1, cluster_file] for massbin in inj_file_bins[injection_file])
-			subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--replace", "--verbose", "--database", "%s" % injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
+			subprocess.check_call(["gstlal_inspiral_merge_and_reduce", "--ilwdchar-compat", "--sql-file", cluster_file, "--tmp-space", "/dev/shm", "--replace", "--verbose", "--database", "%s" % injdball[injection_file]] + list(pool.map(process_mass_bin, args)))
 			inj_files_to_merge.setdefault(injection_file,[]).append(injdball[injection_file])
 
 	#
@@ -159,24 +158,16 @@ if __name__ == '__main__':
 
 	progressbar = ProgressBar("Merge noninjection files", len(noninj_files_to_merge))
 	for f in noninj_files_to_merge:
-		subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % noninjdb, "%s" % f])
 		# NOTE the online analysis doesn't do a global clustering stage!! That means that you will under count the events in the final db
-		try:
-			subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", cluster_file,  "%s" % noninjdb])
-		except subprocess.CalledProcessError as runsqlite_error:
-			print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, noninjdb, f)
+		subprocess.check_call(["gstlal_inspiral_merge_and_reduce", "--sql-file", cluster_file, "--ilwdchar-compat", "--tmp-space", "/dev/shm", "--verbose", "--database", "%s" % noninjdb, "%s" % f])
 		progressbar.increment()
 	del progressbar
 
 	for injection_file in inj_file_bins:
 		progressbar = ProgressBar("Merge injection files", len(inj_files_to_merge[injection_file]))
 		for f in inj_files_to_merge[injection_file]:
-			subprocess.check_call(["ligolw_sqlite", "--ilwdchar-compat", "--tmp-space", os.environ["TMPDIR"], "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
 			# NOTE the online analysis doesn't do a global clustering stage!! That means that you will under count the events in the final db
-			try:
-				subprocess.check_call(["lalapps_run_sqlite", "--verbose", "--sql-file", cluster_file,  "%s" % injdb[injection_file]])
-			except subprocess.CalledProcessError as runsqlite_error:
-				print >> sys.stderr, "trying to run sqlite on: %s\nafter processing file%s\n recieved error%s...continuing anyway" % (runsqlite_error, injdb[injection_file], f)
+			subprocess.check_call(["gstlal_inspiral_merge_and_reduce", "--sql-file", cluster_file, "--ilwdchar-compat", "--tmp-space", "/dev/shm", "--verbose", "--database", "%s" % injdb[injection_file], "%s" % f])
 			progressbar.increment()
 		del progressbar
 
