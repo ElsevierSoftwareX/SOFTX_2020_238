@@ -20,13 +20,13 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gst/gst.h>
+#include <gstlal/ezligolw.h>
 #include <gstlal/gstlal_peakfinder.h>
 #include <complex.h>
 #include <string.h>
 #include <math.h>
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
-#include <lal/LIGOLwXMLInspiralRead.h>
 #include <lal/LALStdlib.h>
 #include <snglinspiralrowtype.h>
 #include <gsl/gsl_matrix_float.h>
@@ -65,37 +65,213 @@ double gstlal_effective_distance(double snr, double sigmasq)
 	return sqrt(sigmasq) / snr;
 }
 
-int gstlal_snglinspiral_array_from_file(const char *bank_filename, SnglInspiralTable **bankarray)
+
+static int sngl_inspiral_row_callback(struct ligolw_table *table, struct ligolw_table_row row, void *data)
 {
-	SnglInspiralTable *this = NULL;
-	SnglInspiralTable *bank = NULL;
-	int num;
-	num = LALSnglInspiralTableFromLIGOLw(&this, bank_filename, -1, -1);
+	int result_code;
+	SnglInspiralTable **head = data;
+	SnglInspiralTable *new = LALCalloc(1, sizeof(*new));
+	struct ligolw_unpacking_spec spec[] = {
+		{&new->process_id, "process_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->event_id, "event_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mass1, "mass1", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mass2, "mass2", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mtotal, "mtotal", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->mchirp, "mchirp", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->eta, "eta", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin1x, "spin1x", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin1y, "spin1y", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin1z, "spin1z", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin2x, "spin2x", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin2y, "spin2y", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->spin2z, "spin2z", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->chi, "chi", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->f_final, "f_final", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->template_duration, "template_duration", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->ttotal, "ttotal", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "search", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "ifo", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "channel", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{&new->sigmasq, "sigmasq", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->snr, "snr", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->coa_phase, "coa_phase", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->eff_distance, "eff_distance", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->amplitude, "amplitude", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->end.gpsSeconds, "end_time", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->end.gpsNanoSeconds, "end_time_ns", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->end_time_gmst, "end_time_gmst", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->impulse_time.gpsSeconds, "impulse_time", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->impulse_time.gpsNanoSeconds, "impulse_time_ns", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->bank_chisq, "bank_chisq", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->bank_chisq_dof, "bank_chisq_dof", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->chisq, "chisq", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->chisq_dof, "chisq_dof", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->cont_chisq, "cont_chisq", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->cont_chisq_dof, "cont_chisq_dof", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
+		{&new->event_duration, "event_duration", ligolw_cell_type_real_8, LIGOLW_UNPACKING_REQUIRED},
+		{&new->rsqveto_duration, "rsqveto_duration", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha, "alpha", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha1, "alpha1", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha2, "alpha2", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha3, "alpha3", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha4, "alpha4", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha5, "alpha5", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->alpha6, "alpha6", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->beta, "beta", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->kappa, "kappa", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->tau0, "tau0", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->tau2, "tau2", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->tau3, "tau3", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->tau4, "tau4", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->tau5, "tau5", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->psi0, "psi0", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->psi3, "psi3", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[0], "Gamma0", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[1], "Gamma1", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[2], "Gamma2", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[3], "Gamma3", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[4], "Gamma4", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[5], "Gamma5", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[6], "Gamma6", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[7], "Gamma7", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[8], "Gamma8", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{&new->Gamma[9], "Gamma9", ligolw_cell_type_real_4, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, NULL, -1, 0}
+	};
 
-	*bankarray = bank = (SnglInspiralTable *) calloc(num, sizeof(SnglInspiralTable));
-
-	/* FIXME do some basic sanity checking */
-
-	/*
-	 * copy the linked list of templates constructed by
-	 * LALSnglInspiralTableFromLIGOLw() into the template array.
-	 */
-
-	while (this) {
-		SnglInspiralTable *next = this->next;
-		this->snr = 0;
-		this->sigmasq = 0;
-		this->mtotal = this->mass1 + this->mass2;
-		this->mchirp = gstlal_mchirp(this->mass1, this->mass2);
-		this->eta = gstlal_eta(this->mass1, this->mass2);
-		*bank = *this;
-		bank->next = NULL;
-		bank++;
-		LALFree(this);
-		this = next;
+	/* check for memory allocation failure.  remember to clean up row's
+	 * memory. */
+	if(!new) {
+		XLALPrintError("memory allocation failure\n");
+		free(row.cells);
+		return -1;
 	}
 
+	/* unpack.  have to do the strings manually because they get copied
+	 * by value rather than reference.  ligolw_unpacking_row_builder()
+	 * cleans up row's memory for us. */
+	strncpy(new->search, ligolw_row_get_cell(row, "search").as_string, LIGOMETA_SEARCH_MAX - 1);
+	new->search[LIGOMETA_SEARCH_MAX - 1] = '\0';
+	strncpy(new->ifo, ligolw_row_get_cell(row, "ifo").as_string, LIGOMETA_IFO_MAX - 1);
+	new->ifo[LIGOMETA_IFO_MAX - 1] = '\0';
+	strncpy(new->channel, ligolw_row_get_cell(row, "channel").as_string, LIGOMETA_CHANNEL_MAX - 1);
+	new->channel[LIGOMETA_CHANNEL_MAX - 1] = '\0';
+
+	result_code = ligolw_unpacking_row_builder(table, row, spec);
+	if(result_code > 0) {
+		/* missing required column */
+		XLALPrintError("failure parsing row: missing column \"%s\"\n", spec[result_code - 1].name);
+		LALFree(new);
+		return -1;
+	} else if(result_code < 0) {
+		/* column type mismatch */
+		XLALPrintError("failure parsing row: incorrect type for column \"%s\"\n", spec[-result_code - 1].name);
+		LALFree(new);
+		return -1;
+	}
+
+	/* add new object to head of linked list.  the linked list is
+	 * reversed with respect to the file's contents.  it will be
+	 * reversed again below */
+	new->next = *head;
+	*head = new;
+
+	/* success */
+	return 0;
+}
+
+
+int gstlal_snglinspiral_array_from_file(const char *filename, SnglInspiralTable **bankarray)
+{
+	SnglInspiralTable *head = NULL;
+	ezxml_t xmldoc;
+	ezxml_t elem;
+	struct ligolw_table *table;
+	int num = 0;
+
+	/*
+	 * so there's no confusion in case of error
+	 */
+
+	*bankarray = NULL;
+
+	/*
+	 * parse the document
+	 */
+
+	g_assert(filename != NULL);
+	xmldoc = ezxml_parse_file(filename);
+	if(!xmldoc) {
+		XLALPrintError("%s(): error parsing \"%s\"\n", __func__, filename);
+		goto parsefailed;
+	}
+
+	/*
+	 * load sngl_inspiral table.
+	 */
+
+	elem = ligolw_table_get(xmldoc, "sngl_inspiral");
+	if(elem) {
+		table = ligolw_table_parse(elem, sngl_inspiral_row_callback, &head);
+		if(!table) {
+			XLALPrintError("%s(): failure parsing sngl_inspiral table in \"%s\"\n", __func__, filename);
+			goto snglinspiralfailed;
+		}
+		ligolw_table_free(table);
+	} else {
+		XLALPrintError("%s(): no sngl_inspiral table in \"%s\"\n", __func__, filename);
+		goto snglinspiralfailed;
+	}
+
+	/*
+	 * clean up
+	 */
+
+	ezxml_free(xmldoc);
+
+	/*
+	 * copy the linked list of templates into the template array in
+	 * reverse order.  the linked list is reversed with respect to the
+	 * contents of the file, so this constructs an array of templates
+	 * in the order in which they appear in the file.
+	 */
+
+	{
+	/* can't use table->n_rows because the callback interecepted the
+	 * rows, and the table object is empty */
+	SnglInspiralTable *row = head;
+	for(num = 0; row; row = row->next, num++);
+	}
+	*bankarray = calloc(num, sizeof(**bankarray));
+	while(num--) {
+		SnglInspiralTable *next = head->next;
+
+		/* fix broken columns */
+		head->snr = 0;
+		head->sigmasq = 0;
+		head->mtotal = head->mass1 + head->mass2;
+		head->mchirp = gstlal_mchirp(head->mass1, head->mass2);
+		head->eta = gstlal_eta(head->mass1, head->mass2);
+
+		(*bankarray)[num] = *head;
+		LALFree(head);
+		head = next;
+	}
+
+	/*
+	 * success
+	 */
+
 	return num;
+
+	/*
+	 * error
+	 */
+
+snglinspiralfailed:
+	ezxml_free(xmldoc);
+parsefailed:
+	return -1;
 }
 
 int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *channel)
