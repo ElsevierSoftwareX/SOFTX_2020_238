@@ -201,13 +201,6 @@ class last_coincs(object):
 #
 
 
-def lower_bound_in_seglist(seglist, x):
-	# FIXME:  replace with segmentlist.value_slice_to_index() when we
-	# can rely on a new-enough ligo.segments
-	i = max(bisect_left(seglist, x) - 1, 0)
-	return i + 1 if seglist and seglist[i][1] <= x else i
-
-
 class backgroundcollector(object):
 	def __init__(self):
 		self.zerolag_singles = set()
@@ -282,7 +275,7 @@ class StreamThinca(object):
 		# clip the lists to reduce subsequent operation count.
 
 		age = float(self.time_slide_graph.age)
-		snr_segments = segments.segmentlistdict((instrument, ratebinlist[lower_bound_in_seglist(ratebinlist, age):].segmentlist()) for instrument, ratebinlist in rankingstat.denominator.triggerrates.items())
+		snr_segments = segments.segmentlistdict((instrument, ratebinlist[ratebinlist.value_slice_to_index(slice(age, None))].segmentlist()) for instrument, ratebinlist in rankingstat.denominator.triggerrates.items())
 
 		#
 		# iterate over coincidences
