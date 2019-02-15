@@ -212,6 +212,7 @@ injections.xml:
 		--seed 12345 \
 		--output $@ \
 		--verbose
+	ligolw_no_ilwdchar $@
 	@echo ""
 
 # Default is local path to git repo version for CI.
@@ -275,25 +276,22 @@ frames.cache: H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf L-L1_FAKE-10000/L-L1_
 segments.xml.gz:
 	# Produce segments file
 	# A files that lists the segments of data that can be analysed
-	echo $(START) $(STOP) > segs.txt
-	ligolw_segments --insert-from-segwizard=H1=segs.txt --output H1_segs.xml.gz --name=datasegments
-	ligolw_segments --insert-from-segwizard=L1=segs.txt --output L1_segs.xml.gz --name=datasegments
-	ligolw_add --ilwdchar-compat --output $@ H1_segs.xml.gz L1_segs.xml.gz
+	echo $(START) $(STOP) | ligolw_segments --insert-from-segwizard=H1=/dev/stdin --name=datasegments --output $@
+	echo $(START) $(STOP) | ligolw_segments --insert-from-segwizard=L1=/dev/stdin --name=datasegments $@
+	ligolw_no_ilwdchar $@
 	@echo ""
 
 vetoes.xml.gz:
 	# Produce a dummy veto file
 	@echo "Produce veto file"
-	echo 999999997 999999998 > vetoes.txt
-	ligolw_segments --insert-from-segwizard=H1=vetoes.txt --output H1_vetoes.xml.gz --name=vetoes
-	ligolw_segments --insert-from-segwizard=L1=vetoes.txt --output L1_vetoes.xml.gz --name=vetoes
-	ligolw_add --ilwdchar-compat --output $@ H1_vetoes.xml.gz L1_vetoes.xml.gz
+	echo 999999997 999999998 | ligolw_segments --insert-from-segwizard=H1=/dev/stdin --name=vetoes --output $@
+	echo 999999997 999999998 | ligolw_segments --insert-from-segwizard=L1=/dev/stdin --name=vetoes $@
+	ligolw_no_ilwdchar $@
 	@echo ""
 
 tisi.xml:
 	# Produce time slides file
-	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 bg_tisi.xml
-	ligolw_add --ilwdchar-compat --output $@ bg_tisi.xml $<
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 $@
 	@echo ""
 
 measured_psd.xml.gz: frames.cache
@@ -344,6 +342,7 @@ psd_horizon.png:
 #		--match-min 0.95 \
 #		--fhigh-max $(HIGH_FREQUENCY_CUTOFF) \
 #		--verbose
+#	ligolw_no_ilwdchar $@
 #	@echo ""
 
 gstlal_bank.xml.gz: frames.cache
@@ -385,8 +384,9 @@ gstlal_bank.xml.gz: frames.cache
 		--spectrum-type median \
 		--write-compress \
 		--verbose
-	gstlal_inspiral_add_template_ids H1-TMPLTBANK-1000000000-2048.xml.gz
-	mv H1-TMPLTBANK-1000000000-2048.xml.gz gstlal_bank.xml.gz
+	mv H1-TMPLTBANK-1000000000-2048.xml.gz $@
+	ligolw_no_ilwdchar $@
+	gstlal_inspiral_add_template_ids $@
 	@echo ""
 
 # FIXME Doesn't work
