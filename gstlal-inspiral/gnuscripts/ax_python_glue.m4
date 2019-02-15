@@ -41,3 +41,25 @@ AC_DEFUN([AX_PYTHON_LIGO_SEGMENTS],[
 		unset minversion
 	])
 ])
+
+#
+# AX_PYTHON_LIGO_LW([MINVERSION = 0])
+#
+AC_DEFUN([AX_PYTHON_LIGO_LW],[
+	AC_REQUIRE([AM_PATH_PYTHON])
+	AX_PYTHON_MODULE([ligo.lw])
+	AS_IF([test "x$HAVE_PYMOD_LIGO_SEGMENTS" == "xyes"], [
+		AC_MSG_CHECKING(ligo.lw version)
+		LIGO_LW_VERSION=`$PYTHON -c "from ligo.lw import __version__ ; print '.'.join(__version__.strip().split('.'))"`
+		AS_IF([test $? != "0"], [
+			AC_MSG_ERROR(["cannot determine version"])
+		])
+		minversion=$1
+		AX_COMPARE_VERSION([$LIGO_LW_VERSION], [ge], [${minversion:-0}], [
+			AC_MSG_RESULT([$LIGO_LW_VERSION])
+		], [
+			AC_MSG_WARN([found $LIGO_LW_VERSION, require at least $1])
+		])
+		unset minversion
+	])
+])
