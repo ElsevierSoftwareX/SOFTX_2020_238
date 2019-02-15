@@ -82,6 +82,7 @@ stages:
     - schedules
     - tags
     - web
+  allow_failure: true
 
 level0:rpm:gstlal:
   <<: *levelN-rpm-package
