@@ -184,6 +184,7 @@ static int sngl_inspiral_row_callback(struct ligolw_table *table, struct ligolw_
 int gstlal_snglinspiral_array_from_file(const char *filename, SnglInspiralTable **bankarray)
 {
 	SnglInspiralTable *head = NULL;
+	SnglInspiralTable *row;
 	ezxml_t xmldoc;
 	ezxml_t elem;
 	struct ligolw_table *table;
@@ -230,20 +231,21 @@ int gstlal_snglinspiral_array_from_file(const char *filename, SnglInspiralTable 
 	ezxml_free(xmldoc);
 
 	/*
+	 * count rows.  can't use table->n_rows because the callback
+	 * interecepted the rows, and the table object is empty
+	 */
+
+	for(num = 0, row = head; row; row = row->next, num++);
+
+	/*
 	 * copy the linked list of templates into the template array in
 	 * reverse order.  the linked list is reversed with respect to the
 	 * contents of the file, so this constructs an array of templates
 	 * in the order in which they appear in the file.
 	 */
 
-	{
-	/* can't use table->n_rows because the callback interecepted the
-	 * rows, and the table object is empty */
-	SnglInspiralTable *row = head;
-	for(num = 0; row; row = row->next, num++);
-	}
 	*bankarray = calloc(num, sizeof(**bankarray));
-	while(num--) {
+	for(row = &(*bankarray)[num - 1]; head; row--) {
 		SnglInspiralTable *next = head->next;
 
 		/* fix broken columns */
@@ -253,7 +255,7 @@ int gstlal_snglinspiral_array_from_file(const char *filename, SnglInspiralTable 
 		head->mchirp = gstlal_mchirp(head->mass1, head->mass2);
 		head->eta = gstlal_eta(head->mass1, head->mass2);
 
-		(*bankarray)[num] = *head;
+		*row = *head;
 		LALFree(head);
 		head = next;
 	}
