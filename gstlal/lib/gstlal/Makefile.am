@@ -1,3 +1,5 @@
+AM_CPPFLAGS = -I..
+
 EXTRA_DIST =
 CLEANFILES =
 
