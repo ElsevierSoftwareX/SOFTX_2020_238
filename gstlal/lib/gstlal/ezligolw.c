@@ -23,7 +23,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ezligolw.h>
-#include <ezxml.h>
 
 
 /*
