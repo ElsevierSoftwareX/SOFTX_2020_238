@@ -954,7 +954,10 @@ trigger_stats_feature_to_rank(FeatureStats *feature, RankingStats *rank)
 	for (ibin_x=0; ibin_x<nbin_x; ibin_x++) {
 		cur_pdf = gsl_vector_get(rpdfdata, ibin_x);
 		pdf_acum += cur_pdf;
-		gsl_vector_set(rfapdata, ibin_x, pdf_acum * (rank->rank_pdf->step));
+		if (pdf_acum * (rank->rank_pdf->step) < FLT_MIN)
+			gsl_vector_set(rfapdata, ibin, FLT_MIN);
+		else
+			gsl_vector_set(rfapdata, ibin_x, pdf_acum * (rank->rank_pdf->step));
 	}
 
 	if (fabs(gsl_vector_max(rfapdata) - 1.0) > 1e-2)
