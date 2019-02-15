@@ -438,6 +438,7 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		cohfar_accumbackground_output_prefix = None,
 		cohfar_accumbackground_output_name = None,
 		cohfar_accumbackground_snapshot_interval = 0,
+		cohfar_accumbackground_ifo_sense = 'H1:50,L1:100',
 		cohfar_assignfar_refresh_interval = 86400,
 		cohfar_assignfar_silent_time = 2147483647,
 		cohfar_assignfar_input_fname = None):
@@ -578,12 +579,12 @@ def mkPostcohSPIIROnline(pipeline, detectors, banks, psd,
 		# FIXME: hard-coded to do compression
 		if verbose:
 			postcoh = pipeparts.mkprogressreport(pipeline, postcoh, "progress_xml_dump_bank_stream%d" % i_dict)
-
+		print cohfar_accumbackground_ifo_sense
 		if cohfar_accumbackground_output_prefix is None:
-			postcoh = pipemodules.mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = None, output_name = cohfar_accumbackground_output_name[i_dict], snapshot_interval = cohfar_accumbackground_snapshot_interval)
+			postcoh = pipemodules.mkcohfar_accumbackground(pipeline, postcoh, ifo_sense = cohfar_accumbackground_ifo_sense, hist_trials = cuda_postcoh_hist_trials, output_prefix = None, output_name = cohfar_accumbackground_output_name[i_dict], history_fname = cohfar_assignfar_input_fname.split(',')[0], snapshot_interval = cohfar_accumbackground_snapshot_interval)
 		else:
-			postcoh = pipemodules.mkcohfar_accumbackground(pipeline, postcoh, ifos = ifos, hist_trials = cuda_postcoh_hist_trials, output_prefix = cohfar_accumbackground_output_prefix[i_dict], output_name = None, snapshot_interval = cohfar_accumbackground_snapshot_interval)
-		postcoh = pipemodules.mkcohfar_assignfar(pipeline, postcoh, ifos = ifos, assignfar_refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
+			postcoh = pipemodules.mkcohfar_accumbackground(pipeline, postcoh, ifo_sense = cohfar_accumbackground_ifo_sense, hist_trials = cuda_postcoh_hist_trials, output_prefix = cohfar_accumbackground_output_prefix[i_dict], output_name = None, history_fname = cohfar_assignfar_input_fname.split(',')[0], snapshot_interval = cohfar_accumbackground_snapshot_interval)
+		postcoh = pipemodules.mkcohfar_assignfar(pipeline, postcoh, ifo_sense = cohfar_accumbackground_ifo_sense, assignfar_refresh_interval = cohfar_assignfar_refresh_interval, silent_time = cohfar_assignfar_silent_time, input_fname = cohfar_assignfar_input_fname)
 		#head = mkpostcohfilesink(pipeline, postcoh, location = output_prefix[i_dict], compression = 1, snapshot_interval = snapshot_interval)
 		triggersrcs.append(postcoh)
 	return triggersrcs

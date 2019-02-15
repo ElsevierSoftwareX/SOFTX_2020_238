@@ -57,9 +57,11 @@ typedef struct {
 	GstBaseTransform element;
 
 	char *ifos;
+	char *ifo_sense;
 	int nifo;
 	int ncombo; // ifo combination
 	int hist_trials;
+	float sense_ratio[MAX_NBICOMBO];
 	TriggerStatsXML *bgstats_2h;
 	TriggerStatsXML *bgstats_1d;
 	TriggerStatsXML *bgstats_1w;

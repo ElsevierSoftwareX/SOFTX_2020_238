@@ -4,6 +4,16 @@
 #ifndef IFO_LEN
 #define IFO_LEN 2
 #define MAX_IFO_LEN 4 
+#define H_INDEX 0
+#define L_INDEX 1
+#define V_INDEX 2
+#define HL_INDEX 0
+#define HV_INDEX 1
+#define LH_INDEX 2
+#define LV_INDEX 3
+#define VH_INDEX 4
+#define VL_INDEX 5
+#define MAX_NBICOMBO 6
 #endif
 
 #define MAX_NIFO 3
@@ -29,6 +39,7 @@ static const IFOType IFOComboMap[MAX_IFO_COMBOS] = {
 };
 /* function given a random ifo, output the index in the IFOComboMap list, implemented in background_stats_utils.c */
 int get_icombo(char *ifos);
+int get_ifo_idx(char *ifo);
 
 #ifndef MAX_ALLIFO_LEN
 #define MAX_ALLIFO_LEN 14
@@ -47,8 +58,8 @@ int get_icombo(char *ifos);
 #define LOGCHISQ_CMAX	3.5
 #define LOGCHISQ_NBIN	300
 
-#define LOGRANK_CMIN	-30 // 10^-30, minimum cdf, extrapolating if less than this min
-#define LOGRANK_CMAX	0 //
+#define LOGRANK_CMIN	-10 // 10^-1, minimum cdf, extrapolating if less than this min
+#define LOGRANK_CMAX	20 //
 #define	LOGRANK_NBIN	300 // FIXME: enough for accuracy
 
 /* array names in xml files */

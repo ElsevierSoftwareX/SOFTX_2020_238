@@ -31,7 +31,11 @@
 #include <glib.h>
 #include <cohfar/background_stats.h>
 #include <LIGOLwHeader.h>
+#include <postcohtable.h>
 
+#ifndef MIN_BACKGROUND_NEVENT
+#define MIN_BACKGROUND_NEVENT 1000000
+#endif
 	
 Bins1D *
 bins1D_create_long(double cmin, double cmax, int nbin);
@@ -76,5 +80,25 @@ trigger_stats_xml_destroy(TriggerStatsXML * stats);
 
 double
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats);
+
+double
+gen_cdf_from_feature(double snr, double chisq, TriggerStats *stats);
+
+double
+get_prob_noise (double cohsnr, double cmbchisq, TriggerStats *margi_stats);
+
+double
+get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml);
+
+double
+get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio);
+
+double
+calc_lr(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, float *sense_ratio);
+
+int
+get_rank_idx(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, int icombo, float *sense_ratio);
+
+void set_sense_ratio(gchar *value, int *nifo, char **pifos, float *sense_ratio);
 #endif /* __BACKGROUND_STATS_UTILS_H__ */
 

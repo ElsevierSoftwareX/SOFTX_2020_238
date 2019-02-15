@@ -185,6 +185,7 @@ def parse_command_line():
     parser.add_option("--cohfar-accumbackground-history-fname", metavar = "filename", help = "Set the history filename to read stats from (optional)")
     parser.add_option("--cohfar-accumbackground-output-prefix", metavar = "filename", action = "append", help = "Set the filename prefix in which to save the stats (optional)")
     parser.add_option("--cohfar-accumbackground-output-name", metavar = "filename", action = "append", help = "Set the filename name in which to save the stats (optional)")
+    parser.add_option("--cohfar-accumbackground-ifo-sense", metavar = "name", default = "H1:50,L1:100", help = "Set the filename name in which to save the stats (optional)")
     parser.add_option("--cohfar-assignfar-refresh-interval", type = "int", metavar = "seconds", default = 86400, help = "How often to update the marginalized stats files. (optional)")
     parser.add_option("--cohfar-assignfar-silent-time", type = "int", metavar = "seconds", default = 2147483647, help = "Do not assign FAP during this silent time. (optional)")
     parser.add_option("--finalsink-fapupdater-collect-walltime", metavar = "seconds,seconds,seconds", default = None, help = "Update the marginalized stats files using the information of the collection time. (optional)")
@@ -256,7 +257,7 @@ def parse_command_line():
         raise ValueError("must provide at least cohfar-accumbackground-output-prefix or cohfar-accumbackground-output-name")
 
 
-    required_options = ["job_tag", "code_version", "mode"]
+    required_options = ["job_tag", "code_version", "mode", "cohfar_accumbackground_ifo_sense"]
     
     missing_options = []
 
@@ -461,6 +462,7 @@ postcohsrcs = spiirparts.mkPostcohSPIIROnline(
             cohfar_accumbackground_output_prefix = options.cohfar_accumbackground_output_prefix,
             cohfar_accumbackground_output_name = options.cohfar_accumbackground_output_name,
             cohfar_accumbackground_snapshot_interval = options.cohfar_accumbackground_snapshot_interval,
+            cohfar_accumbackground_ifo_sense = options.cohfar_accumbackground_ifo_sense,
             cohfar_assignfar_refresh_interval = options.cohfar_assignfar_refresh_interval,
             cohfar_assignfar_silent_time= options.cohfar_assignfar_silent_time,
             cohfar_assignfar_input_fname = options.cohfar_assignfar_input_fname

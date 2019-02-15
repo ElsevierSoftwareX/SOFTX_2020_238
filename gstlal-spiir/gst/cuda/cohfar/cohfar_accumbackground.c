@@ -86,7 +86,7 @@ GST_BOILERPLATE_FULL(
 
 enum property {
 	PROP_0,
-	PROP_IFOS,
+	PROP_IFO_SENSE,
 	PROP_HIST_TRIALS,
 	PROP_SOURCE_TYPE,
 	PROP_SNAPSHOT_INTERVAL,
@@ -105,6 +105,24 @@ static void cohfar_accumbackground_get_property (GObject * object,
 static GstFlowReturn cohfar_accumbackground_chain (GstPad * pad, GstBuffer * inbuf);
 static gboolean cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event);
 static void cohfar_accumbackground_dispose (GObject *object);
+
+static void update_stats_icombo_lr(PostcohInspiralTable *intable, int icombo, int this_nifo, int * this_write_map, TriggerStatsXML *cur_statsxml, TriggerStatsXML *margi_statsxml, float *sense_ratio)
+{
+	int isingle;
+	if (icombo > -1) {
+		trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, cur_statsxml->multistats[icombo]->feature, cur_statsxml->multistats[icombo]);
+
+	for (isingle=0; isingle< this_nifo; isingle++){
+		int write_isingle = this_write_map[isingle];
+		trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), cur_statsxml->multistats[write_isingle]->feature, cur_statsxml->multistats[write_isingle]);
+	}
+	if (margi_statsxml->multistats[icombo]->feature_nevent > MIN_BACKGROUND_NEVENT) {
+		trigger_stats_rank_rate_update(intable, cur_statsxml->multistats[icombo], margi_statsxml, icombo, sense_ratio);
+		GST_DEBUG("updated rate of ranking statistic: likelihood");
+
+	}
+	}	
+}
 
 static void update_stats_icombo(PostcohInspiralTable *intable, int icombo, TriggerStatsXML *stats)
 {
@@ -210,36 +228,46 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 
 	intable = (PostcohInspiralTable *) GST_BUFFER_DATA(inbuf);
 	PostcohInspiralTable *outtable = (PostcohInspiralTable *) GST_BUFFER_DATA(outbuf);
-	int isingle, nifo;
-	for (; intable<intable_end; intable++) {
-		icombo = get_icombo(intable->ifos);
+	int isingle;
+	if (GST_BUFFER_SIZE(inbuf) > 0) {
+		icombo = get_icombo(intable->ifos); // first entry set the icombo and this_nifo, and this_write_map
+		element->this_nifo = strlen(intable->ifos)/IFO_LEN;
+		/* add single detector stats */
+		get_write_ifo_mapping(IFOComboMap[icombo].name, element->this_nifo, element->this_write_map);
 		if (icombo < 0) {
 			LIGOTimeGPS ligo_time;
 			XLALINT8NSToGPS(&ligo_time, GST_BUFFER_TIMESTAMP(inbuf));
 			fprintf(stderr, "invalid ifo combo in cohfar_accumbackground at GPS %d, outentries %d, table flag %d, cohsnr %f\n", ligo_time.gpsSeconds, outentries, intable->is_background, intable->cohsnr);
 		}
+	}
+
+	for (; intable<intable_end; intable++) {
 		if (intable->is_background == FLAG_BACKGROUND) {
 			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo(intable, element->ncombo-1, bgstats); //update the last icombo and single IFO stats
+			GST_DEBUG_OBJECT(element, "updating lr for background");
+			update_stats_icombo_lr(intable, element->ncombo-1, element->this_nifo, element->this_write_map, bgstats, element->margi_stats, element->sense_ratio); //update the last icombo and single IFO stats, update the last bin of lr
 		} else if (intable->is_background == FLAG_FOREGROUND){ /* coherent trigger entry */
+			GST_DEBUG_OBJECT(element, "updating lr for zerolag");
 			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo(intable, element->ncombo-1, zlstats); //update the last icombo and single IFO stats
+			update_stats_icombo_lr(intable, element->ncombo-1, element->this_nifo, element->this_write_map, zlstats, element->margi_stats, element->sense_ratio); //update the last icombo and single IFO stats, update the last bin of lr
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} else {
 			/* increment livetime if participating nifo >= 2 */
 			if (icombo > 2) {
-				nifo = strlen(intable->ifos)/IFO_LEN;
-				/* add single detector stats */
-				get_write_ifo_mapping(IFOComboMap[icombo].name, nifo, element->write_ifo_mapping);
-
-				for (isingle=0; isingle< nifo; isingle++){
-					int write_isingle = element->write_ifo_mapping[isingle];
-					trigger_stats_livetime_inc(bgstats->multistats, write_isingle);
-					trigger_stats_livetime_inc(zlstats->multistats, write_isingle);
+				for (isingle=0; isingle< element->this_nifo; isingle++){
+					int write_isingle = element->this_write_map[isingle];
+					trigger_stats_feature_livetime_inc(bgstats->multistats, write_isingle);
+					trigger_stats_feature_livetime_inc(zlstats->multistats, write_isingle);
 				}
-				trigger_stats_livetime_inc(bgstats->multistats, element->ncombo-1);
-				trigger_stats_livetime_inc(zlstats->multistats, element->ncombo-1);
+				trigger_stats_feature_livetime_inc(bgstats->multistats, element->ncombo-1);
+				trigger_stats_feature_livetime_inc(zlstats->multistats, element->ncombo-1);
+
+				if (element->margi_stats->multistats[element->ncombo-1]->feature_nevent > MIN_BACKGROUND_NEVENT) {
+					trigger_stats_rank_livetime_inc(bgstats->multistats, element->ncombo-1);
+					trigger_stats_rank_livetime_inc(zlstats->multistats, element->ncombo-1);
+				}
+
 			}
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
@@ -277,6 +305,8 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		trigger_stats_xml_reset(element->bgstats);
 		trigger_stats_xml_reset(element->zlstats);
 		element->t_roll_start = t_cur;
+		trigger_stats_xml_from_xml(element->margi_stats, &(element->hist_trials), element->history_fname);
+
 	}
 
 	/*
@@ -361,8 +391,8 @@ cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event)
 
 /*
  * set_property()
+ *
  */
-
 
 static void cohfar_accumbackground_set_property(GObject *object, enum property prop_id, const GValue *value, GParamSpec *pspec)
 {
@@ -370,10 +400,12 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 
 	GST_OBJECT_LOCK(element);
 	switch(prop_id) {
-		case PROP_IFOS:
-			element->ifos = g_value_dup_string(value);
-			element->nifo = strlen(element->ifos) / IFO_LEN;
-			element->ncombo = get_ncombo(element->nifo);
+
+		case PROP_IFO_SENSE:
+			element->ifo_sense = g_value_dup_string(value);
+			set_sense_ratio(element->ifo_sense, &(element->this_nifo), &(element->ifos), element->sense_ratio);
+			element->ncombo = get_ncombo(element->this_nifo);
+			printf("ifos from ifo sense %s\n", element->ifos);
 			element->bgstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_BACKGROUND);
 			element->zlstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_ZEROLAG);
 			element->sgstats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_SIGNAL);
@@ -391,7 +423,13 @@ static void cohfar_accumbackground_set_property(GObject *object, enum property p
 			/* must make sure ifos have been loaded, so stats have been created */
 			g_assert(element->ifos != NULL);
 			element->history_fname = g_value_dup_string(value);
-			trigger_stats_xml_from_xml(element->bgstats, &(element->hist_trials), element->history_fname);
+			element->margi_stats = trigger_stats_xml_create(element->ifos, STATS_XML_TYPE_BACKGROUND);
+			if (!trigger_stats_xml_from_xml(element->margi_stats, &(element->hist_trials), element->history_fname)) { // file not exist
+				GST_DEBUG_OBJECT(element, "%s for cohfar_accumbackground not exist, need to collect some background to produce a %s first!", element->history_fname, element->history_fname);
+			}
+				
+			GST_DEBUG_OBJECT(element, "load %s, nevent %d\n", element->history_fname, element->margi_stats->multistats[element->ncombo-1]->feature_nevent);
+		
 			break;
 
 		case PROP_OUTPUT_NAME:
@@ -432,8 +470,8 @@ static void cohfar_accumbackground_get_property(GObject *object, enum property p
 	GST_OBJECT_LOCK(element);
 
 	switch (prop_id) {
-		case PROP_IFOS:
-			g_value_set_string(value, element->ifos);
+		case PROP_IFO_SENSE:
+			g_value_set_string(value, element->ifo_sense);
 			break;
 
 		case PROP_HISTORY_FNAME:
@@ -481,6 +519,7 @@ static void cohfar_accumbackground_dispose(GObject *object)
 		// FIXME: free stats
 	}
 	G_OBJECT_CLASS(parent_class)->dispose(object);
+	// FIXME: free ifos, ifo_sense
 }
 
 
@@ -546,11 +585,11 @@ static void cohfar_accumbackground_class_init(CohfarAccumbackgroundClass *klass)
 
 	g_object_class_install_property(
 		gobject_class,
-		PROP_IFOS,
+		PROP_IFO_SENSE,
 		g_param_spec_string(
-			"ifos",
-			"ifo names",
-			"ifos that participate in the run",
+			"ifo-sense",
+			"ifo:horizon_distance",
+			"ifos and horizon distances",
 			NULL,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		)
@@ -658,7 +697,10 @@ static void cohfar_accumbackground_init(CohfarAccumbackground *element, CohfarAc
 
 	element->bgstats = NULL;
 	element->zlstats = NULL;
-    element->stats_writer = NULL;
+	element->stats_writer = NULL;
 	element->t_roll_start = GST_CLOCK_TIME_NONE;
 	element->snapshot_interval = NOT_INIT;
+	int i;
+	for (i=0; i< MAX_NBICOMBO; i++)
+		element->sense_ratio[i] = 0;
 }

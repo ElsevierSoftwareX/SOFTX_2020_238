@@ -59,9 +59,12 @@ typedef struct {
 	GstPad *sinkpad, *srcpad;
 
 	char *ifos;
-	int nifo;
-	int ncombo; // ifo combination
-	int write_ifo_mapping[MAX_NIFO];
+	char *ifo_sense;
+	int this_nifo; // nifo in the table
+	int ncombo; // all ifo combination
+	int this_write_map[MAX_NIFO];
+	float sense_ratio[MAX_NBICOMBO];
+	TriggerStatsXML *margi_stats;
 	TriggerStatsXML *bgstats;
 	TriggerStatsXML *zlstats;
 	TriggerStatsXML *sgstats;

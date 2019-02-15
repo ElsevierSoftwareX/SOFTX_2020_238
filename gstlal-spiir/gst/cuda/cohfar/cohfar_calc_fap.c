@@ -143,7 +143,11 @@ void cohfar_get_stats_from_file(gchar **in_fnames, TriggerStatsXML *stats_in, Tr
 		trigger_stats_xml_from_xml(stats_in, hist_trials, *ifname);
 		for (icombo=0; icombo<stats_in->ncombo; icombo++){
 			trigger_stats_feature_rate_add(stats_out->multistats[icombo]->feature, stats_in->multistats[icombo]->feature, stats_out->multistats[icombo]);
-			trigger_stats_livetime_add(stats_out->multistats, stats_in->multistats, icombo);
+			trigger_stats_feature_livetime_add(stats_out->multistats, stats_in->multistats, icombo);
+
+			trigger_stats_rank_rate_add(stats_out->multistats[icombo]->rank, stats_in->multistats[icombo]->rank, stats_out->multistats[icombo]);
+			trigger_stats_rank_livetime_add(stats_out->multistats, stats_in->multistats, icombo);
+
 		}
 	}
 }
@@ -177,14 +181,17 @@ static int process_stats_full(gchar ** in_fnames, int nifo, gchar **pifos, gchar
 	cohfar_get_stats_from_file(in_fnames, bgstats_in, bgstats_out, &hist_trials);
 	if (*update_pdf == 1) {
 		for (icombo=0; icombo<ncombo; icombo++) {
-			trigger_stats_feature_rate_to_pdf(sgstats_out->multistats[icombo]->feature);
-			trigger_stats_feature_to_rank(sgstats_out->multistats[icombo]->feature, sgstats_out->multistats[icombo]->rank);
+			trigger_stats_feature_rate_to_pdf_hist(sgstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_to_cdf(sgstats_out->multistats[icombo]->feature, sgstats_out->multistats[icombo]->rank);
+			trigger_stats_rank_to_fap(sgstats_out->multistats[icombo]->rank);
 	
-			trigger_stats_feature_rate_to_pdf(zlstats_out->multistats[icombo]->feature);
-			trigger_stats_feature_to_rank(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
+			trigger_stats_feature_rate_to_pdf_hist(zlstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_to_cdf(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
+			trigger_stats_rank_to_fap(zlstats_out->multistats[icombo]->rank);
 	
-			trigger_stats_feature_rate_to_pdf(bgstats_out->multistats[icombo]->feature);
-			trigger_stats_feature_to_rank(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
+			trigger_stats_feature_rate_to_pdf_hist(bgstats_out->multistats[icombo]->feature);
+			trigger_stats_feature_to_cdf(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
+			trigger_stats_rank_to_fap(bgstats_out->multistats[icombo]->rank);
 			
 		}
 	}

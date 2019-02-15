@@ -89,31 +89,29 @@ def mkcudapostcoh(pipeline, snr, instrument, detrsp_fname, autocorrelation_fname
 	return elem
 
 
-def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_prefix = None, output_name = None, source_type = pipe_macro.SOURCE_TYPE_BNS):
+def mkcohfar_accumbackground(pipeline, src, ifo_sense= "H1:50,L1:100", hist_trials = 1, snapshot_interval = 0, history_fname = None, output_prefix = None, output_name = None, source_type = pipe_macro.SOURCE_TYPE_BNS):
 	properties = {
-		"ifos": ifos,
+		"ifo_sense": ifo_sense,
 		"snapshot_interval": snapshot_interval,
 		"hist_trials": hist_trials,
-		"source_type": source_type
+		"source_type": source_type,
+		"history_fname": history_fname
 	}
-	if history_fname is not None:
-		properties["history_fname"] = history_fname
 	if output_prefix is not None:
 		properties["output_prefix"] = output_prefix
 	if output_name is not None:
 		properties["output_name"] = output_name
 
-	print "source type %d" % source_type
 	if "name" in properties:
 		elem = gst.element_factory_make("cohfar_accumbackground", properties.pop("name"))
 	else:
 		elem = gst.element_factory_make("cohfar_accumbackground")
 	# make sure ifos go first
 	for name, value in properties.items():
-		if name == "ifos":
+		if name == "ifo_sense":
 			elem.set_property(name.replace("_", "-"), value)
 	for name, value in properties.items():
-		if name is not "ifos":
+		if name is not "ifo_sense":
 			elem.set_property(name.replace("_", "-"), value)
 
 	pipeline.add(elem)
@@ -123,9 +121,9 @@ def mkcohfar_accumbackground(pipeline, src, ifos= "H1L1", hist_trials = 1, snaps
 		src.link(elem)
 	return elem
 
-def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", assignfar_refresh_interval = 14400, silent_time = 2147483647, input_fname = None):
+def mkcohfar_assignfar(pipeline, src, ifo_sense= "H1:50,L1:100", assignfar_refresh_interval = 14400, silent_time = 2147483647, input_fname = None):
 	properties = {
-		"ifos": ifos,
+		"ifo_sense": ifo_sense,
 		"refresh_interval": assignfar_refresh_interval,
 		"silent_time": silent_time,
 	}
@@ -138,10 +136,10 @@ def mkcohfar_assignfar(pipeline, src, ifos= "H1L1", assignfar_refresh_interval =
 		elem = gst.element_factory_make("cohfar_assignfar")
 	# make sure ifos go first
 	for name, value in properties.items():
-		if name == "ifos":
+		if name == "ifo_sense":
 			elem.set_property(name.replace("_", "-"), value)
 	for name, value in properties.items():
-		if name != "ifos":
+		if name != "ifo_sense":
 			elem.set_property(name.replace("_", "-"), value)
 
 	pipeline.add(elem)

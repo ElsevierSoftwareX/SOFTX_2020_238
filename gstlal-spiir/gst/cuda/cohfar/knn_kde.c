@@ -30,6 +30,20 @@
 #include <cohfar/knn_kde.h>
 #include <cohfar/ssvkernel.h>
 
+static int get_num_nonzero_1D(gsl_vector_long *hist)
+{
+	
+	int i = 0, num_nonzero = 0;
+	int x_nbin = hist->size;
+	for(i=0;i<x_nbin;i++) {
+		if (gsl_vector_long_get(hist, i) > 0)
+		{
+			num_nonzero++;
+		}
+	}	
+	return num_nonzero;
+}
+
 static int get_num_nonzero(gsl_matrix_long *histogram)
 {
 	
@@ -44,6 +58,31 @@ static int get_num_nonzero(gsl_matrix_long *histogram)
 		}	
 	}
 	return num_nonzero;
+}
+
+static void find_nonzero_idx_1D(gsl_vector_long *hist, gsl_vector_long * nonzero_idx)
+{
+//	This loop should generate an array that looks something like this
+//	0 1
+//	0 3
+//	...
+//	1 0
+//	1 2
+//	...
+//	...
+
+
+
+	int i = 0;
+	int x_nbin = hist->size;
+	int inonzero = 0;
+	for(i=0;i<x_nbin;i++) {
+		if (gsl_vector_long_get(hist, i) > 0)
+		{
+			gsl_vector_long_set(nonzero_idx, inonzero, i);
+			inonzero++;
+		}
+	}	
 }
 
 static void find_nonzero_idx(gsl_matrix_long *histogram, gsl_matrix_long * nonzero_idx)
@@ -78,6 +117,7 @@ static double get_kth_value_gsl(double *all_dist, int len, int knn_k)
 	double *small = (double*) malloc(sizeof(double)*knn_k);
 	gsl_sort_smallest(small, knn_k, all_dist, 1, len);
 	double kth_value = small[knn_k-1];
+	//printf("all_dist sorted [%d], %f\n", knn_k-1, small[knn_k-1]);
 	free(small);
 	return kth_value;
 
@@ -105,6 +145,26 @@ static double get_kth_value(double * all_dist, int len, int knn_k)// Puts the di
 }
 
 
+static void find_kth_dist_1D(gsl_vector *tin_x,  gsl_vector_long * nonzero_idx, int knn_k, gsl_vector *kth_dist)// Calculates the distance from each grid point to each data point, calling ascend() to order them 
+{
+
+	int i = 0,j = 0;
+	int num_nonzero = nonzero_idx->size;
+	double *all_dist = (double*)malloc(sizeof(double)*num_nonzero);
+	double kth_value = 0, dx = gsl_vector_mindiff(tin_x);
+	for (i=0;i<num_nonzero;i++)
+	{
+		for (j=0;j<num_nonzero;j++) {
+			all_dist[j] = fabs(gsl_vector_long_get(nonzero_idx, j) - gsl_vector_long_get(nonzero_idx, i))*dx;
+			//printf("dx %f, all_dist [%d], %f\n", dx, j, all_dist[j]);
+		}
+		kth_value = get_kth_value_gsl(all_dist, num_nonzero, knn_k);
+		//printf("%d nonzero, kth neighbour dist %f\n", i, kth_value);
+		gsl_vector_set(kth_dist, i, kth_value);
+	}
+	free(all_dist);
+}
+
 static void find_kth_dist(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * nonzero_idx, int knn_k, gsl_vector *kth_dist)// Calculates the distance from each grid point to each data point, calling ascend() to order them 
 {
 
@@ -123,6 +183,62 @@ static void find_kth_dist(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long 
 		gsl_vector_set(kth_dist, i, kth_value);
 	}
 	free(all_dist);
+}
+
+static void calc_pdf_1D(double band_const, gsl_vector *tin_x, gsl_vector_long * hist, gsl_vector_long * nonzero_idx, gsl_vector * kth_dist, gsl_vector *pdf)
+{
+		
+	int i = 0,k = 0;
+	int x_nbin = hist->size;
+	int knn_x_idx;
+	int num_nonzero = nonzero_idx->size;
+	double dist, gau, sum_gau = 0.0;
+	double cur_x_coor, knn_x_coor;
+	double norm_factor = 0, hband;
+	double norm_machine = (double) gsl_vector_long_max(hist);
+	//one-dimensional histogram
+	gsl_vector *hist_double = gsl_vector_alloc(hist->size);
+	gsl_vector_long_to_double(hist, hist_double);
+	double scale_factor = gsl_vector_sum(hist_double);
+	gsl_vector_scale(hist_double, 1/scale_factor);
+
+
+	
+	for(i=0;i<x_nbin;i++)
+	{
+		sum_gau = 0;
+		for(k=0;k<num_nonzero;k++)
+		{
+			cur_x_coor = gsl_vector_get(tin_x, i); 
+			knn_x_idx = (int) gsl_vector_long_get(nonzero_idx, k);
+			knn_x_coor = gsl_vector_get(tin_x, knn_x_idx); 
+			hband = band_const* gsl_vector_get(kth_dist, k);
+			dist = -(pow(cur_x_coor - knn_x_coor, 2))/(2 * pow(hband, 2));
+			gau = exp(dist)*(gsl_vector_get(hist_double, knn_x_idx))/(2 * M_PI * pow(hband, 2));
+			sum_gau = sum_gau + gau;
+			//printf("i %d,  k %d, kth dist %f, gau %f \n", i, k, gsl_vector_get(kth_dist, k), gau);
+		}
+		gsl_vector_set(pdf, i, sum_gau);
+		//printf("i %d,  pdf %lf\n", i, gsl_vector_get(pdf, i));
+	}
+	// normalize pdf
+	double dx = gsl_vector_mindiff(tin_x);
+
+	gsl_vector_scale(hist_double, 1/(dx));
+	gsl_vector_sub(hist_double, pdf);
+	gsl_vector_mul(hist_double, hist_double);
+	double mise = sqrt(gsl_vector_sum(hist_double));
+	printf("knn kde mise for pdf: %lf\n", mise);
+       	double pdf_sum = dx * gsl_vector_sum(pdf);
+	//printf("sum of pdf %lf\n", pdf_sum);
+	gsl_vector_scale(pdf, 1/pdf_sum);
+	
+	/* deprecated; norm_factor is problematic, causing zeros of pdf. normalization that sum(pdf) == 1 */
+	// norm_factor = 1/ gsl_matrix_sum(pdf);
+	//printf("norm_factor %lf\n", norm_factor);
+	//gsl_matrix_scale(pdf, norm_factor);
+	gsl_vector_free(hist_double);
+
 }
 
 static void calc_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long * histogram, gsl_matrix_long * nonzero_idx, gsl_vector * kth_dist, gsl_matrix *pdf)
@@ -186,6 +302,30 @@ static void calc_pdf(double band_const, gsl_vector *tin_x, gsl_vector *tin_y, gs
 
 }
 
+void
+knn_kde_1D(gsl_vector *tin_x, gsl_vector_long *hist, gsl_vector *pdf)
+{
+	int knn_k = 8;
+	double band_const = 0.4;
+	int num_nonzero = get_num_nonzero_1D(hist);
+    // if all rates are zero, do not calc pdf, return
+    if (num_nonzero == 0)
+        return;
+
+    if (knn_k > num_nonzero)
+        knn_k = num_nonzero;
+
+	gsl_vector_long * nonzero_idx = gsl_vector_long_calloc(num_nonzero);
+
+	find_nonzero_idx_1D(hist, nonzero_idx);
+    // set the knn_k to be num_nonzero if there are too few bins that have values
+    // attempt to solve the gsl subset_source.c error length k exceeds vector length h
+	gsl_vector * kth_dist = gsl_vector_alloc(num_nonzero);
+	find_kth_dist_1D(tin_x, nonzero_idx, knn_k, kth_dist);
+	calc_pdf_1D(band_const, tin_x, hist, nonzero_idx, kth_dist, pdf);
+	gsl_vector_long_free(nonzero_idx);
+	gsl_vector_free(kth_dist);
+}
 void
 knn_kde(gsl_vector *tin_x, gsl_vector *tin_y, gsl_matrix_long *histogram, gsl_matrix *pdf)
 {

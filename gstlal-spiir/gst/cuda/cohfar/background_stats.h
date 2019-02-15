@@ -87,8 +87,10 @@ typedef struct {
 	RankingStats *rank;
 	FeatureStats *feature;
 	int hist_trials;
-	long nevent;
-	long livetime;
+	long feature_nevent;
+	long rank_nevent;
+	long feature_livetime;
+	long rank_livetime;
 } TriggerStats;
 
 typedef struct {
