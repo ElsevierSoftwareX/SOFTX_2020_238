@@ -19,6 +19,7 @@ plots:
   - title: Likelihood
     type: TimeSeries
     measurement: likelihood_history_across_jobs
+    #measurement: likelihood_history
     column: data
     aggregate: max
     value: checked 
@@ -29,14 +30,17 @@ plots:
     measurement: likelihood_history
     column: data
     aggregate: max
+    tag: job
     value:
 
   # FAR history
   - title: FAR
     type: TimeSeries
     measurement: far_history_across_jobs
+    #measurement: far_history
     column: data
     aggregate: min
+    log: true
     value:
 
   # FAR history heatmap (by job)
@@ -45,12 +49,14 @@ plots:
     measurement: far_history
     column: data
     aggregate: min
+    tag: job
     value:
 
   # latency history
   - title: Latency
     type: TimeSeries
     measurement: latency_history_across_jobs
+    #measurement: latency_history
     column: data
     aggregate: max
     value:
@@ -61,21 +67,35 @@ plots:
     measurement: latency_history
     column: data
     aggregate: max
+    tag: job
+    value:
+
+  # network snr history
+  - title: Network SNR
+    type: TimeSeries
+    measurement: snr_history
+    column: data
+    aggregate: max
     value:
 
   # snr history
-  - title: SNR
+  - title: H1 SNR
     type: TimeSeries
-    measurement: snr_history_across_jobs
+    measurement: H1_snr_history
     column: data
     aggregate: max
-    params:
-      - - ifo
-        - H1
-      - - ifo
-        - L1
-      - - ifo
-        - V1
+    value:
+  - title: L1 SNR
+    type: TimeSeries
+    measurement: L1_snr_history
+    column: data
+    aggregate: max
+    value:
+  - title: V1 SNR
+    type: TimeSeries
+    measurement: V1_snr_history
+    column: data
+    aggregate: max
     value:
 
   # ram history heatmap (by job)
@@ -84,6 +104,7 @@ plots:
     measurement: ram_history
     column: data
     aggregate: max
+    tag: job
     value:
 
   # noise
@@ -122,18 +143,21 @@ plots:
     measurement: H1_statevector_on
     column: data
     aggregate: max
+    tag: job
     value:
   - title: L1 Uptime by Job
     type: TimeHeatMap
     measurement: L1_statevector_on
     column: data
     aggregate: max
+    tag: job
     value:
   - title: V1 Uptime by Job
     type: TimeHeatMap
     measurement: V1_statevector_on
     column: data
     aggregate: max
+    tag: job
     value:
 
   # downtime heatmaps (by job)
@@ -142,18 +166,21 @@ plots:
     measurement: H1_statevector_off
     column: data
     aggregate: max
+    tag: job
     value:
   - title: L1 Downtime by Job
     type: TimeHeatMap
     measurement: L1_statevector_off
     column: data
     aggregate: max
+    tag: job
     value:
   - title: V1 Downtime by Job
     type: TimeHeatMap
     measurement: V1_statevector_off
     column: data
     aggregate: max
+    tag: job
     value:
 
   # strain dropped heatmaps (by job)
@@ -162,18 +189,21 @@ plots:
     measurement: H1_strain_dropped
     column: data
     aggregate: max
+    tag: job
     value:
   - title: L1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: L1_strain_dropped
     column: data
     aggregate: max
+    tag: job
     value:
   - title: V1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: V1_strain_dropped
     column: data
     aggregate: max
+    tag: job
     value:
 
   # time since last plot
@@ -182,6 +212,7 @@ plots:
     measurement: ram_history
     column: data
     aggregate: max
+    tag: job
     value:
 
   # time since last plot
@@ -190,6 +221,7 @@ plots:
     measurement: latency_history
     column: data
     aggregate: max
+    tag: job
     value:
 
   # FIXME: add time since trigger plot
@@ -199,16 +231,19 @@ nagios:
   measurement: ram_history
   column: data
   aggregate: max
-  num_jobs: 327
+  num_tags: 327
+  tag: job
 
 measurements:
   ram_history:
-    num_jobs: 327
+    tag: job
+    num_tags: 327
     default: 1e4
     transform: latency
 
   latency_history:
-    num_jobs: 327
+    tag: job
+    num_tags: 327
     default: 1e3
     transform: none
 
@@ -216,7 +251,11 @@ database:
   backend: influxdb
   #backend: hdf5
 
+  # hdf5 backend settings
   rootdir: /home/gstlalcbc/replay/last_2_wks_o2/trigs.hyper
+  basename: aggregator
+
+  # influxdb backend settings
   name: gstlal_inspiral
   hostname: 10.9.0.112
   port: 8086
