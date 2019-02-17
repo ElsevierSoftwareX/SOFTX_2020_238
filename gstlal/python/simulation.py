@@ -71,8 +71,8 @@ def sim_inspiral_to_segment_list(fname, pad=1, verbose=False):
 	# extract the padded geocentric end times into segment lists
 
 	for row in lsctables.SimInspiralTable.get_table(xmldoc):
-		t = LIGOTimeGPS(row.get_time_geocent())
-		seglist.append(segments.segment(LIGOTimeGPS(int(math.floor(t-pad))), LIGOTimeGPS(int(math.ceil(t+pad)))))
+		t = row.time_geocent
+		seglist.append(segments.segment(LIGOTimeGPS(math.floor(t-pad)), LIGOTimeGPS(math.ceil(t+pad))))
 
 	# help the garbage collector
 
