@@ -107,7 +107,7 @@ def do_it_to(xmldoc):
 		if table.Name != "coinc_event_map":
 			ilwdclsmap = ilwdchar_tables[table.Name]
 			newrowtype = newtable.RowType
-			def newrow(row, nonilwdcharattrs = tuple(colname for colname in table.columnnames if colname not in ilwdclsmap), ilwdcharattrs = tuple(colname for colname in table.columnames if colname in ilwdclsmap)):
+			def newrow(row, nonilwdcharattrs = tuple(colname for colname in table.columnnames if colname not in ilwdclsmap), ilwdcharattrs = tuple(colname for colname in table.columnnames if colname in ilwdclsmap)):
 				kwargs = dict((attr, getattr(row, attr)) for attr in nonilwdcharattrs)
 				kwargs.update((attr, ilwdclsmap[attr](getattr(row, attr))) for attr in ilwdcharattrs)
 				return newrowtype(**kwargs)
