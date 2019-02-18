@@ -43,6 +43,8 @@
 #include <string.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_blas.h>
+//#include <signal.h>
+//#include <time.h>
 
 /*
  * our own stuff
@@ -202,6 +204,7 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *event) {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(aggpad);
+	//fprintf(stderr, "%s got setcaps event\n", itacacpad->instrument);
 	GstCaps *caps;
 	guint width = 0; 
 
@@ -251,6 +254,7 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
 	GList *padlist;
 
 	GST_DEBUG_OBJECT(aggpad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
+	//fprintf(stderr, "%s got %s event on sink pad\n", itacacpad->instrument, GST_EVENT_TYPE_NAME (event));
 
 	switch (GST_EVENT_TYPE(event)) {
 		case GST_EVENT_CAPS:
@@ -300,7 +304,7 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
 /*
  * ============================================================================
  *
- *                                 Properties
+ *                           Properties and Meta
  *
  * ============================================================================
  */
@@ -473,6 +477,47 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 }
 
 /*
+GType gstlal_itacac_meta_api_get_type(void) {
+	static volatile GType type;
+	static const *tags[] = { "ifos", NULL };
+
+	if(g_init_once_enter(&type)) {
+		GType _type = gst_meta_api_type_register ("GSTLALItacacMetaAPI", tags);
+		g_once_init_leave (&type, _type);
+	}
+	return type;
+}
+
+static gboolean gstlal_itacac_meta_init(GstMeta *meta, gpointer params, GstBuffer *buf) {
+	GSTLALItacacMeta *itacac_meta = (GSTLALItacacMeta *) meta;
+	itacac_meta->ifos = NULL;
+
+	return TRUE;
+}
+
+static void gstlal_itacac_meta_free(GstMeta *meta, GstBuffer *buf) {
+	GSTLALItacacMeta *itacac_meta = (GSTLALItacacMeta *) meta;
+	free(itacac_meta->ifos);
+}
+
+static gboolean gstlal_itacac_meta_transform(GstBuffer *transbuf, GstMeta *meta, GstBuffer *buf, GQuark type, gpointer data) {
+	GSTLALItacacMeta *itacac_meta = (GSTLALItacacMeta *) meta;
+	if(GST_META_TRANSFORM_IS_COPY(type)) {
+		gst_buffer_add_meta(transbuf, GSTLAL_ITACAC_META_INFO, NULL);
+		itacac_meta
+	}
+}
+
+const GstMetaInfo *gstlal_itacac_meta_api_get_info(void) {
+	static const GstMetaInfo *itacac_meta_info = NULL;
+	if (g_once_init_enter ((GstMetaInfo **) &itacac_meta_info)) {
+	const GstMetaInfo *meta = gst_meta_register (GST_PROTECTION_META_API_TYPE, "GSTLALItacacMetaAPI", sizeof(GSTLALItacacMeta), 
+	}
+}
+*/
+
+
+/*
  * aggregate()
 */ 
 
@@ -488,6 +533,7 @@ static GstFlowReturn push_buffer(GstAggregator *agg, GstBuffer *srcbuf) {
 	update_state(itacac, srcbuf);
 
 	GST_DEBUG_OBJECT(itacac, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	//fprintf(stderr, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 	return GST_AGGREGATOR_CLASS(gstlal_itacac_parent_class)->finish_buffer(agg, srcbuf);
 }
 
@@ -499,8 +545,7 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 	GST_BUFFER_OFFSET_END(srcbuf) = itacac->next_output_offset + samps;
 	GST_BUFFER_PTS(srcbuf) = itacac->next_output_timestamp + itacac->difftime;
 	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, samps, itacac->rate);
-	GST_DEBUG_OBJECT(stderr, "pushing gap %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	//GST_BUFFER_DTS(srcbuf) = GST_BUFFER_PTS(srcbuf);
+	itacac->test++;
 
 	return gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 
@@ -511,12 +556,13 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	GstElement *element = GST_ELEMENT(itacac);
 	GList *padlist, *padlist2;
 	GstFlowReturn result = GST_FLOW_OK;
+	//fprintf(stderr, "\n\n\n\n\nin final_setup\n\n\n\n\n");
 
 	// Ensure all of the pads have the same channels and rate, and set them on itacac for easy access
 	for(padlist = element->sinkpads; padlist !=NULL; padlist = padlist->next) {
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		GstBuffer *sinkbuf = gst_aggregator_pad_peek_buffer(GST_AGGREGATOR_PAD(itacacpad));
-		gst_buffer_unref(sinkbuf);
+		//GstBuffer *sinkbuf = gst_aggregator_pad_peek_buffer(GST_AGGREGATOR_PAD(itacacpad));
+		//gst_buffer_unref(sinkbuf);
 		// FIXME Should gst_object_sync_values be called here too?
 		if(padlist == element->sinkpads){
 			itacac->channels = itacacpad->channels;
@@ -850,8 +896,11 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 	
 
 	// First zero the tmp_snr_mat objects in the other pads
-	for(itacacpadlist = itacacpad->next_in_coinc_order; itacacpadlist != NULL; itacacpadlist = itacacpadlist->next)
+	for(itacacpadlist = itacacpad->next_in_coinc_order; itacacpadlist != NULL; itacacpadlist = itacacpadlist->next) {
+		if(GSTLAL_ITACAC_PAD(itacacpadlist->data)->waiting)
+			continue;
 		memset(GSTLAL_ITACAC_PAD(itacacpadlist->data)->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad) * itacacpad->maxdata->unit);
+	}
 	max_sample = 0;
 
 	for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
@@ -872,6 +921,8 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 
 		for(itacacpadlist = itacacpad->next_in_coinc_order; itacacpadlist != NULL; itacacpadlist = itacacpadlist->next) {
 			other_itacacpad = GSTLAL_ITACAC_PAD(itacacpadlist->data);
+			if(other_itacacpad->waiting)
+				continue;
 
 			for(data_container_index = 0; data_container_index < other_itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix->size1; data_container_index++) {
 				nongapsamps_duration = (guint) gsl_matrix_get(other_itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, data_container_index, 0);
@@ -988,10 +1039,18 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 		// L1H1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "L1") == 0) {
-			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, NULL, itacac->difftime);
+			if(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->waiting) {
+				if(srcbuf == NULL) {
+					srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(itacacpad->snr_matrix_view), NULL, NULL, itacac->difftime);
+				} else {
+					gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(itacacpad->snr_matrix_view), NULL, NULL);
+				}
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, NULL);
+				if(srcbuf == NULL) {
+					srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, NULL, itacac->difftime);
+				} else {
+					gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, NULL);
+				}
 			}
 		//
 		// H1V1
@@ -1066,25 +1125,38 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 	guint gapsamps = 0;
 	GstFlowReturn result = GST_FLOW_OK;
 	GList *padlist;
-	GSTLALItacacPad *itacacpad;
+	//GSTLALItacacPad *itacacpad;
 	GstBuffer *srcbuf = NULL;
 	guint availablesamps;
 
         // Make sure we have enough samples to produce a trigger
         // FIXME Currently assumes every pad has the same n
 	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
-		itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		if(gst_audioadapter_available_samples( itacacpad->adapter ) <= itacacpad->n + 2*itacacpad->maxdata->pad && !itacacpad->EOS && !itacacpad->waiting)
+		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		if(gst_audioadapter_available_samples( itacacpad->adapter ) <= itacacpad->n + 2*itacacpad->maxdata->pad && !itacacpad->EOS && !itacacpad->waiting) {
+			//fprintf(stderr, "%s\n", itacacpad->instrument);
 			return result;
+		}
 	}
 
 
 	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
-		itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 		if(itacacpad->waiting)
 			continue;
 
+		/*(
+		if(itacacpad->initial_timestamp == itacac->next_output_timestamp) {
+			// FIXME Only do this once
+			GList *tmp_padlist;
+			for(tmp_padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) 
+				g_assert(itacacpad->initial_timestamp == itacac->next_output_timestamp);
+		}
+		*/
 		samples_left_in_window = itacacpad->n;
+
+		//fprintf(stderr, "%s going into big loop\n", itacacpad->instrument);
+		//raise(SIGINT);
 
 		// FIXME Currently assumes n is the same for all detectors
 		while( samples_left_in_window > 0 && gst_audioadapter_available_samples(itacacpad->adapter) ) {
@@ -1161,6 +1233,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			// is only set to nonzero values at the end of a window
 			else if(itacacpad->adjust_window > 0) {
 				// This should only ever happen at the beginning of a window, so we use itacacpad->n instead of samples_left_in_window for conditionals
+				//fprintf(stderr, "samples_left_in_window = %u, itacacpad->n = %u, ifo = %s\n", samples_left_in_window, itacacpad->n, itacacpad->instrument);
 				g_assert(samples_left_in_window == itacacpad->n);
 				g_assert(itacacpad->last_gap == FALSE);
 				copysamps = nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad ? itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad : nongapsamps;
@@ -1312,21 +1385,21 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 	// FIXME put some logic here to push a gap and return GST_FLOW_OK if there were only gaps in the window
 
+	//raise(SIGINT);
 	guint data_container_index;
 	guint peak_finding_start;
 	guint duration;
 	guint samples_searched_in_window;
 	gint trig_offset;
-	gboolean triggers_generated;
 
 	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
-		itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 		if(itacacpad->waiting)
 			continue;
 		data_container_index = 0;
 		duration = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, 0, 0);
 
-		triggers_generated = FALSE;
+		gboolean triggers_generated = FALSE;
 		while(duration != 0) {
 			peak_finding_start = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, data_container_index, 1);
 			trig_offset = (gint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, data_container_index, 2);
@@ -1343,6 +1416,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			g_assert(samples_searched_in_window < itacacpad->n);
 
 
+			//fprintf(stderr, "%s about to generate triggers\n", itacacpad->instrument);
+			//raise(SIGINT);
 			generate_triggers(
 				itacac, 
 				itacacpad, 
@@ -1352,6 +1427,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				samples_searched_in_window,
 				triggers_generated
 			);
+			//raise(SIGINT);
 
 			triggers_generated = TRUE;
 			duration = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, ++data_container_index, 0);
@@ -1378,21 +1454,24 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 	}
 
 	// clear the matrix that tracks information about our saved data
-	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next)
-		gsl_matrix_scale(GSTLAL_ITACAC_PAD(padlist->data)->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, 0);
+	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
+		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		if(itacacpad->waiting)
+			continue;
+		gsl_matrix_scale(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, 0);
+	}
 
 	if(!itacac->EOS) {
 		if(srcbuf != NULL)
 			result = gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 		else 
-			// FIXME itacacpad->n only works because we still have
-			// itacacpad defined from before
-			result = push_gap(itacac, itacacpad->n);
+			// FIXME Assumes n is same for all ifos
+			result = push_gap(itacac, GSTLAL_ITACAC_PAD(element->sinkpads->data)->n);
 	} else {
 		guint max_num_samps_left_in_any_pad = 0;
 		guint available_samps;
 		for(padlist=element->sinkpads; padlist != NULL; padlist = padlist->next) {
-			itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+			GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 			available_samps = gst_audioadapter_available_samples(itacacpad->adapter);
 			max_num_samps_left_in_any_pad = available_samps > max_num_samps_left_in_any_pad ? available_samps : max_num_samps_left_in_any_pad;
 		}
@@ -1402,7 +1481,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			if(srcbuf != NULL)
 				gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 			else
-				push_gap(itacac, itacacpad->n);
+				push_gap(itacac, GSTLAL_ITACAC_PAD(element->sinkpads->data)->n);
 
 			result = process(itacac);
 		} else {
@@ -1418,14 +1497,18 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 {
+	//fprintf(stderr, "in aggregate\n");
 	GSTLALItacac *itacac = GSTLAL_ITACAC(aggregator);
 	GList *padlist;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	// Calculate the coincidence windows and make sure the pads caps are compatible with each other if we're just starting
 	if(itacac->rate == 0) {
+		//fprintf(stderr, "about to go into final_setup\n");
+		//raise(SIGINT);
 		result = final_setup(itacac);
-		return result;
+		//raise(SIGINT);
+		//return result;
 	}
 
 	if(itacac->EOS) {
@@ -1433,6 +1516,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		return result;
 	}
 	guint64 tmp_uint;
+	
 		
 
 	// FIXME need to confirm the aggregator does enough checks that the
@@ -1441,6 +1525,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// Get the buffer from the pad we're looking at and assert it
 		// has a valid timestamp
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		//raise(SIGINT);
 		//sinkbuf = gst_aggregator_pad_pop_buffer(GST_AGGREGATOR_PAD(itacacpad));
 		// We don't need to worry about this if this pad is waiting
 		//if(!itacac->waiting && itacacpad->waiting)
@@ -1481,15 +1566,17 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			return result;
 		}
 
+
 		// FIXME if we were more careful we wouldn't lose so much data around disconts
 		// FIXME I don't think this logic works for itacac, it came from itac, need to think carefully about what to do around disconts
 		if (GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
 			// FIXME For now, this should ensure we only see disconts at start up
 			g_assert(gst_audioadapter_available_samples(itacacpad->adapter) == 0);
+			itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
+			//fprintf(stderr, "%s clearing audioadapter\n", itacacpad->instrument);
+			gst_audioadapter_clear(itacacpad->adapter);
 			if(!itacacpad->waiting) { 
 				reset_time_and_offset(itacac);
-				itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
-				gst_audioadapter_clear(itacacpad->adapter);
 			}
 		}
 
@@ -1497,7 +1584,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// ignore this buffer for now. We need n + 2*maxdata->pad for a
 		// trigger, so adapter should never need to hold more than 2*(2
 		// + 2*maxdata->pad).
-		if(itacacpad->adapter->size > 2*(itacacpad->n + 2*itacacpad->maxdata->pad)) {
+		if(gst_audioadapter_available_samples(itacacpad->adapter) > 2*(itacacpad->n + 2*itacacpad->maxdata->pad)) {
 			gst_buffer_unref(sinkbuf);
 			continue;
 		}
@@ -1506,18 +1593,28 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		if(itacacpad->initial_timestamp == GST_CLOCK_TIME_NONE) {
 			g_assert(gst_audioadapter_available_samples(itacacpad->adapter) == 0);
 			itacacpad->initial_timestamp = GST_BUFFER_PTS(sinkbuf);
+			//fprintf(stderr, "%s initial_timestamp = %u + 1e-9*%u\n", itacacpad->instrument, (guint) (itacacpad->initial_timestamp / 1000000000), (guint) (itacacpad->initial_timestamp - 1000000000 * (itacacpad->initial_timestamp / 1000000000)));
 		}
 
-		gst_buffer_ref(sinkbuf);
 		// Push buf to gstaudioadapter
-		guint samples_before = gst_audioadapter_available_samples(itacacpad->adapter);
 		gst_audioadapter_push(itacacpad->adapter, sinkbuf);
 		gst_aggregator_pad_drop_buffer(GST_AGGREGATOR_PAD(itacacpad));
+		/*
+		if(gst_audioadapter_available_samples(itacacpad->adapter) > 0) {
+			time_t rawtime;
+			struct tm *timeinfo;
+			time(&rawtime);
+			timeinfo = localtime ( &rawtime );
+			//fprintf(stderr, "%s got samples %s", itacacpad->instrument, asctime(timeinfo));
+			//raise(SIGINT);
+		}
+		*/
 
-		gst_buffer_unref(sinkbuf);
 
 	}
+	//raise(SIGINT);
 
+	//raise(SIGINT);
 	if(itacac->waiting) {
 		// Check if timestamps of all sinkpads are the same, if not,
 		// take the earliest timestamp as the next output timestamp and
@@ -1525,6 +1622,9 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// timestamp
 		for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
 			GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+			if(gst_audioadapter_available_samples(itacacpad->adapter) == 0)
+				continue;
+
 			if(padlist == GST_ELEMENT(aggregator)->sinkpads)
 				itacac->next_output_timestamp = itacacpad->initial_timestamp;
 			else
@@ -1561,20 +1661,32 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 				continue;
 
 			// FIXME Assumes n is the same for all detectors
-			guint num_samples_behind = (guint) (itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->n);
-			if(num_samples_behind > itacacpad->maxdata->pad)
+			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->rate));
+			//fprintf(stderr, "itacac->next_output_timestamp = %lu, itacacpad->initial_timestamp = %lu, %u num_samples_behind, gapsamps = %u, available_samps = %u, %s\n", (guint64) itacac->next_output_timestamp, (guint64) itacacpad->initial_timestamp, num_samples_behind, gst_audioadapter_head_gap_length(itacacpad->adapter), gst_audioadapter_available_samples(itacacpad->adapter), itacacpad->instrument);
+			if(num_samples_behind > itacacpad->maxdata->pad) {
 				gst_audioadapter_flush_samples(itacacpad->adapter, num_samples_behind - itacacpad->maxdata->pad);
-			else if(num_samples_behind < itacacpad->maxdata->pad)
+			} else if(num_samples_behind < itacacpad->maxdata->pad)
 				itacacpad->adjust_window = num_samples_behind;
 
 			itacacpad->waiting = FALSE;
+			//time_t rawtime;
+			//struct tm *timeinfo;
+			//time(&rawtime);
+			//timeinfo = localtime ( &rawtime );
+			//fprintf(stderr, "\n\n\n%s set waiting to FALSE %s \n\n\n\n", itacacpad->instrument, asctime(timeinfo));
+			//raise(SIGINT);
 			if(itacacpad->initial_timestamp != itacac->next_output_timestamp)
 				itacacpad->last_gap = FALSE;
 		}
 
+		//fprintf(stderr, "about to enter process from waiting=FALSE\n");
+		//raise(SIGINT);
 		result = process(itacac);
+		//fprintf(stderr, "out of process from waiting=FALSE\n");
+		//raise(SIGINT);
 	}
 
+	//result = process(itacac);
 
 	return result;
 }
@@ -1598,6 +1710,7 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 	GST_DEBUG_OBJECT(GST_AGGREGATOR_PAD(object), "in pad_dispose");
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(object);
 
+	gst_audioadapter_clear(itacacpad->adapter);
 	g_object_unref(itacacpad->adapter);
 	itacacpad->adapter = NULL;
 
@@ -1660,6 +1773,8 @@ static void gstlal_itacac_unref_pad(GSTLALItacacPad *itacacpad)
 
 static void gstlal_itacac_finalize(GObject *object)
 {
+	GSTLALItacac *itacac = GSTLAL_ITACAC(object);
+	//fprintf(stderr, "num gaps pushed = %u\n", itacac->test);
 	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
 }
 
@@ -1863,9 +1978,11 @@ static void gstlal_itacac_pad_init(GSTLALItacacPad *itacacpad)
 	itacacpad->last_gap = TRUE;
 	itacacpad->EOS = FALSE;
 	itacacpad->waiting = TRUE;
+	//itacacpad->waiting = FALSE;
 
 	itacacpad->adjust_window = 0;
 	itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
+
 
 	gst_pad_use_fixed_caps(GST_PAD(itacacpad));
 
@@ -1875,6 +1992,7 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 {
 	itacac->rate = 0;
 	itacac->channels = 0;
+	itacac->test = 0;
 
 	itacac->difftime = 0;
 	
@@ -1882,5 +2000,6 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 
 	itacac->EOS = FALSE;
 	itacac->waiting = TRUE;
+	//itacac->waiting = FALSE;
 
 }
