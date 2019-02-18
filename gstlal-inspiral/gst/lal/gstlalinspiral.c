@@ -50,14 +50,15 @@
 
 
 #include <gstlal/gstlal_tags.h>
+#include <gstlal_itacac.h>
 /*
 #include <gstlal_coinc.h>
 #include <gstlal_skymap.h>
 #include <gstlal_triggergen.h>
 #include <gstlal_timeslicechisq.h>
 #include <gstlal_blcbc_triggergen.h>
-*/
 #include <gstlal_itac.h>
+*/
 
 
 /*
@@ -79,8 +80,9 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_skymap", GSTLAL_SKYMAP_TYPE},
 		{"lal_triggergen", GSTLAL_TRIGGERGEN_TYPE},
 		{"lal_timeslicechisq", GSTLAL_TIMESLICECHISQUARE_TYPE},
-		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},*/
-		{"lal_itac", GSTLAL_ITAC_TYPE},
+		{"lal_blcbctriggergen", GSTLAL_BLCBC_TRIGGERGEN_TYPE},
+		{"lal_itac", GSTLAL_ITAC_TYPE}, */
+		{"lal_itacac", GSTLAL_ITACAC_TYPE},
 		{NULL, 0},
 	};
 

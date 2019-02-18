@@ -4,7 +4,7 @@ plugin_LTLIBRARIES = lib@GSTPLUGINPREFIX@gstlalinspiral.la
 
 lib@GSTPLUGINPREFIX@gstlalinspiral_la_SOURCES = \
 	gstlalinspiral.c \
-	gstlal_itac.h gstlal_itac.c
+	gstlal_itacac.h gstlal_itacac.c
 #gstlal_triggergen.h gstlal_triggergen.c
 #gstlal_blcbc_triggergen.h gstlal_blcbc_triggergen.c \
 #gstlal_coinc.h gstlal_coinc.c \

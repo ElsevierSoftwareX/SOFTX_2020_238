@@ -81,6 +81,7 @@ from glue import iterutils
 from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeparts
+from gstlal import pipeio
 
 
 #
@@ -656,8 +657,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 	# construct trigger generators
 	#
 
-	triggersrcs = dict((instrument, set()) for instrument in hoftdicts)
-	for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
+	itacac_dict = {}
+	for i, (instrument, bank) in enumerate([(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]):
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if control_branch is not None:
 			if instrument != "H2":
@@ -695,10 +696,19 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 			# but 4 is about the lowest we can do stably for
 			# coincidence online...
 			nsamps_window = max(max(bank.get_rates()) / 4, 256) # FIXME stupid hack
-			head = pipeparts.mkitac(pipeline, snr, nsamps_window, bank.template_bank_filename, autocorrelation_matrix = bank.autocorrelation_bank, mask_matrix = bank.autocorrelation_mask, snr_thresh = 4.0, sigmasq = bank.sigmasq)
-			if verbose:
-				head = pipeparts.mkprogressreport(pipeline, head, "progress_xml_%s" % suffix)
-			triggersrcs[instrument].add(head)
+			if bank.bank_id not in itacac_dict:
+				itacac_dict[bank.bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
+
+			head = itacac_dict[bank.bank_id]
+			pad = head.get_request_pad("sink%d" % len(head.sinkpads))
+			if instrument == 'H1' or instrument == 'L1':
+				for prop, val in [("n", nsamps_window), ("snr-thresh", 4.0), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+					pad.set_property(prop, val)
+				snr.srcpads[0].link(pad)
+			else:
+				for prop, val in [("n", nsamps_window), ("snr-thresh", 4.0), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+					pad.set_property(prop, val)
+				snr.srcpads[0].link(pad)
 		else:
 			raise NotImplementedError("Currently only 'autochisq' is supported")
 		# FIXME:  find a way to use less memory without this hack
@@ -710,5 +720,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 	# done
 	#
 
-	assert any(triggersrcs.values())
-	return triggersrcs
+	assert any(itacac_dict.values())
+	if verbose:
+		for bank_id, head in itacac_dict.items():
+			itacac_dict[bank_id] = pipeparts.mkprogressreport(pipeline, head, "progress_xml_bank_%s" % bank_id)
+	return itacac_dict

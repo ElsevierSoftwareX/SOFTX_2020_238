@@ -950,7 +950,7 @@ class Handler(simplehandler.Handler):
 				memory.unmap(mapinfo)
 
 			# FIXME:  ugly way to get the instrument
-			instrument = elem.get_name().split("_", 1)[0]
+			instruments = set([event.ifo for event in events])
 
 			# extract segment.  move the segment's upper
 			# boundary to include all triggers.  ARGH the 1 ns
@@ -958,10 +958,7 @@ class Handler(simplehandler.Handler):
 			# "in" the segment (segments are open from above)
 			# FIXME:  is there another way?
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
-			if events:
-				buf_seg = segments.segment(buf_timestamp, max(buf_timestamp + LIGOTimeGPS(0, buf.duration), max(event.end for event in events) + 0.000000001))
-			else:
-				buf_seg = segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))
+			buf_seg = dict((instrument, segments.segment(buf_timestamp, max(buf_timestamp + LIGOTimeGPS(0, buf.duration), max(event.end for event in events if event.ifo == instrument) + 0.000000001))) for instrument in instruments)
 			buf_is_gap = bool(buf.mini_object.flags & Gst.BufferFlags.GAP)
 			# sanity check that gap buffers are empty
 			assert not (buf_is_gap and events)
@@ -1062,12 +1059,35 @@ class Handler(simplehandler.Handler):
 			# is aware of this buffer.
 			if not buf_is_gap:
 				snr_min = self.rankingstat.snr_min
-				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg), len([event for event in events if event.snr >= snr_min]))
+				for instrument in instruments:
+					# FIXME At the moment, empty triggers are added to
+					# inform the "how many instruments were on test", the
+					# correct thing to do is probably to add metadata to
+					# the buffer containing information about which
+					# instruments were on
+					self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg[instrument]), len([event for event in events if event.snr >= snr_min and event.ifo == instrument]))
+
+			# FIXME At the moment, empty triggers are added to
+			# inform the "how many instruments were on test", the
+			# correct thing to do is probably to add metadata to
+			# the buffer containing information about which
+			# instruments were on
+			real_events = []
+			for event in events:
+				if event.snr >= snr_min:
+					real_events.append(event)
+
+			events = real_events
 
 			# run stream thinca.
 			for absent_instrument in self.absent_instruments:
 				self.stream_thinca.push(absent_instrument, (), buf_timestamp)
-			if self.stream_thinca.push(instrument, events, buf_timestamp):
+			for instrument in self.rankingstat.instruments:
+				if instrument in instruments or instrument in self.absent_instruments:
+					continue
+				self.stream_thinca.push(instrument, (), buf_timestamp)
+
+			if any([self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp) for instrument in instruments]):
 				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, cluster = self.cluster)
 				self.coincs_document.commit()
 
@@ -1080,7 +1100,10 @@ class Handler(simplehandler.Handler):
 				# that are too old to be used to form
 				# candidates.
 				for event in flushed_sngls:
-					del event.snr_time_series
+					del event.H1_snr_time_series
+					del event.L1_snr_time_series
+					del event.V1_snr_time_series
+					del event.K1_snr_time_series
 
 
 	def _record_horizon_distance(self, instrument, timestamp, horizon_distance):
@@ -1274,7 +1297,10 @@ class Handler(simplehandler.Handler):
 		# for the triggers that are too old to be used to form
 		# candidates.
 		for event in flushed_sngls:
-			del event.snr_time_series
+			del event.H1_snr_time_series
+			del event.L1_snr_time_series
+			del event.V1_snr_time_series
+			del event.K1_snr_time_series
 
 
 	def __do_gracedb_alerts(self, last_coincs):

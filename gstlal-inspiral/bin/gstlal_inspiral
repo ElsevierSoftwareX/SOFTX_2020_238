@@ -843,7 +843,8 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	if options.verbose:
 		print >>sys.stderr, "attaching appsinks to pipeline ...",
 	appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
-	appsinks = set(appsync.add_sink(pipeline, src, caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "%s_sink_%d" % (instrument, n)) for instrument, srcs in triggersrc.items() for n, src in enumerate(srcs))
+	appsinks = set(appsync.add_sink(pipeline, src, caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "bank_%s_sink" % bank_id) for bank_id, src in triggersrc.items())
+
 	if options.verbose:
 		print >>sys.stderr, "attached %d, done" % len(appsinks)
 

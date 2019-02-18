@@ -555,6 +555,7 @@ class GracedBWrapper(object):
 
 			if self.verbose:
 				print >>sys.stderr, "sending %s to gracedb ..." % filename
+			print >>sys.stderr, "sending %s to gracedb ..." % filename
 			message = StringIO.StringIO()
 			xmldoc = last_coincs[coinc_event.coinc_event_id]
 			# give the alert all the standard inspiral
@@ -568,13 +569,19 @@ class GracedBWrapper(object):
 					# already has it
 					pass
 			# add SNR time series if available
+			# FIXME Probably only want one time series for each ifo
 			for event in last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
-				snr_time_series = event.snr_time_series
-				if snr_time_series is not None:
-					xmldoc.childNodes[-1].appendChild(lalseries.build_COMPLEX8TimeSeries(snr_time_series)).appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+				for ifo in ("H1", "L1", "V1", "K1"):
+					snr_time_series = getattr(event, "%s_snr_time_series" % ifo)
+					if snr_time_series is not None:
+						snr_time_series_element = lalseries.build_COMPLEX8TimeSeries(snr_time_series)
+						snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+						snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"ifo", ifo))
+						xmldoc.childNodes[-1].appendChild(snr_time_series_element)
 			# translate IDs from integers to ilwd:char for
 			# backwards compatibility
 			ilwdify.do_it_to(xmldoc)
+
 			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
 			xmldoc.unlink()

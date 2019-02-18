@@ -25,6 +25,7 @@ struct gstlal_peak_state *gstlal_peak_state_new(guint channels, gstlal_peak_type
 	new->thresh = 0;
 	new->type = type;
 	new->is_gap = FALSE;
+	new->no_peaks_past_threshold = TRUE;
 
 	switch (new->type)
 	{
@@ -84,6 +85,9 @@ int gstlal_peak_state_clear(struct gstlal_peak_state *val)
 	memset(val->interpvalues.as_float, 0.0, val->channels * val->unit);
 	val->num_events = 0;
 	val->is_gap = FALSE;
+	// dont reset the value of no peaks past threshold, user is responsibile for that
+	// FIXME This will be removed eventually, see itacac for more info
+	//val->no_peaks_past_threshold = TRUE;
 	return 0;
 }
 
