@@ -42,7 +42,8 @@ from optparse import OptionParser, Option
 
 parser = OptionParser()
 parser.add_option("--tf-file-directory", metavar = "directory", default = '.', help = "location of txt files with transfer functions (Default is current directory, '.')")
-parser.add_option("--model-jump-delay", metavar = "seconds", type = float, default = 0.000061035, help = "Time delay in time-stamping DARM_ERR (Default is one 16384-Hz clock cycle)")
+parser.add_option("--response-model-jump-delay", metavar = "seconds", type = float, default = 0.000061035, help = "Time delay in time-stamping DARM_ERR (Default is one 16384-Hz clock cycle)")
+parser.add_option("--filters-model-jump-delay", metavar = "seconds", type = float, default = 0.0, help = "Any time delay in time-stamping DARM_ERR not contained in the model in the filters file (Default is 0.0 seconds).")
 parser.add_option("--tf-frequency-min", type = float, default = -1, help = "Minimum frequency for transfer function plots (Default is to disable)")
 parser.add_option("--tf-frequency-max", type = float, default = -1, help = "Maximum frequency for transfer function plots (Default is to disable)")
 parser.add_option("--tf-frequency-scale", default = "log", help = "Frequency scale for transfer function plots (linear or log, default is log)")
@@ -95,6 +96,7 @@ for tf_file in tf_files:
 	print "Loading calibration filters from %s\n" % filters_paths[0]
 	filters = numpy.load(filters_paths[0])
 
+	model_jump_delay = options.filters_model_jump_delay
 	# Determine what transfer function this is
 	if '_tst_' in tf_file and 'DCS' in tf_file:
 		plot_title = "TST Transfer Function"
@@ -129,6 +131,7 @@ for tf_file in tf_files:
 	elif '_response_' in tf_file:
 		plot_title = "Response Function"
 		model_name = "response_function" if "response_function" in filters else None
+		model_jump_delay = options.response_model_jump_delay
 	else:
 		plot_title = "Transfer Function"
 		model_name = None
@@ -159,7 +162,7 @@ for tf_file in tf_files:
 	df = data[1][0] - data[0][0] # frequency spacing
 	for j in range(0, len(data)):
 		frequency.append(data[j][0])
-		tf_at_f = (data[j][1] + 1j * data[j][2]) * numpy.exp(-2j * numpy.pi * data[j][0] * options.model_jump_delay)
+		tf_at_f = (data[j][1] + 1j * data[j][2]) * numpy.exp(-2j * numpy.pi * data[j][0] * model_jump_delay)
 		filters_tf.append(tf_at_f)
 		magnitude.append(abs(tf_at_f))
 		phase.append(numpy.angle(tf_at_f) * 180.0 / numpy.pi)

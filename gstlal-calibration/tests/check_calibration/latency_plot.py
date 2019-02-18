@@ -85,6 +85,7 @@ plt.ylabel('Latency [s]')
 plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
 plt.ylim(0, 8)
 plt.grid(True)
+plt.savefig('%s_%d-%d.png' % (options.plot_filename_prefix, int(t_start), int(dur)))
 plt.savefig('%s_%d-%d.pdf' % (options.plot_filename_prefix, int(t_start), int(dur)))
 
 

@@ -465,7 +465,8 @@ try:
 	if src_pcal_line_freq > 10.0 and src_pcal_line_freq != act_pcal_line_freq:
 		pcal_line_removal_dict["pcal4_linefreq"] = [None, src_pcal_line_freq, pcal_corr_at_src_freq_real, pcal_corr_at_src_freq_imag, False]
 	elif src_pcal_line_freq == act_pcal_line_freq and "low_pcal_line_freq" in filters:
-		pcal_line_removal_dict["pcal4_linefreq"] = [None, float(filters["low_pcal_line_freq"]), float(filters["low_pcal_corr_re"]), float(filters["low_pcal_corr_im"]), False]
+		if float(filters["low_pcal_line_freq"]) > 10.0:
+			pcal_line_removal_dict["pcal4_linefreq"] = [None, float(filters["low_pcal_line_freq"]), float(filters["low_pcal_corr_re"]), float(filters["low_pcal_corr_im"]), False]
 
 except:
 	if compute_srcq or compute_fs:
