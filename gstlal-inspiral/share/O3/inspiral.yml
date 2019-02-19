@@ -40,7 +40,7 @@ plots:
     #measurement: far_history
     column: data
     aggregate: min
-    log: true
+    layout: {yaxis: {type: log}}
     value:
 
   # FAR history heatmap (by job)
