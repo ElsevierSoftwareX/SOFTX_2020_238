@@ -107,7 +107,7 @@ DATAMON_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/datamon-0.1.0-py2.7.eg
 LIGOSEGMENTS_TARGET=$(PYTHON_DIR)/ligo_segments-1.2.0-py2.7-linux-x86_64.egg
 PYTHONLIGOLW_TARGET=$(PYTHON_DIR)/python_ligo_lw-1.4.0-py2.7.egg-info
 GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
-KAFKA_PYTHON_TARGET=$(PYTHON_DIR)/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg/confluent_kafka/cimpl.so
+KAFKA_PYTHON_TARGET=$(PYTHON_DIR)/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
 LALINFER_TARGET=$(INSTALL_DIR)/lib/liblalinference.so
@@ -416,7 +416,7 @@ $(GLUE_TARGET) : $(KAFKA_PYTHON_TARGET)
 # confluent-kafka-python
 kafka-python : $(LOGS_DIR)/kafka-python.txt
 
-logs/kafka-python.txt : $(LOGS_DIR)/librdkafka.txt $(KAFKA_PYTHON_TARGET)
+$(LOGS_DIR)/kafka-python.txt : $(LOGS_DIR)/librdkafka.txt $(KAFKA_PYTHON_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 $(KAFKA_PYTHON_TARGET) : $(LIBRDKAFKA_TARGET)
@@ -427,7 +427,7 @@ $(KAFKA_PYTHON_TARGET) : $(LIBRDKAFKA_TARGET)
 # librdkafka
 librdkafka : $(LOGS_DIR)/librdkafka.txt
 
-logs/librdkafka.txt : $(LOGS_DIR)/lalsuite.txt $(LIBRDKAFKA_TARGET)
+$(LOGS_DIR)/librdkafka.txt : $(LOGS_DIR)/lalsuite.txt $(LIBRDKAFKA_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 $(LIBRDKAFKA_TARGET) : $(LALAPPS_TARGET)
@@ -742,13 +742,8 @@ $(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
 # patches
 patch : $(LOGS_DIR)/patch.txt
 
-$(LOGS_DIR)/patch.txt : $(LOGS_DIR)/tar.txt $(PATCH_DIR)/gst1.14.patch
+$(LOGS_DIR)/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
-
-$(PATCH_DIR)/gst1.14.patch : $(LOGS_DIR)/tar.txt
-	@echo $(GREEN)patches$(WHITE) 1>&2
-	cp $(GSTLAL_REPO)/gstlal-inspiral/share/O3/optimized/gst1.14.patch $(PATCH_DIR)
-	cd $(GSTLAL_REPO) && patch -p1 < $(PATCH_DIR)/gst1.14.patch
 
 #tarballs
 $(LOGS_DIR)/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
