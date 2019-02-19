@@ -140,7 +140,7 @@ IFO = H1
 #IFO = L1
 
 EPOCH = O3
-LEVEL = standard
+LEVEL = lldetchar
 
 # if not using standard .ini file, comment and supply custom channel list instead
 CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
@@ -312,8 +312,11 @@ feature_extraction_monitor.yml :
 
 # Pull latest channel list
 $(CHANNEL_LIST) :
-	#wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$(CHANNEL_LIST)
-	wget https://git.ligo.org/patrick.godwin/ligo-channel-lists/raw/lho_O3_updatelist/$(EPOCH)/$(CHANNEL_LIST)
+	if [ "$(LEVEL)" = "lldetchar" ]; then \
+		cp $(GSTLALSHAREDIR)/feature_extractor/$(EPOCH)/channel_lists/$@ . ; \
+	else \
+		wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$@ ; \
+	fi ;
 
 clean-lite :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.txt
