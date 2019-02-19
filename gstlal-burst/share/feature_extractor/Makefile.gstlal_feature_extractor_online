@@ -121,8 +121,12 @@ PERSIST_CADENCE = 20
 
 # kafka options
 KAFKA_TOPIC = gstlal_features
-KAFKA_SERVER = 10.21.6.226:9182
 KAFKA_GROUP = group_2
+ifeq ($(IFO),H1)
+	KAFKA_SERVER:=10.21.6.226:9182
+else
+	KAFKA_SERVER:=10.13.5.53:9182
+endif
 
 # synchronizer/file sink options (kafka only)
 PROCESSING_CADENCE = 0.001
