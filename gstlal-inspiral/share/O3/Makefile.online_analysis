@@ -145,7 +145,7 @@ dag : marginalized_likelihood.xml.gz prior.cache plots ll_simplify_and_cluster.s
 		--time-slide-file tisi.xml
 
 online-web-deploy : inspiral.yml
-	datamon deploy -c inspiral.yml -o ~/public_html
+	scald deploy -c inspiral.yml -o ~/public_html
 
 inspiral.yml:
 	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/inspiral.yml

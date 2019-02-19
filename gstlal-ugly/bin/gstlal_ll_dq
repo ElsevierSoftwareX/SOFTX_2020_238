@@ -36,8 +36,8 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-from datamon import aggregator
-from datamon import io
+from ligo.scald import aggregator
+from ligo.scald import io
 
 from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd
 
@@ -48,10 +48,6 @@ from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd
 #
 # =============================================================================
 #
-
-
-from datamon import aggregator
-from datamon import io
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)

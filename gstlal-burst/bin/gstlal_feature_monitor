@@ -35,7 +35,7 @@ import time
 
 from confluent_kafka import Consumer, KafkaError
 
-from datamon import io
+from ligo.scald import io
 
 from gstlal.fxtools import utils
 

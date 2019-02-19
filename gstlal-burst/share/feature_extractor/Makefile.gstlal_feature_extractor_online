@@ -309,7 +309,7 @@ dag : $(CHANNEL_LIST) feature_extraction_monitor.yml online-web-deploy
 	fi ;
 
 online-web-deploy : feature_extraction_monitor.yml
-	datamon deploy -c feature_extraction_monitor.yml -o ~/public_html -e
+	scald deploy -c feature_extraction_monitor.yml -o ~/public_html -e
 
 feature_extraction_monitor.yml :
 	cp $(GSTLALSHAREDIR)/feature_extractor/monitoring/$@ .

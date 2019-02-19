@@ -28,8 +28,8 @@ import timeit
 
 import numpy
 
-from datamon import aggregator
-from datamon import io
+from ligo.scald import aggregator
+from ligo.scald import io
 
 
 #
