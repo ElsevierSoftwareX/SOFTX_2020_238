@@ -37,7 +37,7 @@ else
 endif
 
 GSTLAL_REPO:=${PWD}/git/gstlal
-DATAMON_REPO:=${PWD}/git/datamon
+LIGOSCALD_REPO:=${PWD}/git/ligo-scald
 LIGOSEGMENTS_REPO:=${PWD}/git/ligo-segments
 PYTHONLIGOLW_REPO:=${PWD}/git/python-ligo-lw
 GLUE_REPO:=${PWD}/git/glue
@@ -45,7 +45,7 @@ LALSUITE_REPO:=${PWD}/git/lalsuite
 
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
-DATAMON_GIT=1
+LIGOSCALD_GIT=1
 LIGOSEGMENTS_GIT=0
 PYTHONLIGOLW_GIT=0
 GLUE_GIT=0
@@ -56,7 +56,7 @@ LALSUITE_GIT=0
 # an unknown branch.
 #
 GSTLAL_GIT_BRANCH="master"
-DATAMON_GIT_BRANCH="master"
+LIGOSCALD_GIT_BRANCH="master"
 LIGOSEGMENTS_GIT_BRANCH="master"
 PYTHONLIGOLW_GIT_BRANCH="master"
 GLUE_GIT_BRANCH="master"
@@ -68,7 +68,7 @@ GSTLALCALIBRATION=gstlal-calibration-1.2.7
 GSTLALBURST=gstlal-burst-0.0.5
 GSTLALUGLY=gstlal-ugly-1.5.6
 GSTLAL=gstlal-1.4.1
-DATAMON=datamon-0.1.0
+LIGOSCALD=ligo-scald-0.1.0
 LIGOSEGMENTS=ligo-segments-1.2.0
 PYTHONLIGOLW=python-ligo-lw-1.4.0
 GLUE=lscsoft-glue-1.60.0
@@ -103,7 +103,7 @@ GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
-DATAMON_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/datamon-0.1.0-py2.7.egg
+LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/ligo_scald-0.1.0-py2.7.egg
 LIGOSEGMENTS_TARGET=$(PYTHON_DIR)/ligo_segments-1.2.0-py2.7-linux-x86_64.egg
 PYTHONLIGOLW_TARGET=$(PYTHON_DIR)/python_ligo_lw-1.4.0-py2.7.egg-info
 GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
@@ -139,7 +139,7 @@ GSTLALCALIB_TAR_TARGET=$(TAR_DIR)/$(GSTLALCALIBRATION).tar.gz
 GSTLALBURST_TAR_TARGET=$(TAR_DIR)/$(GSTLALBURST).tar.gz
 GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
 GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
-DATAMON_TAR_TARGET=$(TAR_DIR)/$(DATAMON).tar.gz
+LIGOSCALD_TAR_TARGET=$(TAR_DIR)/$(LIGOSCALD).tar.gz
 LIGOSEGMENTS_TAR_TARGET=$(TAR_DIR)/$(LIGOSEGMENTS).tar.gz
 PYTHONLIGOLW_TAR_TARGET=$(TAR_DIR)/$(PYTHONLIGOLW).tar.gz
 GLUE_TAR_TARGET=$(TAR_DIR)/$(GLUE).tar.gz
@@ -170,7 +170,7 @@ FFTW_TAR_TARGET=$(TAR_DIR)/$(FFTW).tar.gz
 
 # git repos
 GSTLAL_GIT_TARGET=$(GSTLAL_REPO)/TODO.md
-DATAMON_GIT_TARGET=$(DATAMON_REPO)/README.md
+LIGOSCALD_GIT_TARGET=$(LIGOSCALD_REPO)/README.md
 LIGOSEGMENTS_GIT_TARGET=$(LIGOSEGMENTS_REPO)/README.rst
 PYTHONLIGOLW_GIT_TARGET=$(PYTHONLIGOLW_REPO)/MANIFEST.in
 GLUE_GIT_TARGET=$(GLUE_REPO)/README
@@ -285,7 +285,7 @@ check :
 	@if [ -f $(LOGS_DIR)/gstlal.txt ] ; then ls $(LOGS_DIR)/gstlal.txt >> $(LOGS_DIR)/all.txt ; fi ;
 	@ls -ltrh $$(cat $(LOGS_DIR)/all.txt)
 
-$(LOGS_DIR)/gstlal.txt : $(LOGS_DIR)/datamon.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALBURST_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET)
+$(LOGS_DIR)/gstlal.txt : $(LOGS_DIR)/ligo-scald.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALBURST_TARGET) $(GSTLALCALIB_TARGET) $(GSTINSPIRAL_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 # gstlal-inspiral
@@ -341,7 +341,7 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 	fi ;
 
 # gstlal
-$(GSTLAL_TARGET) : $(DATAMON_TARGET)
+$(GSTLAL_TARGET) : $(LIGOSCALD_TARGET)
 	@echo $(GREEN)gstlal$(WHITE) 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal && echo | ./00init.sh ; \
@@ -353,19 +353,19 @@ $(GSTLAL_TARGET) : $(DATAMON_TARGET)
 		cd $(SRC_DIR)/$(GSTLAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
-# datamon
-datamon : $(LOGS_DIR)/datamon.txt
+# ligo-scald
+ligo-scald : $(LOGS_DIR)/ligo-scald.txt
 
-$(LOGS_DIR)/datamon.txt : $(LOGS_DIR)/ligo-segments.txt $(DATAMON_TARGET)
+$(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/ligo-segments.txt $(LIGOSCALD_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(DATAMON_TARGET) : $(LIGOSEGMENTS_TARGET)
-	@echo $(GREEN)datamon$(WHITE) 1>&2
-	if [ "${DATAMON_GIT}" = "1" ]; then \
-		cd $(DATAMON_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+$(LIGOSCALD_TARGET) : $(LIGOSEGMENTS_TARGET)
+	@echo $(GREEN)ligo-scald$(WHITE) 1>&2
+	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
+		cd $(LIGOSCALD_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	else \
-		tar -xzf $(TAR_DIR)/$(DATAMON).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(DATAMON) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+		tar -xzf $(TAR_DIR)/$(LIGOSCALD).tar.gz -C $(SRC_DIR) ; \
+		cd $(SRC_DIR)/$(LIGOSCALD) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	fi ;
 
 # ligo-segments
@@ -797,15 +797,15 @@ $(FFTW_TAR_TARGET) : $(LOGS_DIR)
 # git repos
 $(LOGS_DIR) :
 	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(PYTHON_DIR)
-	if [ "${DATAMON_GIT}" = "1" ]; then \
+	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
-			echo "datamon git repo exists" ; \
+			echo "ligo-scald git repo exists" ; \
 		else \
-			mkdir -p $(DATAMON_REPO) ; \
-			git clone -b $(DATAMON_GIT_BRANCH) https://git.ligo.org/gstlal-visualisation/datamon.git $(DATAMON_REPO) ; \
+			mkdir -p $(LIGOSCALD_REPO) ; \
+			git clone -b $(LIGOSCALD_GIT_BRANCH) https://git.ligo.org/gstlal-visualisation/ligo-scald.git $(LIGOSCALD_REPO) ; \
 		fi ; \
 	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(DATAMON).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LIGOSCALD).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
 	fi ;
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
