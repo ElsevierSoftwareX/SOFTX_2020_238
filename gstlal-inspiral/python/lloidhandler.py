@@ -241,15 +241,21 @@ class EyeCandy(object):
 			self.snr_history.append((max_snr_t, max_snr))
 
 			max_likelihood, max_likelihood_t, max_likelihood_far = max((coinc_event_index[coinc_event_id].likelihood, float(coinc_inspiral.end), coinc_inspiral.combined_far) for coinc_event_id, coinc_inspiral in coinc_inspiral_index.items())
-			self.likelihood_history.append((max_likelihood_t, max_likelihood))
-			self.far_history.append((max_likelihood_t, max_likelihood_far))
+			if max_likelihood is not None:
+				self.likelihood_history.append((max_likelihood_t, max_likelihood))
+			if max_likelihood_far is not None:
+				self.far_history.append((max_likelihood_t, max_likelihood_far))
 
 			if self.producer is not None:
 				for ii, column in enumerate(["time", "data"]):
 					self.kafka_data["latency_history"][column].append(float(self.latency_history[-1][ii]))
 					self.kafka_data["snr_history"][column].append(float(self.snr_history[-1][ii]))
-					self.kafka_data["likelihood_history"][column].append(float(self.likelihood_history[-1][ii]))
-					self.kafka_data["far_history"][column].append(float(self.far_history[-1][ii]))
+				if max_likelihood is not None:
+					self.kafka_data["likelihood_history"]["time"].append(float(max_likelihood_t))
+					self.kafka_data["likelihood_history"]["data"].append(float(max_likelihood))
+				if max_likelihood_far is not None:
+					self.kafka_data["far_history"]["time"].append(float(max_likelihood_t))
+					self.kafka_data["far_history"]["data"].append(float(max_likelihood_far))
 
 		t = inspiral.now()
 		if self.time_since_last_state is None:
