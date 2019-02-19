@@ -123,7 +123,7 @@ def channel_dict_from_channel_ini(options):
 	channel_dict = {}
 
 	# frame types considered
-	included_frame_types = set(("H1_R", "L1_R"))
+	included_frame_types = set(("H1_R", "L1_R", "H1_lldetchar", "L1_lldetchar"))
 
 	# known/permissible values of safety and fidelity flags
 	known_safety   = set(("safe", "unsafe", "unsafeabove2kHz", "unknown"))
