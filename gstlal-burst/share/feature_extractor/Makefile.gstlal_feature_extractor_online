@@ -90,21 +90,20 @@ SHELL := /bin/bash # Use bash syntax
 ########################
 
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
-ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
-GROUP_USER=albert.einstein
-CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+ACCOUNTING_TAG=ligo.prod.o3.detchar.onlinedq.idq
+GROUP_USER=patrick.godwin
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER) --condor-command='Requirements=TARGET.HasLowLatencyDetcharFrames =?= True'
 
 CONDOR_UNIVERSE=vanilla
-#CONDOR_UNIVERSE=local
 
 #########################
 # Online DAG Parameters #
 #########################
 
-TAG = online_test
+TAG = production_online
 
 DATA_SOURCE = framexmit
-MAX_STREAMS = 50
+MAX_STREAMS = 100
 SAMPLE_RATE = 16
 
 # Parameter space config of waveform
@@ -115,7 +114,6 @@ QHIGH = 40
 # data transfer options
 OUTPATH = $(PWD)
 SAVE_FORMAT = kafka
-#SAVE_FORMAT = hdf5
 
 # save options
 SAVE_CADENCE = 20
@@ -123,13 +121,13 @@ PERSIST_CADENCE = 20
 
 # kafka options
 KAFKA_TOPIC = gstlal_features
-KAFKA_SERVER = localhost:9182
-KAFKA_GROUP = group_1
+KAFKA_SERVER = 10.21.6.226:9182
+KAFKA_GROUP = group_2
 
 # synchronizer/file sink options (kafka only)
-PROCESSING_CADENCE = 0.01
-REQUEST_TIMEOUT = 0.05
-LATENCY_TIMEOUT = 12
+PROCESSING_CADENCE = 0.001
+REQUEST_TIMEOUT = 0.025
+LATENCY_TIMEOUT = 10
 
 # cluster where analysis is run
 CLUSTER:=$(shell hostname -d)
@@ -148,16 +146,19 @@ LEVEL = standard
 CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
 #CHANNEL_LIST = custom_channel_list.txt
 
+# target channel
+TARGET_CHANNEL = $(IFO):CAL-DELTAL_EXTERNAL_DQ
+
 ### used for channel list .ini file
 # if not specified, use all sections (replace spaces with underscores'_')
-SECTION_INCLUDE =
+SECTION_INCLUDE = 
 
 # if not specified, use defaults
-SAFETY_INCLUDE =
+SAFETY_INCLUDE = safe unsafe unsafeabove2kHz unknown
 FIDELITY_EXCLUDE =
 
 # if specified, override safety checks for these channels
-UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
+UNSAFE_CHANNEL_INCLUDE = $(TARGET_CHANNEL)
 
 # parse include/excludes into command line options
 SECTION_INCLUDE_COMMANDS := $(addprefix --section-include ,$(SECTION_INCLUDE))
@@ -165,17 +166,11 @@ SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include ,$(SAFETY_INCLUDE))
 FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude ,$(FIDELITY_EXCLUDE))
 UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAFE_CHANNEL_INCLUDE))
 
-#################
-# Web directory #
-#################
+#######################
+# Other key variables #
+#######################
 
-# Run number
-#RUN = run_1
-# A web directory for output (note difference between cit+uwm and Atlas)
-# cit & uwm
-#WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
-# Atlas
-#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+GSTLALSHAREDIR=$(LAL_PATH)/../git/gstlal/gstlal-burst/share
 
 ############
 # Workflow #
@@ -184,8 +179,7 @@ UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAF
 all : dag
 	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
 
-# Run etg pipe to produce dag
-dag : plots $(CHANNEL_LIST)
+dag : $(CHANNEL_LIST) feature_extraction_monitor.yml online-web-deploy
 	if [[ $(DATA_SOURCE) == "lvshm" ]] && [[ $(SAVE_FORMAT) == "hdf5" ]] ; then \
 		gstlal_ll_feature_extractor_pipe \
 			--data-source $(DATA_SOURCE) \
@@ -206,11 +200,12 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--target-channel $(TARGET_CHANNEL) \
 			--disable-kafka-jobs \
-			--no-drop \
 			--condor-universe $(CONDOR_UNIVERSE) \
-			--request-cpu 6 \
+			--request-cpu 2 \
 			--request-memory 8GB \
+			--auxiliary-request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	elif [[ $(DATA_SOURCE) == "framexmit" ]] && [[ $(SAVE_FORMAT) == "hdf5" ]] ; then \
@@ -231,11 +226,12 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--target-channel $(TARGET_CHANNEL) \
 			--disable-kafka-jobs \
-			--no-drop \
 			--condor-universe $(CONDOR_UNIVERSE) \
-			--request-cpu 6 \
+			--request-cpu 2 \
 			--request-memory 8GB \
+			--auxiliary-request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	elif [[ $(DATA_SOURCE) == "lvshm" ]] && [[ $(SAVE_FORMAT) == "kafka" ]] ; then \
@@ -265,11 +261,12 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--target-channel $(TARGET_CHANNEL) \
 			--disable-kafka-jobs \
-			--no-drop \
 			--condor-universe $(CONDOR_UNIVERSE) \
-			--request-cpu 6 \
+			--request-cpu 2 \
 			--request-memory 8GB \
+			--auxiliary-request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	elif [[ $(DATA_SOURCE) == "framexmit" ]] && [[ $(SAVE_FORMAT) == "kafka" ]] ; then \
@@ -297,29 +294,26 @@ dag : plots $(CHANNEL_LIST)
 			$(SAFETY_INCLUDE_COMMANDS) \
 			$(FIDELITY_EXCLUDE_COMMANDS) \
 			$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
+			--target-channel $(TARGET_CHANNEL) \
 			--disable-kafka-jobs \
-			--no-drop \
 			--condor-universe $(CONDOR_UNIVERSE) \
-			--request-cpu 6 \
+			--request-cpu 2 \
 			--request-memory 8GB \
+			--auxiliary-request-memory 8GB \
 			--verbose \
 			--disable-web-service ; \
 	fi ;
 
+online-web-deploy : feature_extraction_monitor.yml
+	datamon deploy -c feature_extraction_monitor.yml -o ~/public_html -e
+
+feature_extraction_monitor.yml :
+	cp $(GSTLALSHAREDIR)/feature_extractor/monitoring/$@ .
+
 # Pull latest channel list
-$(CHANNEL_LIST) : plots
+$(CHANNEL_LIST) :
 	#wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$(CHANNEL_LIST)
 	wget https://git.ligo.org/patrick.godwin/ligo-channel-lists/raw/lho_O3_updatelist/$(EPOCH)/$(CHANNEL_LIST)
-
-# FIXME Add webpages once we have output
-# Make webpage directory and copy files across
-#$(WEBDIR) : $(MAKEFILE_LIST)
-#	mkdir -p $(WEBDIR)/OPEN-BOX
-#	cp $(MAKEFILE_LIST) $@
-
-# Makes local plots directory
-plots :
-	mkdir plots
 
 clean-lite :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.txt
