@@ -4,33 +4,32 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = ER14
 
-START = $(shell echo 1232874910 - 415 | bc)
+START = $(shell echo 1234418368 - 200 | bc)
 #1229094912
 #1225967424
 #1185763328
-END = $(shell echo 1232875986 + 415 | bc)
+END = $(shell echo 1234418368 + 4096 + 200 | bc)
 #1229099008
 #1225968448
 #1185771520
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 425
-PLOT_COOLDOWN_TIME = 477
+PLOT_WARMUP_TIME = 200
+PLOT_COOLDOWN_TIME = 200
 
-GDSCONFIGS = Filters/ER13/GDSFilters/H1GDS_noisesub_test_1232874910.ini
+GDSCONFIGS = Filters/ER14/GDSFilters/L1GDS_1234630818.ini
 DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
-GDSSHMCONFIGS = Filters/ER14/GDSFilters/H1GDS_1234630818_latency_test.ini
+GDSSHMCONFIGS = Filters/ER14/GDSFilters/L1GDS_1234630818_latency_test.ini
 
-all: latency_test
-#noise_subtraction_ASD_GDS noise_subtraction_tf_GDS filters_tf_GDS latency_test
+all: noise_subtraction_ASD_GDS noise_subtraction_tf_GDS filters_tf_GDS
 
 ###############################################
 ### These commands should change less often ###
@@ -114,8 +113,7 @@ filters_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 filters_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
-latency_test: 
-	#$(IFO)1_hoft_GDS_SHM_frames.cache
+latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
 
 CALCS_GDS_ASD: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache

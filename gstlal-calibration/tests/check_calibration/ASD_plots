@@ -39,8 +39,8 @@ if options.analyze_additional_hoft_channel:
 	additional_hoft_data = TimeSeries.read(options.additional_hoft_frame_cache, "%s:%s" % (options.ifo, options.additional_hoft_channel_name), start = start_time, end = end_time)
 
 # make asds
-calcs_asd = calcs_data.asd(4,2)
-hoft_asd = hoft_data.asd(4,2)
+calcs_asd = calcs_data.asd(4,2,method='lal_median')
+hoft_asd = hoft_data.asd(4,2,method='lal_median')
 if options.analyze_additional_hoft_channel:
 	additional_hoft_asd = additional_hoft_data.asd(4,2)
 
