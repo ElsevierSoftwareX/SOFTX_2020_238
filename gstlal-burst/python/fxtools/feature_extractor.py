@@ -203,7 +203,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		"""
 		with self.lock:
 			buf = elem.emit("pull-sample").get_buffer()
-			buftime = int(buf.pts / 1e9)
+			buftime = float(buf.pts / 1e9)
 			channel, rate  = sink_dict[elem]
 
 			# push new stream event to queue if done processing current timestamp
@@ -287,7 +287,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
-			timestamp = utils.floor_div(trigger_time, self.buffer_size)
+			timestamp = utils.floor_div(buftime, self.buffer_size)
 			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':waveform['frequency'], 'q':waveform['q'], 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 
