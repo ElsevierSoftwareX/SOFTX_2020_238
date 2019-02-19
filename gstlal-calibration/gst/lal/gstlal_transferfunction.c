@@ -450,7 +450,7 @@ static gboolean update_transfer_functions_ ## DTYPE(complex DTYPE *autocorrelati
 		/* Now copy the result into transfer_functions */ \
 		for(j = 0; j < num_tfs; j++) { \
 			gslz = gsl_vector_complex_get(transfer_functions_solved_at_f, j); \
-			if(isnormal(GSL_REAL(gslz)) || GSL_REAL(gslz) == 0.0) \
+			if(isnormal((GSL_REAL(gslz) + GSL_IMAG(gslz))) || GSL_REAL(gslz) + GSL_IMAG(gslz) == 0.0) \
 				transfer_functions[j * fd_tf_length + i] = GSL_REAL(gslz) + I * GSL_IMAG(gslz); \
 			else { \
 				success = FALSE; \
@@ -571,7 +571,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 		/* Check the FFTs to see if their values will produce usable transfer functions */ \
 		for(j = 0; j < fd_fft_length * element->channels; j++) \
-			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
+			success &= isnormal(cabs ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
  \
 		if(success && element->use_median) { \
 			/*
@@ -695,7 +695,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
  \
 		/* Check the FFTs to see if their values will produce usable transfer functions */ \
 		for(j = 0; j < fd_fft_length * element->channels; j++) \
-			success &= isnormal(creal ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
+			success &= isnormal(cabs ## F_OR_BLANK(element->workspace.w ## S_OR_D ## pf.ffts[j])); \
  \
 		if(success && element->use_median) { \
 			/*
