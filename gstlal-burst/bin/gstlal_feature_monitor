@@ -173,7 +173,7 @@ class StreamMonitor(object):
                 for metric in ('latency', 'percent_missed'):
                     self.agg_sink.store_and_reduce(metric, {'synchronizer': [metrics['time'], metrics[metric]]}, 'data', tags='job', aggregates=self.data_type)
                 if len(metrics['target_time']) > 0:
-                    self.agg_sink.store_and_reduce(metric, {'synchronizer': [metrics['target_time'], metrics['target_snr']]}, 'data', tags='job', aggregates=self.data_type)
+                    self.agg_sink.store_and_reduce('target_snr', {'synchronizer': [metrics['target_time'], metrics['target_snr']]}, 'data', tags='job', aggregates=self.data_type)
 
                 self.last_save = timestamp
                 logger.info('processed features up to timestamp %.3f, max latency = %.3f s' % (timestamp, max(metrics['latency'])))
