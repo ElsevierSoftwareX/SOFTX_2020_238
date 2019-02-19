@@ -20,6 +20,7 @@
 ### "Asserion Error: assert row.template_id not in ids" error from 
 ### gstlal_inspiral_mass_model.
 
+import random
 import sys
 from ligo.lw import ligolw
 from ligo.lw import lsctables, param as ligolw_param, array as ligolw_array
@@ -31,15 +32,29 @@ from ligo.lw import utils as ligolw_utils
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
-cnt = 0
+# load all documents.  stored as tuple of (name, xmldoc) pairs in the order
+# provided on the command line
 
-for fname in sys.argv[1:]:
+documents = [(fname, ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)) for fname in sys.argv[1:]]
 
-	xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
-	sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+# count templates
 
-	for row in sngl_inspiral_table:
-		row.template_id = cnt
-		cnt += 1
+N = sum(len(lsctables.SnglInspiralTable.get_table(xmldoc)) for fname, xmldoc in documents)
 
+# generate template IDs by drawing N samples without replacement from the
+# integers between 1 and 2^32.  for template bank sizes into the millions
+# the probability of this process ever producing the same set of numbers
+# twice is infinitessimally small.  but its not 0.  we don't let N get
+# bigger than 1/10 the range from which the IDs are drawn to keep the
+# probability of two ID sequences being the same small.
+
+assert N < 2**31, "too many templates:  increase size of draw space"
+ids = sorted(random.sample(xrange(2**32), N))
+
+# assign the IDs and write back to disk
+
+next_id = iter(ids).next
+for fname, xmldoc in documents:
+	for row in lsctables.SnglInspiralTable.get_table(xmldoc):
+		row.template_id = next_id()
 	ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('gz'), verbose = True)
