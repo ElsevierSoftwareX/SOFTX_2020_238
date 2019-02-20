@@ -74,7 +74,7 @@ mchirps = {}
 ligo_min = 3
 ligo_max = 40
 ligo_peak = 40
-ligo_alpha = -1
+ligo_alpha = -1.5
 ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
 bbh_min = 3
@@ -120,7 +120,7 @@ for row in sngl_inspiral_table:
 		#
 
 		# assume a 0.15 solar mass std deviation, this should capture both population distribution and snr effects
-		sigma = 0.15
+		sigma = 0.25
 		mean = 1.2
 		bnsprob = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 
@@ -135,7 +135,7 @@ for row in sngl_inspiral_table:
 		#
 
 		# make intrinsic BNS rate 10 times higher (it is actually probably 20 times higher)
-		bns_rate = 10.
+		bns_rate = 7.
 		bbh_rate = 1.
 		# FIXME if the noise is ever normalized over mass then we would need the following, but it isn't
 		#prob[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob) / massBA[(mchirp,)] / (bns_rate + bbh_rate)
@@ -146,9 +146,9 @@ for row in sngl_inspiral_table:
 ids = sorted(prob.keys())
 norm = numpy.sum(prob.values())
 chirpmasses = numpy.array([mchirps[tid] for tid in ids])
-coefficients = numpy.zeros((1, 1, max(ids)+1), dtype=float)
-for tid in ids:
-	coefficients[0,0,tid] = numpy.log(prob[tid]) - numpy.log(norm)
+coefficients = numpy.zeros((1, 1, len(ids)+1), dtype=float)
+for idx, tid in enumerate(ids):
+	coefficients[0,0,idx] = numpy.log(prob[tid]) - numpy.log(norm)
 
 #import matplotlib
 #matplotlib.use('agg')
