@@ -42,14 +42,14 @@ documents = [(fname, ligolw_utils.load_filename(fname, verbose = True, contentha
 N = sum(len(lsctables.SnglInspiralTable.get_table(xmldoc)) for fname, xmldoc in documents)
 
 # generate template IDs by drawing N samples without replacement from the
-# integers between 1 and 2^32.  for template bank sizes into the millions
-# the probability of this process ever producing the same set of numbers
-# twice is infinitessimally small.  but its not 0.  we don't let N get
-# bigger than 1/10 the range from which the IDs are drawn to keep the
-# probability of two ID sequences being the same small.
+# integers between 1 and some large number.  for template bank sizes into
+# the millions the probability of this process ever producing the same set
+# of numbers twice is infinitessimally small.  but its not 0.  we don't let
+# N get too close to the number of available IDs to keep the probability of
+# two ID sequences being the same small.
 
-assert N < 2**31, "too many templates:  increase size of draw space"
-ids = sorted(random.sample(xrange(2**32), N))
+assert N < 50000000, "too many templates:  increase size of draw space"
+ids = sorted(random.sample(xrange(99999999), N))
 
 # assign the IDs and write back to disk
 
