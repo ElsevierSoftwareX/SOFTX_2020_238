@@ -359,6 +359,7 @@ test:offline:
   only:
     - pushes
     - schedules
+  allow_failure: true
   
 pages:
   #image: aepace/gstlal-dev:el7-mkl-1.14
