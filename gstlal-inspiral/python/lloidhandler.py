@@ -1093,7 +1093,7 @@ class Handler(simplehandler.Handler):
 					continue
 				self.stream_thinca.push(instrument, (), buf_timestamp)
 
-			if any([self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp) for instrument in instruments]):
+			if any(self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp) for instrument in instruments):
 				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, cluster = self.cluster)
 				self.coincs_document.commit()
 
