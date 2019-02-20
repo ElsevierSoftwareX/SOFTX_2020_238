@@ -286,6 +286,7 @@ critical_lock_loss_time = float(DataCleaningConfigs["criticallocklosstime"])
 witness_filter_taper_time = float(DataCleaningConfigs["witnessfiltertapertime"])
 witness_tf_time_shift = float(DataCleaningConfigs["witnesstftimeshift"]) if "witnesstftimeshift" in DataCleaningConfigs else 0.0
 witness_tf_filename = DataCleaningConfigs["witnesstffilename"] if DataCleaningConfigs["witnesstffilename"] != "None" else None
+strain_channel_transition_time = float(DataCleaningConfigs["strainchanneltransitiontime"]) if "strainchanneltransitiontime" in DataCleaningConfigs else 1.0
 
 expected_kappatst_real = float(TDCFConfigs["expectedkappatstreal"])
 expected_kappatst_imag = float(TDCFConfigs["expectedkappatstimag"])
@@ -361,6 +362,7 @@ remove_power_lines = Config.getboolean("DataCleaningConfigurations", "removepowe
 remove_dc = Config.getboolean("DataCleaningConfigurations", "removedc")
 witness_tf_use_median = Config.getboolean("DataCleaningConfigurations", "witnesstfusemedian")
 witness_tf_parallel_mode = Config.getboolean("DataCleaningConfigurations", "witnesstfparallelmode") if "witnesstfparallelmode" in DataCleaningConfigs else False
+pick_cleanest_strain_channel = Config.getboolean("DataCleaningConfigurations", "pickcleaneststrainchannel") if "pickcleaneststrainchannel" in DataCleaningConfigs else False
 # If td is true we will perform filtering in the time domain (direct convolution) in all FIR filtering routines below
 td = not Config.getboolean("PipelineConfigurations", "frequencydomainfiltering")
 # Boolean for dewhitening
@@ -2091,11 +2093,9 @@ strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instr
 
 # Put the units back to strain before writing to frames
 straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
-	straintee = pipeparts.mktee(pipeline, strain)
+straintee = pipeparts.mktee(pipeline, strain)
+if not pick_cleanest_strain_channel:
 	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
-else:
-	strain = pipeparts.mktaginject(pipeline, strain, straintagstr)
 
 #
 # CALIB_STATE_VECTOR BRANCH
@@ -2105,13 +2105,47 @@ else:
 
 if compute_calib_statevector:
 
+	#
+	# Bit Definitions
+	#
+
+	hoft_ok_bitnum = 0
+	obs_intent_bitnum = 1
+	lownoise_bitnum = 2
+	filters_ok_bitnum = 3
+	no_gap_bitnum = 4
+	no_stoch_inj_bitnum = 5
+	no_cbc_inj_bitnum = 6
+	no_burst_inj_bitnum = 7
+	no_detchar_inj_bitnum = 8
+	ktst_smooth_bitnum = 9
+	kpum_smooth_bitnum = 10
+	kuim_smooth_bitnum = 11
+	kc_smooth_bitnum = 12
+	fcc_smooth_bitnum = 13
+	fs_smooth_bitnum = 14
+	Qinv_smooth_bitnum = 15
+	sus_line3_coh_bitnum = 16
+	sus_line2_coh_bitnum = 17
+	sus_line1_coh_bitnum = 18
+	pcal_line1_coh_bitnum = 19
+	pcal_line2_coh_bitnum = 20
+	pcal_line4_coh_bitnum = 21
+	D_epics_bitnum = 22
+	A_epics_bitnum = 23
+	C_epics_bitnum = 24
+	misc_epics_bitnum = 25
+	line_sub_bitnum = 26
+	noise_sub_bitnum = 27
+	noise_sub_gate_bitnum = 28
+
 	# 
 	# OBSERVATION-INTENT BIT BRANCH
 	#
 
 	obsintentchannel = calibration_parts.caps_and_progress(pipeline, head_dict["obsintent"], obsintent_caps, "obs_intent_%s" % instrument)
 	obsintentchanneltee = pipeparts.mktee(pipeline, obsintentchannel)
-	obsintent = pipeparts.mkgeneric(pipeline, obsintentchanneltee, "lal_logicalundersample", required_on = obsintent_bitmask, status_out = pow(2,1))
+	obsintent = pipeparts.mkgeneric(pipeline, obsintentchanneltee, "lal_logicalundersample", required_on = obsintent_bitmask, status_out = pow(2,obs_intent_bitnum))
 	obsintent = pipeparts.mkcapsfilter(pipeline, obsintent, calibstate_caps)
 	obsintenttee = pipeparts.mktee(pipeline, obsintent)
 	
@@ -2120,7 +2154,7 @@ if compute_calib_statevector:
 	#
 
 	lownoisechanneltee = obsintentchanneltee if lownoise_channel_name == obsintent_channel_name else pipeparts.mktee(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict["lownoise"], lownoise_caps, "low_noise_state_%s" % instrument))
-	lownoise = pipeparts.mkgeneric(pipeline, lownoisechanneltee, "lal_logicalundersample", required_on = lownoise_bitmask, status_out = pow(2,2))
+	lownoise = pipeparts.mkgeneric(pipeline, lownoisechanneltee, "lal_logicalundersample", required_on = lownoise_bitmask, status_out = pow(2,lownoise_bitnum))
 	lownoise = pipeparts.mkcapsfilter(pipeline, lownoise, calibstate_caps)
 	lownoisetee = pipeparts.mktee(pipeline, lownoise)
 
@@ -2137,14 +2171,14 @@ if compute_calib_statevector:
 				if ((filterclock_channel_list[i][j] != obsintent_channel_name and filterclock_channel_list[i][j] != lownoise_channel_name) and key in filterclock_channel_list[i]):
 					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i],key), "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
 				elif (filterclock_channel_list[i][j] == obsintent_channel_name and key == "obsintent"):
-					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = pow(2,1), status_out = 1), calibstate_caps)))
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = pow(2,obs_intent_bitnum), status_out = 1), calibstate_caps)))
 				elif (filterclock_channel_list[i][j] == lownoise_channel_name and key == "lownoise"):
-					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, lownoisetee, "lal_logicalundersample", required_on = pow(2,2), status_out = 1), calibstate_caps)))
+					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, lownoisetee, "lal_logicalundersample", required_on = pow(2,lownoise_bitnum), status_out = 1), calibstate_caps)))
 	if len(filterclock_channel_list) > 1:
 		filtersok = pipeparts.mkadder(pipeline, tuple(filterclock_channels))
 	else:
 		filtersok = filterclock_channels[0]
-	lownoise_gate = pipeparts.mkbitvectorgen(pipeline, lownoisetee, bit_vector = len(filterclock_channels), threshold = pow(2,2))
+	lownoise_gate = pipeparts.mkbitvectorgen(pipeline, lownoisetee, bit_vector = len(filterclock_channels), threshold = pow(2,lownoise_bitnum))
 	lownoise_gate = pipeparts.mkcapsfilter(pipeline, lownoise_gate, calibstate_caps)
 	filtersok = pipeparts.mkadder(pipeline, calibration_parts.list_srcs(lownoise_gate, filtersok))
 	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = 1, threshold=len(filterclock_channels))
@@ -2152,8 +2186,8 @@ if compute_calib_statevector:
 	filtersoktee = pipeparts.mktee(pipeline, filtersok)
 	filtersok = calibration_parts.mkgate(pipeline, filtersoktee, filtersoktee, 1, attack_length = -int(filter_settle_time * calibstate_sr))
 	# The "hold" on FILTERS_OK turning off is still determined by the low noise state
-	filtersok = calibration_parts.mkgate(pipeline, filtersok, lownoisetee, pow(2,2), hold_length = -int(filter_latency * calibstate_sr))
-	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = pow(2,3), nongap_is_control = True)
+	filtersok = calibration_parts.mkgate(pipeline, filtersok, lownoisetee, pow(2,lownoise_bitnum), hold_length = -int(filter_latency * calibstate_sr))
+	filtersok = pipeparts.mkbitvectorgen(pipeline, filtersok, bit_vector = pow(2,filters_ok_bitnum), nongap_is_control = True)
 	filtersok = pipeparts.mkcapsfilter(pipeline, filtersok, calibstate_caps)
 
 	#
@@ -2184,63 +2218,63 @@ if compute_calib_statevector:
 		uimok = pipeparts.mkgeneric(pipeline, uimok, "lal_logicalundersample", required_on = 1, status_out = 1)
 		uimok = pipeparts.mkcapsfilter(pipeline, uimok, calibstate_caps)
 		noinvalidinput = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, nogap, resok, tstok, pumok, uimok))
-		noinvalidinput = pipeparts.mkbitvectorgen(pipeline, noinvalidinput, threshold=5, bit_vector=pow(2,4))
+		noinvalidinput = pipeparts.mkbitvectorgen(pipeline, noinvalidinput, threshold=5, bit_vector=pow(2,no_gap_bitnum))
 	if CalibrationConfigs["calibrationmode"] == "Full":
 		ctrlok = pipeparts.mkbitvectorgen(pipeline, darmctrltee, threshold=1e-35, bit_vector=1)
 		ctrlok = pipeparts.mkcapsfilter(pipeline, ctrlok, "audio/x-raw, format=U32LE, rate=%d" % ctrl_sr)
 		ctrlok = pipeparts.mkgeneric(pipeline, ctrlok, "lal_logicalundersample", required_on = 1, status_out = 1)
 		ctrlok = pipeparts.mkcapsfilter(pipeline, ctrlok, calibstate_caps)
 		noinvalidinput = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, nogap, resok, ctrlok))
-		noinvalidinput = pipeparts.mkbitvectorgen(pipeline, noinvalidinput, threshold=3, bit_vector=pow(2,4))
+		noinvalidinput = pipeparts.mkbitvectorgen(pipeline, noinvalidinput, threshold=3, bit_vector=pow(2,no_gap_bitnum))
 	noinvalidinput = pipeparts.mkcapsfilter(pipeline, noinvalidinput, calibstate_caps)
 	noinvalidinput = pipeparts.mktee(pipeline, noinvalidinput)
 	# inputs that are replaced with zeros affect h(t) for a short time before and after the zeros, so we also must account for this corrupted time.
-	noinvalidinput = calibration_parts.mkgate(pipeline, noinvalidinput, noinvalidinput, pow(2,4), attack_length = -int(filter_settle_time * calibstate_sr), hold_length = -int(filter_latency * calibstate_sr))
+	noinvalidinput = calibration_parts.mkgate(pipeline, noinvalidinput, noinvalidinput, pow(2,no_gap_bitnum), attack_length = -int(filter_settle_time * calibstate_sr), hold_length = -int(filter_latency * calibstate_sr))
 
 	#
 	# KAPPATST BITS BRANCH
 	#
 	if compute_kappatst:
-		ktstSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, expected_kappatst_real, expected_kappatst_imag, kappatst_real_var, kappatst_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,9), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		ktstSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, expected_kappatst_real, expected_kappatst_imag, kappatst_real_var, kappatst_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,ktst_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# KAPPAPUM/KAPPAPU BITS BRANCH
 	#
 	if compute_kappapum:
-		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpumRtee, smooth_kpumItee, expected_kappapum_real, expected_kappapum_imag, kappapum_real_var, kappapum_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,10), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpumRtee, smooth_kpumItee, expected_kappapum_real, expected_kappapum_imag, kappapum_real_var, kappapum_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kpum_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	elif compute_kappapu:
-		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, expected_kappapu_real, expected_kappapu_imag, kappapu_real_var, kappapu_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,10), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, expected_kappapu_real, expected_kappapu_imag, kappapu_real_var, kappapu_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kpum_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# KAPPAUIM BITS BRANCH
 	#
 	if compute_kappauim:
-		kuimSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kuimRtee, smooth_kuimItee, expected_kappauim_real, expected_kappauim_imag, kappauim_real_var, kappauim_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,11), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kuimSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kuimRtee, smooth_kuimItee, expected_kappauim_real, expected_kappauim_imag, kappauim_real_var, kappauim_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kuim_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# KAPPAC BITS BRANCH
 	#
 	if compute_kappac:
-		kcSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_kctee, expected_kappac, kappac_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,12), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kcSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_kctee, expected_kappac, kappac_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kc_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# FCC BITS BRANCH
 	#
 	if compute_fcc:
-		fccSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, fcc_default, fcc_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,13), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		fccSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, fcc_default, fcc_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fcc_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# FS BITS BRANCH
 	#
 	if compute_fs:
-		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, fs_default, fs_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,14), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, fs_default, fs_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# SRCQ BITS BRANCH
 	#
 	if compute_srcq:
-		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, 1.0 / srcQ_default, [srcQinv_min, srcQinv_max], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,15), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, 1.0 / srcQ_default, [srcQinv_min, srcQinv_max], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# COHERENCE BITS BRANCH
@@ -2249,51 +2283,51 @@ if compute_calib_statevector:
 		coherence_ok_list = []
 		if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
 			# PCALY_LINE1 is used for all time-dependence calculations
-			pcaly_line1_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line1_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,19), invert_control = True)
+			pcaly_line1_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line1_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,pcal_line1_coh_bitnum), invert_control = True)
 			pcaly_line1_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line1_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr)
-			pcaly_line1_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line1_coh_ok, "lal_logicalundersample", required_on = pow(2,19), status_out = pow(2,19))
+			pcaly_line1_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line1_coh_ok, "lal_logicalundersample", required_on = pow(2,pcal_line1_coh_bitnum), status_out = pow(2,pcal_line1_coh_bitnum))
 			pcaly_line1_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line1_coh_ok, calibstate_caps)
 			coherence_ok_list.append(pcaly_line1_coh_ok)
 		if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq:
 			# SUS_LINE3 is used to compute kappa_TST and everything that is computed from it
-			sus_line3_coh_ok = pipeparts.mkbitvectorgen(pipeline, sus_line3_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,16), invert_control = True)		    
+			sus_line3_coh_ok = pipeparts.mkbitvectorgen(pipeline, sus_line3_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,sus_line3_coh_bitnum), invert_control = True)		    
 			sus_line3_coh_ok = pipeparts.mkcapsfilter(pipeline, sus_line3_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr) 
-			sus_line3_coh_ok = pipeparts.mkgeneric(pipeline, sus_line3_coh_ok, "lal_logicalundersample", required_on = pow(2,16), status_out = pow(2,16))
+			sus_line3_coh_ok = pipeparts.mkgeneric(pipeline, sus_line3_coh_ok, "lal_logicalundersample", required_on = pow(2,sus_line3_coh_bitnum), status_out = pow(2,sus_line3_coh_bitnum))
 			sus_line3_coh_ok = pipeparts.mkcapsfilter(pipeline, sus_line3_coh_ok, calibstate_caps)
 			coherence_ok_list.append(sus_line3_coh_ok)
 		if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
 			# SUS_LINE2 is used to compute kappa_PUM and everything that is computed from it
-			sus_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, sus_line2_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,17), invert_control = True)
+			sus_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, sus_line2_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,sus_line2_coh_bitnum), invert_control = True)
 			sus_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, sus_line2_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr)
-			sus_line2_coh_ok = pipeparts.mkgeneric(pipeline, sus_line2_coh_ok, "lal_logicalundersample", required_on = pow(2,17), status_out = pow(2,17))
+			sus_line2_coh_ok = pipeparts.mkgeneric(pipeline, sus_line2_coh_ok, "lal_logicalundersample", required_on = pow(2,sus_line2_coh_bitnum), status_out = pow(2,sus_line2_coh_bitnum))
 			sus_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, sus_line2_coh_ok, calibstate_caps)
 			coherence_ok_list.append(sus_line2_coh_ok)
 		if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
 			# SUS_LINE1 is used to compute kappa_UIM and everything that is computed from it
-			sus_line1_coh_ok = pipeparts.mkbitvectorgen(pipeline, sus_line1_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,18), invert_control = True)
+			sus_line1_coh_ok = pipeparts.mkbitvectorgen(pipeline, sus_line1_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,sus_line1_coh_bitnum), invert_control = True)
 			sus_line1_coh_ok = pipeparts.mkcapsfilter(pipeline, sus_line1_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr)
-			sus_line1_coh_ok = pipeparts.mkgeneric(pipeline, sus_line1_coh_ok, "lal_logicalundersample", required_on = pow(2,18), status_out = pow(2,18))
+			sus_line1_coh_ok = pipeparts.mkgeneric(pipeline, sus_line1_coh_ok, "lal_logicalundersample", required_on = pow(2,sus_line1_coh_bitnum), status_out = pow(2,sus_line1_coh_bitnum))
 			sus_line1_coh_ok = pipeparts.mkcapsfilter(pipeline, sus_line1_coh_ok, calibstate_caps)
 			coherence_ok_list.append(sus_line1_coh_ok)
 		if compute_kappapu:
 			# The DARM line is used only for kappa_PU
-			darm_coh_ok = pipeparts.mkbitvectorgen(pipeline, darm_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,18), invert_control = True)
+			darm_coh_ok = pipeparts.mkbitvectorgen(pipeline, darm_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,sus_line1_coh_bitnum), invert_control = True)
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr)
-			darm_coh_ok = pipeparts.mkgeneric(pipeline, darm_coh_ok, "lal_logicalundersample", required_on = pow(2,18), status_out = pow(2,18))
+			darm_coh_ok = pipeparts.mkgeneric(pipeline, darm_coh_ok, "lal_logicalundersample", required_on = pow(2,sus_line1_coh_bitnum), status_out = pow(2,sus_line1_coh_bitnum))
 			darm_coh_ok = pipeparts.mkcapsfilter(pipeline, darm_coh_ok, calibstate_caps)
 			coherence_ok_list.append(darm_coh_ok)
 		if compute_kappac or compute_fcc or compute_srcq or compute_fs:
 			# PCALY_LINE2 is only used for \kappa_c, f_cc, f_s, and Q
-			pcaly_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line2_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,20), invert_control = True)
+			pcaly_line2_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line2_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,pcal_line2_coh_bitnum), invert_control = True)
 			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr)
-			pcaly_line2_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line2_coh_ok, "lal_logicalundersample", required_on = pow(2,20), status_out = pow(2,20))
+			pcaly_line2_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line2_coh_ok, "lal_logicalundersample", required_on = pow(2,pcal_line2_coh_bitnum), status_out = pow(2,pcal_line2_coh_bitnum))
 			pcaly_line2_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line2_coh_ok, calibstate_caps)
 			coherence_ok_list.append(pcaly_line2_coh_ok)
 		if compute_fs or compute_srcq:
 			# PCALY_LINE4 is used to compute f_s and Q
-			pcaly_line4_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line4_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,21), invert_control = True)
+			pcaly_line4_coh_ok = pipeparts.mkbitvectorgen(pipeline, pcaly_line4_coh, threshold = coherence_unc_threshold, bit_vector = pow(2,pcal_line4_coh_bitnum), invert_control = True)
 			pcaly_line4_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line4_coh_ok, "audio/x-raw, format=U32LE, rate=%d" % coh_sr)
-			pcaly_line4_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line4_coh_ok, "lal_logicalundersample", required_on = pow(2,21), status_out = pow(2,21))
+			pcaly_line4_coh_ok = pipeparts.mkgeneric(pipeline, pcaly_line4_coh_ok, "lal_logicalundersample", required_on = pow(2,pcal_line4_coh_bitnum), status_out = pow(2,pcal_line4_coh_bitnum))
 			pcaly_line4_coh_ok = pipeparts.mkcapsfilter(pipeline, pcaly_line4_coh_ok, calibstate_caps)
 			coherence_ok_list.append(pcaly_line4_coh_ok)
 
@@ -2305,28 +2339,28 @@ if compute_calib_statevector:
 
 	# First combine higher order bits to determine h(t)-OK
 	higherbits_list = [filtersok, lownoisetee, noinvalidinput]
-	htok_threshold = pow(2,2) + pow(2,3) + pow(2,4)
+	htok_threshold = pow(2,lownoise_bitnum) + pow(2,filters_ok_bitnum) + pow(2,no_gap_bitnum)
 	if apply_kappatst or apply_complex_kappatst:
 		higherbits_list.append(ktstSmoothInRange)
-		htok_threshold += pow(2,9)
+		htok_threshold += pow(2,ktst_smooth_bitnum)
 	if apply_kappapum or apply_complex_kappapum or apply_kappapu or apply_complex_kappapu:
 		higherbits_list.append(kpumSmoothInRange)
-		htok_threshold += pow(2,10)
+		htok_threshold += pow(2,kpum_smooth_bitnum)
 	if apply_kappauim or apply_complex_kappauim:
 		higherbits_list.append(kuimSmoothInRange)
-		htok_threshold += pow(2,11)
+		htok_threshold += pow(2,kuim_smooth_bitnum)
 	if apply_kappac:
 		higherbits_list.append(kcSmoothInRange)
-		htok_threshold += pow(2,12)
+		htok_threshold += pow(2,kc_smooth_bitnum)
 	if apply_fcc:
 		higherbits_list.append(fccSmoothInRange)
-		htok_threshold += pow(2,13)
+		htok_threshold += pow(2,fcc_smooth_bitnum)
 	if apply_fs:
 		higherbits_list.append(fsSmoothInRange)
-		htok_threshold += pow(2,14)
+		htok_threshold += pow(2,fs_smooth_bitnum)
 	if apply_srcq:
 		higherbits_list.append(srcQSmoothInRange)
-		htok_threshold += pow(2,15)
+		htok_threshold += pow(2,Qinv_smooth_bitnum)
 	higherbits = calibration_parts.mkadder(pipeline, tuple(higherbits_list))
 	higherbitstee = pipeparts.mktee(pipeline, higherbits)
 
@@ -2341,33 +2375,33 @@ if compute_calib_statevector:
 	hwinjchanneltee = obsintentchanneltee if hwinj_channel_name == obsintent_channel_name else lownoisechanneltee if hwinj_channel_name == lownoise_channel_name else pipeparts.mktee(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict["hwinj"], hwinj_caps, "HW_injections_%s" % instrument))
 
 	if cbchwinj_bitmask is not None:
-		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_bitmask, status_out = pow(2,6))
+		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_bitmask, status_out = pow(2,no_cbc_inj_bitnum))
 	elif cbchwinj_offbitmask is not None:
-		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_offbitmask, invert_result = True, status_out = pow(2,6))
+		hwinjcbc = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = cbchwinj_offbitmask, invert_result = True, status_out = pow(2,no_cbc_inj_bitnum))
 	else:
 		raise ValueError("Must set either CBCHWInjBitmask or CBCHWInjOffBitmask")
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
 
 	if bursthwinj_bitmask is not None:
-		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,7))
+		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,no_burst_inj_bitnum))
 	elif bursthwinj_offbitmask is not None:
-		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_offbitmask, invert_result = True, status_out = pow(2,7))
+		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_offbitmask, invert_result = True, status_out = pow(2,no_burst_inj_bitnum))
 	else:
 		raise ValueError("Must set either BurstHWInjBitmask or BurstHWInjOffBitmask")
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, calibstate_caps)
 
 	if detcharhwinj_bitmask is not None:
-		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, status_out = pow(2,8))
+		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, status_out = pow(2,no_detchar_inj_bitnum))
 	elif detcharhwinj_offbitmask is not None:
-		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_on = detcharhwinj_offbitmask, invert_result = True, status_out = pow(2,8))
+		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_on = detcharhwinj_offbitmask, invert_result = True, status_out = pow(2,no_detchar_inj_bitnum))
 	else:
 		raise ValueError("Must set either DetCharHWInjBitmask or DetcharHWInjOffBitmask")
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, calibstate_caps)
 
 	if stochhwinj_bitmask is not None:
-		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, status_out = pow(2,5))
+		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, status_out = pow(2,no_stoch_inj_bitnum))
 	elif stochhwinj_offbitmask is not None:
-		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_on = stochhwinj_offbitmask, invert_result = True, status_out = pow(2,5))
+		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample",  required_on = stochhwinj_offbitmask, invert_result = True, status_out = pow(2,no_stoch_inj_bitnum))
 	else:
 		raise ValueError("Must set either StochHWInjBitmask or StochHWInjOffBitmask")
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, calibstate_caps)
@@ -2391,8 +2425,8 @@ if compute_calib_statevector:
 			D_epics_check = pipeparts.mkgeneric(pipeline, D_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			D_epics_check_list.append(D_epics_check)
 		D_epics_check = calibration_parts.mkadder(pipeline, tuple(D_epics_check_list))
-		D_epics_bit = pipeparts.mkbitvectorgen(pipeline, D_epics_check, bit_vector = pow(2,22), threshold = D_epics_threshold)
-		D_epics_bit = pipeparts.mkgeneric(pipeline, D_epics_bit, "lal_logicalundersample", required_on = pow(2,22), status_out = pow(2,22))
+		D_epics_bit = pipeparts.mkbitvectorgen(pipeline, D_epics_check, bit_vector = pow(2,D_epics_bitnum), threshold = D_epics_threshold)
+		D_epics_bit = pipeparts.mkgeneric(pipeline, D_epics_bit, "lal_logicalundersample", required_on = pow(2,D_epics_bitnum), status_out = pow(2,D_epics_bitnum))
 		D_epics_bit = pipeparts.mkcapsfilter(pipeline, D_epics_bit, calibstate_caps)
 		epics_bits_list.append(D_epics_bit)
 
@@ -2405,8 +2439,8 @@ if compute_calib_statevector:
 			A_epics_check = pipeparts.mkgeneric(pipeline, A_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			A_epics_check_list.append(A_epics_check)
 		A_epics_check = calibration_parts.mkadder(pipeline, tuple(A_epics_check_list))
-		A_epics_bit = pipeparts.mkbitvectorgen(pipeline, A_epics_check, bit_vector = pow(2,23), threshold = A_epics_threshold)
-		A_epics_bit = pipeparts.mkgeneric(pipeline, A_epics_bit, "lal_logicalundersample", required_on = pow(2,23), status_out = pow(2,23))
+		A_epics_bit = pipeparts.mkbitvectorgen(pipeline, A_epics_check, bit_vector = pow(2,A_epics_bitnum), threshold = A_epics_threshold)
+		A_epics_bit = pipeparts.mkgeneric(pipeline, A_epics_bit, "lal_logicalundersample", required_on = pow(2,A_epics_bitnum), status_out = pow(2,A_epics_bitnum))
 		A_epics_bit = pipeparts.mkcapsfilter(pipeline, A_epics_bit, calibstate_caps)
 		epics_bits_list.append(A_epics_bit)
 
@@ -2419,8 +2453,8 @@ if compute_calib_statevector:
 			C_epics_check = pipeparts.mkgeneric(pipeline, C_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			C_epics_check_list.append(C_epics_check)
 		C_epics_check = calibration_parts.mkadder(pipeline, tuple(C_epics_check_list))
-		C_epics_bit = pipeparts.mkbitvectorgen(pipeline, C_epics_check, bit_vector = pow(2,24), threshold = C_epics_threshold)
-		C_epics_bit = pipeparts.mkgeneric(pipeline, C_epics_bit, "lal_logicalundersample", required_on = pow(2,24), status_out = pow(2,24))
+		C_epics_bit = pipeparts.mkbitvectorgen(pipeline, C_epics_check, bit_vector = pow(2,C_epics_bitnum), threshold = C_epics_threshold)
+		C_epics_bit = pipeparts.mkgeneric(pipeline, C_epics_bit, "lal_logicalundersample", required_on = pow(2,C_epics_bitnum), status_out = pow(2,C_epics_bitnum))
 		C_epics_bit = pipeparts.mkcapsfilter(pipeline, C_epics_bit, calibstate_caps)
 		epics_bits_list.append(C_epics_bit)
 
@@ -2433,8 +2467,8 @@ if compute_calib_statevector:
 			misc_epics_check = pipeparts.mkgeneric(pipeline, misc_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
 			misc_epics_check_list.append(misc_epics_check)
 		misc_epics_check = calibration_parts.mkadder(pipeline, tuple(misc_epics_check_list))
-		misc_epics_bit = pipeparts.mkbitvectorgen(pipeline, misc_epics_check, bit_vector = pow(2,25), threshold = misc_epics_threshold)
-		misc_epics_bit = pipeparts.mkgeneric(pipeline, misc_epics_bit, "lal_logicalundersample", required_on = pow(2,25), status_out = pow(2,25))
+		misc_epics_bit = pipeparts.mkbitvectorgen(pipeline, misc_epics_check, bit_vector = pow(2,misc_epics_bitnum), threshold = misc_epics_threshold)
+		misc_epics_bit = pipeparts.mkgeneric(pipeline, misc_epics_bit, "lal_logicalundersample", required_on = pow(2,misc_epics_bitnum), status_out = pow(2,misc_epics_bitnum))
 		misc_epics_bit = pipeparts.mkcapsfilter(pipeline, misc_epics_bit, calibstate_caps)
 		epics_bits_list.append(misc_epics_bit)
 
@@ -2522,7 +2556,7 @@ if remove_cal_lines:
 # Set up gating for the power mains and noise subtraction
 if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_bitmask > 0:
 	noisesubgate = obsintentchanneltee if noisesub_gate_channel == obsintent_channel_name else lownoisechanneltee if noisesub_gate_channel == lownoise_channel_name else hwinjtee if noisesub_gate_channel == hwinj_channel_name else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
-	noisesubgate = pipeparts.mkgeneric(pipeline, noisesubgate, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,28))
+	noisesubgate = pipeparts.mkgeneric(pipeline, noisesubgate, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,noise_sub_gate_bitnum))
 	noisesubgate = pipeparts.mkcapsfilter(pipeline, noisesubgate, calibstate_caps)
 	noisesubgatetee = pipeparts.mktee(pipeline, noisesubgate)
 else:
@@ -2578,17 +2612,15 @@ if any(witness_channel_list):
 if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-	if compute_calib_statevector:
-		clean_straintee = pipeparts.mktee(pipeline, clean_strain)
+	clean_straintee = pipeparts.mktee(pipeline, clean_strain)
+	if not pick_cleanest_strain_channel:
 		clean_strain = pipeparts.mktaginject(pipeline, clean_straintee, clean_straintagstr)
-	else:
-		clean_strain = pipeparts.mktaginject(pipeline, clean_strain, clean_straintagstr)
 
 #
 # CALIB_STATE_VECTOR: CALIB_STRAIN_CLEAN
 #
 
-if compute_calib_statevector and (remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list)):
+if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list)):
 	low_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_low_max) / numpy.log(2) + 1.01))
 	mid_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_mid_max) / numpy.log(2) + 1.01))
 
@@ -2598,8 +2630,9 @@ if compute_calib_statevector and (remove_cal_lines or any(line_witness_channel_l
 	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_lowfreq = calibration_parts.complex_division(pipeline, strain_rms_lowfreq, clean_strain_rms_lowfreq)
-	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector=pow(2,26), threshold=1.0)
+	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector = pow(2,line_sub_bitnum), threshold=1.0)
 	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
+	clean_hoft_ok_lowfreq = pipeparts.mktee(pipeline, clean_hoft_ok_lowfreq)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
 	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
@@ -2607,11 +2640,26 @@ if compute_calib_statevector and (remove_cal_lines or any(line_witness_channel_l
 	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
-	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector=pow(2,27), threshold=1.0)
+	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector = pow(2,noise_sub_bitnum), threshold=1.0)
 	clean_hoft_ok_midfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_midfreq, calibstate_caps)
+	clean_hoft_ok_midfreq = pipeparts.mktee(pipeline, clean_hoft_ok_midfreq)
 
-	# Add these into the CALIB_STATE_VECTOR
-	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
+	if compute_calib_statevector:
+		# Add these into the CALIB_STATE_VECTOR
+		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
+	if pick_cleanest_strain_channel:
+		noise_sub_ok_bitmask = pow(2,line_sub_bitnum) + pow(2,noise_sub_bitnum)
+		noise_sub_state_vector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
+		if InputConfigs["datasource"] == "lvshm":
+			# We don't want to add extra latency
+			noise_sub_state_vector = pipeparts.mkgeneric(pipeline, noise_sub_state_vector, "lal_shift", shift = int(1000000000 * strain_channel_transition_time))
+		noise_sub_state_vector = pipeparts.mktee(pipeline, noise_sub_state_vector)
+		strain_coefficient = pipeparts.mkgeneric(pipeline, noise_sub_state_vector, "lal_dqtukey", required_on = noise_sub_ok_bitmask, transition_samples = hoft_sr * strain_channel_transition_time, invert_window = True)
+		clean_strain_coefficient = pipeparts.mkgeneric(pipeline, noise_sub_state_vector, "lal_dqtukey", required_on = noise_sub_ok_bitmask, transition_samples = hoft_sr * strain_channel_transition_time)
+		strain = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, straintee, strain_coefficient))
+		clean_strain = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, clean_straintee, clean_strain_coefficient))
+		strain = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, strain, clean_strain))
+		strain = pipeparts.mktaginject(pipeline, strain, straintagstr) 
 
 # Check if we gated the cleaning with any ODC bits, and if so, add that to the CALIB_STATE_VECTOR
 if noisesubgatetee is not None:
@@ -2755,7 +2803,7 @@ if compute_calib_statevector:
 # Link the strain branch to the muxer
 channelmux_input_dict["%s:%sCALIB_STRAIN%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, strain)
 # Link the cleaned strain branch to the muxer if h(t) was cleaned in any way
-if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
+if (remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list)) and not pick_cleanest_strain_channel:
 	channelmux_input_dict["%s:%sCALIB_STRAIN_CLEAN%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, clean_strain)
 # Link the real and imaginary parts of kappa_tst to the muxer
 if compute_kappatst:
