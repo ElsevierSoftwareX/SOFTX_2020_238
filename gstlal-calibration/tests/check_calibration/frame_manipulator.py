@@ -299,6 +299,8 @@ channel_list.append("GRD-IFO_OK")
 #channel_list.append("ISC_LOCK_STATUS")
 channel_list.append("GRD-ISC_LOCK_OK")
 channel_list.append("GRD-ISC_LOCK_ERROR")
+channel_list.append("GRD-IFO_INTENT")
+channel_list.append("GRD-IFO_READY")
 temp_list = channel_list
 channel_list = []
 for chan in temp_list:

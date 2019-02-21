@@ -977,7 +977,7 @@ if ChannelNames["witnesschannellist"] != "None":
 if compute_calib_statevector:
 	noisesub_gate_channel = ChannelNames["noisesubgatechannel"] if "noisesubgatechannel" in ChannelNames else lownoise_channel_name 
 	noisesub_gate_bitmask = int(Bitmasks["noisesubgatebitmask"]) if "noisesubgatebitmask" in Bitmasks else lownoise_bitmask
-if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_bitmask >= 0:
+if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_bitmask > 0:
 	channel_list.append((instrument, noisesub_gate_channel))
 	headkeys.append("noisesubgatechannel")
 

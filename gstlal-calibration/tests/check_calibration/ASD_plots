@@ -41,6 +41,25 @@ if options.analyze_additional_hoft_channel:
 # make asds
 calcs_asd = calcs_data.asd(4,2,method='lal_median')
 hoft_asd = hoft_data.asd(4,2,method='lal_median')
+
+numpy.savetxt("%s_CALIB_STRAIN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), calcs_asd)
+numpy.savetxt("%s_CALIB_STRAIN_CLEAN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), hoft_asd)
+
+calcs_asd_tmp = numpy.loadtxt("%s_CALIB_STRAIN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix))
+hoft_asd_tmp = numpy.loadtxt("%s_CALIB_STRAIN_CLEAN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix))
+
+calcs_asd_txt = []
+hoft_asd_txt = []
+freq = 0.0
+for i in range(0, len(calcs_asd)):
+	calcs_asd_txt.append([freq, calcs_asd_tmp[i]])
+	hoft_asd_txt.append([freq, hoft_asd_tmp[i]])
+	freq = freq + 0.25
+calcs_asd_txt = numpy.array(calcs_asd_txt)
+hoft_asd_txt = numpy.array(hoft_asd_txt)
+numpy.savetxt("%s_CALIB_STRAIN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), calcs_asd_txt)
+numpy.savetxt("%s_CALIB_STRAIN_CLEAN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), hoft_asd_txt)
+
 if options.analyze_additional_hoft_channel:
 	additional_hoft_asd = additional_hoft_data.asd(4,2)
 
