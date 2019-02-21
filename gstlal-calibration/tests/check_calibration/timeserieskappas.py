@@ -12,8 +12,7 @@ parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the GPS end
 parser.add_option("--ifo", metavar = "name", help = "Interferometer to perform the analysis on")
 parser.add_option("--frame-cache", metavar = "name", help = "Filename for frame cache to be analyzed.")
 parser.add_option("--channel-list", metavar = "list", help = "List of channels to be plotted.")
-parser.add_option("--raw-frame-cache", metavar = "name", help = "Filename for raw frame cache to be analyzed.")
-parser.add_option("--raw-channel-list", metavar = "list", help = "List of raw channels to be plotted.")
+parser.add_option("--front-end-channel-list", metavar = "list", help = "List of channels to be plotted from the front-end.")
 
 options, filenames = parser.parse_args()
 
@@ -29,28 +28,33 @@ if options.channel_list is not None:
 else:
 	raise ValueError('Channel list option must be set.')
 
-raw_channel_list = []
-if options.raw_channel_list is not None:
-	raw_channels = options.raw_channel_list.split(',')
-	for raw_channel in raw_channels:
-		raw_channel_list.append((ifo, raw_channel))
+front_end_channel_list = []
+if options.front_end_channel_list is not None:
+	front_end_channels = options.front_end_channel_list.split(',')
+	for channel in front_end_channels:
+		front_end_channel_list.append((ifo, channel))
+	plot_front_end = True
 else:
-	raise ValueError('Raw channel list option must be set.')
+	plot_front_end = False
 
-raw_data = TimeSeriesDict.read(options.raw_frame_cache, map("%s:%s".__mod__, raw_channel_list), start = start, end = end)
 data = TimeSeriesDict.read(options.frame_cache, map("%s:%s".__mod__, channel_list), start = start, end = end)
+if plot_front_end:
+	front_end_data = TimeSeriesDict.fetch(map("%s:%s".__mod__, front_end_channel_list), start = start, end = end)
+
+print(map("%s:%s".__mod__, front_end_channel_list))
 
 segs = DataQualityFlag.query('%s:DMT-CALIBRATED:1' % ifo, start, end)
 
-for n in range(0, len(channels)):
-	plot = TimeSeries.plot(data["%s:%s" % (ifo, channels[n])], label = 'GDS')
-	mpl.ylabel('Correction value')
+for n, channel in enumerate(channels):
+	plot = TimeSeries.plot(data["%s:%s" % (ifo, channel)])
 	ax = plot.gca()
-	ax.plot(raw_data["%s:%s" % (ifo, raw_channels[n])], label='CAL-CS')
-	ax.legend()
+	if plot_front_end:
+		ax.plot(front_end_data["%s:%s" % (ifo, front_end_channels[n])])
+	ax.set_ylabel('Correction value')
+	plot.gca().legend()
 	#title = item
 	#title = title.replace('_', '\_')
-	mpl.title(channels[n].replace('_', '\_'))
+	ax.set_title(channel.replace('_', '\_'))
 	plot.add_state_segments(segs, plotargs=dict(label='Calibrated'))
-	plot.savefig('%s_%s_%s_plot_%s.png' % (ifo, options.gps_start_time, options.gps_end_time, channels[n]))
-
+	plot.legend([r'GDS value', r'front-end value'])
+	plot.savefig('%s_%s_%s_plot_%s.png' % (ifo, options.gps_start_time, options.gps_end_time, channel))
