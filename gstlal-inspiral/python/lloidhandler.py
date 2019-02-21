@@ -260,7 +260,7 @@ class EyeCandy(object):
 		t = inspiral.now()
 		if self.time_since_last_state is None:
 			self.time_since_last_state = t
-		if self.producer is not None and (t - self.time_since_last_state) > 1:
+		if self.producer is not None and (t - self.time_since_last_state) >= 1:
 			self.time_since_last_state = t
 			for ii, column in enumerate(["time", "data"]):
 				self.kafka_data["ram_history"][column].append(float(self.ram_history[-1][ii]))
