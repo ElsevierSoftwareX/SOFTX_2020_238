@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2017 Kipp Cannon
+# Copyright (C) 2017,2019 Kipp Cannon
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -26,6 +26,10 @@
 #
 
 
+try:
+	from fpconst import NegInf
+except ImportError:
+	NegInf = float("-inf")
 import itertools
 import matplotlib
 matplotlib.rcParams.update({
@@ -42,11 +46,20 @@ matplotlib.rcParams.update({
 from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from optparse import OptionParser
+import sqlite3
+import sys
 
 
 from glue.text_progress_bar import ProgressBar
+from ligo.lw import dbtables
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import coincs as ligolw_coincs
 from gstlal import far
 from gstlal import plotutil
+from lal import rate
+from lal.utils import CacheEntry
+from lalinspiral.thinca import InspiralCoincDef
 
 
 #
@@ -60,13 +73,23 @@ from gstlal import plotutil
 
 def parse_command_line():
 	parser = OptionParser()
+	parser.add_option("--candidates", metavar = "filename", help = "Set the name of the SQLite database from which to pull candidates (required).")
+	parser.add_option("--ranking-stat-cache", metavar = "filename", help = "Load all ranking statistic files from this cache (required).")
 	parser.add_option("--output-format", metavar = "extension", default = ".png", help = "Select output format by setting the filename extension (default = \".png\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
+	required_options = ["candidates", "ranking_stat_cache"]
+	missing_options = [option for option in required_options if getattr(options, option) is None]
+	if missing_options:
+		raise ValueError("%s is(arg) required" % ", ".join("--%s" % option.subst("_", "-") for option in missing_options))
+
 	valid_formats = (".png", ".pdf", ".svg")
 	if options.output_format not in valid_formats:
 		raise ValueError("invalid --output-format \"%s\", allowed are %s" % (options.output_format, ", ".join("\"%s\"" % fmt for fmt in valid_formats)))
+
+	if filenames:
+		raise ValueError("unexpected arguments %s" % " ".join(filenames))
 
 	return options, filenames
 
@@ -89,51 +112,73 @@ options, filenames = parse_command_line()
 
 
 #
-# load ranking statistic data, and initialize a matching dataless ranking
-# statistic
+# load ranking statistic data.  disable the fast-path code
 #
 
 
-rankingstat = far.marginalize_pdf_urls(filenames, which = "RankingStat", verbose = options.verbose)
-rankingstat.finish()
-
-datalessrankingstat = far.DatalessRankingStat(
-	template_ids = rankingstat.template_ids,
-	instruments = rankingstat.instruments,
-	min_instruments = rankingstat.min_instruments,
-	delta_t = rankingstat.delta_t
-)
-datalessrankingstat.finish()
+if True:
+	rankingstats = []
+	for n, line in enumerate(open(options.ranking_stat_cache), 1):
+		rankingstat = far.RankingStat.from_xml(ligolw_utils.load_url(CacheEntry(line).url, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose), u"gstlal_inspiral_likelihood")
+		rankingstat.finish()
+		rankingstat.fast_path_stat_threshold = NegInf
+		rankingstats.append(rankingstat)
+		# FIXME:  remove this
+		break
+	rankingstat_index = rate.Categories([rankingstat.template_ids for rankingstat in rankingstats])
 
 
 #
-# generate (ranking stat, dataless ranking stat) samples
+# collect metadata
 #
 
-n_samples = 100000
+
+connection = sqlite3.connect(options.candidates)
+xmldoc = dbtables.get_xml(connection)
+coinc_def_id = str(ligolw_coincs.get_coinc_def_id(xmldoc, InspiralCoincDef.search, InspiralCoincDef.search_coinc_type, create_new = False))
+sngl_inspiral_row = lsctables.SnglInspiralTable.get_table(xmldoc).row_from_cols
+offset_vectors = dict((str(time_slide_id), offset_vector) for time_slide_id, offset_vector in lsctables.TimeSlideTable.get_table(xmldoc).as_dict().items())
+
+
+#
+# iterate over candidates, generate (ranking stat, fast-path stat) samples
+#
+
+cursor_outer = connection.cursor()
+cursor_inner = connection.cursor()
 
 if options.verbose:
+	(n_samples,), = cursor_outer.execute("SELECT COUNT(*) FROM coinc_event WHERE coinc_def_id == ? AND time_slide_id NOT IN (SELECT DISTINCT(time_slide_id) FROM time_slide WHERE offset != 0);", (coinc_def_id,)).fetchall()
 	progress = ProgressBar(text = "Sampling", max = n_samples)
+	progress.show()
 else:
 	progress = None
 
 x = []
 y = []
-#csv = []
-for args, kwargs, lnP in itertools.islice(rankingstat.denominator.random_params(), n_samples):
-	x.append(rankingstat(*args, **kwargs))
-	y.append(datalessrankingstat(*args, **kwargs))
-	#csv.append((
-	#	x[-1],
-	#	y[-1],
-	#	(kwargs["H1_snr_chi"][0] if "H1_snr_chi" in kwargs else 0.),
-	#	(kwargs["H1_snr_chi"][1] if "H1_snr_chi" in kwargs else 0.),
-	#	(kwargs["L1_snr_chi"][0] if "L1_snr_chi" in kwargs else 0.),
-	#	(kwargs["L1_snr_chi"][1] if "L1_snr_chi" in kwargs else 0.),
-	#	kwargs["segments"]["H1"][1]
-	#))
-	if progress is not None:
-		progress.increment()
+
+# FIXME:  remove this
+template_id = iter(rankingstats[0].template_ids).next()
+
+with open("dump.txt", "w") as out:
+	# iterate over zero-lag coincs
+	for ln_lr, coinc_event_id, time_slide_id in cursor_outer.execute("SELECT coinc_event.likelihood, coinc_event.coinc_event_id, coinc_event.time_slide_id FROM coinc_event WHERE coinc_def_id == ? AND time_slide_id NOT IN (SELECT DISTINCT(time_slide_id) FROM time_slide WHERE offset != 0);", (coinc_def_id,)):
+		# retrieve triggers
+		events = map(sngl_inspiral_row, cursor_inner.execute("SELECT sngl_inspiral.* FROM sngl_inspiral JOIN coinc_event_map ON (coinc_event_map.table_name == 'sngl_inspiral' AND coinc_event_map.event_id == sngl_inspiral.event_id) WHERE coinc_event_map.coinc_event_id == ?", (coinc_event_id,)))
+		# FIXME:  remove this
+		for event in events:
+			event.template_id = template_id
+		# compute ranking statistic arguments
+		rankingstat = rankingstats[rankingstat_index[events[0].template_id]]
+		fast_path_stat = rankingstat.fast_path_stat
+		kwargs = rankingstat.kwargs_from_triggers(events, offset_vectors[time_slide_id])
+		# evaluate full ranking stat and fast-path ranking stat and save
+		x.append(ln_lr)
+		y.append(fast_path_stat(**kwargs))
+		# update output
+		print >>out, "%.16g %.16g %d" % (x[-1], y[-1], int(coinc_event_id.split(":")[-1]))
+		if progress is not None:
+			progress.increment()
 
 del progress
 
@@ -150,13 +195,8 @@ axes = fig.gca()
 axes.plot(x, y, "k.", markersize = 2.)
 axes.set_xlim(-20, 60)
 axes.set_ylim(-20, 60)
-axes.set_title(r"Dataless vs.\ Data-defined $\ln \mathcal{L}$")
+axes.set_title(r"Fast-Path vs.\ Data-defined $\ln \mathcal{L}$")
 axes.set_xlabel(r"Data-defined $\ln \mathcal{L}$")
-axes.set_ylabel(r"Dataless $\ln \mathcal{L}$")
+axes.set_ylabel(r"Fast-Path $\ln \mathcal{L}$")
 fig.tight_layout(pad = 0.8)
 fig.savefig("dlrs_diag%s" % options.output_format)
-
-#csv_file = open("dlrs_diag.csv", "w")
-#csv_file.write("# datadefined, dataless, H1snr, H1chi, L1snr, L1chi, t\n")
-#for row in csv:
-#	csv_file.write("%.17g,%.17g,%.17g,%.17g,%.17g,%.17g,%.17g\n" % row)
