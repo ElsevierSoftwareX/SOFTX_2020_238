@@ -45,13 +45,6 @@ from gstlal import calibration_parts
 from gstlal import simplehandler
 from gstlal import datasource
 
-from glue.ligolw import ligolw
-from glue.ligolw import array
-from glue.ligolw import param
-from glue.ligolw.utils import segments as ligolw_segments
-array.use_in(ligolw.LIGOLWContentHandler)
-param.use_in(ligolw.LIGOLWContentHandler)
-from glue.ligolw import utils
 from ligo import segments
 import test_common
 

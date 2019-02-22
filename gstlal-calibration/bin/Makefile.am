@@ -1,4 +1,2 @@
 dist_bin_SCRIPTS = \
-	gstlal_compute_strain \
-	gstlal_clean_strain \
-	gstlal_compute_kappas
+	gstlal_compute_strain
