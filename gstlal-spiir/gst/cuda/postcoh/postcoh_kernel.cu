@@ -624,6 +624,7 @@ __global__ void ker_coh_max_and_chisq_versatile
         int ipix = 0, rand_range = trial_sample_inv * hist_trials -1;
         for(itrial=1+threadIdx.x/WARP_SIZE; itrial<=hist_trials; itrial+=blockDim.x/WARP_SIZE) {
             snr_max = 0.0;
+            stat_max = 0.0;
             nullstream_max = 0.0;
             sky_idx = 0;
             
@@ -705,6 +706,7 @@ __global__ void ker_coh_max_and_chisq_versatile
 			nullsnr_bg[output_offset]   = nullstream_max;
             /* background need this for Ntoff */
             pix_idx_bg[output_offset]       = sky_idx;          
+	    //printf("iifo %d, ipeak %d, itrial %d, cohsnr_bg %f\n", iifo, ipeak, itrial, snr_max);
 
         }
         __syncthreads();
