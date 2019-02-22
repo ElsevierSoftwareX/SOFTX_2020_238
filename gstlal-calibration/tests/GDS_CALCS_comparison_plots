@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 from gwpy.timeseries import TimeSeries
-from glue import datafind
 import glob
 from math import pi
 import matplotlib as mpl; mpl.use('Agg')

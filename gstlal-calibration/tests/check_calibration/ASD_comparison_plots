@@ -9,7 +9,6 @@ from math import pi
 from gwpy.plotter import BodePlot
 import numpy
 from optparse import OptionParser, Option
-from glue import datafind
 
 parser = OptionParser()
 

@@ -10,7 +10,6 @@ Group: LSC Software/Data Analysis
 Requires: gstlal >= @MIN_GSTLAL_VERSION@
 Requires: gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
-Requires: glue >= @MIN_GLUE_VERSION@
 Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@

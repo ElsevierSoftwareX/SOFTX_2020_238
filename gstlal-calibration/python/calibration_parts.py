@@ -290,32 +290,32 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 
 	# Re-format inputs if necessary
 	if type(witnesses) is not list and type(witnesses) is not tuple and type(witnesses) is not numpy.ndarray:
-		print "remove_lines_with_witnesses(): argument 3 should be type list.  Converting %s to list" % type(witnesses)
+		print("remove_lines_with_witnesses(): argument 3 should be type list.  Converting %s to list" % type(witnesses))
 		witnesses = [[witnesses]]
 	if type(freqs) is not list and type(freqs) is not tuple and type(freqs) is not numpy.ndarray:
-		print "remove_lines_with_witnesses(): argument 4 should be type list.  Converting %s to list" % type(freqs)
+		print("remove_lines_with_witnesses(): argument 4 should be type list.  Converting %s to list" % type(freqs))
 		freqs = [[freqs]]
 	if type(freq_vars) is not list and type(freq_vars) is not tuple and type(freq_vars) is not numpy.ndarray:
-		print "remove_lines_with_witnesses(): argument 5 should be type list.  Converting %s to list" % type(freq_vars)
+		print("remove_lines_with_witnesses(): argument 5 should be type list.  Converting %s to list" % type(freq_vars))
 		freq_vars = [freq_vars]
 	for i in range(0, len(witnesses) - len(freqs)):
-		print "remove_lines_with_witnesses(): Warning: not enough elements in argument 4"
+		print("remove_lines_with_witnesses(): Warning: not enough elements in argument 4")
 		freqs.append(freqs[-1])
 	for i in range(0, len(witnesses) - len(freq_vars)):
-		print "remove_lines_with_witnesses(): Warning: not enough elements in argument 5"
+		print("remove_lines_with_witnesses(): Warning: not enough elements in argument 5")
 		freq_vars.append(freq_vars[-1])
 	if len(freqs) > len(witnesses):
-		print "remove_lines_with_witnesses(): Warning: too many elements in argument 4"
+		print("remove_lines_with_witnesses(): Warning: too many elements in argument 4")
 		freqs = freqs[:len(witnesses)]
 	if len(freq_vars) > len(witnesses):
-		print "remove_lines_with_witnesses(): Warning: too many elements in argument 5"
+		print("remove_lines_with_witnesses(): Warning: too many elements in argument 5")
 		freq_vars = freq_vars[:len(witnesses)]
 	for i in range(0, len(witnesses)):
 		if type(witnesses[i]) is not list and type(witnesses[i]) is not tuple and type(witnesses[i]) is not numpy.ndarray:
-			print "remove_lines_with_witnesses(): argument 3 should be list of lists.  Converting %s to list" % type(witnesses[i])
+			print("remove_lines_with_witnesses(): argument 3 should be list of lists.  Converting %s to list" % type(witnesses[i]))
 			witnesses[i] = [witnesses[i]]
 		if type(freqs[i]) is not list and type(freqs[i]) is not tuple and type(freqs[i]) is not numpy.ndarray:
-			print "remove_lines_with_witnesses(): argument 4 should be list of lists.  Converting %s to list" % type(freqs[i])
+			print("remove_lines_with_witnesses(): argument 4 should be list of lists.  Converting %s to list" % type(freqs[i]))
 			freqs[i] = [freqs[i]]
 
 	filter_param = 0.0625

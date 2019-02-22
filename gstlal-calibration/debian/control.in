@@ -14,7 +14,6 @@ Build-Depends:
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  pkg-config,
  python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
  python-numpy
 
 Package: gstlal-calibration
@@ -36,7 +35,6 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  python (>= @MIN_PYTHON_VERSION@),
  python-gi,
- python-glue (>= @MIN_GLUE_VERSION@),
  python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
  python-gst-1.0,
  python-numpy,
