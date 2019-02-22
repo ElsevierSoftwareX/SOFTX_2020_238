@@ -23,7 +23,7 @@ PLOT_WARMUP_TIME = 715
 PLOT_COOLDOWN_TIME = 715
 #4521
 
-GDSCONFIGS = Filters/ER14/GDSFilters/H1GDS_noisesub_test_1232874910.ini
+GDSCONFIGS = Filters/ER14/GDSFilters/H1GDS_1234630818.ini 
 DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini

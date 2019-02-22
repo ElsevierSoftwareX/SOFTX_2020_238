@@ -940,7 +940,7 @@ if (ChannelNames["powerlineschannel"] not in headkeys) if remove_power_lines els
 	line_witness_channel_list.append([ChannelNames["powerlineschannel"]])
 	line_witness_freqs.append([60.0, 120.0, 180.0, 240.0, 300.0])
 	line_witness_freq_vars.append(powerlines_freq_var)
-	if line_witness_tf_median is None:
+	if line_witness_tf_median_time is None:
 		line_witness_tf_median_time = powerlines_tf_median_time
 	if line_witness_tf_averaging_time is None: 
 		line_witness_tf_averaging_time = powerlines_tf_averaging_time
