@@ -218,9 +218,9 @@ def write_graph(demux, pipeline, name):
 
 def hook_up(pipeline, demux, channel_name, instrument, buffer_length):
 	if channel_name.endswith("UNCERTAINTY"):
-		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 1)
+		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 1, name = "insertgap_%s" % channel_name)
 	else:
-		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 0)
+		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 0, name = "insertgap_%s" % channel_name)
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_static_pad("sink"))
 
 	return head
@@ -284,9 +284,39 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency
 
 	return elem
 
-def remove_harmonics_with_witnesses(pipeline, signal, witnesses, f0, num_harmonics, f0_var, filter_latency, compute_rate = 16, rate_out = 16384, num_median = 2048, num_avg = 160, noisesub_gate_bit = None):
+def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, filter_latency = 0, compute_rate = 16, rate_out = 16384, num_median = 2048, num_avg = 160, noisesub_gate_bit = None):
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
+
+	# Re-format inputs if necessary
+	if type(witnesses) is not list and type(witnesses) is not tuple and type(witnesses) is not numpy.ndarray:
+		print "remove_lines_with_witnesses(): argument 3 should be type list.  Converting %s to list" % type(witnesses)
+		witnesses = [[witnesses]]
+	if type(freqs) is not list and type(freqs) is not tuple and type(freqs) is not numpy.ndarray:
+		print "remove_lines_with_witnesses(): argument 4 should be type list.  Converting %s to list" % type(freqs)
+		freqs = [[freqs]]
+	if type(freq_vars) is not list and type(freq_vars) is not tuple and type(freq_vars) is not numpy.ndarray:
+		print "remove_lines_with_witnesses(): argument 5 should be type list.  Converting %s to list" % type(freq_vars)
+		freq_vars = [freq_vars]
+	for i in range(0, len(witnesses) - len(freqs)):
+		print "remove_lines_with_witnesses(): Warning: not enough elements in argument 4"
+		freqs.append(freqs[-1])
+	for i in range(0, len(witnesses) - len(freq_vars)):
+		print "remove_lines_with_witnesses(): Warning: not enough elements in argument 5"
+		freq_vars.append(freq_vars[-1])
+	if len(freqs) > len(witnesses):
+		print "remove_lines_with_witnesses(): Warning: too many elements in argument 4"
+		freqs = freqs[:len(witnesses)]
+	if len(freq_vars) > len(witnesses):
+		print "remove_lines_with_witnesses(): Warning: too many elements in argument 5"
+		freq_vars = freq_vars[:len(witnesses)]
+	for i in range(0, len(witnesses)):
+		if type(witnesses[i]) is not list and type(witnesses[i]) is not tuple and type(witnesses[i]) is not numpy.ndarray:
+			print "remove_lines_with_witnesses(): argument 3 should be list of lists.  Converting %s to list" % type(witnesses[i])
+			witnesses[i] = [witnesses[i]]
+		if type(freqs[i]) is not list and type(freqs[i]) is not tuple and type(freqs[i]) is not numpy.ndarray:
+			print "remove_lines_with_witnesses(): argument 4 should be list of lists.  Converting %s to list" % type(freqs[i])
+			freqs[i] = [freqs[i]]
 
 	filter_param = 0.0625
 	downsample_quality = 4
@@ -294,107 +324,107 @@ def remove_harmonics_with_witnesses(pipeline, signal, witnesses, f0, num_harmoni
 	resample_shift = 16.0 + 16.5
 	zero_latency = filter_latency == 0.0
 
-	a = resample_shift / compute_rate
-	b = f0_var / 2
 	for i in range(0, len(witnesses)):
-		witnesses[i] = pipeparts.mktee(pipeline, witnesses[i])
+		for j in range(0, len(witnesses[i])):
+			witnesses[i][j] = pipeparts.mktee(pipeline, witnesses[i][j])
 	signal = pipeparts.mktee(pipeline, signal)
-
-	# If f0 strays from its nominal value and there is a timestamp shift in the signal
-	# (e.g., to achieve zero latency), we need to correct the phase in the reconstructed
-	# signal. To do this, we measure the frequency in the witness and find the beat
-	# frequency between that and the nominal frequency f0.
-	if filter_latency != 0.5:
-		# The low-pass and resampling filters are not centered in time
-		f0_measured = pipeparts.mkgeneric(pipeline, witnesses[0], "lal_trackfrequency", num_halfcycles = int(round((filter_param / f0_var / 2 + resample_shift / compute_rate) * f0)))
-		f0_measured = mkresample(pipeline, f0_measured, 3, zero_latency, compute_rate)
-		f0_measured = pipeparts.mkgeneric(pipeline, f0_measured, "lal_smoothkappas", array_size = 1, avg_array_size = int(round((filter_param / f0_var / 2 * compute_rate + resample_shift) / 2)), default_kappa_re = 0, default_to_median = True, filter_latency = filter_latency)
-		f0_beat_frequency = pipeparts.mkgeneric(pipeline, f0_measured, "lal_add_constant", value = -f0)
-		f0_beat_frequency = pipeparts.mktee(pipeline, f0_beat_frequency)
-
 	signal_minus_lines = [signal]
 
-	for n in range(1, num_harmonics + 1):
-		# Length of low-pass filter
-		filter_length = filter_param / (f0_var * n)
-		filter_samples = int(filter_length * compute_rate) + (1 - int(filter_length * compute_rate) % 2)
-		sample_shift = filter_samples / 2 - int((filter_samples - 1) * filter_latency + 0.5)
-		# shift of timestamp relative to data
-		time_shift = float(sample_shift) / compute_rate + zero_latency * resample_shift / compute_rate
-		two_n_pi_delta_t = 2 * n * numpy.pi * time_shift
+	for m in range(0, len(witnesses)):
+		# If freqs[m][0] strays from its nominal value and there is a timestamp shift in the signal
+		# (e.g., to achieve zero latency), we need to correct the phase in the reconstructed
+		# signal. To do this, we measure the frequency in the witness and find the beat
+		# frequency between that and the nominal frequency freqs[m][0].
+		if filter_latency != 0.5 and freq_vars[m]:
+			# The low-pass and resampling filters are not centered in time
+			f0_measured = pipeparts.mkgeneric(pipeline, witnesses[m][0], "lal_trackfrequency", num_halfcycles = int(round((filter_param / freq_vars[m] / 2 + resample_shift / compute_rate) * freqs[m][0])))
+			f0_measured = mkresample(pipeline, f0_measured, 3, zero_latency, compute_rate)
+			f0_measured = pipeparts.mkgeneric(pipeline, f0_measured, "lal_smoothkappas", array_size = 1, avg_array_size = int(round((filter_param / freq_vars[m] / 2 * compute_rate + resample_shift) / 2)), default_kappa_re = 0, default_to_median = True, filter_latency = filter_latency)
+			f0_beat_frequency = pipeparts.mkgeneric(pipeline, f0_measured, "lal_add_constant", value = -freqs[m][0])
+			f0_beat_frequency = pipeparts.mktee(pipeline, f0_beat_frequency)
 
-		# Only do this if we have to
-		if filter_latency != 0.5:
-			# Find phase shift due to timestamp shift for each harmonic
-			phase_shift = pipeparts.mkmatrixmixer(pipeline, f0_beat_frequency, matrix=[[0, two_n_pi_delta_t]])
-			phase_shift = pipeparts.mktogglecomplex(pipeline, phase_shift)
-			phase_factor = pipeparts.mkgeneric(pipeline, phase_shift, "cexp")
-			phase_factor = pipeparts.mktee(pipeline, phase_factor)
+		for freq in freqs[m]:
+			# Length of low-pass filter
+			filter_length = filter_param / (max(freq_vars[m], 0.003) * freq / freqs[m][0])
+			filter_samples = int(filter_length * compute_rate) + (1 - int(filter_length * compute_rate) % 2)
+			sample_shift = filter_samples / 2 - int((filter_samples - 1) * filter_latency + 0.5)
+			# shift of timestamp relative to data
+			time_shift = float(sample_shift) / compute_rate + zero_latency * resample_shift / compute_rate
+			two_n_pi_delta_t = 2 * freq / freqs[m][0] * numpy.pi * time_shift
 
-		# Find amplitude and phase of line in signal
-		line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = n * f0)
-		line_in_signal = mkresample(pipeline, line_in_signal, downsample_quality, zero_latency, compute_rate)
-		line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
-		line_in_signal = pipeparts.mktee(pipeline, line_in_signal)
+			# Only do this if we have to
+			if filter_latency != 0.5 and freq_vars[m]:
+				# Find phase shift due to timestamp shift for each harmonic
+				phase_shift = pipeparts.mkmatrixmixer(pipeline, f0_beat_frequency, matrix=[[0, two_n_pi_delta_t]])
+				phase_shift = pipeparts.mktogglecomplex(pipeline, phase_shift)
+				phase_factor = pipeparts.mkgeneric(pipeline, phase_shift, "cexp")
+				phase_factor = pipeparts.mktee(pipeline, phase_factor)
 
-		# Make ones for use in matrix equation
-		ones = pipeparts.mktee(pipeline, mkpow(pipeline, line_in_signal, exponent = 0.0))
+			# Find amplitude and phase of line in signal
+			line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = freq)
+			line_in_signal = mkresample(pipeline, line_in_signal, downsample_quality, zero_latency, compute_rate)
+			line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
+			line_in_signal = pipeparts.mktee(pipeline, line_in_signal)
 
-		line_in_witnesses = []
-		tfs_at_f = [None] * len(witnesses) * (len(witnesses) + 1)
-		for i in range(0, len(witnesses)):
-			# Find amplitude and phase of each harmonic in each witness channel
-			line_in_witness = pipeparts.mkgeneric(pipeline, witnesses[i], "lal_demodulate", line_frequency = n * f0)
-			line_in_witness = mkresample(pipeline, line_in_witness, downsample_quality, zero_latency, compute_rate)
-			line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
-			line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
-			line_in_witnesses.append(line_in_witness)
+			# Make ones for use in matrix equation
+			if freq == freqs[0][0]:
+				ones = pipeparts.mktee(pipeline, mkpow(pipeline, line_in_signal, exponent = 0.0))
 
-			# Find transfer function between witness channel and signal at this frequency
-			tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
-			# It may be necessary to remove the first few samples since denominator
-			# samples may have arrived before numerator samples, in which case the
-			# adder assumes the numerator is one.
-			tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000) # Removing one second
+			line_in_witnesses = []
+			tfs_at_f = [None] * len(witnesses[m]) * (len(witnesses[m]) + 1)
+			for i in range(0, len(witnesses[m])):
+				# Find amplitude and phase of each harmonic in each witness channel
+				line_in_witness = pipeparts.mkgeneric(pipeline, witnesses[m][i], "lal_demodulate", line_frequency = freq)
+				line_in_witness = mkresample(pipeline, line_in_witness, downsample_quality, zero_latency, compute_rate)
+				line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
+				line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
+				line_in_witnesses.append(line_in_witness)
 
-			# Remove worthless data from computation of transfer function if we can
-			if noisesub_gate_bit is not None:
-				tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d" % (n, i))
-			tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 1e-35 * numpy.random.rand(), default_kappa_im = 1e-35 * numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
-			tfs_at_f[(i + 1) * len(witnesses) + i] = ones
+				# Find transfer function between witness channel and signal at this frequency
+				tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
+				# It may be necessary to remove the first few samples since denominator
+				# samples may have arrived before numerator samples, in which case the
+				# adder assumes the numerator is one.
+				tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000) # Removing one second
 
-		for i in range(0, len(witnesses)):
-			for j in range(0, len(witnesses)):
-				if(i != j):
-					# Find transfer function between 2 witness channels and at this frequency
-					tf_at_f = complex_division(pipeline, line_in_witnesses[j], line_in_witnesses[i])
-					# It may be necessary to remove the first few samples since
-					# denominator samples may have arrived before numerator samples,
-					# in which case the adder assumes the numerator is one.
-					tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000)
+				# Remove worthless data from computation of transfer function if we can
+				if noisesub_gate_bit is not None:
+					tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%f_%d" % (m, freq, i))
+				tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 1e-35 * numpy.random.rand(), default_kappa_im = 1e-35 * numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
+				tfs_at_f[(i + 1) * len(witnesses[m]) + i] = ones
 
-					# Remove worthless data from computation of transfer function if we can
-					if noisesub_gate_bit is not None:
-						tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d" % (n, i, j))
-					tfs_at_f[(i + 1) * len(witnesses) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = numpy.random.rand(), default_kappa_im = numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
+			for i in range(0, len(witnesses[m])):
+				for j in range(0, len(witnesses[m])):
+					if(i != j):
+						# Find transfer function between 2 witness channels at this frequency
+						tf_at_f = complex_division(pipeline, line_in_witnesses[j], line_in_witnesses[i])
+						# It may be necessary to remove the first few samples since
+						# denominator samples may have arrived before numerator samples,
+						# in which case the adder assumes the numerator is one.
+						tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000)
 
-		tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
-		tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_matrixsolver")
-		tfs_at_f = mkdeinterleave(pipeline, tfs_at_f, len(witnesses), complex_data = True)
+						# Remove worthless data from computation of transfer function if we can
+						if noisesub_gate_bit is not None:
+							tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d" % (n, i, j))
+						tfs_at_f[(i + 1) * len(witnesses[m]) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = numpy.random.rand(), default_kappa_im = numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
-		for i in range(0, len(witnesses)):
-			# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
-			if filter_latency == 0.5:
-				reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tfs_at_f[i], line_in_witnesses[i]))
-			else:
-				reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tfs_at_f[i], line_in_witnesses[i], phase_factor))
-			# It may be necessary to remove the first few samples since line_in_witness may have arrived first, in which case the result of the above multiplication would be line_in_witness
-			reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_insertgap", chop_length = 1000000000)
-			reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
-			reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * n * f0, prefactor_real = -2.0)
-			reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")
+			tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
+			tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_matrixsolver")
+			tfs_at_f = mkdeinterleave(pipeline, tfs_at_f, len(witnesses[m]), complex_data = True)
 
-			signal_minus_lines.append(reconstructed_line_in_signal)
+			for i in range(0, len(witnesses[m])):
+				# Use gated, averaged transfer function to reconstruct the sinusoid as it appears in the signal from the witness channel
+				if filter_latency == 0.5 or not freq_vars[m]:
+					reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tfs_at_f[i], line_in_witnesses[i]))
+				else:
+					reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tfs_at_f[i], line_in_witnesses[i], phase_factor))
+				# It may be necessary to remove the first few samples since line_in_witness may have arrived first, in which case the result of the above multiplication would be line_in_witness
+				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_insertgap", chop_length = 1000000000)
+				reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
+				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * freq, prefactor_real = -2.0)
+				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")
+
+				signal_minus_lines.append(reconstructed_line_in_signal)
 
 	clean_signal = mkadder(pipeline, tuple(signal_minus_lines))
 

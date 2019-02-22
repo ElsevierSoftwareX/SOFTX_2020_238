@@ -31,8 +31,7 @@ GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = Filters/ER14/GDSFilters/L1GDS_1234630818_latency_test.ini
 
-all: noise_subtraction_range_plots_GDS
-#noise_subtraction_ASD_GDS noise_subtraction_range_plots_GDS
+all: noise_subtraction_ASD_GDS noise_subtraction_range_plots_GDS
 
 ###############################################
 ### These commands should change less often ###
