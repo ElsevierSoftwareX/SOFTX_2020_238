@@ -106,6 +106,7 @@ def parse_command_line():
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
 	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
+	parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Set the sample rate.  If not set, the sample rate will be based on the template frequency.  The sample rate must be at least twice the highest frequency in the templates. If provided it must be a power of two")
 	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9995, help = "set the SVD tolerance, default 0.9995")
 	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
 	parser.add_option("--output-name", help = "set the base name of the output, required")
@@ -170,6 +171,7 @@ for i, f in enumerate(groups):
 			"samples-max":options.samples_max,
 			"samples-max-64":options.samples_max_64,
 			"samples-max-256":options.samples_max_256,
+			"sample-rate":options.sample_rate,
 			"clipleft":clipleft,
 			"clipright":clipright,
 			"autocorrelation-length":options.autocorrelation_length,
