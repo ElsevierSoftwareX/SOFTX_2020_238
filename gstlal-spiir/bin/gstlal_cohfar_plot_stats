@@ -91,18 +91,20 @@ def append_missing_options(missing_options, options, option):
 
 def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog to plot pdf and cdf")
-	parser.add_option("--output", default = "", metavar = "name", help = "Set the output file name")
+	parser.add_option("--output-feature", default = "", metavar = "name", help = "Set the output file name")
+	parser.add_option("--output-rank", default = "", metavar = "name", help = "Set the output file name")
 	parser.add_option("--input-stats", default = "", metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--zerolag-format", default = "", metavar = "name", help = "format support, single | multi")
-	parser.add_option("--cohsnr", type = "float", help = "if format is single, read the cohsnr")
-	parser.add_option("--cmbchisq", type = "float", help = "if format is single, read the combined chisq")
+	parser.add_option("--cohsnr", type = "float", default = 8.0, help = "if format is single, read the cohsnr")
+	parser.add_option("--cmbchisq", type = "float", default = 1.0, help = "if format is single, read the combined chisq")
 	parser.add_option("--far-factor", type = "float", default = 12, help = "a factor multiplied to event far")
 	parser.add_option("--input-zerolag", default = None, metavar = "name", help = "Set the input stats file name")
 	parser.add_option("--ifos", metavar = "name", help = "set the ifos to plot pdf and cdf")
 	options, tmp = parser.parse_args()
 
 	missing_options = []
-	append_missing_options(missing_options, options, "output")
+	append_missing_options(missing_options, options, "output_feature")
+	append_missing_options(missing_options, options, "output_rank")
 	append_missing_options(missing_options, options, "input_stats")
 	if options.zerolag_format == "single":
 		append_missing_options(missing_options, options, "cohsnr")
@@ -152,6 +154,7 @@ chisq_idx = min(max(event_chisq - pipe_macro.ymin, 0)/pipe_macro.ystep, pipe_mac
 
 # FIXME: convert rankmap to rankfap
 
+# no longer useful, rank fap map is not fap from the old ranking statistic: CDF
 fapmap = convert_rankmap_to_fapmap(rankmap, rankfap)
 farmap = fapmap * nevent / (float(livetime)*hist_trials) * float(options.far_factor)
 lgfarmap = np.log10(farmap)
@@ -181,5 +184,39 @@ pyplot.xlim(0.2,2.2)
 pyplot.xlabel(r'$\log_{10}(\rho_c)$')	
 pyplot.ylabel(r'$\log_{10}(\xi_c^2)$')	
 pyplot.title("%s Background nevent %d, livetime %d" % (ifos, nevent, livetime))
-pyplot.savefig(options.output)
+pyplot.savefig(options.output_feature)
+
+
+nevent_name = "%s:%s_nevent" % (pipe_macro.BACKGROUND_XML_RANK_NAME, ifos)
+livetime_name = "%s:%s_livetime" % (pipe_macro.BACKGROUND_XML_RANK_NAME, ifos)
+
+rank_nevent = int(param_from_xml(options.input_stats, nevent_name))
+rank_livetime = int(param_from_xml(options.input_stats, livetime_name))
+n_s = nevent / (float(rank_livetime)*hist_trials) * float(options.far_factor)
+
+rankfap_name = "%s:%s_%s" % (pipe_macro.BACKGROUND_XML_RANK_NAME, ifos, pipe_macro.RANK_FAP_SUFFIX)
+rankfap = array_from_xml(options.input_stats, rankfap_name)
+lgrankfar = np.log10(rankfap * n_s)
+
+# find rank for far == one per month : 
+far_thresh = np.log10(1./86400/30)
+min_diff = 100
+for i in range(0, len(lgrankfar)):
+	this_diff = np.abs(lgrankfar[i] - far_thresh)
+	if  this_diff < min_diff:
+		min_diff = this_diff 
+		rank_idx = i
+
+print "plot far_thresh",far_thresh, "rank idx", rank_idx
+pyplot.figure()
+x = np.arange(pipe_macro.rankmin, pipe_macro.rankmax, pipe_macro.rankstep)
+cut_line = range(-40,int(far_thresh)+1)
+pyplot.plot(x, lgrankfar)
+pyplot.plot(np.ones(len(cut_line))*x[rank_idx], cut_line, label = "far = 1/Month, rank = %f" % x[rank_idx])
+pyplot.legend()
+pyplot.xlabel(r'$\log_{10}(R)$')	
+pyplot.ylabel(r'$\log_{10}(\mathrm{FAR}) (\mathrm{Hz})$')	
+pyplot.title("%s Background nevent %d, livetime %d" % (ifos, nevent, livetime))
+pyplot.savefig(options.output_rank)
+
 

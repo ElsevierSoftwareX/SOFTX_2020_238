@@ -11,8 +11,8 @@ ystep = 0.0157
 ybin = 300
 
 # rank
-rankmin = -30
-rankmax = 0
+rankmin = -10
+rankmax = 20
 rankstep = 0.1 # 30/299
 rankbin = 300
 
