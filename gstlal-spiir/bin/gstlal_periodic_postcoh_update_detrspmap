@@ -76,7 +76,7 @@ while True:
 		continue
 
 
-	data_name = grep_out[-1] # lastest timestamp
+	data_name = sorted(grep_out)[-1] # lastest timestamp
 	search_result = re.search(r'\d{7,11}', data_name)
 	try:
 		gps_time = search_result.group()
