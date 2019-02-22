@@ -74,7 +74,7 @@ for tf_file in tf_files:
 	filters_name = tf_file.split('_npz')[0] + '.npz'
 	# Search the directory tree for filters files with names matching the one we want.
 	filters_paths = []
-	print "\nSearching for %s ..." % filters_name
+	print("\nSearching for %s ..." % filters_name)
 	# Check the user's home directory
 	for dirpath, dirs, files in os.walk(os.environ['HOME']):
 		if filters_name in files:
@@ -93,7 +93,7 @@ for tf_file in tf_files:
 				filters_paths.append(os.path.join(dirpath, filters_name))
 	if not len(filters_paths):
 		raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-	print "Loading calibration filters from %s\n" % filters_paths[0]
+	print("Loading calibration filters from %s\n" % filters_paths[0])
 	filters = numpy.load(filters_paths[0])
 
 	model_jump_delay = options.filters_model_jump_delay

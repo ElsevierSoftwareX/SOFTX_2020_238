@@ -49,6 +49,8 @@ For a full list of example command lines that were used to create the O2 h(t) fr
 Type gstlal_compute_strain --help to see the full list of command line options.
 """
 
+from __future__ import print_function
+
 import os
 import sys
 import numpy
@@ -382,7 +384,7 @@ if filters_name.count('/') > 0:
 else:
 	# We need to search for the filters file
 	filters_paths = []
-	print "\nSearching for %s ..." % filters_name
+	print("\nSearching for %s ..." % filters_name)
 	# Check the user's home directory
 	for dirpath, dirs, files in os.walk(os.environ['HOME']):
 		if filters_name in files:
@@ -401,7 +403,7 @@ else:
 				filters_paths.append(os.path.join(dirpath, filters_name))
 	if not len(filters_paths):
 		raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-	print "Loading calibration filters from %s\n" % filters_paths[0]
+	print("Loading calibration filters from %s\n" % filters_paths[0])
 	filters = numpy.load(filters_paths[0])
 
 # In case we want to remove calibration lines, we will fill these dictionaries
@@ -2615,7 +2617,7 @@ if any(witness_channel_list):
 			if key in witness_channel_list[i]:
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
-			print "WARNING: Not all requested witness channels are being used"
+			print("WARNING: Not all requested witness channels are being used")
 		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], high_pass = witness_highpasses[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
 		witness_delay_time += witness_delay_increment
 
@@ -2917,23 +2919,23 @@ if DebuggingConfigs["pipelinegraphfilename"] != "None":
 # Seek the pipeline when necessary
 if InputConfigs["datasource"] == "frames":
 	if verbose:
-		print >>sys.stderr, "seeking GPS start and stop times ..."
+		print("seeking GPS start and stop times ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline failed to enter READY state")
 	datasource.pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time)
 
 if verbose:
-	print >>sys.stderr, "setting pipeline state to playing ..."
+	print("setting pipeline state to playing ...", file=sys.stderr)
 if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 else:
 	if verbose:
-		print "set to playing successfully"
+		print("set to playing successfully")
 if DebuggingConfigs["pipelinegraphfilename"] != "None":
 	pipeparts.write_dump_dot(pipeline, "%s.%s" %(DebuggingConfigs["pipelinegraphfilename"], "PLAYING"), verbose = verbose)
 	
 if verbose:
-	print >>sys.stderr, "running pipeline ..."
+	print("running pipeline ...", file=sys.stderr)
 
 mainloop.run()
 

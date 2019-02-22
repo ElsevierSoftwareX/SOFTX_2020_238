@@ -95,9 +95,9 @@ try:
 	f = open('frchannels.txt', 'r')
 	available_channels = f.read()
 	f.close()
-	print "Making channel list using available channels"
+	print("Making channel list using available channels")
 except:
-	print "Cannot find file frchannels.txt. Run FrChannels to check for available channels"
+	print("Cannot find file frchannels.txt. Run FrChannels to check for available channels")
 
 # These are (or may be) in the calibrated frames
 channel_list.append(chan_prefix + "CALIB_STRAIN" + chan_suffix)
@@ -300,7 +300,7 @@ for chan in temp_list:
 	if chan in available_channels:
 		channel_list.append(chan)
 
-print "Finished channel list"
+print("Finished channel list")
 
 ifo_channel_list = []
 for chan in channel_list:
