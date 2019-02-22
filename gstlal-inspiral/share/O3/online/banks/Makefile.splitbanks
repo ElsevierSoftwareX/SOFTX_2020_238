@@ -1,0 +1,32 @@
+all : bns_hyper.xml.gz nsbh_hyper.xml.gz bbh_hyper.xml.gz imbh_hyper.xml.gz
+	sqlite3 bns_hyper.sqlite "SELECT count(*) FROM sngl_inspiral;"
+	sqlite3 nsbh_hyper.sqlite "SELECT count(*) FROM sngl_inspiral;"
+	sqlite3 bbh_hyper.sqlite "SELECT count(*) FROM sngl_inspiral;"
+	sqlite3 imbh_hyper.sqlite "SELECT count(*) FROM sngl_inspiral;"
+	sqlite3 gstlal_hyperbank.sqlite "SELECT count(*) FROM sngl_inspiral;"
+	
+gstlal_hyperbank.xml.gz :
+	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/gstlal_bank.xml.gz?inline=false
+
+gstlal_hyperbank.sqlite : gstlal_hyperbank.xml.gz
+	ligolw_sqlite -d $@ -v gstlal_hyperbank.xml.gz
+
+bns_hyper.xml.gz : gstlal_hyperbank.sqlite
+	cp gstlal_hyperbank.sqlite bns_hyper.sqlite
+	sqlite3 bns_hyper.sqlite "DELETE FROM sngl_inspiral WHERE mass1 >= 2.0 or mass2 >= 2.0;"
+	ligolw_sqlite -d bns_hyper.sqlite -v -x $@
+
+nsbh_hyper.xml.gz : gstlal_hyperbank.sqlite
+	cp gstlal_hyperbank.sqlite nsbh_hyper.sqlite
+	sqlite3 nsbh_hyper.sqlite "DELETE FROM sngl_inspiral WHERE NOT (mass1 >= 2.0 and mass2 < 2.0);"
+	ligolw_sqlite -d nsbh_hyper.sqlite -v -x $@
+
+bbh_hyper.xml.gz : gstlal_hyperbank.sqlite
+	cp gstlal_hyperbank.sqlite bbh_hyper.sqlite
+	sqlite3 bbh_hyper.sqlite "DELETE FROM sngl_inspiral WHERE NOT(mass1 >=2.0 and mass2 >=2.0 and (mass1 + mass2 < 100));"
+	ligolw_sqlite -d bbh_hyper.sqlite -v -x $@
+
+imbh_hyper.xml.gz : gstlal_hyperbank.sqlite
+	cp gstlal_hyperbank.sqlite imbh_hyper.sqlite
+	sqlite3 imbh_hyper.sqlite "DELETE FROM sngl_inspiral WHERE NOT(mass1 >=2.0 and mass2 >=2.0 and (mass1 + mass2 > 100));"
+	ligolw_sqlite -d imbh_hyper.sqlite -v -x $@
