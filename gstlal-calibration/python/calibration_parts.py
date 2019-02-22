@@ -382,10 +382,6 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 
 				# Find transfer function between witness channel and signal at this frequency
 				tf_at_f = complex_division(pipeline, line_in_signal, line_in_witness)
-				# It may be necessary to remove the first few samples since denominator
-				# samples may have arrived before numerator samples, in which case the
-				# adder assumes the numerator is one.
-				tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000) # Removing one second
 
 				# Remove worthless data from computation of transfer function if we can
 				if noisesub_gate_bit is not None:
@@ -398,10 +394,6 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 					if(i != j):
 						# Find transfer function between 2 witness channels at this frequency
 						tf_at_f = complex_division(pipeline, line_in_witnesses[j], line_in_witnesses[i])
-						# It may be necessary to remove the first few samples since
-						# denominator samples may have arrived before numerator samples,
-						# in which case the adder assumes the numerator is one.
-						tf_at_f = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_insertgap", chop_length = 1000000000)
 
 						# Remove worthless data from computation of transfer function if we can
 						if noisesub_gate_bit is not None:
@@ -409,6 +401,9 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 						tfs_at_f[(i + 1) * len(witnesses[m]) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = numpy.random.rand(), default_kappa_im = numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 			tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
+			# It may be necessary to remove data at the beginning so that data that
+			# is missing do to filtering is not replaced with zeros
+			tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_insertgap", chop_length = 1000000000 * int(1 + (1 - filter_latency) * 21))
 			tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_matrixsolver")
 			tfs_at_f = mkdeinterleave(pipeline, tfs_at_f, len(witnesses[m]), complex_data = True)
 
