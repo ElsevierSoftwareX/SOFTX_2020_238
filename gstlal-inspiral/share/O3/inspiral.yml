@@ -4,7 +4,7 @@ dashboard:
   image: yes
   tabs:
     - name: Summary
-      url: /
+      url: https://docs.google.com/document/d/e/2PACX-1vSXj6m6A5qHuP4FR6V9fmv2u_mjHH3G-c0T8BWDLiusYOk81rZMRDWWbNnKkcGcQcHx9Ce07bF40DEK/pub
     - name: Shifts
       url: /
     - name: Docs
@@ -22,7 +22,7 @@ plots:
     #measurement: likelihood_history
     column: data
     aggregate: max
-    value: checked 
+    value:
 
   # likelihood history heatmap (by job)
   - title: Likelihood by Job
@@ -41,7 +41,7 @@ plots:
     column: data
     aggregate: min
     layout: {yaxis: {type: log}}
-    value:
+    value: checked
 
   # FAR history heatmap (by job)
   - title: FAR by Job
@@ -213,7 +213,7 @@ plots:
     column: data
     aggregate: max
     tag: job
-    value:
+    value: checked
 
   # time since last plot
   - title: Last Latency by Job
@@ -222,7 +222,7 @@ plots:
     column: data
     aggregate: max
     tag: job
-    value:
+    value: checked
 
   # FIXME: add time since trigger plot
 
