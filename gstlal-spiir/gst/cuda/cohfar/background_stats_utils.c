@@ -493,7 +493,6 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 			this_mean = this_snr*sense_ratio[VH_INDEX];
 			lgp_snr += log10(gsl_ran_gaussian_pdf(intable->snglsnr_V- this_mean, this_mean*mismatch));
 		}
-	return lgp_snr;
 	}
 
 	if (g_strcmp0(intable->pivotal_ifo, "L1") == 0) {
@@ -507,7 +506,6 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 			this_mean = this_snr*sense_ratio[VL_INDEX];
 			lgp_snr += log10(gsl_ran_gaussian_pdf(intable->snglsnr_V- this_mean, this_mean*mismatch));
 		}
-	return lgp_snr;
 	}
 	
 	if (g_strcmp0(intable->pivotal_ifo, "V1" ) == 0) {
@@ -521,9 +519,13 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 			this_mean = this_snr*sense_ratio[LV_INDEX];
 			lgp_snr += log10(gsl_ran_gaussian_pdf(intable->snglsnr_L- this_mean, this_mean*mismatch));
 		}
-	return lgp_snr;
 	}
-	
+
+	if (icombo < 6)
+		return lgp_snr - 0.399; // normalize the lgp_snr so is consistent with 3-det lgp_snr. +log10(gaussian.pdf(0, 1))
+	else
+		return lgp_snr;
+
 }
 double
 calc_lr(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, float *sense_ratio)
