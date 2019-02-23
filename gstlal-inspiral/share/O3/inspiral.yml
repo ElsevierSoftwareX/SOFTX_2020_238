@@ -1,7 +1,7 @@
 # configuration file for monitoring
 dashboard:
   title: GstLAL
-  image: yes
+  image: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/static/gstlal.png
   tabs:
     - name: Summary
       url: https://docs.google.com/document/d/e/2PACX-1vSXj6m6A5qHuP4FR6V9fmv2u_mjHH3G-c0T8BWDLiusYOk81rZMRDWWbNnKkcGcQcHx9Ce07bF40DEK/pub
@@ -40,7 +40,16 @@ plots:
     #measurement: far_history
     column: data
     aggregate: min
-    layout: {yaxis: {type: log}}
+    layout:
+      yaxis:
+        type: log
+        title:
+          text: FAR [Hz]
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value: checked
 
   # FAR history heatmap (by job)
@@ -213,6 +222,18 @@ plots:
     column: data
     aggregate: max
     tag: job
+    layout:
+      xaxis:
+        title:
+          text: Job ID
+      yaxis:
+        title:
+          text: Time since last heartbeat [s]
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 40
     value: checked
 
   # time since last plot
@@ -222,6 +243,18 @@ plots:
     column: data
     aggregate: max
     tag: job
+    layout:
+      xaxis:
+        title:
+          text: Job ID
+      yaxis:
+        title:
+          text: Latency [s]
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 40
     value: checked
 
   # FIXME: add time since trigger plot
