@@ -199,11 +199,17 @@ static void solve_system_ ## COMPLEX ## DTYPE(const COMPLEX DTYPE *src, COMPLEX 
  \
 		/* Now solve [matrix] [outvec] = [invec] for [outvec] using gsl */ \
 		gsl_linalg_ ## COMPLEX ## UNDERSCORE ## LU_decomp(matrix, permutation, &signum); \
-		gsl_linalg_ ## COMPLEX ## UNDERSCORE ## LU_solve(matrix, permutation, invec, outvec); \
+		if(!isinf(gsl_linalg_ ## COMPLEX ## UNDERSCORE ## LU_lndet(matrix))) { \
+			gsl_linalg_ ## COMPLEX ## UNDERSCORE ## LU_solve(matrix, permutation, invec, outvec); \
  \
-		/* Put the solutions into the output buffer */ \
-		for(j = 0; j < channels_out; j++) \
-			dst[i * channels_out + j] = get_ ## COMPLEX ## double_from_gsl_vector(outvec, j); \
+			/* Put the solutions into the output buffer */ \
+			for(j = 0; j < channels_out; j++) \
+				dst[i * channels_out + j] = get_ ## COMPLEX ## double_from_gsl_vector(outvec, j); \
+		} else { \
+			/* Fill output buffer with zeros */ \
+			for(j = 0; j < channels_out; j++) \
+				dst[i * channels_out + j] = 0.0; \
+		} \
 	} \
 }
 

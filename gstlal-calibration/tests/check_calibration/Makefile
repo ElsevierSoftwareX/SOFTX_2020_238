@@ -18,8 +18,8 @@ END = $(shell echo 1234694144 + 4096 + 715 | bc)
 #1185771520
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 885
-PLOT_COOLDOWN_TIME = 4521
+PLOT_WARMUP_TIME = 715
+PLOT_COOLDOWN_TIME = 715
 
 GDSCONFIGS = Filters/ER14/GDSFilters/H1GDS_noisesub_test_1232874910.ini 
 DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
@@ -27,9 +27,10 @@ DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
-GDSSHMCONFIGS = Filters/ER14/GDSFilters/L1GDS_1234630818_latency_test.ini
+GDSSHMCONFIGS = Filters/ER14/GDSFilters/H1GDS_1234630818_latency_test.ini
 
-all: noise_subtraction_ASD_GDS noise_subtraction_range_plots_GDS
+all: latency_test
+#noise_subtraction_ASD_GDS noise_subtraction_range_plots_GDS
 
 ###############################################
 ### These commands should change less often ###
