@@ -403,7 +403,7 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 			tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
 			# It may be necessary to remove data at the beginning so that data that
 			# is missing do to filtering is not replaced with zeros
-			tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_insertgap", chop_length = 1000000000 * int(1 + (1 - filter_latency) * 21))
+			tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_insertgap", bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], replace_value = 1e-35, chop_length = 1000000000 * int(1 + (1 - filter_latency) * 21))
 			tfs_at_f = pipeparts.mkgeneric(pipeline, tfs_at_f, "lal_matrixsolver")
 			tfs_at_f = mkdeinterleave(pipeline, tfs_at_f, len(witnesses[m]), complex_data = True)
 
