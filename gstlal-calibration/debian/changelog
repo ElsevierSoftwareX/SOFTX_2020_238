@@ -1,3 +1,13 @@
+gstlal-calibration (1.2.8-1) unstable; urgency=low
+
+  * Pcal correction factors can be updated from the front end
+  * More generalized line subtraction scheme
+  * Bumped required min gstreamer to 1.14.1
+  * Option to choose the best strain channel instead of writing two channels
+  * Cleaned up imports and removed unused glue imports
+
+ -- Aaron Viets <aaron.viets@ligo.org>  Sat, 23 Feb 2019 07:45:11 -0600
+
 gstlal-calibration (1.2.7-1) unstable; urgency=low
 
   * Bug fix to CALIB_STATE_VECTOR calculation
