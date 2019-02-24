@@ -5,9 +5,14 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
+#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal/gstaudioadapter.h>
+#include <gstlal/gstlal_peakfinder.h>
 #include <lal/LIGOMetadataTables.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_matrix_float.h>
+
 
 G_BEGIN_DECLS
 
@@ -40,20 +45,21 @@ typedef struct {
 	
 	GstAudioInfo audio_info;
 
-	/*
-	 * extracting triggers above threshold
-	 */
-
 	float threshold;
 	float cluster;
 
 	GMutex bank_lock;
+	gsl_matrix_complex *autocorrelation_matrix;
+	gsl_vector *autocorrelation_norm;
 	char *bank_filename;
+	SnglBurst *bank;
+	void *data;
+	struct gstlal_peak_state *maxdata;
 	gchar *instrument;
 	gchar *channel_name;
-	SnglBurst *bank;
 	gint num_templates;
 	LIGOTimeGPS *last_time;
+	void *snr_mat;
 } GSTLALStringTriggergen;
 
 
