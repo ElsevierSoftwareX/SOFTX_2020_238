@@ -29,11 +29,10 @@ from ligo.lw.utils import ligolw_add
 
 import numpy
 
+@lsctables.use_in
 class ligolwcontenthandler(ligolw.LIGOLWContentHandler):
 	pass
 
-lsctables.use_in(ligolwcontenthandler)
-lsctables.table.RowBuilder = lsctables.table.InterningRowBuilder
 
 def mchirp_bounds(mchirp, which):
 	if mchirp < 10:
