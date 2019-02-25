@@ -36,31 +36,36 @@ specifically written for the case of gstlal_inspiral's gracedb uploads.
 from glue.ligolw import ilwd
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables
+from ligo.lw.lsctables import TableByName as ligo_lw_TableByName
 from ligo.lw.param import Param as ligo_lw_Param
 from ligo.lw.table import Column as ligo_lw_Column
 
 
 #
 # dictionary mapping lsctables table class to dictionary mapping column
-# name to ilwd:char class.  note the colum name is initially in the format
-# as it appears in the .validcolumns attribute, which means it is not
-# stripped, then it is stripped for ease of use later
+# name to ilwd:char class.  we only consider tables that are named in both
+# glue.ligolw.lsctables and ligo.lw.lsctables, assuming we won't be
+# converting documents that contain tables that have been removed from the
+# latter.
 #
 
+ilwdchar_tables = dict((tblname, dict((ligo_lw_Column.ColumnName(colname), None) for colname, coltype in tblcls.validcolumns.items() if coltype == u"ilwd:char")) for tblname, tblcls in lsctables.TableByName.items() if tblname in ligo_lw_TableByName and u"ilwd:char" in tblcls.validcolumns.values())
 
-ilwdchar_tables = dict((tblname, dict((colname, None) for colname, coltype in tblcls.validcolumns.items() if coltype == u"ilwd:char")) for tblname, tblcls in lsctables.TableByName.items() if u"ilwd:char" in tblcls.validcolumns.values())
-
-for tblname, colnamemap in list(ilwdchar_tables.items()):
+destrip_column = dict((key, dict(value)) for key, value in ilwdchar_tables.items())
+for tblname, colnamemap in destrip_column.items():
 	for colname in list(colnamemap):
+		colnamemap[colname], = (destripped for destripped in ligo_lw_TableByName[tblname].validcolumns if ligo_lw_Column.ColumnName(destripped) == colname)
+
+for tblname, colnamemap in ilwdchar_tables.items():
+	for colname in list(colnamemap):
+		destripped = destrip_column[tblname][colname]
 		try:
-			tblprefix = ligo_lw_Column.ColumnName.table_name(colname)
+			tblprefix = ligo_lw_Column.ColumnName.table_name(destripped)
 		except ValueError:
 			# columns whose names don't have a prefix are in
 			# their own table
 			tblprefix = tblname
 		colnamemap[colname] = ilwd.get_ilwdchar_class(tblprefix, ligo_lw_Column.ColumnName(colname))
-	# strip column names
-	ilwdchar_tables[tblname] = dict((ligo_lw_Column.ColumnName(colname), ilwdcls) for colname, ilwdcls in colnamemap.items())
 
 
 #
