@@ -142,11 +142,14 @@ if not gid_list:
 	lvalert_data = json.loads(sys.stdin.read())
 	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 	logging.info("lvalert data: %s" % repr(lvalert_data))
-	filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
-	if filename not in (u"ranking_data.xml.gz",):
-		logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
-		sys.exit()
-	gid_list = [str(lvalert_data["uid"])]
+	if "filename" in lvalert_data["data"]:
+		filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
+		if filename not in (u"ranking_data.xml.gz",):
+			logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
+			sys.exit()
+		gid_list = [str(lvalert_data["uid"])]
+	else:
+		logging.info("json key filename not in lvalert data, skipping")
 
 
 #

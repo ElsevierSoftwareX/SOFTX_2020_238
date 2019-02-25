@@ -82,11 +82,14 @@ def parse_command_line():
 		lvalert_data = json.loads(sys.stdin.read())
 		logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 		logging.info("lvalert data: %s" % repr(lvalert_data))
-		filename = path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
-		if filename not in (u"psd.xml.gz",):
-			logging.info("filename is not 'psd.xml.gz'.  skipping")
-			sys.exit()
-		gid_list = [str(lvalert_data["uid"])]
+		if "filename" in lvalert_data["data"]:
+			filename = path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
+			if filename not in (u"psd.xml.gz",):
+				logging.info("filename is not 'psd.xml.gz'.  skipping")
+				sys.exit()
+			gid_list = [str(lvalert_data["uid"])]
+		else:
+			logging.info("json key filename not in lvalert data, skipping")
 
 	elif options.verbose:
 		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
