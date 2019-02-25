@@ -59,6 +59,7 @@ import sys
 import time
 import httplib
 import tempfile
+import os
 
 from glue import iterutils
 from ligo.lw import ligolw
@@ -685,7 +686,6 @@ class GracedBWrapper(object):
 
 			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
-			xmldoc.unlink()
 			# FIXME: make this optional from command line?
 			if True:
 				for attempt in range(1, self.retries + 1):
@@ -708,6 +708,14 @@ class GracedBWrapper(object):
 				with open(filename, "w") as f:
 					f.write(message.getvalue())
 			message.close()
+			try:
+				os.mkdir("gracedb_uploads")
+			except OSError:
+				pass
+			with open(os.path.join("gracedb_uploads", filename), "w") as fileobj:
+                               ligolw_utils.write_fileobj(xmldoc, fileobj, gz = False)
+
+			xmldoc.unlink()
 
 		#
 		# upload PSDs and ranking statistic data
