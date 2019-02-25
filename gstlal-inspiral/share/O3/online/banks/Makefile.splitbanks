@@ -6,7 +6,7 @@ all : bns_hyper.xml.gz nsbh_hyper.xml.gz bbh_hyper.xml.gz imbh_hyper.xml.gz
 	sqlite3 gstlal_hyperbank.sqlite "SELECT count(*) FROM sngl_inspiral;"
 	
 gstlal_hyperbank.xml.gz :
-	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/gstlal_bank.xml.gz?inline=false
+	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-inspiral/share/O3/gstlal_hyperbank.xml.gz --output-document $@
 
 gstlal_hyperbank.sqlite : gstlal_hyperbank.xml.gz
 	ligolw_sqlite -d $@ -v gstlal_hyperbank.xml.gz
