@@ -1,0 +1,27 @@
+USER=albert.einstein
+
+ER14_H1L1V1_PSD.xml.gz: L1psd.xml.gz H1psd.xml.gz V1psd.xml.gz
+	ligolw_add --output $@ $^
+
+darm_20190223_0438utc.txt:
+	# FROM https://wiki.ligo.org/AuthProject/CommandLineLIGOAuth_New
+	kinit ${USER}@LIGO.ORG
+	ecp-cookie-init -k https://llocds.ligo-la.caltech.edu/data/l1nb/DARM_measurements/darm_20190223_0438utc.txt > $@
+
+181202_Strain_ref.txt:
+	kinit ${USER}@LIGO.ORG
+	ecp-cookie-init -k https://dcc.ligo.org/DocDB/0157/G1802280/001/181202_Strain_ref.txt > $@
+
+L1psd.xml.gz: darm_20190223_0438utc.txt
+	gstlal_psd_xml_from_asd_txt --instrument L1 $< --output $@
+
+# NOTE we reuse L1 psd for H1 since H1 is still being commissioned
+H1psd.xml.gz: darm_20190223_0438utc.txt
+	gstlal_psd_xml_from_asd_txt --instrument H1 $< --output $@
+
+# NOTE we use the ER13 PSD for now
+V1psd.xml.gz: 181202_Strain_ref.txt
+	gstlal_psd_xml_from_asd_txt --instrument V1 --output $@ $<
+
+clean:
+	rm 181202_Strain_ref.txt  darm_20190223_0438utc.txt  ER14_H1L1V1_PSD.xml.gz  H1psd.xml.gz  L1psd.xml.gz  V1psd.xml.gz
