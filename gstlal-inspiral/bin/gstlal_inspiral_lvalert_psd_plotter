@@ -127,13 +127,13 @@ if not graceids:
 	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 	logging.info("lvalert data: %s" % repr(lvalert_data))
 	if "filename" in lvalert_data["data"]:
-	    filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
-	    if filename not in (u"psd.xml.gz",):
-		    logging.info("filename is not 'psd.xml.gz'.  skipping")
-		    sys.exit()
-	    graceids = [str(lvalert_data["uid"])]
-    else:
-        logging.info("json key filename not in lvalert data, skipping)
+		filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
+		if filename not in (u"psd.xml.gz",):
+			logging.info("filename is not 'psd.xml.gz'.  skipping")
+			sys.exit()
+		graceids = [str(lvalert_data["uid"])]
+	else:
+		logging.info("json key filename not in lvalert data, skipping")
 
 
 gracedb_client = gracedb.GraceDb(service_url = options.gracedb_service_url)
