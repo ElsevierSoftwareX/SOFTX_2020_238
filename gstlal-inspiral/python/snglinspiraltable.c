@@ -623,7 +623,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				PyErr_SetString(PyExc_ValueError, "buffer overrun while copying H1 SNR time series");
 				return NULL;
 			}
-			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("H1_snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->H1_length);
+			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->H1_length);
 			if (!series)
 			{
 				Py_DECREF(item);
@@ -650,7 +650,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				PyErr_SetString(PyExc_ValueError, "buffer overrun while copying L1 SNR time series");
 				return NULL;
 			}
-			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("L1_snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->L1_length);
+			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->L1_length);
 			if (!series)
 			{
 				Py_DECREF(item);
@@ -677,7 +677,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				return NULL;
 			}
 
-			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("V1_snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->V1_length);
+			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->V1_length);
 			if (!series)
 			{
 				Py_DECREF(item);
@@ -702,7 +702,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				PyErr_SetString(PyExc_ValueError, "buffer overrun while copying SNR time series");
 				return NULL;
 			}
-			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("K1_snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->K1_length);
+			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->K1_length);
 			if (!series)
 			{
 				Py_DECREF(item);

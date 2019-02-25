@@ -76,6 +76,7 @@ from ligo.lw.utils import time_slide as ligolw_time_slide
 import lal
 from lal import LIGOTimeGPS
 from lal import series as lalseries
+from lalburst.snglcoinc import light_travel_time
 import ligo.gracedb.rest
 from ligo import gracedb
 
@@ -553,8 +554,6 @@ class GracedBWrapper(object):
 			# part way through.
 			#
 
-			if self.verbose:
-				print >>sys.stderr, "sending %s to gracedb ..." % filename
 			print >>sys.stderr, "sending %s to gracedb ..." % filename
 			message = StringIO.StringIO()
 			xmldoc = last_coincs[coinc_event.coinc_event_id]
@@ -562,22 +561,124 @@ class GracedBWrapper(object):
 			# columns (attributes should all be
 			# populated).  FIXME:  ugly.
 			sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+			process_params_table = lsctables.ProcessParamsTable.get_table(xmldoc)
 			for standard_column in ("process:process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id"):
 				try:
 					sngl_inspiral_table.appendColumn(standard_column)
 				except ValueError:
 					# already has it
 					pass
+			# If we have snr time series for a detector that didn't
+			# produce a peak above threshold, create a trigger here
+			# for the highest peak that is coincident with all
+			# other triggers
+			event_ifos = [event.ifo for event in last_coincs.sngl_inspirals(coinc_event.coinc_event_id)]
+			triggerless_ifos = [ifo for ifo in self.instruments if ifo not in event_ifos]
+			subthreshold_events = []
+			# FIXME Add logic to take highest network snr set of triggers when more than 1 sub-threshold trigger
+			for ifo in triggerless_ifos:
+				trigger_time_list = sorted([(event.ifo, LIGOTimeGPS(event.end_time, event.end_time_ns), getattr(event, "%s_snr_time_series" % ifo)) for event in last_coincs.sngl_inspirals(coinc_event.coinc_event_id) if getattr(event, "%s_snr_time_series" % ifo) is not None], key = lambda t: t[1])
+				if not trigger_time_list:
+					continue
+				# NOTE NOTE NOTE The coincidence finding algorithm has an extra fudge factor added to the light travel time that isn't used here
+				coinc_segment = ligolw_segments.segments.segment(ligolw_segments.segments.NegInfinity, ligolw_segments.segments.PosInfinity)
+				t0 = trigger_time_list[0][2].epoch
+				# NOTE This assumes all ifos have same sample rate
+				dt = trigger_time_list[0][2].deltaT
+				unit = trigger_time_list[0][2].sampleUnits
+				for (trigger_ifo, trigger_time, snr_time_series) in trigger_time_list:
+					coincidence_window = LIGOTimeGPS(light_travel_time(ifo, trigger_ifo))
+					coinc_segment &= ligolw_segments.segments.segment(trigger_time - coincidence_window, trigger_time + coincidence_window)
+					if snr_time_series.epoch == t0:
+						snr_time_series_array = snr_time_series.data.data
+					else:
+						idx = int(round((t0 + (len(snr_time_series_array))*dt - snr_time_series.epoch) / dt))
+						snr_time_series_array = numpy.append(snr_time_series_array, snr_time_series.data.data[idx:])
+
+				if not snr_time_series_array.any():
+					# empty snr time series, detector wasn't on
+					# FIXME Need to fix itacac so that snr time series only created from a detector if there was science mode data, currently it'll just pass zeros
+					continue
+
+				for (event, snr_time_series) in subthreshold_events:
+					coincidence_window = LIGOTimeGPS(light_travel_time(ifo, event.ifo))
+					trigger_time = LIGOTimeGPS(event.end_time, event.end_time_ns)
+					coinc_segment &= ligolw_segments.segments.segment(trigger_time - coincidence_window, trigger_time + coincidence_window)
+
+				tfinal = t0 + dt*(snr_time_series_array.shape[0] - 1)
+				# NOTE This will not work if the length of the
+				# snr time series (currently the
+				# autocorrelation length) is not large enough
+				# to cover all possible times that could be
+				# coincident with all of the existing triggers
+				if not ((t0 <= coinc_segment[0]) and (tfinal >= coinc_segment[1])):
+					# NOTE This should probably be an
+					# assert, but it's better to upload a
+					# candidate to gracedb without
+					# subthreshold triggers than to not
+					# upload anything
+					print >>sys.stderr, "something went wrong creating sub-threshold trigger for %s in gracedb upload" % ifo
+					continue
+				idx0 = int((coinc_segment[0] - t0)/dt)
+				idxf = int(math.ceil((coinc_segment[1] - t0)/dt))
+				peak_snr = 0.
+				for idx in xrange(idx0, idxf + 1):
+					if abs(snr_time_series_array[idx]) > peak_snr:
+						peak_snr = abs(snr_time_series_array[idx])
+						peak_phase = math.atan2(snr_time_series_array[idx].imag, snr_time_series_array[idx].real)
+						peak_idx = idx
+						peak_t = idx*dt + t0
+
+				# NOTE Bayestar needs at least 26.3ms on either side of the snr peak, so only provide an snr time series if we have enough samples
+				min_num_samps = int(math.ceil(0.0263 / dt)) + 1
+				if peak_idx < min_num_samps or snr_time_series_array.shape[0] - peak_idx < min_num_samps:
+					print >>sys.stderr, "not enough samples to produce snr time series for sub-threshold trigger in %s" % ifo
+					continue
+
+				sngl_inspiral_table.append(sngl_inspiral_table.RowType())
+				# FIXME Ugly
+				for column in sngl_inspiral_table.columnnames:
+					setattr(sngl_inspiral_table[-1], column, getattr(sngl_inspiral_table[0], column))
+				# TODO Make sure end_time_gmst is not set
+				setattr(sngl_inspiral_table[-1], "ifo", ifo)
+				setattr(sngl_inspiral_table[-1], "end_time", peak_t.gpsSeconds)
+				setattr(sngl_inspiral_table[-1], "end_time_ns", peak_t.gpsNanoSeconds)
+				setattr(sngl_inspiral_table[-1], "end_time_gmst", lal.GreenwichMeanSiderealTime(peak_t))
+				setattr(sngl_inspiral_table[-1], "snr", peak_snr)
+				setattr(sngl_inspiral_table[-1], "coa_phase", peak_phase)
+				setattr(sngl_inspiral_table[-1], "chisq", numpy.nan)
+				setattr(sngl_inspiral_table[-1], "event_id", sngl_inspiral_table.get_next_id())
+				setattr(sngl_inspiral_table[-1], "eff_distance", numpy.nan)
+				for row in process_params_table:
+					if row.param == "--state-channel-name" and row.value[:2] == ifo:
+						setattr(sngl_inspiral_table[-1], "channel", row.value[3:])
+						break
+
+				snr_time_series = lal.CreateCOMPLEX8TimeSeries(
+					name = "snr",
+					epoch = peak_t - min_num_samps*dt,
+					f0 = 0.0,
+					deltaT = dt,
+					sampleUnits = unit,
+					length = 2*min_num_samps + 1
+				)
+				snr_time_series.data.data = snr_time_series_array[(peak_idx - min_num_samps):(peak_idx + min_num_samps+1)]
+				subthreshold_events.append((sngl_inspiral_table[-1], snr_time_series))
+
 			# add SNR time series if available
 			# FIXME Probably only want one time series for each ifo
 			for event in last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
-				for ifo in ("H1", "L1", "V1", "K1"):
-					snr_time_series = getattr(event, "%s_snr_time_series" % ifo)
-					if snr_time_series is not None:
-						snr_time_series_element = lalseries.build_COMPLEX8TimeSeries(snr_time_series)
-						snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
-						snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"ifo", ifo))
-						xmldoc.childNodes[-1].appendChild(snr_time_series_element)
+				snr_time_series = getattr(event, "%s_snr_time_series" % event.ifo)
+				if snr_time_series is not None:
+					snr_time_series_element = lalseries.build_COMPLEX8TimeSeries(snr_time_series)
+					snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+					xmldoc.childNodes[-1].appendChild(snr_time_series_element)
+
+			for (event, snr_time_series) in subthreshold_events:
+				snr_time_series_element = lalseries.build_COMPLEX8TimeSeries(snr_time_series)
+				snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
+				xmldoc.childNodes[-1].appendChild(snr_time_series_element)
+
 			# translate IDs from integers to ilwd:char for
 			# backwards compatibility
 			ilwdify.do_it_to(xmldoc)
