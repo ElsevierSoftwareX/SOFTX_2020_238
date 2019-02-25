@@ -117,15 +117,14 @@ options, filenames = parse_command_line()
 
 
 if True:
-	rankingstats = []
+	rankingstat_index = {}
 	for n, line in enumerate(open(options.ranking_stat_cache), 1):
 		rankingstat = far.RankingStat.from_xml(ligolw_utils.load_url(CacheEntry(line).url, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose), u"gstlal_inspiral_likelihood")
 		rankingstat.finish()
 		rankingstat.fast_path_stat_threshold = NegInf
-		rankingstats.append(rankingstat)
+		rankingstat_index.update((template_id, rankingstat) for template_id in rankingstat.template_ids)
 		# FIXME:  remove this
 		break
-	rankingstat_index = rate.Categories([rankingstat.template_ids for rankingstat in rankingstats])
 
 
 #
@@ -135,9 +134,9 @@ if True:
 
 connection = sqlite3.connect(options.candidates)
 xmldoc = dbtables.get_xml(connection)
-coinc_def_id = str(ligolw_coincs.get_coinc_def_id(xmldoc, InspiralCoincDef.search, InspiralCoincDef.search_coinc_type, create_new = False))
+coinc_def_id = ligolw_coincs.get_coinc_def_id(xmldoc, InspiralCoincDef.search, InspiralCoincDef.search_coinc_type, create_new = False)
 sngl_inspiral_row = lsctables.SnglInspiralTable.get_table(xmldoc).row_from_cols
-offset_vectors = dict((str(time_slide_id), offset_vector) for time_slide_id, offset_vector in lsctables.TimeSlideTable.get_table(xmldoc).as_dict().items())
+offset_vectors = dict((time_slide_id, offset_vector) for time_slide_id, offset_vector in lsctables.TimeSlideTable.get_table(xmldoc).as_dict().items())
 
 
 #
@@ -158,7 +157,7 @@ x = []
 y = []
 
 # FIXME:  remove this
-template_id = iter(rankingstats[0].template_ids).next()
+template_id = rankingstat_index.keys()[0]
 
 with open("dump.txt", "w") as out:
 	# iterate over zero-lag coincs
@@ -169,14 +168,14 @@ with open("dump.txt", "w") as out:
 		for event in events:
 			event.template_id = template_id
 		# compute ranking statistic arguments
-		rankingstat = rankingstats[rankingstat_index[events[0].template_id]]
+		rankingstat = rankingstat_index[events[0].template_id]
 		fast_path_stat = rankingstat.fast_path_stat
 		kwargs = rankingstat.kwargs_from_triggers(events, offset_vectors[time_slide_id])
 		# evaluate full ranking stat and fast-path ranking stat and save
 		x.append(ln_lr)
 		y.append(fast_path_stat(**kwargs))
 		# update output
-		print >>out, "%.16g %.16g %d" % (x[-1], y[-1], int(coinc_event_id.split(":")[-1]))
+		print >>out, "%.16g %.16g %d" % (x[-1], y[-1], coinc_event_id)
 		if progress is not None:
 			progress.increment()
 
