@@ -484,7 +484,6 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 	float this_mean, this_snr, mismatch = 0.3;
 	if (g_strcmp0(intable->pivotal_ifo, "H1") == 0) {
 		this_snr = intable->snglsnr_H;
-		// check L1 and V1
 		if (icombo == 6 || icombo == 3) { // H1L1 or H1L1V1
 			this_mean = this_snr*sense_ratio[LH_INDEX];
 			lgp_snr += log10(gsl_ran_gaussian_pdf(intable->snglsnr_L- this_mean, this_mean*mismatch));
@@ -497,7 +496,6 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 
 	if (g_strcmp0(intable->pivotal_ifo, "L1") == 0) {
 		this_snr = intable->snglsnr_L;
-		// check L1 and V1
 		if (icombo == 6 || icombo == 3) { // H1L1 or H1L1V1
 			this_mean = this_snr*sense_ratio[HL_INDEX];
 			lgp_snr += log10(gsl_ran_gaussian_pdf(intable->snglsnr_H- this_mean, this_mean*mismatch));
@@ -509,9 +507,8 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 	}
 	
 	if (g_strcmp0(intable->pivotal_ifo, "V1" ) == 0) {
-		if (icombo == 6 || icombo == 4) { // H1V1 or H1L1V1
 		this_snr = intable->snglsnr_V;
-		// check L1 and V1
+		if (icombo == 6 || icombo == 4) { // H1V1 or H1L1V1
 			this_mean = this_snr*sense_ratio[HV_INDEX];
 			lgp_snr += log10(gsl_ran_gaussian_pdf(intable->snglsnr_H- this_mean, this_mean*mismatch));
 		}
@@ -537,7 +534,8 @@ calc_lr(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, float *s
 	double lgp_signal = 0;
 	lgp_signal += get_prob_snrs(icombo, intable, sense_ratio);
 	lgp_signal += get_prob_null(intable);
-	//printf("signal %e (p_null %e) noise %e\n", p_signal, get_prob_null(intable), p_noise);
+	if (lgp_signal-lgp_noise > 15)
+		printf("end time %d, ifos %s, cohsnr %f, cmbchisq %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f, signal %f (p_null %f) noise %f\n", intable->end_time_H, intable->ifos, intable->cohsnr, intable->cmbchisq, intable->snglsnr_L, intable->snglsnr_H, intable->snglsnr_V, intable->chisq_L, intable->chisq_H, intable->chisq_V, lgp_signal, get_prob_null(intable), lgp_noise);
 	return lgp_signal-lgp_noise;
 }
 

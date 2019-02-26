@@ -1108,7 +1108,7 @@ static int cuda_postcoh_select_background(PeakList *pklist,int write_ifo, int hi
 			background_cur = (itrial - 1)*max_npeak + peak_cur;
 			// FIXME: consider a different threshold for 3-detector 
 //			if (sqrt(pklist->cohsnr_bg[background_cur]) > cohsnr_thresh * pklist->snglsnr_H[iifo*max_npeak + peak_cur])
-			if (sqrt(pklist->cohsnr_bg[background_cur]) > pklist->snglsnr_H[write_ifo*max_npeak + peak_cur]) {
+			if (sqrt(pklist->cohsnr_bg[background_cur]) > 0.1 + pklist->snglsnr_H[write_ifo*max_npeak + peak_cur]) {
 				left_backgrounds++;
 				GST_LOG("mark back,%d ipeak, %d itrial", ipeak, itrial);
 			}
@@ -1162,7 +1162,7 @@ static int cuda_postcoh_select_foreground(PostcohState *state, float cohsnr_thre
 			 * */
 			peak_cur = peak_pos[ipeak];
 			// FIXME: consider a different threshold for 3-detector 
-			if (sqrt(pklist->cohsnr[peak_cur]) > pklist->snglsnr_H[write_ifo*(state->max_npeak) + peak_cur]) {
+			if (sqrt(pklist->cohsnr[peak_cur]) > 0.1 + pklist->snglsnr_H[write_ifo*(state->max_npeak) + peak_cur]) {
 				cluster_peak_pos[final_peaks++] = peak_cur;
 			} else 
 				bubbled_peak_pos[bubbled_peaks++] = peak_cur;
