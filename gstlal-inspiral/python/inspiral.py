@@ -587,6 +587,8 @@ class GracedBWrapper(object):
 				# NOTE This assumes all ifos have same sample rate
 				dt = trigger_time_list[0][2].deltaT
 				unit = trigger_time_list[0][2].sampleUnits
+				snr_length = trigger_time_list[0][2].data.length
+				autocorrelation_length = (snr_length - 1) / 2
 				for (trigger_ifo, trigger_time, snr_time_series) in trigger_time_list:
 					coincidence_window = LIGOTimeGPS(light_travel_time(ifo, trigger_ifo))
 					coinc_segment &= ligolw_segments.segments.segment(trigger_time - coincidence_window, trigger_time + coincidence_window)
@@ -636,18 +638,37 @@ class GracedBWrapper(object):
 					print >>sys.stderr, "not enough samples to produce snr time series for sub-threshold trigger in %s" % ifo
 					continue
 
+				# snr length guaranteed to be odd
+				if peak_idx > autocorrelation_length:
+					idx0 = peak_idx - autocorrelation_length
+				else:
+					idx0 = 0
+				if peak_idx < snr_time_series_array.shape[0] - autocorrelation_length:
+					idxf = peak_idx + autocorrelation_length + 1
+				else:
+					idxf = snr_time_series_array.shape[0]
+
+				snr_time_series_array = snr_time_series_array[idx0:idxf]
+				if snr_time_series_array.shape[0] != snr_length:
+					if idx0 == 0:
+						snr_time_series_array = numpy.append(snr_time_series_array, numpy.zeros(snr_length - snr_time_series_array.shape[0]))
+					elif idxf != peak_idx + autocorrelation_length + 1:
+						snr_time_series_array = numpy.insert(snr_time_series_array, 0, numpy.zeros(snr_length - snr_time_series_array.shape[0]))
+					else:
+						print >>sys.stderr, "unexpected conditional while making sub-threshold trigger for %s, skipping. idx0 = %d, idxf = %d" % (ifo, idx0, idxf)
+						continue
+
 				sngl_inspiral_table.append(sngl_inspiral_table.RowType())
 				# FIXME Ugly
 				for column in sngl_inspiral_table.columnnames:
 					setattr(sngl_inspiral_table[-1], column, getattr(sngl_inspiral_table[0], column))
-				# TODO Make sure end_time_gmst is not set
 				setattr(sngl_inspiral_table[-1], "ifo", ifo)
 				setattr(sngl_inspiral_table[-1], "end_time", peak_t.gpsSeconds)
 				setattr(sngl_inspiral_table[-1], "end_time_ns", peak_t.gpsNanoSeconds)
 				setattr(sngl_inspiral_table[-1], "end_time_gmst", lal.GreenwichMeanSiderealTime(peak_t))
 				setattr(sngl_inspiral_table[-1], "snr", peak_snr)
 				setattr(sngl_inspiral_table[-1], "coa_phase", peak_phase)
-				setattr(sngl_inspiral_table[-1], "chisq", numpy.nan)
+				setattr(sngl_inspiral_table[-1], "chisq", None)
 				setattr(sngl_inspiral_table[-1], "event_id", sngl_inspiral_table.get_next_id())
 				setattr(sngl_inspiral_table[-1], "eff_distance", numpy.nan)
 				for row in process_params_table:
@@ -657,14 +678,29 @@ class GracedBWrapper(object):
 
 				snr_time_series = lal.CreateCOMPLEX8TimeSeries(
 					name = "snr",
-					epoch = peak_t - min_num_samps*dt,
+					epoch = peak_t - autocorrelation_length * dt,
 					f0 = 0.0,
 					deltaT = dt,
 					sampleUnits = unit,
-					length = 2*min_num_samps + 1
+					length = snr_length
 				)
-				snr_time_series.data.data = snr_time_series_array[(peak_idx - min_num_samps):(peak_idx + min_num_samps+1)]
+				snr_time_series.data.data = snr_time_series_array
 				subthreshold_events.append((sngl_inspiral_table[-1], snr_time_series))
+
+			if subthreshold_events:
+				sngl_inspiral_table.sort(key = lambda row: row.ifo)
+				coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
+				setattr(coinc_inspiral_table[0], "ifos", ",".join(sorted([getattr(row, "ifo") for row in sngl_inspiral_table])))
+				setattr(coinc_inspiral_table[0], "snr", sum([getattr(row, "snr")**2. for row in sngl_inspiral_table])**.5)
+
+				coinc_event_map_table = lsctables.CoincMapTable.get_table(xmldoc)
+				for row in sngl_inspiral_table:
+					if getattr(row, "chisq") is not None:
+						continue
+					coinc_event_map_table.append(coinc_event_map_table.RowType())
+					for column in ("coinc_event_id", "table_name"):
+						setattr(coinc_event_map_table[-1], column, getattr(coinc_event_map_table[0], column))
+					setattr(coinc_event_map_table[-1], "event_id", getattr(row, "event_id"))
 
 			# add SNR time series if available
 			# FIXME Probably only want one time series for each ifo
