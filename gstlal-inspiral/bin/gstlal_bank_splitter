@@ -93,7 +93,8 @@ def parse_command_line():
 	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
 	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
 	parser.add_option("--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
-	parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over mx, use max.")
+	parser.add_option("--min-f-final", metavar = "float", type="float", help = "Min f_final to populate table with; if f_final under min, use min.")
+	parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over max, use max.")
 	parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--approximant", type = "string", action = "append", help = "Must specify an approximant given as mchirp_min:mchirp_max:string")
@@ -206,6 +207,9 @@ with open(options.output_cache, "w") as output_cache_file:
 			# Override the high frequency with the max if appropriate
 			if options.max_f_final and (row.f_final > options.max_f_final):
 				row.f_final = options.max_f_final
+			# Override the high frequency with the min if appropriate
+			if options.min_f_final and (row.f_final < options.min_f_final):
+				row.f_final = options.min_f_final
 			row.process_id = process.process_id
 
 
