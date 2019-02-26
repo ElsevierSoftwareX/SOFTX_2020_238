@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-inspiral],[1.5.2],[gstlal-discuss@ligo.org],[gstlal-inspiral])
+AC_INIT([gstlal-inspiral],[1.6.0],[gstlal-discuss@ligo.org],[gstlal-inspiral])
 AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -273,8 +273,8 @@ AC_SUBST([MIN_LIGO_LW_VERSION], [1.5.3])
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.4.0])
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.5.2])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.5.0])
+AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.6.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

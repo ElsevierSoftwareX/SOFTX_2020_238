@@ -2,7 +2,7 @@ gstlal-burst (0.1.0) unstable; urgency=low
 
   * Add feature extraction toolkit
 
- -- Patrick Godwin <patrick.godwin@ligo.org>  Sat, 6 Oct 2018 20:54:00 -0500
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Tue, 26 Feb 2019 16:43:50 -0500
 
 gstlal-burst (0.0.3) unstable; urgency=low
 
