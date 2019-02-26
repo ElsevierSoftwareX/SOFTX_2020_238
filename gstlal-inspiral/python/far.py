@@ -733,6 +733,10 @@ WHERE
 		mode, = zl.argmax()
 		zlcumsum = zl.array.cumsum()
 		assert zlcumsum[-1] > 1000, "Need at least 1000 zero lag events to compute extinction model"
+		ten_thousand_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 10000)]
+		# Adjust the mode to be at 10,000 events if that LR is higher
+		if ten_thousand_events_lr > mode:
+			mode = ten_thousand_events_lr
 		one_hundred_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 100)]
 		mask = (x < mode) | (x > one_hundred_events_lr)
 		zl = numpy.ma.masked_array(zl.array, mask)
