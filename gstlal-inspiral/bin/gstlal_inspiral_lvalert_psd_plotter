@@ -40,7 +40,7 @@ import json
 import lal
 
 
-from ligo.lw import utils as ligolw_utils
+from glue.ligolw import utils as ligolw_utils
 from gstlal import lvalert_helper
 from gstlal import plotpsd
 from ligo.gracedb import rest as gracedb

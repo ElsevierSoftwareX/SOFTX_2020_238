@@ -39,11 +39,11 @@ import sys
 import json
 
 
-from ligo.lw import ligolw
-from ligo.lw import lsctables
-from ligo.lw import utils as ligolw_utils
-from ligo.lw.utils import coincs as ligolw_coincs
-from ligo.lw.utils import process as ligolw_process
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import coincs as ligolw_coincs
+from glue.ligolw.utils import process as ligolw_process
 from gstlal import lvalert_helper
 import lal
 from ligo.gracedb import rest as gracedb
