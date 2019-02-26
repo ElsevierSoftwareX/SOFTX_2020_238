@@ -147,6 +147,7 @@ def do_it_to(xmldoc):
 
 	ilwdcls = ilwdchar_tables["sngl_inspiral"]["event_id"]
 	for param in list(ligo_lw_Param.getParamsByName(xmldoc, "event_id")):
+		param.Type = u"ilwd:char"
 		param.pcdata = ilwdcls(param.pcdata)
 
 	#
