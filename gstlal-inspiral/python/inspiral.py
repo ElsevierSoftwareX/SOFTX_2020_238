@@ -662,18 +662,18 @@ class GracedBWrapper(object):
 				# FIXME Ugly
 				for column in sngl_inspiral_table.columnnames:
 					setattr(sngl_inspiral_table[-1], column, getattr(sngl_inspiral_table[0], column))
-				setattr(sngl_inspiral_table[-1], "ifo", ifo)
-				setattr(sngl_inspiral_table[-1], "end_time", peak_t.gpsSeconds)
-				setattr(sngl_inspiral_table[-1], "end_time_ns", peak_t.gpsNanoSeconds)
-				setattr(sngl_inspiral_table[-1], "end_time_gmst", lal.GreenwichMeanSiderealTime(peak_t))
-				setattr(sngl_inspiral_table[-1], "snr", peak_snr)
-				setattr(sngl_inspiral_table[-1], "coa_phase", peak_phase)
-				setattr(sngl_inspiral_table[-1], "chisq", None)
-				setattr(sngl_inspiral_table[-1], "event_id", sngl_inspiral_table.get_next_id())
-				setattr(sngl_inspiral_table[-1], "eff_distance", numpy.nan)
+				sngl_inspiral_table[-1].ifo = ifo
+				sngl_inspiral_table[-1].end = peak_t
+				sngl_inspiral_table[-1].end_time_gmst = lal.GreenwichMeanSiderealTime(peak_t)
+				sngl_inspiral_table[-1].snr = peak_snr
+				sngl_inspiral_table[-1].coa_phase = peak_phase
+				sngl_inspiral_table[-1].chisq = None
+				sngl_inspiral_table[-1].eff_distance = None
+				sngl_inspiral_table[-1].event_id = sngl_inspiral_table.get_next_id()
 				for row in process_params_table:
+					# FIXME There's probably code in ligolw somewhere to do this
 					if row.param == "--state-channel-name" and row.value[:2] == ifo:
-						setattr(sngl_inspiral_table[-1], "channel", row.value[3:])
+						sngl_inspiral_table[-1].channel = row.value[3:]
 						break
 
 				snr_time_series = lal.CreateCOMPLEX8TimeSeries(
