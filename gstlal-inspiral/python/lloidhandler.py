@@ -1086,14 +1086,13 @@ class Handler(simplehandler.Handler):
 			events = real_events
 
 			# run stream thinca.
-			for absent_instrument in self.absent_instruments:
-				self.stream_thinca.push(absent_instrument, (), buf_timestamp)
-			for instrument in self.rankingstat.instruments:
-				if instrument in instruments or instrument in self.absent_instruments:
-					continue
-				self.stream_thinca.push(instrument, (), buf_timestamp)
+			instruments |= self.absent_instruments
+			instruments |= self.rankingstat.instruments
 
-			if any(self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp) for instrument in instruments):
+			for instrument in instruments:
+				if not self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp):
+					continue
+
 				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, cluster = self.cluster)
 				self.coincs_document.commit()
 
