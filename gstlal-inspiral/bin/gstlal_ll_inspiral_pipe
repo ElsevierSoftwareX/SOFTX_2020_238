@@ -121,10 +121,10 @@ class zookeeper_job(dagparts.DAGJob):
 	"""
 	A zookeeper job
 	"""
-	def __init__(self, program = "zookeeper-server-start.sh", datadir = os.path.join(os.getcwd(), "zookeeper"), port = 2181, maxclients = 0, condor_commands = {}):
+	def __init__(self, program = "zookeeper-server-start.sh", tag_base = "zookeeper-server-start", datadir = os.path.join(os.getcwd(), "zookeeper"), port = 2181, maxclients = 0, condor_commands = {}):
 		"""
 		"""
-		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, tag_base = tag_base, universe = "local", condor_commands = condor_commands)
 
 		try:
 			os.mkdir(datadir)
@@ -147,10 +147,10 @@ class kafka_job(dagparts.DAGJob):
 	"""
 	A kafka job
 	"""
-	def __init__(self, program = "kafka-server-start.sh", logdir = os.path.join(os.getcwd(), "kafka"), host = "10.14.0.112:9092", zookeeperaddr = "localhost:2181", condor_commands = {}):
+	def __init__(self, program = "kafka-server-start.sh", tag_base = "kafka-server-start", logdir = os.path.join(os.getcwd(), "kafka"), host = "10.14.0.112:9092", zookeeperaddr = "localhost:2181", condor_commands = {}):
 		"""
 		"""
-		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
+		dagparts.DAGJob.__init__(self, program, tag_base = tag_base, universe = "local", condor_commands = condor_commands)
 
 		try:
 			os.mkdir(logdir)
@@ -338,8 +338,8 @@ listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.g
 # Zookeeper and Kafka Jobs and Nodes which only get set if you specify the kafka server
 
 if options.output_kafka_server is not None:
-	zooJob = zookeeper_job(condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), port = options.zookeeper_port)
-	kafkaJob = kafka_job(condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), host = options.output_kafka_server, zookeeperaddr = "localhost:%d" % options.zookeeper_port)
+	zooJob = zookeeper_job("zookeeper-server-start.sh", tag_base = "zookeeper-server-start", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), port = options.zookeeper_port)
+	kafkaJob = kafka_job("kafka-server-start.sh", tag_base = "kafka-server-start", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), host = options.output_kafka_server, zookeeperaddr = "localhost:%d" % options.zookeeper_port)
 	zooNode = dagparts.DAGNode(zooJob, dag, [], opts = {"":"zookeeper.properties"})
 	kafkaNode = dagparts.DAGNode(kafkaJob, dag, [], opts = {"":"kafka.properties"})
 
