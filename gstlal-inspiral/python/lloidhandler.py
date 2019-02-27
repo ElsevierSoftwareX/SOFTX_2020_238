@@ -1087,9 +1087,11 @@ class Handler(simplehandler.Handler):
 			# run stream thinca.
 			instruments |= self.absent_instruments
 			instruments |= self.rankingstat.instruments
+			for instrument in instruments:
+				if not self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp):
+					continue
 
-			if any(self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp) for instrument in instruments):
-				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers)
+				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, cluster = self.cluster)
 				self.coincs_document.commit()
 
 				# do GraceDB alerts and update eye candy
