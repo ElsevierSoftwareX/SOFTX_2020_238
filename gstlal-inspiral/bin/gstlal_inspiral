@@ -416,7 +416,7 @@ def parse_command_line():
 				subprocess.call(["smrepair", partition])
 	else:
 		bad_options = []
-		for option in ["job_tag", "ranking_stat_pdf", "likelihood_snapshot_interval"]:
+		for option in ["job_tag"]:
 			if getattr(options, option) is not None:
 				bad_options.append("--%s" % option.replace("_","-"))
 		if bad_options:
