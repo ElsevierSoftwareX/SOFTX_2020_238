@@ -87,6 +87,7 @@ struct _GSTLALInterpolator {
 	GstClockTime next_output_timestamp;
 	gboolean need_discont;
 	gboolean need_pretend;
+	gboolean last_gap_state;
 
 	/* Variables to control the size of transforms */
 	gsize unitsize;

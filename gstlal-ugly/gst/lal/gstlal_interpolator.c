@@ -501,6 +501,7 @@ static void gstlal_interpolator_init(GSTLALInterpolator *element)
 	/* Always initialize with a discont */
 	element->need_discont = TRUE;
 	element->need_pretend = TRUE;
+	element->last_gap_state = FALSE;
 
 	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 }
@@ -802,10 +803,14 @@ static void set_metadata(GSTLALInterpolator *element, GstBuffer *buf, guint64 ou
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
-	if(gap)
+	if(gap) {
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-	else
+		element->last_gap_state = TRUE;
+	}
+	else {
 		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
+		element->last_gap_state = FALSE;
+	}
 	GST_INFO_OBJECT(element, "%s%s output_buffer %p spans %" GST_BUFFER_BOUNDARIES_FORMAT, gap ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", buf, GST_BUFFER_BOUNDARIES_ARGS(buf));
 }
 
@@ -872,7 +877,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	output_length = gst_buffer_get_size(outbuf) / element->unitsize;
 
 	if (gst_buffer_get_size(outbuf) == 0)
-		set_metadata(element, outbuf, 0, FALSE);
+		set_metadata(element, outbuf, 0, element->last_gap_state);
 	else {
 
 		if (element->width == 32) {
