@@ -1,3 +1,9 @@
+gstlal-inspiral (1.6.1-1) unstable; urgency=low
+
+  * Packaging differences for rpms: disabling mass model.
+
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 28 Feb 2019 21:07:35 -0500
+
 gstlal-inspiral (1.6.0-1) unstable; urgency=low
 
   * Pre-ER14 Release
