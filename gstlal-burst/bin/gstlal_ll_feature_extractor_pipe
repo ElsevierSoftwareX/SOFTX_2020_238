@@ -116,9 +116,9 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 			print("Creating node for channel subset %d"%ii)
 
 		# creates a list of channel names with entries of the form --channel-name=IFO:CHANNEL_NAME:RATE
-		channel_list.extend(channel_subset)
 		channels = [''.join(["--channel-name=",':'.join([channel, str(int(data_source_info.channel_dict[channel]['fsamp']))])]) for channel in channel_subset]
 		channels[0] = channels[0].split('=')[1] # this is done to peel off --channel-name option off first channel
+		channel_list.extend([(channel, int(data_source_info.channel_dict[channel]['fsamp'])) for channel in channel_subset])
 
 		# create specific options for each channel subset
 		subset_options = {
@@ -139,8 +139,8 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 	print("Writing channel list of all channels processed")
 	listpath = os.path.join(options.out_path, "full_channel_list.txt")
 	with open(listpath, 'w') as f:
-		for channel in channel_list:
-			f.write(channel+'\n')
+		for channel, rate in channel_list:
+			f.write('%s\t%d\n'%(channel, rate))
 
 	return feature_extractor_nodes, num_channels
 
@@ -240,6 +240,7 @@ def parse_command_line():
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	parser.add_option("--condor-universe", default = "vanilla", metavar = "universe", help = "set the condor universe to run jobs in DAG, options are local/vanilla, default = vanilla")
 	parser.add_option("--disable-kafka-jobs", action = "store_true", help = "If set, do not launch instances of kafka and zookeeper alongside feature extraction jobs.")
+	parser.add_option("--disable-agg-jobs", action = "store_true", help = "If set, do not launch aggregation jobs to process and aggregate incoming features.")
 	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count for feature extraction jobs, default = 2")
 	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory for feature extraction jobs, default = 8GB")
 	parser.add_option("--auxiliary-request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count for auxiliary processes, default = 2")
@@ -319,10 +320,13 @@ if options.save_format == 'kafka':
 	synchronizer_job = dagparts.DAGJob("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
 	hdf5_sink_job = dagparts.DAGJob("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
 	monitor_job = dagparts.DAGJob("gstlal_feature_monitor", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
-	aggregator_job = dagparts.DAGJob("gstlal_feature_aggregator", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
 
+	# aggregator jobs
+	if not options.disable_agg_jobs:
+		aggregator_job = dagparts.DAGJob("gstlal_feature_aggregator", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+
+	# kafka/zookeeper jobs
 	if not options.disable_kafka_jobs:
-		# kafka/zookeeper jobs
 		local_condor_options = {"want_graceful_removal":"True", "kill_sig":"15"}
 		local_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, local_condor_options)
 		zoo_job = zookeeper_job(condor_commands = local_condor_commands)
@@ -393,7 +397,6 @@ if options.save_format == 'kafka':
 
 	aggregator_options.update(backend_options)
 	monitor_options.update(backend_options)
-
 	### FIXME: hack to deal with condor DAG utilities not playing nice with empty settings
 	for option_name, option in extra_hdf5_channel_options.items():
 		if option:
@@ -403,6 +406,8 @@ if options.save_format == 'kafka':
 	hdf5_sink_options.update(common_options)
 	aggregator_options.update(common_options)
 	monitor_options.update(common_options)
+	monitor_options.update({"channel-list": os.path.join(options.out_path, "full_channel_list.txt")})
+
 
 #
 # set up jobs
@@ -418,14 +423,16 @@ if options.save_format == 'kafka':
 	hdf5_sink_node = dagparts.DAGNode(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "features")})
 	monitor_node = dagparts.DAGNode(monitor_job, dag, [], opts = monitor_options, output_files = {"rootdir": os.path.join(options.out_path, "aggregator")})
 
-    ### aggregator jobs
-	all_fx_jobs = [(str(ii).zfill(4), channel_subset) for ii, channel_subset in enumerate(data_source_info.channel_subsets)]
-	for job_subset in groups(all_fx_jobs, options.num_agg_jobs):
-		jobs, channels = zip(*job_subset)
-		job_channel_options = {"jobs": jobs}
-		job_channel_options.update(aggregator_options)
-		agg_node = dagparts.DAGNode(aggregator_job, dag, [], opts = job_channel_options, output_files = {"rootdir": os.path.join(options.out_path, "aggregator")})
+	### aggregator jobs
+	if not options.disable_agg_jobs:
+		all_fx_jobs = [(str(ii).zfill(4), channel_subset) for ii, channel_subset in enumerate(data_source_info.channel_subsets)]
+		for job_subset in groups(all_fx_jobs, options.num_agg_jobs):
+			jobs, channels = zip(*job_subset)
+			job_channel_options = {"jobs": jobs}
+			job_channel_options.update(aggregator_options)
+			agg_node = dagparts.DAGNode(aggregator_job, dag, [], opts = job_channel_options, output_files = {"rootdir": os.path.join(options.out_path, "aggregator")})
 
+	### kafka jobs
 	if not options.disable_kafka_jobs:
 		zoo_node = dagparts.DAGNode(zoo_job, dag, [], opts = {"":"zookeeper.properties"})
 		kafka_node = dagparts.DAGNode(kafka_job, dag, [], opts = {"":"kafka.properties"})
