@@ -651,9 +651,9 @@ class GracedBWrapper(object):
 				snr_time_series_array = snr_time_series_array[idx0:idxf]
 				if snr_time_series_array.shape[0] != snr_length:
 					if idx0 == 0:
-						snr_time_series_array = numpy.append(snr_time_series_array, numpy.zeros(snr_length - snr_time_series_array.shape[0]))
+						snr_time_series_array = numpy.append(snr_time_series_array, numpy.zeros(snr_length - snr_time_series_array.shape[0], dtype=snr_time_series_array.dtype))
 					elif idxf != peak_idx + autocorrelation_length + 1:
-						snr_time_series_array = numpy.insert(snr_time_series_array, 0, numpy.zeros(snr_length - snr_time_series_array.shape[0]))
+						snr_time_series_array = numpy.insert(snr_time_series_array, 0, numpy.zeros(snr_length - snr_time_series_array.shape[0], dtype=snr_time_series_array.dtype))
 					else:
 						print >>sys.stderr, "unexpected conditional while making sub-threshold trigger for %s, skipping. idx0 = %d, idxf = %d" % (ifo, idx0, idxf)
 						continue
