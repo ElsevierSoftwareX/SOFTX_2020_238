@@ -92,7 +92,6 @@ SHELL := /bin/bash # Use bash syntax
 # Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 ACCOUNTING_TAG=ligo.prod.o3.detchar.onlinedq.idq
 GROUP_USER=patrick.godwin
-CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER) --condor-command='Requirements=TARGET.HasLowLatencyDetcharFrames =?= True'
 
 CONDOR_UNIVERSE=vanilla
 
@@ -213,11 +212,13 @@ dag : $(CHANNEL_LIST) feature_extraction_monitor.yml online-web-deploy
 		--disable-kafka-jobs \
 		--disable-agg-jobs \
 		--condor-universe $(CONDOR_UNIVERSE) \
+		--condor-command=accounting_group=$(ACCOUNTING_TAG) \
+		--condor-command=accounting_group_user=$(GROUP_USER) \
+		--condor-command='Requirements=(TARGET.HasLowLatencyDetcharFrames =?= True) && (Machine != "node274.ldas.ligo-la.caltech.edu")' \
 		--tag $(TAG) \
 		--processing-cadence $(PROCESSING_CADENCE) \
 		--request-timeout $(REQUEST_TIMEOUT) \
 		--latency-timeout $(LATENCY_TIMEOUT) \
-		--condor-universe $(CONDOR_UNIVERSE) \
 		--kafka-topic $(KAFKA_TOPIC) \
 		--kafka-server $(KAFKA_SERVER) \
 		--kafka-partition $(KAFKA_GROUP) \
