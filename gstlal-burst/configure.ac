@@ -217,16 +217,6 @@ to your GI_TYPELIB_PATH environment variable.])
 
 
 #
-# Check for PyGObject
-#
-
-
-PKG_CHECK_MODULES([pygobject], [pygobject-3.0])
-AC_SUBST([pygobject_CFLAGS])
-AC_SUBST([pygobject_LIBS])
-
-
-#
 # Check for NumPy
 #
 
