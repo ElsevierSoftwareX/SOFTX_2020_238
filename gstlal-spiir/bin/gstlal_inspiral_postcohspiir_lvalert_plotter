@@ -76,10 +76,11 @@ def call_plot_fits_func(pngname, fitsname, labelname, contour = None, colormap =
 	return proc.returncode
 
 
-def call_background_plot_func(parti_ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, njob, verbose = False):
+def call_background_plot_func(parti_ifos, stats_fname, zerolag_fname, cohsnr, cmbchisq, output_fname, feat_prefix, njob, verbose = False):
 	cmd = []
 	cmd += ["gstlal_cohfar_plot_stats"]
-	cmd += ["--output", output_fname]
+	cmd += ["--output-rank", output_fname]
+	cmd += ["--output-feature-prefix", feat_prefix]
 	cmd += ["--input-stats", stats_fname]
 	cmd += ["--zerolag-format", "single"]
 	cmd += ["--cohsnr", str(cohsnr)]
@@ -116,6 +117,7 @@ def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, even
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--cuda-postcoh-detrsp-fname", default="H1L1V1_prob_coeff.xml", help = "The Det array of A matrix to construct prob map (default: H1L1V1_prob_coeff.xml")
 	parser.add_option("--ifos", metavar = "ifo-names", default = "H1L1V1", help = "Set the name of the ifo names (default = \"H1L1\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -167,8 +169,6 @@ for process_params in process_params_table:
 		njob = process_params.value
 	if process_params.param == '--cohfar-assignfar-input-fname':
 		assignfar_fnames = process_params.value.split(',')
-	if process_params.param == '--cuda-postcoh-detrsp-fname':
-		cuda_postcoh_detrsp_fname = process_params.value
 	if process_params.param == '--cuda-postcoh-output-skymap':
 		cuda_postcoh_output_skymap = process_params.value
 	
@@ -190,7 +190,7 @@ try:
 except:
 	msg += "no skymap generated in %s" % copied_name
 
-returncode = call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname, verbose = options.verbose)
+returncode = call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, options.cuda_postcoh_detrsp_fname, verbose = options.verbose)
 
 if returncode == 0:
 	if options.verbose:
@@ -235,9 +235,9 @@ dur_mid = get_stats_duration_name(input_stats_fname_mid)
 dur_short = get_stats_duration_name(input_stats_fname_short)
 
 parti_ifos = options.ifos
-outfname_long = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, parti_ifos, dur_long)
-outfname_mid = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, parti_ifos, dur_mid)
-outfname_short = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, parti_ifos, dur_short)
+outfname_long = 'gracedb/%s/%s_%s_rank_%s.png' % (gid, gid, parti_ifos, dur_long)
+outfname_mid = 'gracedb/%s/%s_%s_rank_%s.png' % (gid, gid, parti_ifos, dur_mid)
+outfname_short = 'gracedb/%s/%s_%s_rank_%s.png' % (gid, gid, parti_ifos, dur_short)
 
 # read in the cohsnr, cmbchisq, and far values from the event
 cohsnr = postcoh_table_row.cohsnr
@@ -247,9 +247,9 @@ far = postcoh_table_row.far
 # 
 # call the program to plot background stats
 #
-call_background_plot_func(parti_ifos, input_stats_fname_long, input_zerolag_fname, cohsnr, cmbchisq, outfname_long, njob)
-call_background_plot_func(parti_ifos, input_stats_fname_mid, input_zerolag_fname, cohsnr, cmbchisq, outfname_mid, njob)
-call_background_plot_func(parti_ifos, input_stats_fname_short, input_zerolag_fname, cohsnr, cmbchisq, outfname_short, njob)
+call_background_plot_func(parti_ifos, input_stats_fname_long, input_zerolag_fname, cohsnr, cmbchisq, outfname_long, "None", njob)
+call_background_plot_func(parti_ifos, input_stats_fname_mid, input_zerolag_fname, cohsnr, cmbchisq, outfname_mid, "None", njob)
+call_background_plot_func(parti_ifos, input_stats_fname_short, input_zerolag_fname, cohsnr, cmbchisq, outfname_short, "None", njob)
 
 #
 # Upload Background plots
@@ -257,17 +257,17 @@ call_background_plot_func(parti_ifos, input_stats_fname_short, input_zerolag_fna
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_long, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (parti_ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over ranking statistic" % (parti_ifos, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_mid, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (parti_ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over ranking statistic" % (parti_ifos, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
 
 if options.verbose:
 	print("Uploading %s for event %s" % (outfname_short, gid))
 
-gracedb.writeLog(gid, "%s FAR_%s over CohSNR/NormChisq, note the SPIIR zerolags are from all history" % (parti_ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
+gracedb.writeLog(gid, "%s FAR_%s over ranking statistic" % (parti_ifos, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
 
 def get_snglsnr(snr_name, postcoh_table_row):
 	if snr_name == 'snr_L':
@@ -295,19 +295,10 @@ if far < 1e-4:
 		snr = get_snglsnr(snr_name, postcoh_table_row)
 		chisq_name = 'chisq_%s' % ifo[0]
 		chisq = get_chisq(chisq_name, postcoh_table_row)
-		outfname_long = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifo, dur_long)
-		call_background_plot_func(ifo, input_stats_fname_long, input_zerolag_fname, snr, chisq, outfname_long, njob)
+		output_feat_prefix_long = 'gracedb/%s/%s_%s_snrchi' % (gid, gid, dur_long)
+		call_background_plot_func(ifo, input_stats_fname_long, input_zerolag_fname, snr, chisq, "None", output_feat_prefix_long, njob)
+		outfname_long = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, dur_long, ifo)
 		if options.verbose:
 			print("Uploading %s for event %s" % (outfname_long, gid))
 		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_long), filename = outfname_long, filecontents = open(outfname_long).read(), tag_name = "background")
-		outfname_mid = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifo, dur_mid)
-		call_background_plot_func(ifo, input_stats_fname_mid, input_zerolag_fname, snr, chisq, outfname_mid, njob)
-		if options.verbose:
-			print("Uploading %s for event %s" % (outfname_mid, gid))
-		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_mid), filename = outfname_mid, filecontents = open(outfname_mid).read(), tag_name = "background")
-		outfname_short = 'gracedb/%s/%s_%s_snrchi_%s.png' % (gid, gid, ifo, dur_short)
-		call_background_plot_func(ifo, input_stats_fname_short, input_zerolag_fname, snr, chisq, outfname_short, njob)
-		if options.verbose:
-			print("Uploading %s for event %s" % (outfname_short, gid))
-		gracedb.writeLog(gid, "%s FAR_%s over SNR/Chisq" % (ifo, dur_short), filename = outfname_short, filecontents = open(outfname_short).read(), tag_name = "background")
 
