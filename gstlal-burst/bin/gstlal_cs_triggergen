@@ -127,7 +127,7 @@ class PSDHandler(simplehandler.Handler):
 					autocorr_t.data.data /= numpy.max(autocorr_t.data.data)
 					autocorr_t = autocorr_t.data.data
 					max_index = numpy.argmax(autocorr_t)
-					# find the index of the third extremum for the first template
+					# find the index of the third extremum for the templates, making them all have the same length.
 					# FIXME we do this because we know that the template with the lowest high-f cutoff will have
 					# the largest chi2_index.
 					if i == 0:
@@ -154,7 +154,6 @@ class PSDHandler(simplehandler.Handler):
 				firbank.set_property("latency", -(len(template_t[0]) - 1) // 2)
 				firbank.set_property("fir_matrix", template_t)
 				triggergen.set_property("autocorrelation_matrix", autocorr)
-				print >> sys.stderr, "finished setting all the properties" 
 				self.firbank = firbank
 				self.triggergen = triggergen
 			else:
@@ -167,7 +166,9 @@ class PSDHandler(simplehandler.Handler):
 					template[i] = lal.ResizeREAL8TimeSeries(template[i], -int(32*options.sample_rate - template[i].data.length)//2 ,int(32*options.sample_rate))
 					template[i] = template[i].data.data
 					template[i] *= 0.0
-					autocorr[i] = template[i]
+					# Set autocorrealtion to zero vectors as well.
+					# The length is set to be similar to that obtained when the PSD is stable, but probably the length doesn't matter
+					autocorr[i] = numpy.zeros(403)
 				firbank.set_property("latency",-(len(template[0]) - 1) // 2)
 				firbank.set_property("fir_matrix", template)
 				triggergen.set_property("autocorrelation_matrix", autocorr)

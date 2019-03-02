@@ -49,17 +49,17 @@ typedef struct {
 	float cluster;
 
 	GMutex bank_lock;
-	gsl_matrix_complex *autocorrelation_matrix;
+	gsl_matrix *autocorrelation_matrix;
 	gsl_vector *autocorrelation_norm;
 	char *bank_filename;
 	SnglBurst *bank;
-	void *data;
+	double *data;
 	struct gstlal_peak_state *maxdata;
 	gchar *instrument;
 	gchar *channel_name;
 	gint num_templates;
 	LIGOTimeGPS *last_time;
-	void *snr_mat;
+	double *snr_mat;
 } GSTLALStringTriggergen;
 
 
