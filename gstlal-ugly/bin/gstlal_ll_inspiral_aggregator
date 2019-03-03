@@ -124,7 +124,8 @@ if __name__ == '__main__':
 		start = timeit.default_timer()
 		for route in routes:
 			logging.info("storing and reducing timeseries for measurement: %s" % route)
-			agg_sink.store_and_reduce(route, datadata[route], 'data', tags='job', aggregates=options.data_type)
+			for aggregate in options.data_type:
+				agg_sink.store_columns(route, datadata[route], 'data', tags='job', aggregate=aggregate)
 		elapsed = timeit.default_timer() - start
 		logging.info("time to store/reduce timeseries: %.1f s" % elapsed)
 

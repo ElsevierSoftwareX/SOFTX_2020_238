@@ -127,11 +127,11 @@ class PSDHandler(simplehandler.Handler):
 			self.last_reduce_time = int(round(buftime,-2))
 			logging.info("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(aggregator.now())))
 
-			data = {route: {self.instrument: (list(self.timedeq), list(self.datadeq[route]))} for route in self.routes}
+			data = {route: {self.instrument: {'time': list(self.timedeq), 'fields': {'data': list(self.datadeq[route])}}} for route in self.routes}
 
 			### store and reduce noise / range history
 			for route in self.routes:
-				agg_sink.store_and_reduce(route, data[route], 'data', tags='ifo', aggregates=("min", "median", "max"))
+				agg_sink.store_columns(route, data[route], 'data', tags='ifo', aggregate="max")
 
 			### flush buffers
 			self.timedeq.clear()
