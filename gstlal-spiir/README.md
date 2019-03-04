@@ -47,7 +47,7 @@ lalsuite/6.15.0+
 This is an example of a SPIIR online pipeline using LHO, LLO, and Virgo O2replay streaming data:
 ```
 gstlal_postcohspiir_inspiral_online 
-        --job-tag pcdev1 
+        --job-tag pcdev11 
         --iir-bank  H1:/mnt/qfs3/joel.bosveld/online/banks/gstlal_iir_bank_split/iir_H1-GSTLAL_SPLIT_BANK_0000-a1-0-0.xml.gz,L1:/mnt/qfs3/joel.bosveld/online/banks/gstlal_iir_bank_split/iir_L1-GSTLAL_SPLIT_BANK_0000-a1-0-0.xml.gz,V1:/mnt/qfs3/joel.bosveld/online/banks/gstlal_iir_bank_split/iir_V1-GSTLAL_SPLIT_BANK_0000-a1-0-0.xml.gz
         --iir-bank H1:/mnt/qfs3/joel.bosveld/online/banks/gstlal_iir_bank_split/iir_H1-GSTLAL_SPLIT_BANK_0001-a1-0-0.xml.gz,L1:/mnt/qfs3/joel.bosveld/online/banks/gstlal_iir_bank_split/iir_L1-GSTLAL_SPLIT_BANK_0001-a1-0-0.xml.gz,V1:/mnt/qfs3/joel.bosveld/online/banks/gstlal_iir_bank_split/iir_V1-GSTLAL_SPLIT_BANK_0001-a1-0-0.xml.gz
         --data-source lvshm
@@ -58,14 +58,15 @@ gstlal_postcohspiir_inspiral_online
         --shared-memory-assumed-duration 1 
         --track-psd 
         --psd-fft-length 16 
+		--fir-whitener 1
         --channel-name H1=GDS-CALIB_STRAIN_O2Replay
         --channel-name L1=GDS-CALIB_STRAIN_O2Replay
         --channel-name V1=Hrec_hoft_16384Hz_O2Replay
-        --cohfar-accumbackground-output-prefix bank0_stats 
-        --cohfar-accumbackground-output-prefix bank1_stats 
+        --cohfar-accumbackground-output-prefix pcdev11/bank0_stats 
+        --cohfar-accumbackground-output-prefix pcdev11/bank1_stats 
         --cohfar-accumbackground-snapshot-interval 200 
         --cohfar-assignfar-silent-time 500 
-        --cohfar-assignfar-input-fname marginalized_1w.xml.gz,marginalized_1d.xml.gz,marginalized_2h.xml.gz
+        --cohfar-assignfar-input-fname pcdev11/marginalized_1w.xml.gz,pcdev11/marginalized_1d.xml.gz,pcdev11/marginalized_2h.xml.gz
         --cohfar-assignfar-refresh-interval 200 
         --gpu-acc on  
         --ht-gate-threshold 15.0 
@@ -83,7 +84,7 @@ gstlal_postcohspiir_inspiral_online
         --finalsink-need-online-perform 1 
         --finalsink-gracedb-far-threshold 0.0001
         --finalsink-gracedb-service-url https://gracedb.ligo.org/api/
-	--finalsink-gracedb-pipeline spiir 
+		--finalsink-gracedb-pipeline spiir 
         --finalsink-gracedb-group CBC 
         --finalsink-gracedb-search LowMass
         --verbose
@@ -95,6 +96,7 @@ gstlal_postcohspiir_inspiral_online
  - `iir-bank`: location for the SPIIR banks. can give multiple times to process multiple sets of banks.
  - `track-psd`: track the psd on the fly and use this psd for whitening.
  - `psd-fft-length`: psd length in seconds for whitening.
+ - `fir-whitener`: set to 1 if we want to use FIR filters for whitening. Set to 0 if using FFT whitening. Default is 0.
  - `channel-name`: strain channel name.
  - `cohfar-accumbackground-snapshot-interval`: the various rates of background events, used to estimate FARs for zerolag events, will be snapshotted at multiples of the time defined here. If it's set to 0, the background rates will be saved after finishing processing the whole data stream.
  - `cohfar-accumbackground-output-prefix`: the output prefix for the background rates. The background output will be saved in the job-tag folder.
@@ -106,6 +108,7 @@ gstlal_postcohspiir_inspiral_online
  - `cuda-postcoh-hist-trials`: number of time-shifts to collect background histogram, usually set to 100. Each time-shift is 0.1 second apart.
  - `cuda-postcoh-detrsp-fname`: the detector response file, which contains the sampled U and arrival time difference matrices, used to generate coherent SNR and skymap.
  - `cuda-postcoh-output-skymap`: threshold to output skymap, normally set to 7. If it is set to 0, will not output skymaps at all.
+ - `check-time-stamp`: check if the data is continously flowing in the pipeline.
  - `finalsink-output-prefix`: the prefix for the zerolag output files.
  - `finalsink-background-collection-time`: How long we collect backgrounds for FAR estimations. Usually three scales spanning 1week, 1day, or 2hours. 
  - `finalsink-background-update-interval`: A FAR mapping is derived from the collected background for each of different scales set above.
