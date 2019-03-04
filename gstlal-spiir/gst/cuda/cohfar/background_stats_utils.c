@@ -428,8 +428,7 @@ double
 get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml)
 {
 	double lgp_noise = 0;
-	// if snr <3, assume 100% noise: lgp_noise += 0.
-	if (intable->snglsnr_H > 3 && (icombo == 6 || icombo == 3 || icombo == 4)) { // H1L1, H1V1 or H1L1V1
+	if ((icombo == 6 || icombo == 3 || icombo == 4)) { // H1L1, H1V1 or H1L1V1
 		FeatureStats *feature = margi_statsxml->multistats[H_INDEX]->feature;	
 		int snr_idx = bins1D_get_idx(intable->snglsnr_H, feature->lgsnr_rate);
 		int chisq_idx = bins1D_get_idx(intable->chisq_H, feature->lgchisq_rate);
@@ -437,7 +436,7 @@ get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *
 		lgp_noise += log10(gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
 	}
 
-	if (intable->snglsnr_L > 3 && (icombo == 6 || icombo == 3 || icombo == 5)) { // H1L1, L1V1 or H1L1V1
+	if ((icombo == 6 || icombo == 3 || icombo == 5)) { // H1L1, L1V1 or H1L1V1
 		FeatureStats *feature = margi_statsxml->multistats[L_INDEX]->feature;	
 		int snr_idx = bins1D_get_idx(intable->snglsnr_L, feature->lgsnr_rate);
 		int chisq_idx = bins1D_get_idx(intable->chisq_L, feature->lgchisq_rate);
@@ -446,7 +445,7 @@ get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *
 	}
 
 
-	if (intable->snglsnr_V > 3 && (icombo == 6 || icombo == 4 || icombo == 5)) { // H1V1, L1V1 or H1L1V1
+	if ((icombo == 6 || icombo == 4 || icombo == 5)) { // H1V1, L1V1 or H1L1V1
 		FeatureStats *feature = margi_statsxml->multistats[V_INDEX]->feature;	
 		int snr_idx = bins1D_get_idx(intable->snglsnr_V, feature->lgsnr_rate);
 		int chisq_idx = bins1D_get_idx(intable->chisq_V, feature->lgchisq_rate);
