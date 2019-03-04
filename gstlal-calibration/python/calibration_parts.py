@@ -386,7 +386,7 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				# Remove worthless data from computation of transfer function if we can
 				if noisesub_gate_bit is not None:
 					tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%f_%d" % (m, freq, i))
-				tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 1e-35 * numpy.random.rand(), default_kappa_im = 1e-35 * numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
+				tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0.0, default_kappa_im = 0.0, array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 				tfs_at_f[(i + 1) * len(witnesses[m]) + i] = ones
 
 			for i in range(0, len(witnesses[m])):
@@ -398,7 +398,7 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 						# Remove worthless data from computation of transfer function if we can
 						if noisesub_gate_bit is not None:
 							tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d" % (n, i, j))
-						tfs_at_f[(i + 1) * len(witnesses[m]) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = numpy.random.rand(), default_kappa_im = numpy.random.rand(), array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
+						tfs_at_f[(i + 1) * len(witnesses[m]) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0.0, default_kappa_im = 0.0, array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 			tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
 			# It may be necessary to remove data at the beginning so that data that
