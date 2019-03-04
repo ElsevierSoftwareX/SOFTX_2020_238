@@ -5,9 +5,9 @@ xmax = 3.0
 xstep = 0.0082
 xbin = 300
 # chisq
-ymin = -1.2
+ymin = -0.4
 ymax = 3.5
-ystep = 0.0157
+ystep = 0.013
 ybin = 300
 
 # rank

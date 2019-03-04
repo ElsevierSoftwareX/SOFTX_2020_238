@@ -54,7 +54,7 @@ int get_ifo_idx(char *ifo);
 #define LOGSNR_CMIN	0.54 // center of the first bin
 #define LOGSNR_CMAX	3.0 // center of the last bin
 #define LOGSNR_NBIN	300 // step is 0.01
-#define LOGCHISQ_CMIN	-1.2
+#define LOGCHISQ_CMIN	-0.4
 #define LOGCHISQ_CMAX	3.5
 #define LOGCHISQ_NBIN	300
 
