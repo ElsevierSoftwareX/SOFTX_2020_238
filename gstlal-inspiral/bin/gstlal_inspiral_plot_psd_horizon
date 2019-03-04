@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+
+""" Plot horizon history from ranking statistics"""
+
+import sys
+import os
+import itertools
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib import pyplot
+from optparse import OptionParser
+import numpy
+
+from gstlal import far, plotutil
+from lal.utils import CacheEntry
+
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	parser.add_option("-o", "--outdir", default = ".", help = "output directory for plots (Default: current directory)" )
+	parser.add_option("-v", "--verbose", action = "store_true", help = "be verbose")
+
+	options, args = parser.parse_args()
+
+	if len(args) == 0:
+		raise ValueError("Ranking statistics cannot be empty.")
+
+	return options, args
+
+options, caches = parse_command_line()
+
+urls = [CacheEntry(line).url for cache in caches for line in open(cache)]
+
+for key, group in itertools.groupby(sorted(urls,key = lambda x: CacheEntry.from_T050017(x).description), lambda x: CacheEntry.from_T050017(x).description):
+	rankingstat = far.marginalize_pdf_urls(list(group), "RankingStat", verbose = options.verbose)
+	horizon_history_dict = rankingstat.numerator.horizon_history
+
+	fig, ax = pyplot.subplots(1, 2, figsize=(12,4))
+	pyplot.tight_layout(pad = 2.5, w_pad = 2.5, h_pad = 2.5)
+
+	gmint = []
+	for detector, horizon_history in horizon_history_dict.items():
+		GPSTime = numpy.array(horizon_history.keys())
+		horizon_dist = horizon_history.values()
+
+		minh, maxh = (float("inf"), 0)
+		maxh = max(maxh, max(horizon_dist))
+		minh = min(minh, min(horizon_dist))
+		mint = int(GPSTime.min())
+		SinceGPSTime = (GPSTime - mint)/1000.
+		binvec = numpy.linspace(minh, maxh, 25)
+		gmint.append(mint)
+
+		ax[0].semilogy(SinceGPSTime, horizon_dist, "x", color = plotutil.colour_from_instruments([detector]), label = detector)
+		ax[1].hist(horizon_dist, binvec, alpha = 0.5, color = plotutil.colour_from_instruments([detector]), label = detector)
+
+	if options.verbose:
+		sys.stderr.write("plotting " + key + ".png\n")
+
+	#pyplot.suptitle("%s : Horizon Distance" % detector)
+	ax[0].set_xlabel("Time (ks) from GPS {:d}".format(min(gmint)))
+	ax[0].set_ylabel("Mpc")
+	ax[0].legend(loc = "best")
+	ax[0].grid()
+
+	ax[1].set_xlabel("Mpc")
+	ax[1].set_ylabel("Count")
+	ax[1].legend(loc = "best")
+	fig.savefig(os.path.join(options.outdir, key + ".png"))
+	pyplot.close()
+
+if options.verbose:
+	sys.stderr.write("done\n")
