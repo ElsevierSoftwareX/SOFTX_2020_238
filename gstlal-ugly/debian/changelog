@@ -1,3 +1,14 @@
+gstlal-ugly (1.6.1-1) unstable; urgency=low
+
+  * interpolator: fix bug where interpolator was pushing out nongap buffers
+    when it received gap buffers
+  * gstlal_ll_dq: reduce the upper frequency for the horizon distance
+    calculation
+  * gstlal_ll_dq, gstlal_ll_inspiral_aggregator: update to deal with API
+    changes from ligo-scald
+
+ -- Alexander Pace <alexander.pace@ligo.org>  Sun, 03 Mar 2019 21:30:40 -0500
+
 gstlal-ugly (1.6.0-1) unstable; urgency=low
 
   * Pre-ER14 Release

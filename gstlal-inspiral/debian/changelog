@@ -1,3 +1,10 @@
+gstlal-inspiral (1.6.2-1) unstable; urgency=low
+
+  * Enforce that appended zeros in subthreshold trigger generation have same
+    dtype as snr time series
+
+ -- Alexander Pace <alexander.pace@ligo.org>  Sun, 03 Mar 2019 21:51:57 -0500
+
 gstlal-inspiral (1.6.1-1) unstable; urgency=low
 
   * Packaging differences for rpms: disabling mass model.
