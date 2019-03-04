@@ -1,92 +1,138 @@
 #!/usr/bin/env python
 
 import matplotlib
+matplotlib.rcParams['font.family'] = 'Times New Roman'
+matplotlib.rcParams['font.size'] = 14
+matplotlib.rcParams['legend.fontsize'] = 10
+matplotlib.rcParams['mathtext.default'] = 'regular'
+font = {'fontname' : 'Times New Roman'}
 matplotlib.use('Agg')
 from gwpy.timeseries import TimeSeriesDict
 from gwpy.timeseries import TimeSeries
 import glob
 from math import pi
-from gwpy.plotter import BodePlot
+from gwpy.plot import BodePlot
 import numpy
 from optparse import OptionParser, Option
+matplotlib.rcParams.update({'font.size': 14})
 
 parser = OptionParser()
 
 parser.add_option("--ifo", metavar = "name", help = "Name of the IFO")
 parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the GPS start time.")
 parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the GPS end time.")
-parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
-parser.add_option("--hoft-frame-cache", metavar = "name", help = "h(t) frame cache file.")
-parser.add_option("--hoft-channel-name", metavar = "name", default = "GDS-CALIB_STRAIN", help = "Channel name for h(t) channel in frames. (Default = GDS-CALIB_STRAIN)")
-parser.add_option("--analyze-additional-hoft-channel", action="store_true", help = "Set this option to analyze an additional h(t) channel")
-parser.add_option("--additional-hoft-channel-name", metavar = "name", default = "DCS-CALIB_STRAIN", help = "Channel name for additional h(t) channel frames. (Default = DCS-CALIB_STRAIN)")
-parser.add_option("--additional-hoft-frame-cache", metavar = "name", help = "additional h(t) frame cache file.")
-parser.add_option("--calcs-channel-name", metavar = "name", default = "CAL-DELTAL_EXTERNAL_DQ", help = "Channel name for h(t) channel in raw frames. (Default = CAL-DELTAL_EXTERNAL_DQ)")
-parser.add_option("--filename-suffix", type = str, default = "", help = "Suffix to add to the end of filenames")
+parser.add_option("--frame-cache-list", metavar = "list", help = "Comma-separated list of frame cache files")
+parser.add_option("--channel-list", metavar = "list", help = "Comma-separated list of channel names for ASD data")
+parser.add_option("--ASD-fmin", metavar = "Hz", type = float, default = 10.0, help = "Minimum frequency for horizontal axis of ASD plot")
+parser.add_option("--ASD-fmax", metavar = "Hz", type = float, default = 8192.0, help = "Maximum frequency for horizontal axis of ASD plot")
+parser.add_option("--ASD-min", metavar = "Hz", type = float, default = 1e-24, help = "Minimum value for vertical axis of ASD plot")
+parser.add_option("--ASD-max", metavar = "Hz", type = float, default = 1e-18, help = "Maximum value for vertical axis of ASD plot")
+parser.add_option("--ratio-fmin", metavar = "Hz", type = float, default = 10.0, help = "Minimum frequency for horizontal axis of ASD ratio plot")
+parser.add_option("--ratio-fmax", metavar = "Hz", type = float, default = 5000.0, help = "Maximum frequency for horizontal axis of ASD ratio plot")
+parser.add_option("--ratio-min", metavar = "Hz", type = float, default = 0.7, help = "Minimum value for vertical axis of ASD ratio plot")
+parser.add_option("--ratio-max", metavar = "Hz", type = float, default = 1.3, help = "Maximum value for vertical axis of ASD ratio plot")
+parser.add_option("--ASD-plot-title", metavar = "name", type = str, default = "", help = "Title of ASD plot, to appear above plot. Default is no title")
+parser.add_option("--ratio-plot-title", metavar = "name", type = str, default = "", help = "Title of ASD ratio plot, to appear above plot. Default is no title")
+parser.add_option("--write-ASD-txt", action="store_true", help = "If set, tst files will be written with the ASDs")
+parser.add_option("--filename-suffix", metavar = "name", type = str, default = "", help = "Suffix to add to the end of filenames")
 
 options, filenames = parser.parse_args()
 
+ifo = options.ifo
 start_time = int(options.gps_start_time)
 end_time = int(options.gps_end_time)
+frame_cache_list = options.frame_cache_list.split(',')
+channel_list = options.channel_list.split(',')
+if len(frame_cache_list) != len(channel_list):
+	raise ValueError("frame-cache-list and channel-list must be the same length!")
+ASD_fmin = float(options.ASD_fmin)
+ASD_fmax = float(options.ASD_fmax)
+ASD_min = float(options.ASD_min)
+ASD_max = float(options.ASD_max)
+ratio_fmin = float(options.ratio_fmin)
+ratio_fmax = float(options.ratio_fmax)
+ratio_min = float(options.ratio_min)
+ratio_max = float(options.ratio_max)
+ASD_title = options.ASD_plot_title
+ratio_title = options.ratio_plot_title
+filename_suffix = options.filename_suffix
 
-# Grab CALCS data
-calcs_data=TimeSeries.read(options.raw_frame_cache, '%s:%s' % (options.ifo, options.calcs_channel_name), start = start_time, end = end_time)
+# Grab all data and make ASDs and ASD ratios
+ASDs = []
+ratios = []
+for i in range(0, len(frame_cache_list)):
+	ASDs.append(TimeSeries.read(frame_cache_list[i], '%s:%s' % (ifo, channel_list[i]), start = start_time, end = end_time).asd(4, 2, method = 'lal_median'))
+	if i > 0:
+		ratios.append(ASDs[i] / ASDs[0])
 
-# grab h(t) data
-hoft_data = TimeSeries.read(options.hoft_frame_cache, "%s:%s" % (options.ifo, options.hoft_channel_name), start = start_time, end = end_time)
-if options.analyze_additional_hoft_channel:
-	additional_hoft_data = TimeSeries.read(options.additional_hoft_frame_cache, "%s:%s" % (options.ifo, options.additional_hoft_channel_name), start = start_time, end = end_time)
+# Save ASDs to text files if requested
+if options.write_ASD_txt:
+	for i in range(0, len(ASDs)):
+		numpy.savetxt("%s_%s_ASD_%d_%d%s.txt" % (ifo, channel_list[i], start_time, end_time, options.filename_suffix), ASDs[i])
+		# FIXME: This is a hack to reformat the text file
+		asd_tmp = numpy.loadtxt("%s_%s_ASD_%d_%d%s.txt" % (ifo, channel_list[i], start_time, end_time, options.filename_suffix), ASDs[i])
+		asd_txt = []
+		freq = 0.0
+		for i in range(0, len(ASDs[i])):
+			asd_txt.append([freq, asd_tmp[i]])
+			freq = freq + 0.25
+		asd_txt = numpy.array(asd_txt)
+		numpy.savetxt("%s_%s_ASD_%d_%d%s.txt" % (ifo, channel_list[i], start_time, end_time, options.filename_suffix), asd_txt)
 
-# make asds
-calcs_asd = calcs_data.asd(4,2,method='lal_median')
-hoft_asd = hoft_data.asd(4,2,method='lal_median')
+# Plot ASDs
+colors = ["blue", "green", "limegreen", "red", "yellow", "purple", "pink"]
+if len(ASD_title):
+	plot = ASDs[0].plot(color = colors[0], title = "%s" % ASD_title, linewidth = 0.75, label = "%s:%s" % (ifo, channel_list[0].replace('_', '\_')))
+else:
+	plot = ASDs[0].plot(color = colors[0], linewidth = 0.75, label = "%s:%s" % (ifo, channel_list[0].replace('_', '\_')))
 
-numpy.savetxt("%s_CALIB_STRAIN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), calcs_asd)
-numpy.savetxt("%s_CALIB_STRAIN_CLEAN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), hoft_asd)
-
-calcs_asd_tmp = numpy.loadtxt("%s_CALIB_STRAIN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix))
-hoft_asd_tmp = numpy.loadtxt("%s_CALIB_STRAIN_CLEAN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix))
-
-calcs_asd_txt = []
-hoft_asd_txt = []
-freq = 0.0
-for i in range(0, len(calcs_asd)):
-	calcs_asd_txt.append([freq, calcs_asd_tmp[i]])
-	hoft_asd_txt.append([freq, hoft_asd_tmp[i]])
-	freq = freq + 0.25
-calcs_asd_txt = numpy.array(calcs_asd_txt)
-hoft_asd_txt = numpy.array(hoft_asd_txt)
-numpy.savetxt("%s_CALIB_STRAIN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), calcs_asd_txt)
-numpy.savetxt("%s_CALIB_STRAIN_CLEAN_ASD_%d_%d%s.txt" % (options.ifo, start_time, end_time, options.filename_suffix), hoft_asd_txt)
-
-if options.analyze_additional_hoft_channel:
-	additional_hoft_asd = additional_hoft_data.asd(4,2)
-
-#plot spectrum
-plot=calcs_asd.plot(label='CALCS h(t) ASD')
-plot.gca().plot(hoft_asd,label='GDS h(t) ASD')
-if options.analyze_additional_hoft_channel:
-	plot.gca().plot(additional_hoft_asd,label='DCS h(t) ASD')
 ax = plot.gca()
-ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
-ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-ax.legend(['%s:GDS-CALIB\_STRAIN' % options.ifo, '%s:GDS-CALIB\_STRAIN\_CLEAN' % options.ifo, r'DCS h(t) ASD'], loc='upper right', fontsize='small')
-ax.set_xlim(0.5,8192)
-ax.set_ylim(1e-24,1e-16)
-plot.save('%s_%s_%s_spectrum_comparison%s.png' % (options.ifo, start_time, end_time, options.filename_suffix))
+for tick in ax.xaxis.get_major_ticks():
+	tick.label.set_fontsize(14)
+for tick in ax.yaxis.get_major_ticks():
+	tick.label.set_fontsize(14)
+ax.set_ylabel(r'Strain [Hz $^{-1/2}$]', fontsize = 14)
+ax.set_xlabel('Frequency [Hz]', fontsize = 14)
+ax.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+leg = ax.legend(fancybox = True, fontsize = 10)
+leg.get_frame().set_alpha(0.8)
+ax.set_xlim(ASD_fmin, ASD_fmax)
+ax.set_ylim(ASD_min, ASD_max)
 
-diff1 = calcs_asd / hoft_asd
-if options.analyze_additional_hoft_channel:
-	diff2 = calcs_asd / additional_hoft_asd
-	diff3 = hoft_asd / additional_hoft_asd
-plot = diff1.plot(label="ASD ratios")
-if options.analyze_additional_hoft_channel:
-	plot.gca().plot(diff2)
-	plot.gca().plot(diff3)
-ax = plot.gca()
-ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
-ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-ax.legend([r'CALCS h(t) ASD / GDS h(t) ASD', r'CALCS h(t) ASD / DCS h(t) ASD', r'GDS h(t) ASD / DCS h(t) ASD'], loc='upper right', fontsize='small')
-ax.set_xlim(0.5,5000)
-ax.set_ylim(0.0, 10)
-plot.save('%s_%s_%s_ASD_residual%s.png' % (options.ifo, start_time, end_time, options.filename_suffix))
+for i in range(1, len(ASDs)):
+	ax = plot.gca()
+	ax.plot(ASDs[i], colors[i % 7], linewidth = 0.75, label = "%s:%s" % (ifo, channel_list[i].replace('_', '\_')))
+	leg = ax.legend(fancybox = True, fontsize = 10)
+	leg.get_frame().set_alpha(0.8)
+
+plot.save('%s_%s_%s_spectrum_comparison%s.png' % (ifo, start_time, end_time, options.filename_suffix))
+plot.save('%s_%s_%s_spectrum_comparison%s.pdf' % (ifo, start_time, end_time, options.filename_suffix))
+
+# Plot ASD ratios
+if len(ratios):
+	if len(ratio_title):
+		plot = ratios[0].plot(color = colors[1], title = "%s" % ratio_title, linewidth = 0.75, label = "%s:%s / %s:%s" % (ifo, channel_list[1].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+	else:
+		plot = ratios[0].plot(color = colors[1], linewidth = 0.75, label = "%s:%s / %s:%s" % (ifo, channel_list[1].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+
+	ax = plot.gca()
+	for tick in ax.xaxis.get_major_ticks():
+		tick.label.set_fontsize(14)	
+	for tick in ax.yaxis.get_major_ticks():
+		tick.label.set_fontsize(14)
+	ax.set_ylabel('ASD ratio', fontsize = 14)
+	ax.set_xlabel('Frequency [Hz]', fontsize = 14)
+	ax.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	leg = ax.legend(fancybox = True, fontsize = 10)
+	leg.get_frame().set_alpha(0.8)
+	ax.set_xlim(ratio_fmin, ratio_fmax)
+	ax.set_ylim(ratio_min, ratio_max)
+	for i in range(1, len(ratios)):
+		ax = plot.gca()
+		ax.plot(ratios[i], colors[(i + 1) % 7], linewidth = 0.75, label = "%s:%s / %s:%s" % (ifo, channel_list[i + 1].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+		leg = ax.legend(fancybox = True, fontsize = 10)
+		leg.get_frame().set_alpha(0.8)
+
+	plot.save('%s_%s_%s_ASD_ratios%s.png' % (options.ifo, start_time, end_time, options.filename_suffix))
+	plot.save('%s_%s_%s_ASD_ratios%s.pdf' % (options.ifo, start_time, end_time, options.filename_suffix))
+

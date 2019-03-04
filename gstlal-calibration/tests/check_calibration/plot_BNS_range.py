@@ -45,7 +45,6 @@ import glob
 import matplotlib.pyplot as plt
 
 from optparse import OptionParser, Option
-import ConfigParser
 
 
 parser = OptionParser()
@@ -58,6 +57,7 @@ parser.add_option("--integration-time", metavar = "seconds", type = int, default
 parser.add_option("--stride", metavar = "seconds", type = int, default = 32, help = "Time-separation in seconds between consecutive values of range")
 parser.add_option("--range-min", metavar = "Mpc", type = float, default = 0.0, help = "Minimum value for range on plot")
 parser.add_option("--range-max", metavar = "Mpc", type = float, default = 160.0, help = "Maximum value for range on plot")
+parser.add_option("--make-title", action = "store_true", help = "If set, a title will be added to the BNS range plot.")
 
 options, filenames = parser.parse_args()
 
@@ -114,19 +114,20 @@ for i in range(0, len(channel_list)):
 		ranges[i].append(BNS_range)
 	medians.append(numpy.median(ranges[i]))
 	stds.append(numpy.std(ranges[i]))
-
 # Make plots
-colors = ['b', 'y', 'r', 'c', 'm', 'g'] # Hopefully the user will not want to plot more than six datasets on one plot.
-plt.figure(figsize = (15, 10))
+colors = ["blue", "green", "limegreen", "red", "yellow", "purple", "pink"] # Hopefully the user will not want to plot more than 7 datasets on one plot.
+plt.figure(figsize = (12, 8))
 for i in range(0, len(channel_list)):
-	plt.plot(times, ranges[i], colors[i % 6], linewidth = 0.5, label = r'%s [median = %0.1f Mpc, $\sigma$ = %0.1f Mpc]' % (channel_list[i].replace('_', '\_'), medians[i], stds[i]))
-	plt.title("%s binary neutron star inspiral range" % ifo)
+	plt.gcf().subplots_adjust(bottom=0.15)
+	plt.plot(times, ranges[i], colors[i % 6], linewidth = 1.5, label = r'%s:%s [median = %0.1f Mpc, $\sigma$ = %0.1f Mpc]' % (ifo, channel_list[i].replace('_', '\_'), medians[i], stds[i]))
+	if options.make_title:
+		plt.title("%s binary neutron star inspiral range" % ifo)
 	plt.ylabel('Angle-averaged range [Mpc]')
-	plt.xlabel('Time [%s] from %s UTC (%d)' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(gps_start_time + 315964782)), gps_start_time))
+	plt.xlabel('Time [%s] from %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(gps_start_time + 315964782))))
 	plt.ylim(range_min, range_max)
 	plt.grid(True)
 	leg = plt.legend(fancybox = True)
-	leg.get_frame().set_alpha(0.5)
+	leg.get_frame().set_alpha(0.8)
 plt.savefig('%s_BNS_range_%d-%d.png' % (ifo, int(gps_start_time), int(dur)))
 plt.savefig('%s_BNS_range_%d-%d.pdf' % (ifo, int(gps_start_time), int(dur)))
 
