@@ -5,9 +5,9 @@ All the bash scripts have documentation inside that is supposed to explain every
 ## prod
  - uses the code of branch spiir-review-O3, tag spiir-ER14. Reviewers agreed triggers uploaded to GraceDB.
  - compared to tag spiir-ER13 used in ER13: correct minor bugs and minor improvement on skymap speed:
-  -  changed fixed time-shifting to cascade time-shifting for collecting background from different detectors
-  -  fixed the overflow of FAR by restricting it to machine precision, about 10-38
-  -  improved the speed of skymap generation by splitting detector response map into two parts
+  1.  changed fixed time-shifting to cascade time-shifting for collecting background from different detectors
+  2.  fixed the overflow of FAR by restricting it to machine precision, about 10-38
+  3.  improved the speed of skymap generation by splitting detector response map into two parts
  - `gen_pipeline.sh`: generate a condor file and a couple of sub files to run on CIT
  - `2det_lowmass_prod_init.sh`: initialize parameters for lowmass pipeline using live LHO and LLO data.
  - `3det_lowmass_prod_init.sh`: initialize parameters for lowmass pipeline using live LHO, LLO, and Virgo data.
@@ -17,7 +17,7 @@ All the bash scripts have documentation inside that is supposed to explain every
 ## fix
  - uses the code of branch spiir, tag spiir-fix-ER14. Reviewers agreed triggers uploaded to GraceDB-playground.
  - compared to branch spiir-review-O3 tag spiir-ER14 (above), a fix on the FAR estimation and interface updates accordingly:
-  -  changed the ranking statistic from `R = CDF(cohSNR, reducedChisq)` to 
+  1.  changed the ranking statistic from `R = CDF(cohSNR, reducedChisq)` to 
  `(P(nullsnr|signal)*II P(SNR_nontrigger|SNR_trigger, signal))/ II P(SNR_I, chisq_I|noise)`. The background burn-in time need to be increased from a few hours to a few days to cover a 2N+3 dimension background distribution from 2 dimensions.
  - `gen_pipeline.sh`: generate a condor file and a couple of sub files to run on CIT
  - `3det_lowmass_fix_init.sh`: initialize parameters for lowmass pipeline using live LHO, LLO, and Virgo data.
