@@ -293,9 +293,9 @@ expected_kappapum_imag = float(TDCFConfigs["expectedkappapumimag"])
 expected_kappauim_real = float(TDCFConfigs["expectedkappauimreal"])
 expected_kappauim_imag = float(TDCFConfigs["expectedkappauimimag"])
 expected_kappac = float(TDCFConfigs["expectedkappac"])
-expected_fcc = float(TDCFConfigs["expectedfcc"])
-expected_fs = float(TDCFConfigs["expectedfs"])
-expected_srcq = float(TDCFConfigs["expectedsrcq"])
+expected_fcc = float(TDCFConfigs["expectedfcc"]) if "expectedfcc" in TDCFConfigs else 0.0
+expected_fs = float(TDCFConfigs["expectedfs"]) if "expectedfs" in TDCFConfigs else 0.0
+expected_srcq = float(TDCFConfigs["expectedsrcq"]) if "expectedsrcq" in TDCFConfigs else 0.0
 kappatst_real_var = float(TDCFConfigs["kappatstrealvar"])
 kappatst_imag_var = float(TDCFConfigs["kappatstimagvar"])
 kappapu_real_var = float(TDCFConfigs["kappapurealvar"])
@@ -489,12 +489,18 @@ try:
 	fcc_default = float(filters["fcc"])
 except:
 	fcc_default = expected_fcc
+	if fcc_default == 0.0:
+		print("Warning: Could not find expected fcc in filters file or config file.  Setting to zero.")
 try:
 	fs_default = float(filters["fs"])
 	srcQ_default = float(filters["srcQ"])
 except:
 	fs_default = expected_fs
+	if fs_default == 0:
+		print("Warning: Could not find expected fs in filters file or config file.  Setting to zero.")
 	srcQ_default = expected_srcq
+	if srcQ_default == 0:
+		print("Warning: Could not find expected srcQ in filters file or config file.  Setting to zero.")
 
 # Load kappa dewhitening factors
 if dewhitening:
@@ -972,7 +978,7 @@ if ChannelNames["witnesschannellist"] != "None":
 if compute_calib_statevector:
 	noisesub_gate_channel = ChannelNames["noisesubgatechannel"] if "noisesubgatechannel" in ChannelNames else lownoise_channel_name 
 	noisesub_gate_bitmask = int(Bitmasks["noisesubgatebitmask"]) if "noisesubgatebitmask" in Bitmasks else lownoise_bitmask
-if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_bitmask > 0 and noisesub_gate_channel != "None":
+if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_channel != obsintent_channel_name and noisesub_gate_channel != lownoise_channel_name and noisesub_gate_channel != hwinj_channel_name and noisesub_gate_channel not in numpy.concatenate(filterclock_channel_list) and noisesub_gate_bitmask > 0 and noisesub_gate_channel != "None":
 	channel_list.append((instrument, noisesub_gate_channel))
 	headkeys.append("noisesubgatechannel")
 
@@ -2184,7 +2190,11 @@ if compute_calib_statevector:
 		for key in headkeys:
 			for j in range(len(filterclock_channel_list[i])):
 				if ((filterclock_channel_list[i][j] != obsintent_channel_name and filterclock_channel_list[i][j] != lownoise_channel_name) and key in filterclock_channel_list[i]):
-					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i],key), "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps)))
+					filterclock_channel = calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i], key)
+					if filterclock_channel_list[i][j] == noisesub_gate_channel:
+						filterclock_channel = noisesub_gate_tee = pipeparts.mktee(pipeline, filterclock_channel)
+					filterclock_channel = calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps))
+					filterclock_channels.append(filterclock_channel)
 				elif (filterclock_channel_list[i][j] == obsintent_channel_name and key == "obsintent"):
 					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = pow(2,obs_intent_bitnum), status_out = 1), calibstate_caps)))
 				elif (filterclock_channel_list[i][j] == lownoise_channel_name and key == "lownoise"):
@@ -2570,7 +2580,7 @@ if remove_cal_lines:
 
 # Set up gating for the power mains and noise subtraction
 if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_channel_list)) and noisesub_gate_bitmask > 0 and noisesub_gate_channel != "None":
-	noisesubgate = obsintentchanneltee if noisesub_gate_channel == obsintent_channel_name else lownoisechanneltee if noisesub_gate_channel == lownoise_channel_name else hwinjtee if noisesub_gate_channel == hwinj_channel_name else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
+	noisesubgate = obsintentchanneltee if noisesub_gate_channel == obsintent_channel_name else lownoisechanneltee if noisesub_gate_channel == lownoise_channel_name else hwinjchanneltee if noisesub_gate_channel == hwinj_channel_name else noisesub_gate_tee if noisesub_gate_channel in numpy.concatenate(filterclock_channel_list) else calibration_parts.caps_and_progress(pipeline, head_dict["noisesubgatechannel"], "audio/x-raw, format=U32LE, channels=1, channel-mask=(bitmask)0x0", noisesub_gate_channel)
 	noisesubgate = pipeparts.mkgeneric(pipeline, noisesubgate, "lal_logicalundersample", required_on = noisesub_gate_bitmask, status_out = pow(2,noise_sub_gate_bitnum))
 	noisesubgate = pipeparts.mkcapsfilter(pipeline, noisesubgate, calibstate_caps)
 	noisesubgatetee = pipeparts.mktee(pipeline, noisesubgate)
