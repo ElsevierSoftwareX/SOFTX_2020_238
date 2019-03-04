@@ -32,6 +32,7 @@ pkgpython_PYTHON = \
 	spiirparts.py \
 	streamthinca.py \
 	svd_bank.py \
+	svd_bank_snr.py \
 	templates.py \
 	webpage.py
 

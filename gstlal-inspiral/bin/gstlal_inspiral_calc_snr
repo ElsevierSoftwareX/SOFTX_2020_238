@@ -1,0 +1,310 @@
+#!/usr/bin/env python
+
+"""
+Typical Usages:
+
+--mode 0 (calculate SNR using LLOID method):
+	1. GW options: also see datasource.GWDataSourceInfo()
+	--frame-cache
+	--data-source
+	--channel-name
+	--gps-start-time
+	--gps-end-time
+	--injection
+	--ht-gate-threshold
+	--veto-segments-file
+	--veto-segments-name
+
+	2. SVD bank options:
+	--svd-bank (require)
+	--bank-id (require)
+	--row-number
+
+	3. PSD options:
+	--reference-psd (optional)
+	--track-psd (default = False. If --reference-psd is not given, this will be set to True)
+	--psd-fft-length (default = 32s)
+
+	4. Output options:
+	--output-width (default = 32bits)
+	--instrument (require)
+	--output (require)
+	--verbose (default = False)
+
+--mode 1 (calculate SNR using Finite Impulse Response):
+	1. GW options: also see datasource.GWDataSourceInfo()
+	--frame-cache
+	--data-source
+	--channel-name
+	--gps-start-time
+	--gps-end-time
+	--injection
+
+	2. Template options:
+	--table (require)
+	--approximant (require)
+	--template-duration (default = 600s)
+	--sample-rate (default = 16384Hz)
+	--f-low (default = 10)
+	--f-high (default = 1000)
+
+	3. PSD / Whiten options:
+	--reference-psd (optional)
+	--track-psd (default = False. If --reference-psd is not given, this will be set to True)
+	--psd-fft-length (default = 32s)
+	--average-samples (default = 64)
+	--median-samples (default = 7)
+	--zero-pad (default = 0s)
+
+	4. Output options:
+	--output-rate (default = 2048Hz)
+	--output-width (default = 32bits)
+	--instrument (require)
+	--output (require)
+	--verbose (default = False)
+"""
+import numpy
+from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
+import os
+import sys
+
+from gstlal import cbc_template_fir
+from gstlal import chirptime
+from gstlal import datasource
+from gstlal import reference_psd
+from gstlal import spawaveform
+from gstlal import svd_bank
+from gstlal import svd_bank_snr
+from gstlal import templates
+
+import lal
+import lal.series
+
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw import param as ligolw_param
+from ligo.lw import array as ligolw_array
+from ligo.lw import lsctables
+from ligo.lw import table
+
+@ligolw_param.use_in
+@ligolw_array.use_in
+@lsctables.use_in
+class ContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+class epilogFormatter(IndentedHelpFormatter):
+	def format_epilog(self, epilog):
+		if epilog:
+			return epilog + "\n"
+		else:
+			return ""
+
+def parse_command_line():
+	parser = OptionParser(formatter = epilogFormatter(), description = "Using gstlal inspiral pipeline to calculate SNR for template(s)", epilog = __doc__)
+
+	datasource.append_options(parser)
+
+	group = OptionGroup(parser, "Whiten / PSD Options", "Adjust noise spectrum estimation parameter")
+	group.add_option("--reference-psd", metavar = "filename", help = "Load noise spectrum from LIGO light-weight XML file (optional).")
+	group.add_option("--psd-fft-length", metavar = "seconds", default = 32, type = "int", help = "Length of the FFT used to whiten strain data (default = 32 s).")
+	group.add_option("--track-psd", action = "store_true", help = "Enable dynamic PSD tracking. Enabled by default if --reference-psd is not given.")
+	group.add_option("--zero-pad", metavar = "seconds", default = 0, type = "int", help = "The zero padding of the Hanning window in seconds (default = 0).")
+	group.add_option("--average-samples", default = 64, type = "int", help = "The number of samples used to estimate the average value of the PSD")
+	group.add_option("--median-samples", default = 7, type = "int", help = "The number of samples used to estimate the median value of the PSD")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Template Options", "Choose a template from a SVD bank file / a single SnglInspiral Table")
+	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information (require)." )
+	group.add_option("--sub-bank-id", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (require).")
+	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
+	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template for each instrument only.")
+	group.add_option("--approximant", metavar = "name", type = "str", help = "Name of the Waveform model (require).")
+	group.add_option("--template-duration", metavar = "seconds", default = 600, type = "int", help = "Duration of the template")
+	group.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sampling rate of the template")
+	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
+	group.add_option("--f-high", metavar = "Hz", type = "float", help = "The maximum frequency of GW signal")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")
+	group.add_option("--ht-gate-threshold", metavar= "sigma", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to excise glitches in units of standard deviation (optional)")
+	group.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	group.add_option("--veto-segments-name", metavar = "name", default = "vetoes", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (default = 'veto') (optional).")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
+	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (requires).")
+	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
+	group.add_option("--drop-first", metavar = "seconds", type = "int", default = 0, help = "Dropping the initital '--drop-first' seconds of SNR data (default = 0).")
+	group.add_option("--drop-last", metavar = "seconds", type = "int", default = 0, help = "Dropping the last '--drop-last' seconds of SNR data (default = 0).")
+	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
+	group.add_option("--output-rate", metavar = "Hz", type = "int", default = 2048, help = "The output sampling rate (default 2048).")
+	group.add_option("--instrument", metavar = "name", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Place Holder Options", "There are no needs to input anything")
+	group.add_option("--reconstruction_segment_list", metavar = "None", help = "There is no need to input anything into it, it will be automatically filled if --injection is provided.")
+	group.add_option("--veto-segments", metavar = "None", help = "There is no need to input anything into it, it will be automatically filled if --veto-segments-file and --veto-segments-name are provided.")
+	parser.add_option_group(group)
+
+	parser.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
+
+	options, args = parser.parse_args()
+
+	# Setting up GW data
+	gw_data_source_info = datasource.GWDataSourceInfo(options)
+
+	# Setting up PSD
+	if options.reference_psd:
+		psd = lal.series.read_psd_xmldoc(ligolw_utils.load_url(options.reference_psd, contenthandler = lal.series.PSDContentHandler))
+		if options.instrument not in set(psd):
+			raise ValueError("No such instrument: %s in psd: (%s)"% (options.instrument, ", ".join(set(psd))))
+	else:
+		options.track_psd = True
+
+	# Use LLOID method
+	if options.mode == 0:
+		missing_required_options = []
+		# Checking required options
+		if options.svd_bank is None:
+			missing_required_options.append("--svd-bank")
+		if options.sub_bank_id is None:
+			missing_required_options.append("--sub-bank-id")
+		if options.outdir is None:
+			missing_required_options.append("--outdir")
+		if options.instrument is None:
+			missing_required_options.append("--instrument")
+		# Raise VauleError is required option(s) is/are missing
+		if missing_required_options:
+			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
+
+		# Setting up SVD bank
+		banks = svd_bank.read_banks(options.svd_bank, svd_bank.DefaultContentHandler)
+		if banks is None:
+			raise ValueError("svd bank is empty: Invaild --svd-bank %s" % options.svd_bank)
+		else:
+			try:
+				bank = banks[options.sub_bank_id]
+			except IndexError:
+				raise IndexError("Invaild --bank-id %d. Possible id (0-%d)\n" % (options.sub_bank_id, len(banks) - 1))
+		if options.row_number >=  bank.bank_fragments[0].mix_matrix.shape[1] / 2:
+			raise ValueError("No such template: Invaild --row-number %d. Possible range (0-%d)\n" % (options.row_number, bank.bank_fragments[0].mix_matrix.shape[1] / 2 - 1))
+
+		# Setting up output
+		if options.instrument not in set(gw_data_source_info.channel_dict):
+			raise ValueError("No such instrument: %s in detectos: (%s)"% (options.instrument, ", ".join(set(gw_data_source_info.channel_dict))))
+
+		# Setting up injections if provided
+		# FIXME: test me
+		if options.injections:
+			offset_padding = max([int(abs(float(offset)))+2 for offset in bank.sngl_inspiral_table.get_end()])
+			options.reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
+		else:
+			options.reconstruction_segment_list = None
+
+		# Setting up vetos segments if provided
+		if options.veto_segments_file:
+			# FIXME:  this is broken
+			segments_file = ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)
+			options.veto_segments = ligolw_segments.segmenttable_get_by_name(segments_file, options.veto_segments_name).coalesce()
+		else:
+			options.veto_segments = None
+
+		return options, gw_data_source_info, bank, psd
+
+	# Use Finite Impulse Response
+	elif options.mode == 1:
+		missing_required_options = []
+		# Checking required options
+		if options.table is None:
+			missing_required_options.append("--table")
+		if options.approximant is None:
+			missing_required_options.append("--approximant")
+		if options.outdir is None:
+			missing_required_options.append("--outdir")
+		if options.instrument is None:
+			missing_required_options.append("--instrument")
+		# Raise VauleError is required option(s) is/are missing
+		if missing_required_options:
+			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
+
+	    #
+        # Temporary work for comparison
+        #
+		banks = svd_bank.read_banks(options.svd_bank, svd_bank.DefaultContentHandler)
+		bank = banks[options.sub_bank_id]
+		template_table = bank.sngl_inspiral_table
+		row = [template_table[options.row_number]]
+		time_slice = []
+		for frag in bank.bank_fragments[::-1]:
+			time_slice.append((frag.rate, frag.start, frag.end))
+		time_slice = numpy.array(time_slice, dtype = [("rate", "int"),("begin", "float"),("end", "float")])
+		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, autocorrelation_length = 351, fhigh= options.f_high)
+		#
+        # delele me afterward
+        #
+
+
+		#xmldoc = ligolw_utils.load_url(options.table, contenthandler = ContentHandler, verbose = options.verbose)
+		#template_table = table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+		#row = [row for row in template_table if row.ifo == options.instrument]
+		#if len(row) != 1 :
+		#	raise ValueError("Expecting only one template for --instrument=%s or cannot find template for --instrument=%s" %(options.instrument, options.instrument))
+
+		# work around for building a single whitened template
+		#time_slice = numpy.array([(options.sample_rate, 0, options.template_duration)], dtype = [("rate", "int"),("begin", "float"), ("end", "float")])
+		# FIXME: psd[options.instrument] is bad
+		#workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, options.f_high)
+		template, autocorrelation, sigma = workspace.make_whitened_template(row[0])
+
+		return options, gw_data_source_info, template, psd
+
+	# Unknown mode
+	else:
+		raise ValueError("Invalid mode: %d" % options.mode)
+
+options, gw_data_source_info, template, psd  = parse_command_line()
+#====================================================================================================
+#
+#												main
+#
+#====================================================================================================
+
+if options.mode == 0:
+	bank = template
+	num_of_row = bank.bank_fragments[0].mix_matrix.shape[1] / 2
+
+	lloid_snr = svd_bank_snr.LLOID_SNR(
+		psd_fft_length = options.psd_fft_length,
+		ht_gate_threshold = options.ht_gate_threshold,
+		veto_segments = options.veto_segments,
+		track_psd = options.track_psd,
+		verbose = options.verbose
+	)
+	snr_info = lloid_snr(gw_data_source_info, bank, options.instrument, psd = psd)
+
+	if options.row_number is None:
+		for row in range(num_of_row):
+			snrdict = {options.instrument : svd_bank_snr.make_snr_series(snr_info, row_number = row, drop_first = options.drop_first, drop_last = options.drop_last)}
+			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "snr_%d.xml.gz" % row), verbose = options.verbose)
+	else:
+		snrdict = {options.instrument : svd_bank_snr.make_snr_series(snr_info, row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)}
+		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "snr.xml.gz"), verbose = options.verbose)
+
+elif options.mode == 1:
+	fir_snr = svd_bank_snr.FIR_SNR(
+		psd_fft_length = options.psd_fft_length,
+		average_samples = options.average_samples,
+		median_samples = options.median_samples,
+		track_psd = options.track_psd,
+		rate = options.output_rate,
+		width = options.output_width,
+		verbose = options.verbose
+		)
+	#FIXME: allow multiple instruments
+	# drop the quadrature phase component
+	snr_info = fir_snr(gw_data_source_info, template.real, options.instrument, 0, psd = psd)
+
+	snrdict = {options.instrument:svd_bank_snr.make_snr_series(snr_info, drop_first = options.drop_first, drop_last = options.drop_last)}
+
+	svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "snr.xml.gz"), verbose = options.verbose)
