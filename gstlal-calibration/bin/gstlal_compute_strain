@@ -293,9 +293,9 @@ expected_kappapum_imag = float(TDCFConfigs["expectedkappapumimag"])
 expected_kappauim_real = float(TDCFConfigs["expectedkappauimreal"])
 expected_kappauim_imag = float(TDCFConfigs["expectedkappauimimag"])
 expected_kappac = float(TDCFConfigs["expectedkappac"])
-expected_fcc = float(TDCFConfigs["expectedfcc"])
-expected_fs = float(TDCFConfigs["expectedfs"])
-expected_srcq = float(TDCFConfigs["expectedsrcq"])
+expected_fcc = float(TDCFConfigs["expectedfcc"]) if "expectedfcc" in TDCFConfigs else 0.0
+expected_fs = float(TDCFConfigs["expectedfs"]) if "expectedfs" in TDCFConfigs else 0.0
+expected_srcq = float(TDCFConfigs["expectedsrcq"]) if "expectedsrcq" in TDCFConfigs else 0.0
 kappatst_real_var = float(TDCFConfigs["kappatstrealvar"])
 kappatst_imag_var = float(TDCFConfigs["kappatstimagvar"])
 kappapu_real_var = float(TDCFConfigs["kappapurealvar"])
@@ -489,12 +489,18 @@ try:
 	fcc_default = float(filters["fcc"])
 except:
 	fcc_default = expected_fcc
+	if fcc_default == 0.0:
+		print("Warning: Could not find expected fcc in filters file or config file.  Setting to zero.")
 try:
 	fs_default = float(filters["fs"])
 	srcQ_default = float(filters["srcQ"])
 except:
 	fs_default = expected_fs
+	if fs_default == 0:
+		print("Warning: Could not find expected fs in filters file or config file.  Setting to zero.")
 	srcQ_default = expected_srcq
+	if srcQ_default == 0:
+		print("Warning: Could not find expected srcQ in filters file or config file.  Setting to zero.")
 
 # Load kappa dewhitening factors
 if dewhitening:
