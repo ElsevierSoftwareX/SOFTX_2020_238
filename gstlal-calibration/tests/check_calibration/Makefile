@@ -6,31 +6,31 @@
 # which interferometer (H or L)
 IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
-OBSRUN = ER14
+OBSRUN = O2
 
-START = $(shell echo 1234694144 - 715 | bc)
+START = $(shell echo 1186099200 - 2260 | bc)
 #1229094912
 #1225967424
 #1185763328
-END = $(shell echo 1234694144 + 4096 + 715 | bc)
+END = $(shell echo 1186177024 + 2260 | bc)
 #1229099008
 #1225968448
 #1185771520
 SHMRUNTIME = 400
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 715
-PLOT_COOLDOWN_TIME = 715
+PLOT_WARMUP_TIME = 2260
+PLOT_COOLDOWN_TIME = 2260
 
 GDSCONFIGS = Filters/ER14/GDSFilters/H1GDS_noisesub_test_1232874910.ini 
-DCSCONFIGS = Filters/ER13/GDSFilters/L1DCS_TEST_1231620000.ini
+DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
+DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = Filters/ER14/GDSFilters/H1GDS_1234630818_latency_test.ini
 
-all: latency_test
-#noise_subtraction_ASD_GDS noise_subtraction_range_plots_GDS
+all: noise_subtraction_ASD_DCS noise_subtraction_tf_DCS lines_ratio_DCS
 
 ###############################################
 ### These commands should change less often ###
@@ -100,7 +100,7 @@ GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --config-file '$(GDSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list GDS-CALIB_STRAIN --labels GDS-CALIB_STRAIN
 
 DCS_pcal2darm_plots: (IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache
-	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_FCC_frames.cache,$(IFO)1_hoft_DCS_TEST_frames.cache --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list DCS-CALIB_STRAIN_CLEAN,DCS-CALIB_STRAIN_CLEAN,DCS-CALIB_STRAIN_CLEAN --labels 'Scalars,Cavity pole,All'
+	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_DCS_LINES_frames.cache,$(IFO)1_hoft_DCS_LINES_frames.cache --config-file '$(DCSLINESCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN --labels 'H1:DCS-CALIB_STRAIN,H1:DCS-CALIB_STRAIN_CLEAN'
 
 pcal_DCS_transfer_functions: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-PCALY_TX_PD_OUT_DQ --denominator-correction y_arm_pcal_corr --numerator-correction arm_length --frequency-max 400 --numerator-frame-cache-list $(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_FCC_frames.cache,$(IFO)1_hoft_DCS_TEST_frames.cache --numerator-channel-list DCS-CALIB_STRAIN_CLEAN,DCS-CALIB_STRAIN_CLEAN,DCS-CALIB_STRAIN_CLEAN --config-file $(DCSCONFIGS) --use-median --labels 'Only scalar corrections,Cavity pole corrections,All corrections'
@@ -133,7 +133,10 @@ kappastimeseries_GDS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cach
 	python timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_GDS_frames.cache --channel-list 'GDS-CALIB_KAPPA_TST_REAL_NOGATE','GDS-CALIB_KAPPA_TST_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_PUM_REAL_NOGATE','GDS-CALIB_KAPPA_PUM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_UIM_REAL_NOGATE','GDS-CALIB_KAPPA_UIM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_C_NOGATE','GDS-CALIB_F_CC_NOGATE' --raw-channel-list 'CAL-CS_TDEP_KAPPA_TST_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_TST_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_C_OUTPUT','CAL-CS_TDEP_F_C_OUTPUT' --raw-frame-cache $(IFO)1_easy_raw_frames.cache
 
 noise_subtraction_ASD_DCS: $(IFO)1_hoft_DCS_frames.cache
-	./ASD_comparison_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_hoft_DCS_frames.cache --calcs-channel-name DCS-CALIB_STRAIN --hoft-frame-cache $(IFO)1_hoft_DCS_frames.cache --hoft-channel-name DCS-CALIB_STRAIN_CLEAN
+	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-plot-fmin 0.3
+
+noise_subtraction_ASD_DCS_LINES: $(IFO)1_hoft_DCS_frames.cache
+	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-plot-fmin 0.3
 
 noise_subtraction_ASD_GDS: $(IFO)1_hoft_GDS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_hoft_GDS_frames.cache --calcs-channel-name GDS-CALIB_STRAIN --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache --hoft-channel-name GDS-CALIB_STRAIN_CLEAN
