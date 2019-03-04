@@ -79,6 +79,12 @@ zookeeper.connection.timeout.ms=6000
 group.initial.rebalance.delay.ms=0
 """
 
+KAFKA_ENV_TEMPLATE = """
+KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"
+KAFKA_HEAP_OPTS="-Xms8G -Xmx8G"
+export KAFKA_HEAP_OPTS KAFKA_JVM_PERFORMANCE_OPTS
+"""
+
 #
 # job classes
 #
@@ -203,4 +209,10 @@ print('making DAG...')
 dag.write_dag()
 dag.write_script()
 
+print('making env script...')
+with open('kafka.env', 'w') as f:
+    f.write(KAFKA_ENV_TEMPLATE)
+
+
+print('source kafka env with: source kafka.env')
 print('launch DAG with: condor_submit_dag kafka_broker.dag')
