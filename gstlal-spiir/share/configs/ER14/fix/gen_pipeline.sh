@@ -156,6 +156,7 @@ echo -e "arguments = \"
 --finalsink-snapshot-interval ${ZeroLag_T}
 --cohfar-accumbackground-snapshot-interval ${FAR_T}
 --cohfar-accumbackground-output-prefix \$(macrostatsprefix)
+--cohfar-accumbackground-ifo-sense $ifo_horizons
 --cohfar-assignfar-input-fname \$(macrofarinput)
 --finalsink-fapupdater-output-fname \$(macrolocfapoutput)
 --cohfar-assignfar-silent-time ${FAR_silent}
