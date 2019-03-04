@@ -58,7 +58,7 @@ gstlal_postcohspiir_inspiral_online
         --shared-memory-assumed-duration 1 
         --track-psd 
         --psd-fft-length 16 
-		--fir-whitener 1
+        --fir-whitener 1
         --channel-name H1=GDS-CALIB_STRAIN_O2Replay
         --channel-name L1=GDS-CALIB_STRAIN_O2Replay
         --channel-name V1=Hrec_hoft_16384Hz_O2Replay
@@ -84,7 +84,7 @@ gstlal_postcohspiir_inspiral_online
         --finalsink-need-online-perform 1 
         --finalsink-gracedb-far-threshold 0.0001
         --finalsink-gracedb-service-url https://gracedb.ligo.org/api/
-		--finalsink-gracedb-pipeline spiir 
+        --finalsink-gracedb-pipeline spiir 
         --finalsink-gracedb-group CBC 
         --finalsink-gracedb-search LowMass
         --verbose
