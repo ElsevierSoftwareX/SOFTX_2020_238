@@ -1,0 +1,33 @@
+#!/usr/bin/env python
+"""
+Plotter for gstlal_inspiral_calc_snr
+"""
+import sys
+from optparse import OptionParser
+
+from gstlal import plotsnr
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	parser.add_option("-o", "--output", metavar = "filename", help = "The output filename for the SNR plot (require).")
+	parser.add_option("-i", "--input", metavar = "filename", help = "A LIGO light-weight XML file containing SNR time series data (require).")
+	parser.add_option("--center", metavar = "gpsSeconds", type = "float", help = "Center the plot to --center (optional).")
+	parser.add_option("--span", metavar = "seconds", type = "float", help = "The time span around --center (optional).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+
+	options, args = parser.parse_args()
+
+	missing_required_options = []
+	if options.input is None:
+		missing_required_options.append("--input")
+	if options.output is None:
+		missing_required_options.append("--output")
+	if missing_required_options:
+		raise ValueError("Missing required option(s) %s" % ", ".join(missing_required_options))
+
+	return options
+
+options = parse_command_line()
+
+plotsnr.plot_snr(options.input, output = options.output, center = options.center, span = options.span, verbose = options.verbose)

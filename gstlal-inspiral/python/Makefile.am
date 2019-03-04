@@ -26,6 +26,7 @@ pkgpython_PYTHON = \
 	plotfar.py \
 	plotsegments.py \
 	plotsensitivity.py \
+	plotsnr.py \
 	rate_estimation.py \
 	snglinspiraltable.py \
 	spawaveform.py \

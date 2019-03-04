@@ -38,6 +38,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_plot_kernels \
 	gstlal_inspiral_plot_psd_horizon \
 	gstlal_inspiral_plot_sensitivity \
+	gstlal_inspiral_plot_snr \
 	gstlal_inspiral_plotsummary \
 	gstlal_inspiral_plot_svd_bank \
 	gstlal_inspiral_rate_posterior \
