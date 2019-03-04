@@ -1,0 +1,10 @@
+# ER14 configurations
+
+All the bash scripts have documentation inside that explains every setting.
+
+## prod
+ - uses the code of branch spiir-review-O3, tag spiir-ER14. Reviewers agreed triggers uploaded to GraceDB.
+ - compared to tag spiir-ER13 used in ER13: correct minor bugs and minor improvement on skymap speed:
+  1.  changed fixed time-shifting to cascade time-shifting for collecting background from different detectors
+  2.  fixed the overflow of FAR by restricting it to machine precision, about 10-38
+  3.  improve the speed of skymap generation by splitting detector response map
