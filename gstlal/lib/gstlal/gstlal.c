@@ -550,6 +550,37 @@ gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va)
 	return matrix;
 }
 
+
+/**
+ * gstlal_g_value_array_from_gsl_matrix_ulong:
+ * @matrix: a #gsl_matrix_ulong
+ *
+ * Build a #GValueArray of #GValueArrays of #guin64 from a
+ * #gsl_matrix_ulong.
+ *
+ * Returns:  the newly-allocated #GValueArray of newly-allocated
+ * #GValueArrays of #guint64s or %NULL on failure.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *matrix)
+{
+	GValueArray *va;
+	GValue v = G_VALUE_INIT;
+	guint i;
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
+
+	va = g_value_array_new(matrix->size1);
+	if(!va)
+		return NULL;
+	for(i = 0; i < matrix->size1; i++) {
+		g_value_take_boxed(&v, gstlal_g_value_array_from_uint64s((guint64*) gsl_matrix_ulong_const_ptr(matrix, i, 0), matrix->size2));
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
 /**
  * gstlal_gsl_matrix_from_g_value_array:
  * @va:  #GValueArray of #GValueArrays of double
@@ -600,36 +631,6 @@ gsl_matrix *gstlal_gsl_matrix_from_g_value_array(GValueArray *va)
 	}
 
 	return matrix;
-}
-
-
-/**
- * gstlal_g_value_array_from_gsl_matrix_ulong:
- * @matrix: a #gsl_matrix_ulong
- *
- * Build a #GValueArray of #GValueArrays of #guin64 from a
- * #gsl_matrix_ulong.
- *
- * Returns:  the newly-allocated #GValueArray of newly-allocated
- * #GValueArrays of #guint64s or %NULL on failure.
- */
-
-
-GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *matrix)
-{
-	GValueArray *va;
-	GValue v = G_VALUE_INIT;
-	guint i;
-	g_value_init(&v, G_TYPE_VALUE_ARRAY);
-
-	va = g_value_array_new(matrix->size1);
-	if(!va)
-		return NULL;
-	for(i = 0; i < matrix->size1; i++) {
-		g_value_take_boxed(&v, gstlal_g_value_array_from_uint64s((guint64*) gsl_matrix_ulong_const_ptr(matrix, i, 0), matrix->size2));
-		g_value_array_append(va, &v);
-	}
-	return va;
 }
 
 
