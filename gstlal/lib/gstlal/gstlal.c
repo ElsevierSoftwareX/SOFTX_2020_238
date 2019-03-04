@@ -226,6 +226,73 @@ GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *src, gint n)
 
 
 /**
+ * gstlal_floats_from_g_value_array:
+ * @va: the #GValueArray from which to copy the elements
+ * @dest:  address of memory large enough to hold elements, or %NULL
+ * @n:  address of integer that will be set to the number of elements, or
+ * %NULL
+ *
+ * Convert a #GValueArray of floats to an array of floats.  If @dest is
+ * %NULL then new memory will be allocated otherwise the floats are copied
+ * into the memory pointed to by @dest, which must be large enough to hold
+ * them.  If memory is allocated by this function, free with g_free().  If
+ * @n is not %NULL it is set to the number of elements in the array.
+ *
+ * Returns: @dest or the address of the newly-allocated memory on success,
+ * or %NULL on failure.
+ */
+
+
+gfloat *gstlal_floats_from_g_value_array(GValueArray *va, gfloat *dest, gint *n)
+{
+	guint i;
+
+	if(!va)
+		return NULL;
+	if(!dest)
+		dest = g_new(gfloat, va->n_values);
+	if(!dest)
+		return NULL;
+	if(n)
+		*n = va->n_values;
+	for(i = 0; i < va->n_values; i++)
+		dest[i] = g_value_get_float(g_value_array_get_nth(va, i));
+	return dest;
+}
+
+
+/**
+ * gstlal_g_value_array_from_floats:
+ * @src:  start of array
+ * @n: number of elements in array
+ *
+ * Build a #GValueArray from an array of floats.
+ *
+ * Returns: newly-allocated #GValueArray object or %NULL on failure.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_floats(const gfloat *src, gint n)
+{
+	GValueArray *va;
+	GValue v = G_VALUE_INIT;
+	gint i;
+	g_value_init(&v, G_TYPE_FLOAT);
+
+	if(!src)
+		return NULL;
+	va = g_value_array_new(n);
+	if(!va)
+		return NULL;
+	for(i = 0; i < n; i++) {
+		g_value_set_float(&v, src[i]);
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
+/**
  * gstlal_doubles_from_g_value_array:
  * @va: the #GValueArray from which to copy the elements
  * @dest:  address of memory large enough to hold elements, or %NULL
@@ -328,6 +395,46 @@ gsl_vector_int *gstlal_gsl_vector_int_from_g_value_array(GValueArray *va)
 GValueArray *gstlal_g_value_array_from_gsl_vector_int(const gsl_vector_int *vector)
 {
 	return gstlal_g_value_array_from_ints(gsl_vector_int_const_ptr(vector, 0), vector->size);
+}
+
+
+/**
+ * gstlal_gsl_vector_float_from_g_value_array:
+ * @va:  #GValueArray of floats
+ *
+ * Build a #gsl_vector_float from a #GValueArray of floats.
+ *
+ * Returns:  the newly-allocated #gsl_vector_float or %NULL on failure.
+ */
+
+
+gsl_vector_float *gstlal_gsl_vector_float_from_g_value_array(GValueArray *va)
+{
+	gsl_vector_float *vector = gsl_vector_float_alloc(va->n_values);
+	if(!vector)
+		return NULL;
+	if(!gstlal_floats_from_g_value_array(va, gsl_vector_float_ptr(vector, 0), NULL)) {
+		gsl_vector_float_free(vector);
+		return NULL;
+	}
+	return vector;
+}
+
+
+/**
+ * gstlal_g_value_array_from_gsl_vector_float:
+ * @vector:  #gsl_vector_float
+ *
+ * Build a #GValueArray of floats from a #gsl_vector_float.
+ *
+ * Returns:  the newly-allocated #GValueArray of floats or %NULL on
+ * failure.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_vector_float(const gsl_vector_float *vector)
+{
+	return gstlal_g_value_array_from_floats(gsl_vector_float_const_ptr(vector, 0), vector->size);
 }
 
 
@@ -575,6 +682,88 @@ GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *
 		return NULL;
 	for(i = 0; i < matrix->size1; i++) {
 		g_value_take_boxed(&v, gstlal_g_value_array_from_uint64s((guint64*) gsl_matrix_ulong_const_ptr(matrix, i, 0), matrix->size2));
+		g_value_array_append(va, &v);
+	}
+	return va;
+}
+
+
+/**
+ * gstlal_gsl_matrix_float_from_g_value_array:
+ * @va:  #GValueArray of #GValueArrays of float
+ *
+ * Build a #gsl_matrix_float from a #GValueArray of #GValueArrays of floats.
+ *
+ * Returns:  the newly-allocated #gsl_matrix_float or %NULL on failure.
+ */
+
+
+gsl_matrix_float *gstlal_gsl_matrix_float_from_g_value_array(GValueArray *va)
+{
+	gsl_matrix_float *matrix;
+	GValueArray *row;
+	guint rows, cols;
+	guint i;
+
+	if(!va)
+		return NULL;
+	rows = va->n_values;
+	if(!rows)
+		/* 0x0 matrix */
+		return gsl_matrix_float_alloc(0, 0);
+
+	row = g_value_get_boxed(g_value_array_get_nth(va, 0));
+	cols = row->n_values;
+	matrix = gsl_matrix_float_alloc(rows, cols);
+	if(!matrix)
+		/* allocation failure */
+		return NULL;
+	if(!gstlal_floats_from_g_value_array(row, gsl_matrix_float_ptr(matrix, 0, 0), NULL)) {
+		/* row conversion failure */
+		gsl_matrix_float_free(matrix);
+		return NULL;
+	}
+	for(i = 1; i < rows; i++) {
+		row = g_value_get_boxed(g_value_array_get_nth(va, i));
+		if(row->n_values != cols) {
+			/* one of the rows has the wrong number of columns */
+			gsl_matrix_float_free(matrix);
+			return NULL;
+		}
+		if(!gstlal_floats_from_g_value_array(row, gsl_matrix_float_ptr(matrix, i, 0), NULL)) {
+			/* row conversion failure */
+			gsl_matrix_float_free(matrix);
+			return NULL;
+		}
+	}
+
+	return matrix;
+}
+
+
+/**
+ * gstlal_g_value_array_from_gsl_matrix_float:
+ * @matrix: a #gsl_matrix_float
+ *
+ * Build a #GValueArray of #GValueArrays of floats from a #gsl_matrix_float.
+ *
+ * Returns:  the newly-allocated #GValueArray of newly-allocated
+ * #GValueArrays of doubles or %NULL on failure.
+ */
+
+
+GValueArray *gstlal_g_value_array_from_gsl_matrix_float(const gsl_matrix_float *matrix)
+{
+	GValueArray *va;
+	GValue v = G_VALUE_INIT;
+	guint i;
+	g_value_init(&v, G_TYPE_VALUE_ARRAY);
+
+	va = g_value_array_new(matrix->size1);
+	if(!va)
+		return NULL;
+	for(i = 0; i < matrix->size1; i++) {
+		g_value_take_boxed(&v, gstlal_g_value_array_from_floats(gsl_matrix_float_const_ptr(matrix, i, 0), matrix->size2));
 		g_value_array_append(va, &v);
 	}
 	return va;

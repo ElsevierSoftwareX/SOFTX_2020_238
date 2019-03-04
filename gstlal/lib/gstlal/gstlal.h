@@ -27,7 +27,9 @@
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
 #include <gsl/gsl_vector.h>
+#include <gsl/gsl_vector_float.h>
 #include <gsl/gsl_matrix.h>
+#include <gsl/gsl_matrix_float.h>
 
 
 #include <lal/LALDatatypes.h>
@@ -91,6 +93,15 @@ guint64 *gstlal_uint64s_from_g_value_array(GValueArray *va, guint64 *dest, gint 
 gsl_matrix_ulong *gstlal_gsl_matrix_ulong_from_g_value_array(GValueArray *va);
 GValueArray *gstlal_g_value_array_from_gsl_matrix_ulong(const gsl_matrix_ulong *matrix);
 GValueArray *gstlal_g_value_array_from_uint64s(const guint64 *src, gint n);
+
+
+/* float type */
+GValueArray *gstlal_g_value_array_from_floats(const gfloat *src, gint n);
+gfloat *gstlal_floats_from_g_value_array(GValueArray *va, gfloat *dest, gint *n);
+gsl_vector_float *gstlal_gsl_vector_float_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_vector_float(const gsl_vector_float *vector);
+gsl_matrix_float *gstlal_gsl_matrix_float_from_g_value_array(GValueArray *va);
+GValueArray *gstlal_g_value_array_from_gsl_matrix_float(const gsl_matrix_float *matrix);
 
 
 /* double type */
