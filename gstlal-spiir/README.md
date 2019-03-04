@@ -77,6 +77,7 @@ gstlal_postcohspiir_inspiral_online
         --cohfar-accumbackground-output-prefix pcdev11/bank0_stats 
         --cohfar-accumbackground-output-prefix pcdev11/bank1_stats 
         --cohfar-accumbackground-snapshot-interval 200 
+		--cohfar-accumbackground-ifo-sense H1:100,L1:140,V1:50
         --cohfar-assignfar-silent-time 500 
         --cohfar-assignfar-input-fname pcdev11/marginalized_1w.xml.gz,pcdev11/marginalized_1d.xml.gz,pcdev11/marginalized_2h.xml.gz
         --cohfar-assignfar-refresh-interval 200 
@@ -121,6 +122,7 @@ gstlal_postcohspiir_inspiral_online
  - `state-vector-off-bits`: data of the state channel need to be 0 on these bits for strain data to be used.
  - `cohfar-accumbackground-snapshot-interval`: the various rates of background events, used to estimate FARs for zerolag events, will be snapshotted at multiples of the time defined here. If it's set to 0, the background rates will be saved after finishing processing the whole data stream.
  - `cohfar-accumbackground-output-prefix`: the output prefix for the background rates. The background output will be saved in the job-tag folder.
+ - `cohfar-accumbackground-ifo-sense`: horizon distance for each detector.
  - `cohfar-assignfar-silent-time`: Do not assign FARs to zerolag events during this time from the start of the pipeline. This is to avoid unstable FAR assignment at the beginning due to insufficient background collection.
  - `cohfar-assignfar-input-fname`: All the zerolags will be assigned a FAR which is maximum of FARs from given files.
  - `cohfar-assignfar-refresh-interval`The FAR file or files will be refreshed at multiples of this interval.
