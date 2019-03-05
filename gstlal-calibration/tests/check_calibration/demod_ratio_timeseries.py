@@ -33,6 +33,10 @@ import resource
 import datetime
 import time
 import matplotlib
+matplotlib.rcParams['font.family'] = 'Times New Roman'
+matplotlib.rcParams['font.size'] = 22
+matplotlib.rcParams['legend.fontsize'] = 18
+matplotlib.rcParams['mathtext.default'] = 'regular'
 matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
@@ -161,7 +165,7 @@ def demod_ratio(pipeline, name):
 test_common.build_and_run(demod_ratio, "demod_ratio", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
-colors = ['b.', 'y.', 'r.', 'c.', 'm.', 'g.'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['limegreen.', 'y.', 'c.', 'm.', 'g.', 'r.'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(freq_list)):
 	data = numpy.loadtxt("%s_%s_over_%s_%0.1fHz.txt" % (ifo, options.numerator_channel_name, options.denominator_channel_name, freq_list[i][0]))
 	t_start = data[0][0]

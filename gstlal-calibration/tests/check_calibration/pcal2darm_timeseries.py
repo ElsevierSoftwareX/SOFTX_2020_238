@@ -266,7 +266,7 @@ def pcal2darm(pipeline, name):
 test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
-colors = ['r.', 'g.', 'y.', 'c.', 'm.', 'b.'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['b.', 'limegreen.', 'c.', 'y.', 'r.', 'm.'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
 channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):
