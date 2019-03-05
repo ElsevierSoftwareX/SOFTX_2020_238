@@ -310,8 +310,6 @@ fs_var = float(TDCFConfigs["fsvar"])
 srcQinv_min = float(TDCFConfigs["srcqinvmin"])
 srcQinv_max = float(TDCFConfigs["srcqinvmax"])
 
-latency_test_filename_suffix = DebuggingConfigs["latencytestfilenamesuffix"] if "latencytestfilenamesuffix" in DebuggingConfigs else ""
-
 # Set up smoothing, averaging and integration sample sizes for kappa calulations
 integration_samples = demodulation_filter_time * compute_factors_sr
 factors_average_samples = int(TDCFConfigs["tdcfaveragingtime"]) * compute_factors_sr
@@ -371,7 +369,7 @@ verbose = Config.getboolean("DebuggingConfigurations", "verbose")
 file_check_sum = Config.getboolean("InputConfigurations", "filechecksum")
 skip_bad_files = Config.getboolean("InputConfigurations", "skipbadfiles")
 # Booleans for calibration tests
-test_latency = True if len(latency_test_filename_suffix) else Config.getboolean("DebuggingConfigurations", "testlatency") if "testlatency" in DebuggingConfigs else False
+test_latency = Config.getboolean("DebuggingConfigurations", "testlatency") if "testlatency" in DebuggingConfigs else False
 test_filters = Config.getboolean("DebuggingConfigurations", "testfilters") if "testfilters" in DebuggingConfigs else False
 
 #
@@ -1010,7 +1008,7 @@ elif InputConfigs["datasource"] == "frames": # Data is to be read from frame fil
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
 
 if test_latency:
-	src = pipeparts.mkgeneric(pipeline, src, "splitcounter", filename = "gstlal_compute_strain_timestamps_in%s.txt" % latency_test_filename_suffix)
+	src = pipeparts.mkgeneric(pipeline, src, "splitcounter", filename = "%s_timestamps_in.txt" % OutputConfigs["frametype"])
 
 #
 # Hook up the relevant channels to the demuxer
@@ -2916,7 +2914,7 @@ else:
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
 if test_latency:
-	mux = pipeparts.mkgeneric(pipeline, mux, "splitcounter", filename = "gstlal_compute_strain_timestamps_out%s.txt" % latency_test_filename_suffix)
+	mux = pipeparts.mkgeneric(pipeline, mux, "splitcounter", filename = "%s_timestamps_out.txt" % OutputConfigs["frametype"])
 
 if OutputConfigs["datasink"] == "lvshm":
 	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*options.frame_duration*options.frames_per_file, buffer_mode = int(OutputConfigs["buffermode"]))

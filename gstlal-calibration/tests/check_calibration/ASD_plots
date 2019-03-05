@@ -33,6 +33,8 @@ parser.add_option("--ratio-min", metavar = "Hz", type = float, default = 0.7, he
 parser.add_option("--ratio-max", metavar = "Hz", type = float, default = 1.3, help = "Maximum value for vertical axis of ASD ratio plot (default = 1.3)")
 parser.add_option("--ASD-plot-title", metavar = "name", type = str, default = "", help = "Title of ASD plot, to appear above plot. Default is no title")
 parser.add_option("--ratio-plot-title", metavar = "name", type = str, default = "", help = "Title of ASD ratio plot, to appear above plot. Default is no title")
+parser.add_option("--ASD-labels", metavar = "list", type = str, default = "", help = "Comma-separated list of labels to go in ASD plot legend (default is to use channel names)")
+parser.add_option("--ratio-labels", metavar = "list", type = str, default = "", help = "Comma-separated list of labels to go in ratio plot legend (default is to use channel names)")
 parser.add_option("--write-ASD-txt", action="store_true", help = "If set, text files will be written with the ASDs")
 parser.add_option("--filename-suffix", metavar = "name", type = str, default = "", help = "Suffix to add to the end of filenames")
 
@@ -55,6 +57,23 @@ ratio_min = float(options.ratio_min)
 ratio_max = float(options.ratio_max)
 ASD_title = options.ASD_plot_title
 ratio_title = options.ratio_plot_title
+if len(options.ASD_labels):
+	ASD_labels = options.ASD_labels.split(',')
+	if len(ASD_labels) != len(frame_cache_list):
+		raise ValueError("ASD-labels must be the same length as frame-cache-list")
+else:
+	ASD_labels = []
+	for i in range(0, len(channel_list)):
+		ASD_labels.append("%s:%s" % (ifo, channel_list[i].replace('_', '\_')))
+if len(options.ratio_labels):
+	ratio_labels = options.ratio_labels.split(',')
+	if len(ratio_labels) != len(frame_cache_list) - 1:
+		raise ValueError("ratio-labels must be one less than the length of frame-cache-list")
+else:
+	ratio_labels = []
+	for i in range(1, len(channel_list)):
+		ratio_labels.append("%s:%s / %s:%s" % (ifo, channel_list[i].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+
 filename_suffix = options.filename_suffix
 
 # Grab all data and make ASDs and ASD ratios
@@ -82,9 +101,9 @@ if options.write_ASD_txt:
 # Plot ASDs
 colors = ["blue", "green", "limegreen", "red", "yellow", "purple", "pink"]
 if len(ASD_title):
-	plot = ASDs[0].plot(color = colors[0], title = "%s" % ASD_title, linewidth = 0.75, label = "%s:%s" % (ifo, channel_list[0].replace('_', '\_')))
+	plot = ASDs[0].plot(color = colors[0], title = "%s" % ASD_title, linewidth = 0.75, label = ASD_labels[0])
 else:
-	plot = ASDs[0].plot(color = colors[0], linewidth = 0.75, label = "%s:%s" % (ifo, channel_list[0].replace('_', '\_')))
+	plot = ASDs[0].plot(color = colors[0], linewidth = 0.75, label = ASD_labels[0])
 
 ax = plot.gca()
 for tick in ax.xaxis.get_major_ticks():
@@ -101,7 +120,7 @@ ax.set_ylim(ASD_min, ASD_max)
 
 for i in range(1, len(ASDs)):
 	ax = plot.gca()
-	ax.plot(ASDs[i], colors[i % 7], linewidth = 0.75, label = "%s:%s" % (ifo, channel_list[i].replace('_', '\_')))
+	ax.plot(ASDs[i], colors[i % 7], linewidth = 0.75, label = ASD_ratios[i])
 	leg = ax.legend(fancybox = True, fontsize = 10)
 	leg.get_frame().set_alpha(0.8)
 
@@ -111,9 +130,9 @@ plot.save('%s_%s_%s_spectrum_comparison%s.pdf' % (ifo, start_time, end_time, opt
 # Plot ASD ratios
 if len(ratios):
 	if len(ratio_title):
-		plot = ratios[0].plot(color = colors[1], title = "%s" % ratio_title, linewidth = 0.75, label = "%s:%s / %s:%s" % (ifo, channel_list[1].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+		plot = ratios[0].plot(color = colors[1], title = "%s" % ratio_title, linewidth = 0.75, label = ratio_labels[0])
 	else:
-		plot = ratios[0].plot(color = colors[1], linewidth = 0.75, label = "%s:%s / %s:%s" % (ifo, channel_list[1].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+		plot = ratios[0].plot(color = colors[1], linewidth = 0.75, label = ratio_labels[0])
 
 	ax = plot.gca()
 	for tick in ax.xaxis.get_major_ticks():
@@ -129,7 +148,7 @@ if len(ratios):
 	ax.set_ylim(ratio_min, ratio_max)
 	for i in range(1, len(ratios)):
 		ax = plot.gca()
-		ax.plot(ratios[i], colors[(i + 1) % 7], linewidth = 0.75, label = "%s:%s / %s:%s" % (ifo, channel_list[i + 1].replace('_', '\_'), ifo, channel_list[0].replace('_', '\_')))
+		ax.plot(ratios[i], colors[(i + 1) % 7], linewidth = 0.75, label = ratio_labels[i])
 		leg = ax.legend(fancybox = True, fontsize = 10)
 		leg.get_frame().set_alpha(0.8)
 
