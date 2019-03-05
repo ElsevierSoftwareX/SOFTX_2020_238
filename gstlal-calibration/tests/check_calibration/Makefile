@@ -4,9 +4,9 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
-OBSRUN = O2
+OBSRUN = ER14
 
 START = $(shell echo 1186099200 - 2260 | bc)
 #1229094912
@@ -16,7 +16,7 @@ END = $(shell echo 1186177024 + 2260 | bc)
 #1229099008
 #1225968448
 #1185771520
-SHMRUNTIME = 400
+SHMRUNTIME = 36000
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 2260
 PLOT_COOLDOWN_TIME = 2260
@@ -29,8 +29,10 @@ DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_
 GDSTESTCONFIGS = ../../config_files/PreER13/H1/H1GDS_TEST_1225558818.ini
 DCSTESTCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning_TEST.ini
 GDSSHMCONFIGS = Filters/ER14/GDSFilters/H1GDS_1234630818_latency_test.ini
+GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
+GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 
-all: noise_subtraction_ASD_DCS noise_subtraction_tf_DCS lines_ratio_DCS
+all: latency_tests
 
 ###############################################
 ### These commands should change less often ###
@@ -96,6 +98,14 @@ $(IFO)1_hoft_GDS_SHM_frames.cache: filters framesdir
 	-GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSSHMCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_SHM*.gwf | lalapps_path2cache > $@
 
+$(IFO)1_hoft_GDS_OLD_frames.cache: filters
+	-GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSOLDCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_OLD*.gwf | lalapps_path2cache > $@
+
+$(IFO)1_hoft_GDS_BETTER_frames.cache: filters
+	-GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSBETTERCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_BETTER*.gwf | lalapps_path2cache > $@
+
 GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --config-file '$(GDSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list GDS-CALIB_STRAIN --labels GDS-CALIB_STRAIN
 
@@ -116,6 +126,10 @@ filters_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
 
 latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
+
+latency_tests: 
+	#$(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache
+	python latency_plot.py --intime-file-list 'gstlal_compute_strain_timestamps_in_resample.txt,gstlal_compute_strain_timestamps_in_old.txt,gstlal_compute_strain_timestamps_in_better.txt' --outtime-file-list 'gstlal_compute_strain_timestamps_out_resample.txt,gstlal_compute_strain_timestamps_out_old.txt,gstlal_compute_strain_timestamps_out_better.txt' --plot-filename-prefix $(IFO)1GDS_latency --labels 'Including resampling latency,6s Tukey-windowed actuation filter,3.5s Kaiser-windowed actuation filter'
 
 CALCS_GDS_ASD: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	./ASD_comparison_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_easy_raw_frames.cache --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache

@@ -5,65 +5,76 @@ from math import pi
 import datetime
 import time
 import matplotlib
+matplotlib.rcParams['font.family'] = 'Times New Roman'
+matplotlib.rcParams['font.size'] = 16
+matplotlib.rcParams['legend.fontsize'] = 14
+matplotlib.rcParams['mathtext.default'] = 'regular'
 matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib import rc
+rc('text', usetex = True)
 import glob
 from optparse import OptionParser, Option
 import matplotlib.pyplot as plt
 
 parser = OptionParser()
-parser.add_option("--intime-file", metavar = "file", type = str, help = "File that contains data timestamps and real time of input data")
-parser.add_option("--outtime-file", metavar = "file", type = str, help = "File that contains data timestamps and real time of output data")
-parser.add_option("--plot-title", metavar = "name", type = str, help = "Title of the plot")
+parser.add_option("--intime-file-list", metavar = "list", type = str, help = "Comma-separated list of files that contain data timestamps and real times of input data")
+parser.add_option("--outtime-file-list", metavar = "file", type = str, help = "Comma-separated list of files that contain data timestamps and real times of output data")
+parser.add_option("--labels", metavar = "list", type = str, default = "", help = "Comma-separated list of plot legends for the data sets (default is no legend)")
+parser.add_option("--plot-title", metavar = "name", type = str, default = "", help = "Title of the plot (default is no title)")
 parser.add_option("--plot-filename-prefix", metavar = "file", type = str, default = "", help = "Start of the name of the file containing the plot. GPS start time, duration of plot, and .pdf are added")
 
 options, filenames = parser.parse_args()
 
-intimes = numpy.loadtxt(options.intime_file)
-outtimes = numpy.loadtxt(options.outtime_file)
+labels = options.labels.split(',')
 
-in_dt = intimes[1][0] - intimes[0][0]
-out_dt = outtimes[1][0] - outtimes[0][0]
+# Get the list of files with the timestamp data
+intime_file_list = options.intime_file_list.split(',')
+outtime_file_list = options.outtime_file_list.split(',')
+if len(intime_file_list) != len(outtime_file_list):
+	raise ValueError("intime-file-list and outtime-file-list must be the same length")
 
+# Organize the times into lists
+intimes = []
+outtimes = []
+for i in range(0, len(intime_file_list)):
+	intimes.append(numpy.loadtxt(intime_file_list[i]))
+	outtimes.append(numpy.loadtxt(outtime_file_list[i]))
+
+# Find the least common multiple sample period.  This assumes that all input
+# sample periods are the same and all output sample periods are the same.
+in_dt = intimes[0][1][0] - intimes[0][0][0]
+out_dt = outtimes[0][1][0] - outtimes[0][0][0]
 long_dt = max(in_dt, out_dt)
 short_dt = min(in_dt, out_dt)
 common_dt = long_dt
 while common_dt % short_dt:
 	common_dt = common_dt + long_dt
 
-in_step = int(common_dt / in_dt)
-out_step = int(common_dt / out_dt)
+# Number of sample of input and output corresponding to least common multiple sample period
+in_step = round(common_dt / in_dt)
+out_step = round(common_dt / out_dt)
 
-first_index_in = 0
-first_index_out = 0
-last_index_in = len(intimes) - 1
-last_index_out = len(outtimes) - 1
+# Find a start time that is not before any of the data sets start and an end time that is not after any of the data sets end
+t_start = intimes[0][0][0]
+t_end = intimes[0][-1][0]
+for i in range(0, len(intimes)):
+	t_start = t_start if t_start > intimes[i][0][0] else intimes[i][0][0]
+	t_start = t_start if t_start > outtimes[i][0][0] else outtimes[i][0][0]
+	t_end = t_end if t_end < intimes[i][-1][0] else intimes[i][-1][0]
+	t_end = t_end if t_end < outtimes[i][-1][0] else outtimes[i][-1][0]
 
-while intimes[first_index_in][0] % common_dt:
-	first_index_in = first_index_in + 1
-while outtimes[first_index_out][0] % common_dt:
-        first_index_out = first_index_out + 1
-while intimes[last_index_in][0] % common_dt:
-        last_index_in = last_index_in - 1
-while outtimes[last_index_out][0] % common_dt:
-        last_index_out = last_index_out - 1
+# Make sure the start and end times are multiples of the chosen sample period
+if t_start % common_dt:
+	t_start = t_start + common_dt - t_start % common_dt
+if t_end % common_dt:
+	t_end = t_end - t_end % common_dt
 
-while intimes[first_index_in][0] < outtimes[first_index_out][0]:
-	first_index_in = first_index_in + in_step
-while outtimes[first_index_out][0] < intimes[first_index_in][0]:
-        first_index_out = first_index_out + out_step
-while intimes[last_index_in][0] > outtimes[last_index_out][0]:
-        last_index_in = last_index_in - in_step
-while outtimes[last_index_out][0] > intimes[last_index_in][0]:
-        last_index_out = last_index_out - out_step
+# Make a time vector
+dur = t_end - t_start
+gps_time = numpy.arange(0, dur + common_dt / 2, common_dt)
 
-t_start = intimes[first_index_in][0]
-dur = intimes[last_index_in][0] - t_start
-gps_time = []
-latency = []
-for i in range(0, 1 + (last_index_in - first_index_in) / in_step):
-	gps_time.append(intimes[first_index_in + i * in_step][0] - t_start)
-	latency.append(outtimes[first_index_out + i * out_step][1] - intimes[first_index_in + i * in_step][1])
-
+# Decide what unit of time to use
 t_unit = 'seconds'
 if gps_time[len(gps_time) - 1] > 100:
 	for i in range(0, len(gps_time)):
@@ -78,13 +89,45 @@ if gps_time[len(gps_time) - 1] > 100:
 				gps_time[i] = gps_time[i] / 24.0
 			t_unit = 'days'
 
+# Collect latency data in a list
+latency = []
+for i in range(0, len(intimes)):
+	latency.append([])
+	intimes_start_index = round((t_start - intimes[i][0][0]) / in_dt)
+	outtimes_start_index = round((t_start - outtimes[i][0][0]) / out_dt)
+	for j in range(0, len(gps_time)):
+		latency[i].append(outtimes[i][outtimes_start_index + j * out_step][1] - intimes[i][intimes_start_index + j * in_step][1])
+
+# Make the plot
+colors = ['purple', 'b', 'c', 'g', 'y', 'r']
+markersize = 200.0 * numpy.sqrt(len(intimes[0]))
+markersize = min(markersize, 10.0)
+markersize = max(markersize, 0.2)
 plt.figure(figsize = (10, 5))
-plt.plot(gps_time, latency, 'r.')
-plt.title(options.plot_title)
+if len(labels[0]):
+	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = labels[0])
+else:
+	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize)
+if len(options.plot_title):
+	plt.title(options.plot_title)
 plt.ylabel('Latency [s]')
 plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
-plt.ylim(0, 8)
-plt.grid(True)
+plt.ylim(0, 15)
+plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+if len(labels[0]):
+	leg = plt.legend(fancybox = True, loc = 'upper right')
+	leg.get_frame().set_alpha(0.8)
+
+for i in range(1, len(intimes)):
+	if len(labels) > 1:
+		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize, label = labels[i])
+	else:
+		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize)
+	if len(options.labels):
+		leg = plt.legend(fancybox = True, loc = 'upper right')
+		leg.get_frame().set_alpha(0.8)
+
+# Save the plot to a file
 plt.savefig('%s_%d-%d.png' % (options.plot_filename_prefix, int(t_start), int(dur)))
 plt.savefig('%s_%d-%d.pdf' % (options.plot_filename_prefix, int(t_start), int(dur)))
 
