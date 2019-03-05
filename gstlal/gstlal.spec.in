@@ -30,7 +30,7 @@ Requires: lalburst >= @MIN_LALBURST_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Requires: lalsimulation >= @MIN_LALSIMULATION_VERSION@
-Requires: numpy
+Requires: numpy > @MIN_NUMPY_VERSION@
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
@@ -53,7 +53,7 @@ BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
 BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
-BuildRequires: numpy
+BuildRequires: numpy >= @MIN_NUMPY_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal

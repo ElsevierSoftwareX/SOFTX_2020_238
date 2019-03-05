@@ -29,7 +29,7 @@ Build-Depends:
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-ligolw-tools,
- python-numpy
+ python-numpy (>= @MIN_NUMPY_VERSION@)
 
 Package: gstlal-ugly
 Architecture: any
@@ -54,7 +54,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-h5py,
  python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
  python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
- python-numpy,
+ python-numpy (>= @MIN_NUMPY_VERSION@),
  python-scipy
 Description: GStreamer for GW data analysis (in-development parts)
  This package provides a variety of GStreamer elements for

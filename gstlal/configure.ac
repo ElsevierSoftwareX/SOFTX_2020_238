@@ -289,6 +289,7 @@ fi
 #
 
 
+AC_SUBST([MIN_NUMPY_VERSION], [1.7.0])
 AX_PYTHON_MODULE(numpy, fatal)
 NUMPY_CFLAGS=-I`$PYTHON -c "import numpy;print (numpy.get_include());"`
 old_CFLAGS="$CFLAGS"
