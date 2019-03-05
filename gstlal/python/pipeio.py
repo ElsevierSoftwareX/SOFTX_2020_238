@@ -126,23 +126,36 @@ def numpy_dtype_from_caps(caps):
 		GstAudio.AudioFormat.S32: numpy.dtype("int32"),
 		GstAudio.AudioFormat.U32: numpy.dtype("uint32")
 	}
+
+	custom_formats_dict = {
+		"Z64LE" : numpy.dtype("complex64"),
+		"Z128LE": numpy.dtype("complex128")
+	}
+
 	info = GstAudio.AudioInfo()
 	info.from_caps(caps)
-	return formats_dict[info.finfo.format]
+
+	if info.finfo.format in formats_dict:
+		return formats_dict[info.finfo.format]
+	elif caps.get_structure(0).get_string("format") in custom_formats_dict:
+		return custom_formats_dict[caps.get_structure(0).get_string("format")]
+	else:
+		raise ValueError("unknown GstAudioFormat : %s" % caps.get_structure(0).get_string("format"))
 
 
-def format_string_from_numpy_dtype(dtype):
-	formats_dict = {
-		numpy.dtype("float32"): GstAudio.AudioFormat.F32,
-		numpy.dtype("float64"): GstAudio.AudioFormat.F64,
-		numpy.dtype("int8"): GstAudio.AudioFormat.S8,
-		numpy.dtype("uint8"): GstAudio.AudioFormat.U8,
-		numpy.dtype("int16"): GstAudio.AudioFormat.S16,
-		numpy.dtype("uint16"): GstAudio.AudioFormat.U16,
-		numpy.dtype("int32"): GstAudio.AudioFormat.S32,
-		numpy.dtype("uint32"): GstAudio.AudioFormat.U32
-	}
-	return GstAudio.AudioFormat.to_string(formats_dict[dtype])
+def format_string_from_numpy_dtype(dtype, formats_dict = {
+		numpy.dtype("float32"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32),
+		numpy.dtype("float64"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64),
+		numpy.dtype("int8"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.S8),
+		numpy.dtype("uint8"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.U8),
+		numpy.dtype("int16"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.S16),
+		numpy.dtype("uint16"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.U16),
+		numpy.dtype("int32"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.S32),
+		numpy.dtype("uint32"): GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.U32),
+		numpy.dtype("complex64") : "Z64LE",
+		numpy.dtype("complex128") : "Z128LE"
+	}):
+	return formats_dict[dtype]
 
 
 def caps_from_array(arr, rate = None):
