@@ -31,7 +31,7 @@ from gstlal import far
 
 def parse_command_line():
 	parser = OptionParser(usage="%prog [options] database.sqlite")
-	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Path of marginalized likelihood file")
+	parser.add_option("--post-marginalized-likelihood-file", metavar = "filename", help = "Path of post marginalized likelihood file")
 	options, database = parser.parse_args()
 
 	return options, database
@@ -39,9 +39,9 @@ def parse_command_line():
 
 options, database = parse_command_line()
 
-_, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.marginalized_likelihood_file, contenthandler=far.RankingStat.LIGOLWContentHandler))
+_, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(options.post_marginalized_likelihood_file, contenthandler=far.RankingStat.LIGOLWContentHandler))
 
-fapfar = far.FAPFAR(rankingstatpdf)
+fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 
 livetime = fapfar.livetime
 print "%s: livetime used in making IFAR plots\n" % (livetime,)
