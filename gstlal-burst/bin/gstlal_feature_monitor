@@ -117,14 +117,14 @@ class StreamMonitor(object):
         ### set up aggregator 
         logger.info("setting up monitor with backend: %s"%options.data_backend)
         if options.data_backend == 'influx':
-            self.agg_sink = io.influx.InfluxDBAggregator(
+            self.agg_sink = io.influx.Aggregator(
                 hostname=options.influx_hostname,
                 port=options.influx_port,
                 db=options.influx_database_name,
                 reduce_across_tags=False,
             )
         else: ### hdf5 data backend
-            self.agg_sink = io.hdf5.HDF5Aggregator(
+            self.agg_sink = io.hdf5.Aggregator(
                 rootdir=options.rootdir,
                 num_processes=options.num_processes,
                 reduce_across_tags=False,
@@ -134,6 +134,9 @@ class StreamMonitor(object):
         name, _ = options.channel_list.rsplit('.', 1)
         self.channels = set(multichannel_datasource.channel_dict_from_channel_file(options.channel_list).keys())
 
+        ### define measurements to be stored
+        for metric in ('target_snr', 'synchronizer_latency', 'percent_missed'):
+            self.agg_sink.register_schema(metric, columns='data', column_key='data', tags='job', tag_key='job')
 
     def fetch_data(self):
         """
@@ -185,10 +188,10 @@ class StreamMonitor(object):
                 ### store and aggregate features
                 for metric in ('synchronizer_latency', 'percent_missed'):
                     data = {'time': metrics['time'], 'fields': {'data': metrics[metric]}}
-                    self.agg_sink.store_columns(metric, {'synchronizer': data}, 'data', tags='job', aggregate=self.data_type)
+                    self.agg_sink.store_columns(metric, {'synchronizer': data}, aggregate=self.data_type)
                 if len(metrics['target_time']) > 0:
                     data = {'time': metrics['target_time'], 'fields': {'data': metrics['target_snr']}}
-                    self.agg_sink.store_columns('target_snr', {'synchronizer': data}, 'data', tags='job', aggregate=self.data_type)
+                    self.agg_sink.store_columns('target_snr', {'synchronizer': data}, aggregate=self.data_type)
 
                 self.last_save = timestamp
                 logger.info('processed features up to timestamp %.3f, max latency = %.3f s, percent missing channels = %.3f' % (timestamp, max(metrics['synchronizer_latency']), max(metrics['percent_missed'])))

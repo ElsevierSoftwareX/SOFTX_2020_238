@@ -112,18 +112,22 @@ class StreamAggregator(object):
         ### set up aggregator 
         logger.info("setting up aggregator with backend: %s"%options.data_backend)
         if options.data_backend == 'influx':
-            self.agg_sink = io.influx.InfluxDBAggregator(
+            self.agg_sink = io.influx.Aggregator(
                 hostname=options.influx_hostname,
                 port=options.influx_port,
                 db=options.influx_database_name,
                 reduce_across_tags=False,
             )
         else: ### hdf5 data backend
-            self.agg_sink = io.hdf5.HDF5Aggregator(
+            self.agg_sink = io.hdf5.Aggregator(
                 rootdir=options.rootdir,
                 num_processes=options.num_processes,
                 reduce_across_tags=False,
             )
+
+        ### define measurements to be stored from aggregators
+        self.agg_sink.register_schema('latency', columns='data', column_key='data', tags='job', tag_key='job')
+        self.agg_sink.register_schema('snr', columns='data', column_key='data', tags='channel', tag_key='channel')
 
     def fetch_data(self, job_consumer):
         """
@@ -163,11 +167,11 @@ class StreamAggregator(object):
 
             ### store and aggregate metrics
             metric_data = {job: {'time': metrics['time'], 'fields': {'data': metrics['latency']}} for job, metrics in all_metrics.items()}
-            self.agg_sink.store_columns('latency', metric_data, 'data', tags='job', aggregate=self.data_type)
+            self.agg_sink.store_columns('latency', metric_data, aggregate=self.data_type)
 
             ### store and aggregate features
             timeseries_data = {channel: {'time': timeseries['trigger_time'], 'fields': {'data': timeseries['snr']}} for channel, timeseries in all_timeseries.items()}
-            self.agg_sink.store_columns('snr', timeseries_data, 'data', tags='channel', aggregate=self.data_type)
+            self.agg_sink.store_columns('snr', timeseries_data, aggregate=self.data_type)
 
             try:
                 max_latency = max(max(metrics['latency']) for metrics in all_metrics.values())
@@ -242,7 +246,7 @@ if __name__ == '__main__':
 
     ### set up logging
     logger = utils.get_logger(
-        '-'.join([options.tag, 'feature_aggregator']),
+        '-'.join([options.tag, 'feature_aggregator', options.jobs[0]]),
         log_level=options.log_level,
         rootdir=options.rootdir,
         verbose=options.verbose
