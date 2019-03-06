@@ -98,11 +98,15 @@ if __name__ == '__main__':
 	else:
 		consumer = None
 
-        # set up aggregator sink
+	# set up aggregator sink
 	if options.data_backend == 'influx':
-		agg_sink = io.influx.InfluxDBAggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name)
+		agg_sink = io.influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name)
 	else: ### hdf5 data backend
-		agg_sink = io.hdf5.HDF5Aggregator(rootdir=options.base_dir, num_processes=options.num_threads)
+		agg_sink = io.hdf5.Aggregator(rootdir=options.base_dir, num_processes=options.num_threads)
+
+	# register measurement schemas for aggregators
+	for route in routes:
+		agg_sink.register_schema(route, columns='data', column_key='data', tags='job', tag_key='job')
 
 	# start an infinite loop to keep updating and aggregating data
 	while True:
@@ -125,7 +129,7 @@ if __name__ == '__main__':
 		for route in routes:
 			logging.info("storing and reducing timeseries for measurement: %s" % route)
 			for aggregate in options.data_type:
-				agg_sink.store_columns(route, datadata[route], 'data', tags='job', aggregate=aggregate)
+				agg_sink.store_columns(route, datadata[route], aggregate=aggregate)
 		elapsed = timeit.default_timer() - start
 		logging.info("time to store/reduce timeseries: %.1f s" % elapsed)
 

@@ -131,7 +131,7 @@ class PSDHandler(simplehandler.Handler):
 
 			### store and reduce noise / range history
 			for route in self.routes:
-				agg_sink.store_columns(route, data[route], 'data', tags='ifo', aggregate="max")
+				agg_sink.store_columns(route, data[route], aggregate="max")
 
 			### flush buffers
 			self.timedeq.clear()
@@ -140,7 +140,7 @@ class PSDHandler(simplehandler.Handler):
 
 			# Save a "latest" psd
 			# NOTE: The PSD is special, we just record it. No min/median/max
-			thisdir = os.path.join(self.out_path, io.hdf5.gps_to_leaf_directory(buftime))
+			thisdir = os.path.join(self.out_path, io.common.gps_to_leaf_directory(buftime))
 			aggregator.makedir(thisdir)
 			psd_name = "%s-PSD-%d-100.hdf5" % (self.instrument, int(round(buftime,-2)))
 			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
@@ -178,9 +178,13 @@ if __name__ == '__main__':
 
 	# set up aggregator sink
 	if options.data_backend == 'influx':
-		agg_sink = io.influx.InfluxDBAggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name)
+		agg_sink = io.influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name)
 	else: ### hdf5 data backend
-		agg_sink = io.hdf5.HDF5Aggregator(rootdir=options.out_path, num_processes=options.num_threads)
+		agg_sink = io.hdf5.Aggregator(rootdir=options.out_path, num_processes=options.num_threads)
+
+	# register measurement schemas for aggregators
+	for route in ('noise', 'range_history'):
+		agg_sink.register_schema(route, columns='data', column_key='data', tags='job', tag_key='job')
 
 	# parse the generic "source" options, check for inconsistencies is done inside
 	# the class init method
