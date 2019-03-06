@@ -90,7 +90,7 @@ echo -e "getenv = True
 accounting_group_user  =  $submitter
 accounting_group  =  $myaccgroup
 environment = GST_REGISTRY_UPDATE=no
-log = /usr1/spiir/trigger_pipe.dag.log.bJCa30
+log = /usr1/${user}/trigger_pipe.dag.log.bJCa30
 error = logs/clean_skymap_${user}-\$(cluster)-\$(process).err
 output = logs/clean_skymap_${user}-\$(cluster)-\$(process).out
 notification = never

@@ -62,7 +62,7 @@ iflive=1
 #  triggers uploaded to the main grace (0), or gracedb-playground (1)
 ######################################################
 
-ifplayground=1
+ifplayground=0
 
 ######################################################
 #  --request-data=${mytag} 
