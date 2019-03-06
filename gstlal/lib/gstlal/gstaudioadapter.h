@@ -109,6 +109,7 @@ GType gst_audioadapter_get_type(void);
 
 gboolean gst_audioadapter_is_empty(GstAudioAdapter *adapter);
 GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter);
+guint64 gst_audioadapter_offset(GstAudioAdapter *adapter);
 guint64 gst_audioadapter_expected_offset(GstAudioAdapter *adapter);
 void gst_audioadapter_clear(GstAudioAdapter *adapter);
 void gst_audioadapter_push(GstAudioAdapter *adapter, GstBuffer *buf);

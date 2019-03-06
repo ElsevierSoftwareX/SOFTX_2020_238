@@ -90,6 +90,13 @@ static guint samples_remaining(GstBuffer *buf, guint skip)
 }
 
 
+static guint64 offset(GstAudioAdapter *adapter)
+{
+	guint64 offset = GST_BUFFER_OFFSET(GST_BUFFER(g_queue_peek_head(adapter->queue)));
+	return GST_BUFFER_OFFSET_IS_VALID(offset) ? offset + adapter->skip : GST_BUFFER_OFFSET_NONE;
+}
+
+
 static GstClockTime expected_timestamp(GstAudioAdapter *adapter)
 {
 	GstBuffer *buf = GST_BUFFER(g_queue_peek_tail(adapter->queue));
@@ -137,7 +144,7 @@ gboolean gst_audioadapter_is_empty(GstAudioAdapter *adapter)
  * to be contiguous with the data in the #GstAudioAdapter.  Returns
  * #GST_CLOCK_TIME_NONE if the #GstAudioAdapter is empty.
  *
- * See also:  gst_audioadapter_expected_offset()
+ * See also:  gst_audioadapter_offset(), gst_audioadapter_expected_offset()
  *
  * Returns:  #GstClockTime
  */
@@ -150,6 +157,27 @@ GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
 
 
 /**
+ * gst_audioadapter_offset:
+ * @adapter: a #GstAudioAdapter
+ *
+ * If the #GstAudioAdapter is not empty, returns the offset of the next
+ * sample to be pulled from the adapter.  Returns #GST_BUFFER_OFFSET_NONE
+ * if the #GstAudioAdapter is empty.
+ *
+ * See also:  gst_audioadapter_expected_offset(),
+ * gst_audioadapter_expected_timestamp()
+ *
+ * Returns:  #guint64
+ */
+
+
+guint64 gst_audioadapter_offset(GstAudioAdapter *adapter)
+{
+	return g_queue_is_empty(adapter->queue) ? GST_BUFFER_OFFSET_NONE : offset(adapter);
+}
+
+
+/**
  * gst_audioadapter_expected_offset:
  * @adapter: a #GstAudioAdapter
  *
@@ -158,7 +186,8 @@ GstClockTime gst_audioadapter_expected_timestamp(GstAudioAdapter *adapter)
  * is to be contiguous with the data in the #GstAudioAdapter.  Returns
  * #GST_BUFFER_OFFSET_NONE if the #GstAudioAdapter is empty.
  *
- * See also:  gst_audioadapter_expected_timestamp()
+ * See also:  gst_audioadapter_offset(),
+ * gst_audioadapter_expected_timestamp()
  *
  * Returns:  #guint64
  */
