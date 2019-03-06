@@ -11,7 +11,7 @@ AC_DEFUN([AX_PYTHON_GLUE],[
 			AC_MSG_ERROR(["cannot determine version"])
 		])
 		minversion=$1
-		AX_COMPARE_VERSION([$LIGO_SEGMENTS_VERSION], [ge], [${minversion:-0}], [
+		AX_COMPARE_VERSION([$GLUE_VERSION], [ge], [${minversion:-0}], [
 			AC_MSG_RESULT([$GLUE_VERSION])
 		], [
 			AC_MSG_WARN([found $GLUE_VERSION, require at least $1])
