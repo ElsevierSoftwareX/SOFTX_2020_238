@@ -253,4 +253,4 @@ clean :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt
 
 clean-all :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt aggregator features snapshots synchronizer
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt monitor aggregator features snapshots synchronizer gstlal_feature_*
