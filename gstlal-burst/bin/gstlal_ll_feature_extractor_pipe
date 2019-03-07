@@ -213,15 +213,14 @@ channels = data_source_info.channel_dict.keys()
 # create directories if needed
 #
 
-listdir = os.path.join(options.out_path, "gstlal_feature_extractor/channel_lists")
-aggregator.makedir(listdir)
-aggregator.makedir("logs")
+for dir_ in ('features', 'synchronizer', 'monitor', 'aggregator', 'logs'):
+	aggregator.makedir(dir_)
 
 #
 # set up dag and job classes
 #
 
-dag = dagparts.DAG("feature_extractor_pipe")
+dag = dagparts.DAG("%s_%s_fx_pipe"%(options.tag, ifo))
 
 # feature extractor job
 if options.condor_universe == 'local':
@@ -336,7 +335,7 @@ if options.save_format == 'kafka':
 	synchronizer_options.update({"num-topics": len(feature_extractor_nodes)})
 	synchronizer_node = dagparts.DAGNode(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "synchronizer")})
 	hdf5_sink_node = dagparts.DAGNode(hdf5_sink_job, dag, [], opts = hdf5_sink_options, output_files = {"rootdir": os.path.join(options.out_path, "features")})
-	monitor_node = dagparts.DAGNode(monitor_job, dag, [], opts = monitor_options, output_files = {"rootdir": os.path.join(options.out_path, "aggregator")})
+	monitor_node = dagparts.DAGNode(monitor_job, dag, [], opts = monitor_options, output_files = {"rootdir": os.path.join(options.out_path, "monitor")})
 
 	### aggregator jobs
 	if not options.disable_agg_jobs:
