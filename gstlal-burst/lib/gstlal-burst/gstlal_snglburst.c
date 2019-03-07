@@ -34,6 +34,7 @@ static int sngl_burst_row_callback(struct ligolw_table *table, struct ligolw_tab
 		{&new->event_id, "event_id", ligolw_cell_type_int_8s, LIGOLW_UNPACKING_REQUIRED},
 		{NULL, "ifo", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
 		{NULL, "search", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
+		{NULL, "channel", ligolw_cell_type_lstring, LIGOLW_UNPACKING_REQUIRED},
 		{&new->start_time.gpsSeconds, "start_time", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
 		{&new->start_time.gpsNanoSeconds, "start_time_ns", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
 		{&new->peak_time.gpsSeconds, "peak_time", ligolw_cell_type_int_4s, LIGOLW_UNPACKING_REQUIRED},
@@ -64,6 +65,8 @@ static int sngl_burst_row_callback(struct ligolw_table *table, struct ligolw_tab
 	new->ifo[LIGOMETA_IFO_MAX - 1] = '\0';
 	strncpy(new->search, ligolw_row_get_cell(row, "search").as_string, LIGOMETA_SEARCH_MAX - 1);
 	new->search[LIGOMETA_SEARCH_MAX - 1] = '\0';
+	strncpy(new->channel, ligolw_row_get_cell(row, "channel").as_string, LIGOMETA_CHANNEL_MAX - 1);
+	new->channel[LIGOMETA_CHANNEL_MAX - 1] = '\0';
 
 	result_code = ligolw_unpacking_row_builder(table, row, spec);
 	if(result_code > 0) {
