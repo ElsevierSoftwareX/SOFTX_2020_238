@@ -47,7 +47,6 @@ from gstlal import datasource
 
 # FIXME: Find a better way than using global variables.
 PSD_FFT_LENGTH = 32
-PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
 NATIVE_RATE_CUTOFF = 128
 
 #
@@ -149,9 +148,9 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	# construct whitener.
 	#
 
-	zero_pad = 0
+	zero_pad = psd_fft_length // 4
 	head = pipeparts.mktee(pipeline, head)
-	whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lalwhiten" % (instrument, channel_name))
+	whiten = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = zero_pad, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_%s_lalwhiten" % (instrument, channel_name))
 	pipeparts.mkfakesink(pipeline, whiten)
 
 	#
@@ -195,7 +194,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	# Drop initial data to let the PSD settle
 	#
 
-	head = pipeparts.mkdrop(pipeline, head, drop_samples = PSD_DROP_TIME * max_rate)
+	head = pipeparts.mkdrop(pipeline, head, drop_samples = 16 * psd_fft_length * max_rate)
 
 	#
 	# enable/disable PSD tracking
