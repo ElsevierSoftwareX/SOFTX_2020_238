@@ -556,7 +556,6 @@ lalapps_run_sqlite_0001: gstlal_inspiral_calc_likelihood_0001
 H1L1-ALL_LLOID-1000000000-2048.sqlite: lalapps_run_sqlite_0001
 	# ligolw_sqlite_from_xml_0004
 	$(TIME) ligolw_sqlite \
-		--ilwdchar-compat \
 		--database H1L1-ALL_LLOID-1000000000-2048.sqlite \
 		--replace \
 		--tmp-space $(TMPDIR) \
