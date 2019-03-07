@@ -87,7 +87,7 @@ def generate_options(options):
 		raise NotImplementedError, 'not an available option for online jobs at this time'
 
 	# program behavior options
-	program_options = {}
+	program_options = {"psd-fft-length": options.psd_fft_length}
 	if options.disable_web_service:
 		program_options.update({"disable-web-service": options.disable_web_service})
 	if options.verbose:
@@ -147,83 +147,6 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 
 # =============================
 #
-#           classes
-#
-# =============================
-
-
-class zookeeper_job(dagparts.DAGJob):
-	"""
-	A zookeeper job
-	"""
-	def __init__(self, program = "zookeeper-server-start.sh", datadir = os.path.join(dagparts.log_path(), "zookeeper"), port = 2271, maxclients = 0, condor_commands = {}):
-		"""
-		"""
-		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
-
-		try:
-			os.mkdir(datadir)
-		except OSError:
-			pass
-		f = open("zookeeper.properties", "w")
-		f.write("""
-# the directory where the snapshot is stored.
-dataDir=%s
-# the port at which the clients will connect
-clientPort=%d
-# disable the per-ip limit on the number of connections since this is a non-production config
-maxClientCnxns=%d
-		""" % (datadir, port, maxclients))
-
-		f.close()
-
-
-class kafka_job(dagparts.DAGJob):
-	"""
-	A kafka job
-	"""
-	def __init__(self, program = "kafka-server-start.sh", logdir = os.path.join(dagparts.log_path(), "kafka"), host = "10.14.0.112:9182", zookeeperaddr = "localhost:2271", condor_commands = {}):
-		"""
-		"""
-		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
-
-		try:
-			os.mkdir(logdir)
-		except OSError:
-			pass
-		f = open("kafka.properties", "w")
-		f.write("""
-broker.id=0
-listeners = PLAINTEXT://%s
-background.threads=100
-num.network.threads=50
-num.io.threads=80
-log.cleaner.threads=10
-socket.send.buffer.bytes=102400
-socket.receive.buffer.bytes=102400
-socket.request.max.bytes=104857600
-queued.max.requests=10000
-log.dirs=%s
-num.partitions=1
-num.recovery.threads.per.data.dir=1
-auto.create.topics.enable=true
-offsets.topic.replication.factor=1
-transaction.state.log.replication.factor=1
-transaction.state.log.min.isr=1
-log.flush.interval.ms=300000
-log.retention.ms=100000
-log.roll.ms = 1000000
-log.segment.bytes=1073741824
-log.retention.check.interval.ms=300000
-zookeeper.connect=%s
-zookeeper.connection.timeout.ms=6000
-group.initial.rebalance.delay.ms=0
-		""" % (host, logdir, zookeeperaddr))
-
-		f.close()
-
-# =============================
-#
 #     command line parser
 #
 # =============================
@@ -239,7 +162,6 @@ def parse_command_line():
 	group = optparse.OptionGroup(parser, "Condor Options", "Adjust parameters used for HTCondor")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	parser.add_option("--condor-universe", default = "vanilla", metavar = "universe", help = "set the condor universe to run jobs in DAG, options are local/vanilla, default = vanilla")
-	parser.add_option("--disable-kafka-jobs", action = "store_true", help = "If set, do not launch instances of kafka and zookeeper alongside feature extraction jobs.")
 	parser.add_option("--disable-agg-jobs", action = "store_true", help = "If set, do not launch aggregation jobs to process and aggregate incoming features.")
 	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count for feature extraction jobs, default = 2")
 	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory for feature extraction jobs, default = 8GB")
@@ -324,13 +246,6 @@ if options.save_format == 'kafka':
 	# aggregator jobs
 	if not options.disable_agg_jobs:
 		aggregator_job = dagparts.DAGJob("gstlal_feature_aggregator", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
-
-	# kafka/zookeeper jobs
-	if not options.disable_kafka_jobs:
-		local_condor_options = {"want_graceful_removal":"True", "kill_sig":"15"}
-		local_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, local_condor_options)
-		zoo_job = zookeeper_job(condor_commands = local_condor_commands)
-		kafka_job = kafka_job(condor_commands = local_condor_commands, host = options.kafka_server)
 
 	#
 	# set up options for auxiliary jobs
@@ -431,11 +346,6 @@ if options.save_format == 'kafka':
 			job_channel_options = {"jobs": jobs}
 			job_channel_options.update(aggregator_options)
 			agg_node = dagparts.DAGNode(aggregator_job, dag, [], opts = job_channel_options, output_files = {"rootdir": os.path.join(options.out_path, "aggregator")})
-
-	### kafka jobs
-	if not options.disable_kafka_jobs:
-		zoo_node = dagparts.DAGNode(zoo_job, dag, [], opts = {"":"zookeeper.properties"})
-		kafka_node = dagparts.DAGNode(kafka_job, dag, [], opts = {"":"kafka.properties"})
 
 #
 # write out dag and sub files
