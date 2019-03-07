@@ -38,7 +38,7 @@
 #include <lal/LIGOMetadataTables.h>
 #include <gsl/gsl_matrix.h>
 #include <gsl/gsl_matrix_float.h>
-#include <gstlal_sngltrigger.h>
+#include <gstlal-burst/gstlal_sngltrigger.h>
 
 G_BEGIN_DECLS
 
