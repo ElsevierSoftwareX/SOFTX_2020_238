@@ -16,8 +16,9 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	gstlal-burst.spec \
 	bin/Makefile \
-	lib/gstlal-burst.pc \
 	lib/Makefile \
+	lib/gstlal-burst/gstlal-burst.pc \
+	lib/gstlal-burst/Makefile \
 	gst/Makefile \
 	gst/lal/Makefile \
 	debian/control \

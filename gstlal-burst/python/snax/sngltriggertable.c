@@ -35,8 +35,8 @@
 #include <lal/TimeSeries.h>
 #include <lal/Units.h>
 
-#include <gstlal_sngltrigger.h>
-#include <sngltriggerrowtype.h>
+#include <gstlal-burst/gstlal_sngltrigger.h>
+#include <gstlal-burst/sngltriggerrowtype.h>
 
 
 /*

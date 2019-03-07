@@ -51,7 +51,7 @@
 #include <gstlal/gstaudioadapter.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstlal/gstlal_autocorrelation_chi2.h>
-#include <gstlal_sngltrigger.h>
+#include <gstlal-burst/gstlal_sngltrigger.h>
 
 
 /*
