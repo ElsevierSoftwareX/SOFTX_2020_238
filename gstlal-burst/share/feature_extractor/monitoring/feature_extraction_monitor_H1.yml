@@ -1,0 +1,144 @@
+# configuration file for monitoring
+dashboard:
+  title: Online Feature Extraction Status
+  image: null
+  tabs:
+    - name: H1
+      url: https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/cgi-bin/H1_feature_extraction_monitor
+    - name: L1
+      url: https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/cgi-bin/L1_feature_extraction_monitor
+    - name: Docs
+      url: https://docs.ligo.org/lscsoft/gstlal/gstlal-burst/gstlal-burst.html
+    - name: Git
+      url: https://git.ligo.org/lscsoft/gstlal
+  GPS: -1
+  Duration: 600
+
+plots:
+  # target SNR timeseries
+  - title: h(t) SNR
+    type: TimeSeries
+    measurement: target_snr
+    column: data
+    aggregate: max
+    params:
+      - - job
+        - synchronizer
+    layout:
+      yaxis:
+        type: log
+        title:
+          text: SNR
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    value: checked
+
+  # synchronizer latency timeseries
+  - title: Latency
+    type: TimeSeries
+    measurement: synchronizer_latency
+    column: data
+    aggregate: max
+    params:
+      - - job
+        - synchronizer
+    layout:
+      yaxis:
+        title:
+          text: Latency [s]
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    value: checked
+
+  # percent missed timeseries
+  - title: Percent channels missed
+    type: TimeSeries
+    measurement: percent_missed
+    column: data
+    aggregate: max
+    params:
+      - - job
+        - synchronizer
+    layout:
+      yaxis:
+        title:
+          text: percent channels missed in buffer
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    value: checked
+
+  # latency heatmap (by job)
+  - title: Latency by Job
+    type: TimeHeatMap
+    measurement: latency
+    column: data
+    aggregate: max
+    tag: job
+    value: 
+
+  # snr heatmap (by channel)
+  - title: SNR by Channel
+    type: TimeHeatMap
+    measurement: snr
+    column: data
+    aggregate: max
+    tag: channel
+    value:
+
+nagios:
+  ### check for missing jobs from synchronizer
+  missed_jobs:
+    lookback: 300
+    measurement: missed_packets
+    column: data
+    aggregate: max
+    alert_type: threshold
+    alert_settings:
+      tags:
+        - - job
+          - synchronizer
+      tag_type: job
+      threshold: 1
+      threshold_units: missed_packets
+
+  ### check for synchronizer latency spikes
+  latency:
+    lookback: 300
+    measurement: synchronizer_latency
+    column: data
+    aggregate: max
+    alert_type: threshold
+    alert_settings:
+      tags:
+        - - job
+          - synchronizer
+      tag_type: job
+      threshold: 10
+      threshold_units: seconds
+
+  ### check for jobs not reporting
+  job_heartbeat:
+    lookback: 30
+    measurement: latency
+    column: data
+    aggregate: max
+    alert_type: heartbeat
+    alert_settings:
+      tag_type: job
+      tag_format: 4digit
+      num_tags: 43
+
+database:
+  backend: influxdb
+  name: H1_gstlal_features
+  hostname: 10.14.0.100
+  port: 8086
