@@ -193,6 +193,7 @@ dag : $(CHANNEL_LIST) feature_extraction_monitor.yml online-web-deploy
 		--data-source $(DATA_SOURCE) \
 		--shared-memory-partition H1=LHO_RedDtchr \
 		--shared-memory-assumed-duration 1 \
+		--psd-fft-length 8 \
 		--save-format $(SAVE_FORMAT) \
 		--sample-rate $(SAMPLE_RATE) \
 		--cadence $(SAVE_CADENCE) \
@@ -209,13 +210,12 @@ dag : $(CHANNEL_LIST) feature_extraction_monitor.yml online-web-deploy
 		$(FIDELITY_EXCLUDE_COMMANDS) \
 		$(UNSAFE_CHANNEL_INCLUDE_COMMANDS) \
 		--target-channel $(TARGET_CHANNEL) \
-		--disable-kafka-jobs \
-		--disable-agg-jobs \
 		--condor-universe $(CONDOR_UNIVERSE) \
 		--condor-command=accounting_group=$(ACCOUNTING_TAG) \
 		--condor-command=accounting_group_user=$(GROUP_USER) \
 		--condor-command='Requirements=(TARGET.HasLowLatencyDetcharFrames =?= True) && (Machine != "node274.ldas.ligo-la.caltech.edu")' \
 		--tag $(TAG) \
+		--num-agg-jobs 15 \
 		--processing-cadence $(PROCESSING_CADENCE) \
 		--request-timeout $(REQUEST_TIMEOUT) \
 		--latency-timeout $(LATENCY_TIMEOUT) \
@@ -247,10 +247,10 @@ $(CHANNEL_LIST) :
 	fi ;
 
 clean-lite :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.txt
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.txt
 
 clean :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.ini *.txt
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt
 
 clean-all :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js *.ini *.txt gstlal_feature_*
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt aggregator features snapshots synchronizer
