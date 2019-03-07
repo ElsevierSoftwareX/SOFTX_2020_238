@@ -249,6 +249,7 @@ Documentation of classes and functions
 # =============================================================================
 #
 
+
 # FIXME: This code is no longer used.
 def P_instruments_given_signal(horizon_distances, n_samples = 500000, min_instruments = 2, min_distance = 0.):
 	"""
@@ -876,7 +877,6 @@ class SNRPDF(object):
 #
 
 
-# FIXME: This code is no longer used.
 class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 	"""
 	Reports ln P(chi^2/rho^2 | rho, signal)
