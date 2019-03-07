@@ -196,6 +196,7 @@ def parse_command_line():
 	# append all the datasource specific options
 	datasource.append_options(parser)
 
+	parser.add_option("--analysis-tag", metavar = "name", help = "Set the name of the analysis, used to distinguish between different DAGs running simultaneously.")
 	parser.add_option("--psd-fft-length", metavar = "s", default = 32, type = "int", help = "FFT length, default 32s.  Note that 50% will be used for zero-padding.")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Set the reference psd file.")
 	parser.add_option("--bank-cache", metavar = "filenames", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc..")
@@ -319,7 +320,11 @@ try: os.mkdir("logs")
 except: pass
 try: os.mkdir("gracedb")
 except: pass
-dag = dagparts.DAG("trigger_pipe")
+
+if options.analysis_tag:
+	dag = dagparts.DAG("trigger_pipe_%s" % options.analysis_tag)
+else:
+	dag = dagparts.DAG("trigger_pipe")
 
 #
 # setup the job classes
