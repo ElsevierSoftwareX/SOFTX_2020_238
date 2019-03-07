@@ -4,8 +4,6 @@
 ACCOUNTING_GROUP=ligo.dev.o3.cbc.em.gstlalonline
 ACCOUNTING_USER=cody.messick
 
-ANALYSIS_TAG = er14
-
 # bank settings
 H1_BANK_CACHE = /home/gstlalcbc/engineering/14/svd/er14/H1_bank.cache
 L1_BANK_CACHE = /home/gstlalcbc/engineering/14/svd/er14/L1_bank.cache
@@ -18,7 +16,7 @@ RANKING_STATS := $(shell for n in $$(seq -f '%04.f' $$(wc -l ../svd/replay/hyper
 BURNIN_RUN_DIR=/home/gstlalcbc/engineering/14/trigs.replay.hyper
 
 # web settings
-WEBAPP_NAME=inspiral_$(ANALYSIS_TAG)
+WEBAPP_NAME=inspiral_er14
 WEBDIR=$(HOME)/public_html/engineering/14/hyper/
 GSTLALSHAREDIR=/home/gstlalcbc/engineering/14/code/master_icc_190225/git/gstlal/gstlal-inspiral/share
 
@@ -34,7 +32,7 @@ DATA_BACKEND=influx
 
 INFLUX_HOSTNAME=10.14.0.100
 INFLUX_PORT=8086
-INFLUX_DATABASE_NAME=gstlal_inspiral_$(ANALYSIS_TAG)
+INFLUX_DATABASE_NAME=gstlal_inspiral_er14
 
 GRACEDB_SERVICE_URL=https://gracedb.ligo.org/api/
 
@@ -81,7 +79,6 @@ V1SHM=X1VIRGO_Data
 # (CAT1 type) 11: interferometer is locked rest: not used
 
 all : dag
-	@echo "Submit with: condor_submit_dag -f trigger_pipe_$(ANALYSIS_TAG).dag"
 
 H1play :
 	gstlal_play \
@@ -131,7 +128,6 @@ tisi.xml :
 
 dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cache zerolag_rankingstat_pdf.cache online-web-deploy
 	gstlal_ll_inspiral_pipe \
-		--analysis-tag $(ANALYSIS_TAG) \
 		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE),V1=$(V1_BANK_CACHE) \
 		--max-jobs 1000 \
 		--likelihood-cache rankingstat.cache \
@@ -203,11 +199,13 @@ dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cac
 	#python ~/trim_online_dag.py trigger_pipe.dag
 	#python ~/noretries.py trigger_pipe.dag
 
+	# submit: condor_submit_dag trigger_pipe.dag
+
 online-web-deploy : inspiral.yml
 	scald deploy -c inspiral.yml -o ~/public_html -n $(WEBAPP_NAME)
 
 inspiral.yml:
-	cp -n $(GSTLALSHAREDIR)/O3/$@ .
+	cp $(GSTLALSHAREDIR)/O3/$@ .
 
 ll_simplify.sql :
 	ln -s $(GSTLALSHAREDIR)/$@ .
@@ -219,8 +217,8 @@ plots:
 	mkdir plots
 	mkdir -p $(WEBDIR)
 
-set-min-instruments-1:
-	gstlal_ll_inspiral_gracedb_min_instruments --min-instruments 1  0*registry.txt
+set-min-instruments:
+	gstlal_ll_inspiral_gracedb_min_instruments --min-instruments 2  0*registry.txt
 
 set-min-instruments-2:
 	gstlal_ll_inspiral_gracedb_min_instruments --min-instruments 2  0*registry.txt
@@ -229,7 +227,6 @@ set-far-thresh :
 	gstlal_ll_inspiral_gracedb_threshold \
 		--gracedb-far-threshold 1e-4 \
 		0*registry.txt
-
 get-far-thresh :
 	gstlal_ll_inspiral_gracedb_threshold \
 		0*registry.txt
