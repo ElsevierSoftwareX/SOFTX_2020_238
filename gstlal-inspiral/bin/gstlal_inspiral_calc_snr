@@ -18,7 +18,7 @@ Typical Usages:
 	2. SVD bank options:
 	--svd-bank (require)
 	--bank-id (require)
-	--row-number
+	--row-number (optional, calculate all SNRs if not given)
 
 	3. PSD options:
 	--reference-psd (optional)
@@ -28,7 +28,7 @@ Typical Usages:
 	4. Output options:
 	--output-width (default = 32bits)
 	--instrument (require)
-	--output (require)
+	--outdir (require)
 	--verbose (default = False)
 
 --mode 1 (calculate SNR using Finite Impulse Response):
@@ -43,10 +43,10 @@ Typical Usages:
 	2. Template options:
 	--table (require)
 	--approximant (require)
-	--template-duration (default = 600s)
-	--sample-rate (default = 16384Hz)
+	--template-duration (require)
+	--sample-rate (default = 2048Hz)
 	--f-low (default = 10)
-	--f-high (default = 1000)
+	--f-high (optional)
 
 	3. PSD / Whiten options:
 	--reference-psd (optional)
@@ -57,26 +57,21 @@ Typical Usages:
 	--zero-pad (default = 0s)
 
 	4. Output options:
-	--output-rate (default = 2048Hz)
 	--output-width (default = 32bits)
 	--instrument (require)
-	--output (require)
+	--outdir (require)
 	--verbose (default = False)
 """
 import numpy
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 import os
-import sys
 
 from gstlal import cbc_template_fir
-from gstlal import chirptime
 from gstlal import datasource
 from gstlal import pipeparts
 from gstlal import reference_psd
-from gstlal import spawaveform
 from gstlal import svd_bank
 from gstlal import svd_bank_snr
-from gstlal import templates
 
 import lal
 import lal.series
@@ -125,8 +120,8 @@ def parse_command_line():
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
 	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template for each instrument only.")
 	group.add_option("--approximant", metavar = "name", type = "str", help = "Name of the Waveform model (require).")
-	group.add_option("--template-duration", metavar = "seconds", default = 600, type = "int", help = "Duration of the template")
-	group.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sampling rate of the template")
+	group.add_option("--template-duration", metavar = "seconds", type = "int", help = "Duration of the template")
+	group.add_option("--sample-rate", metavar = "Hz", default = 2048, type = "int", help = "Sampling rate of the template and SNR for mode 1")
 	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
 	group.add_option("--f-high", metavar = "Hz", type = "float", help = "The maximum frequency of GW signal")
 	parser.add_option_group(group)
@@ -143,7 +138,6 @@ def parse_command_line():
 	group.add_option("--drop-first", metavar = "seconds", type = "int", default = 0, help = "Dropping the initital '--drop-first' seconds of SNR data (default = 0).")
 	group.add_option("--drop-last", metavar = "seconds", type = "int", default = 0, help = "Dropping the last '--drop-last' seconds of SNR data (default = 0).")
 	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
-	group.add_option("--output-rate", metavar = "Hz", type = "int", default = 2048, help = "The output sampling rate (default 2048).")
 	group.add_option("--instrument", metavar = "name", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
 	parser.add_option_group(group)
 
@@ -229,37 +223,22 @@ def parse_command_line():
 			missing_required_options.append("--outdir")
 		if options.instrument is None:
 			missing_required_options.append("--instrument")
+		if options.template_duration is None:
+			missing_required_options.append("--template-duration")
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
 
-	    #
-        # Temporary work for comparison
-        #
-		banks = svd_bank.read_banks(options.svd_bank, svd_bank.DefaultContentHandler)
-		bank = banks[options.sub_bank_id]
-		template_table = bank.sngl_inspiral_table
-		row = [template_table[options.row_number]]
-		time_slice = []
-		for frag in bank.bank_fragments[::-1]:
-			time_slice.append((frag.rate, frag.start, frag.end))
-		time_slice = numpy.array(time_slice, dtype = [("rate", "int"),("begin", "float"),("end", "float")])
-		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, autocorrelation_length = 351, fhigh= options.f_high)
-		#
-        # delele me afterward
-        #
-
-
-		#xmldoc = ligolw_utils.load_url(options.table, contenthandler = ContentHandler, verbose = options.verbose)
-		#template_table = table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-		#row = [row for row in template_table if row.ifo == options.instrument]
-		#if len(row) != 1 :
-		#	raise ValueError("Expecting only one template for --instrument=%s or cannot find template for --instrument=%s" %(options.instrument, options.instrument))
+		xmldoc = ligolw_utils.load_url(options.table, contenthandler = ContentHandler, verbose = options.verbose)
+		template_table = table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
+		row = [row for row in template_table if row.ifo == options.instrument]
+		if len(row) != 1 :
+			raise ValueError("Expecting only one template for --instrument=%s or cannot find template for --instrument=%s" %(options.instrument, options.instrument))
 
 		# work around for building a single whitened template
-		#time_slice = numpy.array([(options.sample_rate, 0, options.template_duration)], dtype = [("rate", "int"),("begin", "float"), ("end", "float")])
+		time_slice = numpy.array([(options.sample_rate, 0, options.template_duration)], dtype = [("rate", "int"),("begin", "float"), ("end", "float")])
 		# FIXME: psd[options.instrument] is bad
-		#workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, options.f_high)
+		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, options.f_high)
 		template, autocorrelation, sigma = workspace.make_whitened_template(row[0])
 
 		return options, gw_data_source_info, template, psd
@@ -284,6 +263,7 @@ if options.mode == 0:
 		ht_gate_threshold = options.ht_gate_threshold,
 		veto_segments = options.veto_segments,
 		track_psd = options.track_psd,
+		width = options.output_width,
 		verbose = options.verbose
 	)
 	snr_info = lloid_snr(gw_data_source_info, bank, options.instrument, psd = psd)
@@ -302,11 +282,12 @@ elif options.mode == 1:
 		average_samples = options.average_samples,
 		median_samples = options.median_samples,
 		track_psd = options.track_psd,
-		rate = options.output_rate,
+		rate = options.sample_rate,
 		width = options.output_width,
 		verbose = options.verbose
 		)
 	#FIXME: allow multiple instruments
+	#FIXME: proper handle for latency
 	# drop the quadrature phase component
 	snr_info = fir_snr(gw_data_source_info, template.real, options.instrument, 0, psd = psd)
 

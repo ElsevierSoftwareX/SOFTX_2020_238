@@ -4,9 +4,7 @@ Short cutting gstlal inspiral pipeline to produce SNR for template(s)
 
 import sys
 import numpy
-import struct
 import threading
-from collections import deque
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -29,8 +27,8 @@ import lal.series
 
 from ligo.lw import array as ligolw_array
 from ligo.lw import ligolw
-from ligo.lw import utils as ligolw_utils
 from ligo.lw import param as ligolw_param
+from ligo.lw import utils as ligolw_utils
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -226,29 +224,23 @@ class FIR_SNR(object):
 		if self.verbose:
 			sys.stderr.write("Building pipeline to calculate SNR\n")
 
-		head, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = self.verbose)
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = self.verbose)
 
-		if psd is not None:
-			head = whiten = pipeparts.mkwhiten(pipeline, head, psd_mode = not self.track_psd, fft_length = self.psd_fft_length, zero_pad = self.zero_pad, average_samples = self.average_samples, median_samples = self.median_samples, name = "lal_whiten_%s" % instrument)
-			def psd_changes(elem, pspec, psd):
-				n = int(round(elem.get_property("f-nyquist")/elem.get_property("delta-f")) + 1)
-				psd = reference_psd.interpolate_psd(psd, elem.get_property("delta-f"))
-				elem.set_property("mean-psd", psd.data.data[:n])
-			whiten.connect_after("notify::f-nyquist", psd_changes, psd[instrument])
-			whiten.connect_after("notify::delta-f", psd_changes, psd[instrument])
-			whiten.connect_after("notify::psd-units", psd_changes, psd[instrument])
-		else:
-			head = pipeparts.mkwhiten(pipeline, head, psd_mode = 0, fft_length = self.psd_fft_length, zero_pad = self.zero_pad, average_samples = self.average_samples, median_samples = self.median_samples, name = "lal_whiten_%s" % instrument)
+		hoftdict = multirate_datasource.mkwhitened_multirate_src(
+					pipeline,
+					src = src,
+					rates = [self.rate],
+					instrument = instrument,
+					psd = psd[instrument],
+					psd_fft_length = self.psd_fft_length,
+					track_psd = self.track_psd,
+					width = self.width,
+					statevector = statevector,
+					dqvector = dqvector
+					)
 
-		head = pipeparts.mkresample(pipeline, head)
-		if self.width == 32:
-			head = pipeparts.mkaudioconvert(pipeline, head, caps_string = "audio/x-raw, rate=%d, format=%s" %(self.rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
-		elif self.width == 64:
-			head = pipeparts.mkaudioconvert(pipeline, head, caps_string = "audio/x-raw, rate=%d, format=%s" %(self.rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
-		else:
-			raise ValueError("Invalid width: %d" % self.width)
-		#FIXME: how to set latency, block_stride, time_domain
-		head = pipeparts.mkfirbank(pipeline, head, latency = latency, fir_matrix = [template], block_stride = 16 * self.rate, time_domain = False)
+		#FIXME: how to set latency
+		head = pipeparts.mkfirbank(pipeline, hoftdict[self.rate], latency = latency, fir_matrix = [template], block_stride = 16 * self.rate, time_domain = False)
 
 		appsink = pipeparts.mkappsink(pipeline, head, drop = False)
 		handler_id = appsink.connect("new-preroll", self.new_preroll_handler)
