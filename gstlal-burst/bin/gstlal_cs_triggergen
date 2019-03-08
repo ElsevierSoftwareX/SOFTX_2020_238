@@ -127,8 +127,8 @@ class PSDHandler(simplehandler.Handler):
 					autocorr_t.data.data /= numpy.max(autocorr_t.data.data)
 					autocorr_t = autocorr_t.data.data
 					max_index = numpy.argmax(autocorr_t)
-					# find the index of the third extremum for the templates, making them all have the same length.
-					# FIXME we do this because we know that the template with the lowest high-f cutoff will have
+					# find the index of the third extremum for the template with lowest high-f cutoff.
+					# we do this because we know that the template with the lowest high-f cutoff will have
 					# the largest chi2_index.
 					if i == 0:
 						extr_ctr = 0
@@ -249,7 +249,7 @@ xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, "StringSearch", options.__dict__)
 
-sngl_burst_table = lsctables.New(lsctables.SnglBurstTable, ["process_id", "event_id","ifo","search","channel","start_time","start_time_ns","peak_time","peak_time_ns","duration","central_freq","bandwidth","amplitude","snr","confidence","chisq","chisq_dof"])
+sngl_burst_table = lsctables.New(lsctables.SnglBurstTable, ["process:process_id", "event_id","ifo","search","channel","start_time","start_time_ns","peak_time","peak_time_ns","duration","central_freq","bandwidth","amplitude","snr","confidence","chisq","chisq_dof"])
 xmldoc.childNodes[-1].appendChild(sngl_burst_table)
 
 

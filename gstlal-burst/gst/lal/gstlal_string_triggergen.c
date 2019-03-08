@@ -99,16 +99,25 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 
-static unsigned autocorrelation_length(const GSTLALStringTriggergen *element)
+static unsigned autocorrelation_channels(const gsl_matrix_float *autocorrelation_matrix)
 {
-	return element->autocorrelation_matrix->size2;
+	return autocorrelation_matrix->size1;
 }
 
 
-static guint64 output_num_bytes(GSTLALStringTriggergen *element)
+static unsigned autocorrelation_length(const gsl_matrix_float *autocorrelation_matrix)
 {
-	// FIXME don't hardcode sample rate
-        return (guint64) 8192 * element->adapter->unit_size;
+	return autocorrelation_matrix->size2;
+}
+
+
+static guint64 get_available_samples(GSTLALStringTriggergen *element)
+{
+	guint size;
+
+	g_object_get(element->adapter, "size", &size, NULL);
+
+	return size;
 }
 
 
@@ -118,9 +127,9 @@ static void free_bankfile(GSTLALStringTriggergen *element)
 	element->bank_filename = NULL;
 	free(element->bank);
 	element->bank = NULL;
+	element->num_templates = 0;
 	free(element->last_time);
 	element->last_time = NULL;
-	element->num_templates = 0;
 }
 
 
@@ -145,7 +154,6 @@ static int setup_bankfile_input(GSTLALStringTriggergen *element, char *bank_file
 		return -1;
 	}
 
-
 	for(i=0; bank; i++) {
 		SnglBurst *next = bank->next;
 		g_assert(i < element->num_templates);
@@ -154,8 +162,44 @@ static int setup_bankfile_input(GSTLALStringTriggergen *element, char *bank_file
 		free(bank);
 		bank = next;
 	}
-	return element->num_templates;
 
+	return element->num_templates;
+}
+
+
+/*
+ * compute autocorrelation norms --- the expectation value in noise.
+ */
+
+
+static gsl_vector_float *gstlal_autocorrelation_chi2_compute_norms_string(const gsl_matrix_float *autocorrelation_matrix, const gsl_matrix_int *autocorrelation_mask_matrix)
+{
+	gsl_vector_float *norm;
+	unsigned channel;
+
+	if(autocorrelation_mask_matrix && (autocorrelation_channels(autocorrelation_matrix) != autocorrelation_mask_matrix->size1 || autocorrelation_length(autocorrelation_matrix) != autocorrelation_mask_matrix->size2)) {
+		/* FIXME:  report errors how? */
+		/*GST_ELEMENT_ERROR(element, STREAM, FAILED, ("array size mismatch"), ("autocorrelation matrix (%dx%d) and mask matrix (%dx%d) do not have the same size", autocorrelation_channels(autocorrelation_matrix), autocorrelation_length(autocorrelation_matrix), autocorrelation_mask_matrix->size1, autocorrelation_mask_matrix->size2));*/
+		return NULL;
+	}
+
+	norm = gsl_vector_float_alloc(autocorrelation_channels(autocorrelation_matrix));
+
+	for(channel = 0; channel < autocorrelation_channels(autocorrelation_matrix); channel++) {
+		gsl_vector_float_const_view row = gsl_matrix_float_const_row(autocorrelation_matrix, channel);
+		gsl_vector_int_const_view mask = autocorrelation_mask_matrix ? gsl_matrix_int_const_row(autocorrelation_mask_matrix, channel) : (gsl_vector_int_const_view) {{0}};
+		unsigned sample;
+		float n = 0.0;
+		
+		for(sample = 0; sample < row.vector.size; sample++) {
+			if(autocorrelation_mask_matrix && !gsl_vector_int_get(&mask.vector, sample))
+				continue;
+			n += 1.0 - pow(gsl_vector_float_get(&row.vector, sample), 2.0);
+		}
+		gsl_vector_float_set(norm, channel, n);
+	}
+
+	return norm;
 }
 
 
@@ -168,71 +212,65 @@ static int setup_bankfile_input(GSTLALStringTriggergen *element, char *bank_file
  */
 
 
-static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffer *inbuf, GstBuffer *outbuf, guint copysamps)
+static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffer *outbuf)
 {
-	GstMapInfo inmap;
 	float *snrdata;
-	double *chisq;
-	double * dataptr;
+	float *snrsample;
 	SnglBurst *triggers = NULL;
 	guint ntriggers = 0;
-	guint64 t0;
+	guint64 offset;
 	guint64 length;
 	guint sample;
 	gint channel;
 
+	length = get_available_samples(element); 
+	if(length < autocorrelation_length(element->autocorrelation_matrix)) {
+		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + ntriggers;
+		return GST_FLOW_OK;
+	}
+
 	g_mutex_lock(&element->bank_lock);
-	gst_buffer_map(inbuf, &inmap, GST_MAP_WRITE);
-
-	snrdata = (float *) inmap.data;
-
-	t0 = GST_BUFFER_PTS(inbuf);
-	length = GST_BUFFER_OFFSET_END(inbuf) - GST_BUFFER_OFFSET(inbuf);
+	snrsample = snrdata = g_malloc(length * element->num_templates * sizeof(*snrdata));
 
 	/* copy samples */
-	gst_audioadapter_copy_samples(element->adapter, element->data, copysamps, NULL, NULL);
+	offset = gst_audioadapter_offset(element->adapter);
+	gst_audioadapter_copy_samples(element->adapter, snrdata, length, NULL, NULL);
 
 	/* compute the chisq norm if it doesn't exist */
-	/* FIXME is it okay even if the autocorrelation matrix is not complex?? */
-	if (!element->autocorrelation_norm)
-		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(element->autocorrelation_matrix, NULL);
+	if(!element->autocorrelation_norm)
+		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms_string(element->autocorrelation_matrix, NULL);
 	
 	/* check that autocorrelation vector has odd number of samples */
-	g_assert(autocorrelation_length(element) & 1);
+	g_assert(autocorrelation_length(element->autocorrelation_matrix) & 1);
 	
 	/* find events */
-	GST_DEBUG_OBJECT(element, "searching %" G_GUINT64_FORMAT " samples at %" GST_TIME_SECONDS_FORMAT " for events with SNR greater than %f", length, GST_TIME_SECONDS_ARGS(t0),element->threshold);
-
-	chisq = calloc(element->num_templates, sizeof(double));
-
-	for(sample = 0; sample < length; sample++){
+	snrsample += (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2 * element->num_templates;
+	for(sample = (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2; sample < length - (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2; sample++){
 		LIGOTimeGPS t;
-		XLALINT8NSToGPS(&t, t0);
-		XLALGPSAdd(&t, (float) sample / GST_AUDIO_INFO_RATE(&element->audio_info));
+		XLALINT8NSToGPS(&t, element->t0);
+		XLALGPSAdd(&t, (double) (offset - element->offset0 + sample) / GST_AUDIO_INFO_RATE(&element->audio_info));
 
-		for(channel = 0; channel < element->num_templates; channel++) {
-			float snr = fabsf(*snrdata++);
+		for(channel = 0; channel < element->num_templates; channel++, snrsample++) {
+			float snr = fabsf(*snrsample);
 			if(snr >= element->threshold) {
 				element->last_time[channel] = t;
 				if(snr > element->bank[channel].snr) {
 					/*
 					 * Higher SNR than the "current winner". Update.
 					 */
+					const float *autocorrelation = (const float *) gsl_matrix_float_const_ptr(element->autocorrelation_matrix, channel, 0);
+					const float *autocorrelation_end = autocorrelation + autocorrelation_length(element->autocorrelation_matrix);
+					float *snrseries = snrsample - (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2 * element->num_templates;
+					float chisq;
+
 					element->bank[channel].snr = snr;
 					element->bank[channel].peak_time = t;
-					element->bank[channel].chisq_dof = 1.0;
-					/*
-					 * We calculate chisq each time this update occurs, by defining this as peak.
-					 */
-					element->maxdata->values.as_double[channel] = snr;
-					element->maxdata->samples[channel] = sample;
-					/* put the dat pointer one pad length in */
-					dataptr = element->data + element->maxdata->pad * element->num_templates;
-					/* extract data around peak for chisq calculation */
-					gstlal_double_series_around_peak(element->maxdata, dataptr, (double *) element->snr_mat, element->maxdata->pad);
+
 					/* calculate chisq */
-					gstlal_autocorrelation_chi2((double *) chisq, (double complex *) element->snr_mat, autocorrelation_length(element), -((int) autocorrelation_length(element)) / 2, 0.0, element->autocorrelation_matrix, NULL, element->autocorrelation_norm);
-					element->bank[channel].chisq = chisq[channel];
+					for(chisq = 0.0; autocorrelation < autocorrelation_end; autocorrelation++, snrseries += element->num_templates)
+						chisq += pow(*autocorrelation * *snrsample - *snrseries, 2.0);
+					element->bank[channel].chisq = chisq / gsl_vector_float_get(element->autocorrelation_norm, channel);
+					element->bank[channel].chisq_dof = 1.0;
 				}
 			} else if(element->bank[channel].snr != 0. && XLALGPSDiff(&t, &element->last_time[channel]) > element->cluster) {
 				/*
@@ -245,14 +283,12 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 				element->bank[channel].chisq = 0.0;
 				element->bank[channel].chisq_dof = 0.0;
 			}
-		/* reset the maxdata information for that channel so that the SNR series in that channel won't be processed again. */
-		element->maxdata->values.as_double[channel] = 0;
-		element->maxdata->samples[channel] = 0;
 		}
 	}
 	g_mutex_unlock(&element->bank_lock);
 
-	gst_buffer_unmap(inbuf,&inmap);
+	g_free(snrdata);
+	gst_audioadapter_flush_samples(element->adapter, length - (autocorrelation_length(element->autocorrelation_matrix) - 1));
 
 	if(ntriggers)
 		gst_buffer_replace_all_memory(outbuf, gst_memory_new_wrapped(GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS, triggers, ntriggers * sizeof(*triggers), 0, ntriggers * sizeof(*triggers), triggers, g_free));
@@ -260,8 +296,6 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 		gst_buffer_remove_all_memory(outbuf);
 
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + ntriggers;
-
-	g_free(chisq);
 
 	return GST_FLOW_OK;
 }
@@ -289,8 +323,8 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 	if(success)
 		*size = GST_AUDIO_INFO_BPF(&info);
 	else {
-		GstCaps * src_caps=gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
-		if(gst_caps_is_strictly_equal (caps, src_caps)){
+		GstCaps *src_caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
+		if(gst_caps_is_strictly_equal(caps, src_caps)) {
 			*size = sizeof(SnglBurst);
 			success = TRUE;
 		}
@@ -307,33 +341,33 @@ static gboolean get_unit_size(GstBaseTransform *trans, GstCaps *caps, gsize *siz
 
 static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter)
 {
-  /*
-   * always return the template caps of the other pad
-   */
+	/*
+	 * always return the template caps of the other pad
+	 */
 
-  switch (direction) {
-    case GST_PAD_SRC:
-      caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
-      break;
+	switch (direction) {
+	case GST_PAD_SRC:
+		caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SINK_PAD(trans));
+		break;
 
-    case GST_PAD_SINK:
-      caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
-      break;
+	case GST_PAD_SINK:
+		caps = gst_pad_get_pad_template_caps(GST_BASE_TRANSFORM_SRC_PAD(trans));
+		break;
 
-    default:
-      GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction"));
-      caps = GST_CAPS_NONE;
-      gst_caps_ref(caps);
-      break;
-  }
+	default:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction"));
+		caps = GST_CAPS_NONE;
+		gst_caps_ref(caps);
+		break;
+	}
 
-  if(filter) {
-    GstCaps *intersection = gst_caps_intersect(caps, filter);
-    gst_caps_unref(caps);
-    caps = intersection;
-  }
+	if(filter) {
+		GstCaps *intersection = gst_caps_intersect(caps, filter);
+		gst_caps_unref(caps);
+		caps = intersection;
+	}
 
-  return caps;
+	return caps;
 }
 
 
@@ -347,18 +381,8 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
 	gboolean success = gst_audio_info_from_caps(&element->audio_info, incaps);
 
-	g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_WIDTH(&element->audio_info) / 8 * element->num_templates, NULL);
-
-	if (element->maxdata)
-		gstlal_peak_state_free(element->maxdata);
-	element->maxdata = gstlal_peak_state_new(element->num_templates, GSTLAL_PEAK_DOUBLE_COMPLEX);
-	/* Update padding any time the autocorrelation property is updated */
-	if (element->autocorrelation_matrix) {
-		element->maxdata->pad = autocorrelation_length(element) / 2;
-		if (element->snr_mat)
-			free(element->snr_mat);
-		element->snr_mat = calloc(element->num_templates * autocorrelation_length(element), element->maxdata->unit);
-	}
+	if(success)
+		g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_BPF(&element->audio_info), NULL);
 
 	/*
 	 * done
@@ -376,31 +400,45 @@ static gboolean start(GstBaseTransform *trans)
 {
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
 	gint i;
+	gboolean success = TRUE;
 
-	for(i=0; i < element->num_templates; i++) {
-		/*
-		 * initialize data in template. the snr is 0'ed so that
-		 * when the templates are used to initialize the last event
-		 * info that field is set properly.
-		 */
+	if(!element->bank) {
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("no template bank"));
+		success = FALSE;
+	} else if(GST_AUDIO_INFO_CHANNELS(&element->audio_info) != element->num_templates) {
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("number of channels is not equal to number of templates"));
+		success = FALSE;
+	} else {
+		for(i=0; i < element->num_templates; i++) {
+			/*
+			 * initialize data in template. the snr is 0'ed so that
+			 * when the templates are used to initialize the last event
+			 * info that field is set properly.
+			 */
 
-		XLALINT8NSToGPS(&element->bank[i].peak_time, 0);
-		element->bank[i].snr = 0;
+			XLALINT8NSToGPS(&element->bank[i].peak_time, 0);
+			element->bank[i].snr = 0;
 
-		/*
-		 * Initialize the chisq and chisq_dof, too.
-		 * We follow the definition of the previous string search pipeline,
-		 * The actual chi^2 is then chisq/chisq_dof. We can come
-		 * back to the definition later if we have to.
-		 */
-		element->bank[i].chisq = 0;
-		element->bank[i].chisq_dof = 0;
+			/*
+			 * Initialize the chisq and chisq_dof, too.
+			 * We follow the definition of the previous string search pipeline,
+			 * The actual chi^2 is then chisq/chisq_dof. We can come
+			 * back to the definition later if we have to.
+			 */
+			element->bank[i].chisq = 0;
+			element->bank[i].chisq_dof = 0;
 
-		/* initialize the last time array, too */
-		XLALINT8NSToGPS(&element->last_time[i], 0);
+			/* initialize the last time array, too */
+			XLALINT8NSToGPS(&element->last_time[i], 0);
+		}
+		element->t0 = GST_CLOCK_TIME_NONE;
+		element->offset0 = GST_BUFFER_OFFSET_NONE;
+		element->next_in_offset = GST_BUFFER_OFFSET_NONE;
+		element->next_out_offset = GST_BUFFER_OFFSET_NONE;
+		element->need_discont = TRUE;
 	}
 
-	return TRUE;
+	return success;
 }
 
 
@@ -426,27 +464,29 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 {
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
 	GstFlowReturn result;
-	guint64 maxsize, copysamps;
 
-	/* The max size to copy from an adapter is the typical output size plus the padding */
-	maxsize = output_num_bytes(element) + element->adapter->unit_size * element->maxdata->pad * 2;
-	copysamps = 8192 + element->maxdata->pad * 2;
-
-	/* if we haven't allocated storage do it now, we should never try to copy from an adapter with a larger buffer than this */
-	if (!element->data)
-		element->data = malloc(maxsize);
+	g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_DURATION_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_OFFSET_IS_VALID(inbuf));
+	g_assert(GST_BUFFER_OFFSET_END_IS_VALID(inbuf));
 	
-	/* put the incoming buffer into an adapter */
+	if(GST_BUFFER_IS_DISCONT(inbuf) || GST_BUFFER_OFFSET(inbuf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0)) {
+		gst_audioadapter_clear(element->adapter);
+		element->t0 = GST_BUFFER_PTS(inbuf);
+		element->offset0 = GST_BUFFER_OFFSET(inbuf);
+		element->next_out_offset = 0;
+	} else if(!gst_audioadapter_is_empty(element->adapter))
+		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
+	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
+
+	gst_buffer_ref(inbuf);
 	gst_audioadapter_push(element->adapter, inbuf);
 
-	result = trigger_generator(element,inbuf,outbuf,copysamps);
+	result = trigger_generator(element, outbuf);
 
 	/*
 	 * done
 	 */
-
-	/* flush samples */
-	gst_audioadapter_flush_samples(element->adapter, 8192);
 
 	return result;
 }
@@ -496,22 +536,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	case ARG_AUTOCORRELATION_MATRIX:
 		g_mutex_lock(&element->bank_lock);
 		if(element->autocorrelation_matrix)
-			gsl_matrix_free(element->autocorrelation_matrix);
-		element->autocorrelation_matrix = gstlal_gsl_matrix_from_g_value_array(g_value_get_boxed(value));
+			gsl_matrix_float_free(element->autocorrelation_matrix);
+		element->autocorrelation_matrix = gstlal_gsl_matrix_float_from_g_value_array(g_value_get_boxed(value));
 
-		/* This should be called any time caps change too */
-		if(element->maxdata && element->autocorrelation_matrix){
-			element->maxdata->pad = autocorrelation_length(element) / 2;
-			if (element->snr_mat)
-				free(element->snr_mat);
-			element->snr_mat = calloc(element->num_templates * autocorrelation_length(element), element->maxdata->unit);
-		}
-		
 		/*
 		 * induce norms to be recomputed
 		 */
+
 		if(element->autocorrelation_norm) {
-			gsl_vector_free(element->autocorrelation_norm);
+			gsl_vector_float_free(element->autocorrelation_norm);
 			element->autocorrelation_norm = NULL;
 		}
 
@@ -551,12 +584,12 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_AUTOCORRELATION_MATRIX:
 		g_mutex_lock(&element->bank_lock);
 		if(element->autocorrelation_matrix)
-			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix(element->autocorrelation_matrix));
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_float(element->autocorrelation_matrix));
 		else {
 			GST_WARNING_OBJECT(element, "no autocorrelation matrix");
 			/* FIXME deprecated.. */
 			g_value_take_boxed(value, g_value_array_new(0)); 
-			}
+		}
 		g_mutex_unlock(&element->bank_lock);
 		break;
 
@@ -572,37 +605,20 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 static void finalize(GObject *object)
 {
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(object);
-	g_mutex_clear(&element->bank_lock);
-	free_bankfile(element);
-	if(element->maxdata) {
-		gstlal_peak_state_free(element->maxdata);
-		element->maxdata = NULL;
-	}
-	if(element->data){
-		free(element->data);
-		element->data = NULL;
-	}
-
-	g_free(element->instrument);
-	element->instrument = NULL;
-	g_free(element->channel_name);
-	element->channel_name = NULL;
-
 	gst_audioadapter_clear(element->adapter);
 	g_object_unref(element->adapter);
 
-	if(element->snr_mat) {
-		free(element->snr_mat);
-		element->snr_mat = NULL;
-	}
+	g_mutex_clear(&element->bank_lock);
 	if(element->autocorrelation_matrix) {
-		gsl_matrix_free(element->autocorrelation_matrix);
+		gsl_matrix_float_free(element->autocorrelation_matrix);
 		element->autocorrelation_matrix = NULL;
 	}
 	if(element->autocorrelation_norm) {
-		gsl_vector_free(element->autocorrelation_norm);
+		gsl_vector_float_free(element->autocorrelation_norm);
 		element->autocorrelation_norm = NULL;
 	}
+	free_bankfile(element);
+
 	G_OBJECT_CLASS(gstlal_string_triggergen_parent_class)->finalize(object);
 }
 
@@ -705,11 +721,11 @@ static void gstlal_string_triggergen_class_init(GSTLALStringTriggergenClass *kla
 				"Autocorrelation",
 				"Array of autocorrelation samples.",
 				/* FIXME:  should be complex */
-				g_param_spec_double(
+				g_param_spec_float(
 					"sample",
 					"Sample",
 					"Autocorrelation sample",
-					-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+					-G_MAXFLOAT, G_MAXFLOAT, 0.0,
 					G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 				),
 				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
@@ -726,19 +742,14 @@ static void gstlal_string_triggergen_class_init(GSTLALStringTriggergenClass *kla
 
 static void gstlal_string_triggergen_init(GSTLALStringTriggergen *element)
 {
-	g_mutex_init(&element->bank_lock);
-	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
 	element->bank_filename = NULL;
-	element->bank = NULL;
-	element->data = NULL;
-	element->maxdata = NULL;
-	element->instrument = NULL;
-	element->channel_name = NULL;
-	element->num_templates = 0;
-	element->last_time = NULL;
-	element->snr_mat = NULL;
-	element->audio_info.bpf = 0;	/* impossible value */
 	element->autocorrelation_matrix = NULL;
 	element->autocorrelation_norm = NULL;
+	element->audio_info.bpf = 0;	/* impossible value */
+	element->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
+	g_mutex_init(&element->bank_lock);
+	element->bank = NULL;
+	element->num_templates = 0;
+	element->last_time = NULL;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }

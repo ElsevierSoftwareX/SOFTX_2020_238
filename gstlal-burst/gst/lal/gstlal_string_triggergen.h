@@ -5,12 +5,10 @@
 #include <glib.h>
 #include <gst/gst.h>
 #include <gst/audio/audio.h>
-#include <gst/base/gstadapter.h>
 #include <gst/base/gstbasetransform.h>
 #include <gstlal/gstaudioadapter.h>
-#include <gstlal/gstlal_peakfinder.h>
 #include <lal/LIGOMetadataTables.h>
-#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_vector_float.h>
 #include <gsl/gsl_matrix_float.h>
 
 
@@ -37,29 +35,36 @@ typedef struct {
 typedef struct {
 	GstBaseTransform element;
 
-	GstAudioAdapter *adapter;
+	/*
+	 * properties
+	 */
+
+	float threshold;
+	float cluster;
+	char *bank_filename;
+	gsl_matrix_float *autocorrelation_matrix;
+	gsl_vector_float *autocorrelation_norm;
 
 	/*
 	 * input stream
 	 */
 	
 	GstAudioInfo audio_info;
+	GstAudioAdapter *adapter;
+	GstClockTime t0;
+	guint64 offset0;
+	guint64 next_in_offset;
+	guint64 next_out_offset;
+	gboolean need_discont;
 
-	float threshold;
-	float cluster;
+	/*
+	 * trigger state
+	 */
 
 	GMutex bank_lock;
-	gsl_matrix *autocorrelation_matrix;
-	gsl_vector *autocorrelation_norm;
-	char *bank_filename;
 	SnglBurst *bank;
-	double *data;
-	struct gstlal_peak_state *maxdata;
-	gchar *instrument;
-	gchar *channel_name;
 	gint num_templates;
 	LIGOTimeGPS *last_time;
-	double *snr_mat;
 } GSTLALStringTriggergen;
 
 
