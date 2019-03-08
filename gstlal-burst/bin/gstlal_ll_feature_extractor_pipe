@@ -220,7 +220,7 @@ for dir_ in ('features', 'synchronizer', 'monitor', 'aggregator', 'logs'):
 # set up dag and job classes
 #
 
-dag = dagparts.DAG("%s_%s_fx_pipe"%(options.tag, ifo))
+dag = dagparts.DAG("%s_feature_extraction_pipe" % ifo)
 
 # feature extractor job
 if options.condor_universe == 'local':
