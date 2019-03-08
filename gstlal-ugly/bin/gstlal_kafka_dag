@@ -135,13 +135,11 @@ def parse_command_line():
 	parser = OptionParser(description = __doc__)
 
 	parser.add_option("--analysis-tag", metavar = "name", help = "Set the name of the analysis, used to distinguish between different DAGs running simultaneously and to avoid filename clashes.")
-	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--zookeeper-port", type = "int", metavar = "number", help = "Set the zookeeper port. default 2181", default = 2181)
 	parser.add_option("--kafka-hostname", metavar = "hostname", help = "Set the hostname in which kafka/zookeeper will be running at.")
 	parser.add_option("--kafka-port", type = "int", metavar = "number", help = "Set the kafka port. default: 9092", default = 9092)
 	parser.add_option("--condor-universe", default = "local", metavar = "universe", help = "set the condor universe to run jobs in DAG, options are local/vanilla, default = local")
-	parser.add_option("--condor-accounting-user", metavar = "user", help = "set the condor accounting user.")
-	parser.add_option("--condor-accounting-group", metavar = "group", help = "set the condor accounting group.")
+	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 
 	options, filenames = parser.parse_args()
 
@@ -167,8 +165,6 @@ else:
 #
 
 condor_options = {
-	"accounting_group_user": options.condor_accounting_user,
-	"accounting_group": options.condor_accounting_group,
 	"want_graceful_removal": "True",
 	"kill_sig": "15"
 }
