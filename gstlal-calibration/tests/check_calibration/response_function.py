@@ -91,7 +91,7 @@ if options.analyze_additional_hoft:
 #C01_data = C01_data["%s:%s" % (ifo, C01_hoft_channel_name)] * 3995.1
 
 dur = end - start
-averaging_time = 16
+averaging_time = 8
 chunk_start = start
 chunk_end = start + averaging_time
 
