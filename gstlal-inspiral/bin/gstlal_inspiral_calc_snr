@@ -52,9 +52,6 @@ Typical Usages:
 	--reference-psd (optional)
 	--track-psd (default = False. If --reference-psd is not given, this will be set to True)
 	--psd-fft-length (default = 32s)
-	--average-samples (default = 64)
-	--median-samples (default = 7)
-	--zero-pad (default = 0s)
 
 	4. Output options:
 	--output-width (default = 32bits)
@@ -120,7 +117,7 @@ def parse_command_line():
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
 	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template for each instrument only.")
 	group.add_option("--approximant", metavar = "name", type = "str", help = "Name of the Waveform model (require).")
-	group.add_option("--template-duration", metavar = "seconds", type = "int", help = "Duration of the template")
+	group.add_option("--template-duration", metavar = "seconds", type = "float", help = "Duration of the template")
 	group.add_option("--sample-rate", metavar = "Hz", default = 2048, type = "int", help = "Sampling rate of the template and SNR for mode 1")
 	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
 	group.add_option("--f-high", metavar = "Hz", type = "float", help = "The maximum frequency of GW signal")
@@ -250,7 +247,7 @@ def parse_command_line():
 options, gw_data_source_info, template, psd  = parse_command_line()
 #====================================================================================================
 #
-#												main
+#						main
 #
 #====================================================================================================
 
@@ -259,6 +256,10 @@ if options.mode == 0:
 	num_of_row = bank.bank_fragments[0].mix_matrix.shape[1] / 2
 
 	lloid_snr = svd_bank_snr.LLOID_SNR(
+		gw_data_source_info,
+		bank,
+		options.instrument,
+		psd = psd,
 		psd_fft_length = options.psd_fft_length,
 		ht_gate_threshold = options.ht_gate_threshold,
 		veto_segments = options.veto_segments,
@@ -266,31 +267,32 @@ if options.mode == 0:
 		width = options.output_width,
 		verbose = options.verbose
 	)
-	snr_info = lloid_snr(gw_data_source_info, bank, options.instrument, psd = psd)
 
 	if options.row_number is None:
+		# FIXME: put it in one xmldoc
 		for row in range(num_of_row):
-			snrdict = {options.instrument : svd_bank_snr.make_snr_series(snr_info, row_number = row, drop_first = options.drop_first, drop_last = options.drop_last)}
+			snrdict = {options.instrument : lloid_snr(row_number = row, drop_first = options.drop_first, drop_last = options.drop_last)}
 			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "snr_%d.xml.gz" % row), verbose = options.verbose)
 	else:
-		snrdict = {options.instrument : svd_bank_snr.make_snr_series(snr_info, row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)}
+		snrdict = {options.instrument : lloid_snr(row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)}
 		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "snr.xml.gz"), verbose = options.verbose)
 
 elif options.mode == 1:
+	#FIXME: proper handle for latency
 	fir_snr = svd_bank_snr.FIR_SNR(
+		gw_data_source_info,
+		template,
+		options.instrument,
+		options.sample_rate,
+		0,
+		psd = psd,
 		psd_fft_length = options.psd_fft_length,
-		average_samples = options.average_samples,
-		median_samples = options.median_samples,
-		track_psd = options.track_psd,
-		rate = options.sample_rate,
 		width = options.output_width,
+		track_psd = options.track_psd,
 		verbose = options.verbose
 		)
-	#FIXME: allow multiple instruments
-	#FIXME: proper handle for latency
-	# drop the quadrature phase component
-	snr_info = fir_snr(gw_data_source_info, template.real, options.instrument, 0, psd = psd)
 
-	snrdict = {options.instrument:svd_bank_snr.make_snr_series(snr_info, drop_first = options.drop_first, drop_last = options.drop_last)}
+	#FIXME: allow multiple instruments
+	snrdict = {options.instrument : fir_snr(drop_first = options.drop_first, drop_last = options.drop_last)}
 
 	svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "snr.xml.gz"), verbose = options.verbose)
