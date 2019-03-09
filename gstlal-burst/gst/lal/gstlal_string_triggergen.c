@@ -41,8 +41,6 @@
 
 #include <lal/Date.h>
 #include <lal/LIGOMetadataTables.h>
-#include <lal/LIGOLwXMLBurstRead.h>
-#include <lal/SnglBurstUtils.h>
 
 
 /*
@@ -56,6 +54,8 @@
 #include <gstlal/gstlal_autocorrelation_chi2.h>
 #include <gstlal/gstlal_debug.h>
 #include <gstlal/gstlal_peakfinder.h>
+#include <gstlal-burst/gstlal_snglburst.h>
+
 
 
 /*
@@ -125,7 +125,7 @@ static void free_bankfile(GSTLALStringTriggergen *element)
 {
 	g_free(element->bank_filename);
 	element->bank_filename = NULL;
-	free(element->bank);
+	gstlal_snglburst_array_free(element->bank);
 	element->bank = NULL;
 	element->num_templates = 0;
 	free(element->last_time);
@@ -135,32 +135,18 @@ static void free_bankfile(GSTLALStringTriggergen *element)
 
 static int setup_bankfile_input(GSTLALStringTriggergen *element, char *bank_filename)
 {
-	SnglBurst *bank = NULL;
-	int i;
-
 	free_bankfile(element);
 
 	element->bank_filename = bank_filename;
-	bank = XLALSnglBurstTableFromLIGOLw(element->bank_filename);
-	element->num_templates = XLALSnglBurstTableLength(bank);
-	element->bank = calloc(element->num_templates, sizeof(*element->bank));
-	element->last_time = calloc(element->num_templates, sizeof(*element->last_time));
-	if(!bank || !element->bank || !element->last_time) {
-		XLALDestroySnglBurstTable(bank);
-		free(element->bank);
-		element->bank = NULL;
-		free(element->last_time);
-		element->last_time = NULL;
+	element->num_templates = gstlal_snglburst_array_from_file(element->bank_filename, &element->bank);
+	if(element->num_templates < 0) {
+		free_bankfile(element);
 		return -1;
 	}
-
-	for(i=0; bank; i++) {
-		SnglBurst *next = bank->next;
-		g_assert(i < element->num_templates);
-		element->bank[i] = *bank;
-		element->bank[i].next = NULL;
-		free(bank);
-		bank = next;
+	element->last_time = calloc(element->num_templates, sizeof(*element->last_time));
+	if(!element->last_time) {
+		free_bankfile(element);
+		return -1;
 	}
 
 	return element->num_templates;
