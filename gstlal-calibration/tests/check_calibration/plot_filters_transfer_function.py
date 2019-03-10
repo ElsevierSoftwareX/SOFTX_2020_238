@@ -30,9 +30,11 @@ import numpy
 from math import pi
 import resource
 import matplotlib
+from matplotlib import rc
+rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
-matplotlib.rcParams['font.size'] = 22
-matplotlib.rcParams['legend.fontsize'] = 18
+matplotlib.rcParams['font.size'] = 16
+matplotlib.rcParams['legend.fontsize'] = 14
 matplotlib.rcParams['mathtext.default'] = 'regular'
 matplotlib.use('Agg')
 import glob
@@ -208,83 +210,83 @@ for tf_file in tf_files:
 				index += 1
 
 	# Filter transfer function plots
-	plt.figure(figsize = (10, 10))
+	plt.figure(figsize = (10, 8))
 	if model_name is not None:
-		plt.subplot(211)
-		plt.plot(frequency, model_magnitude, 'r', linewidth = 0.5, label = 'Model')
+		plt.subplot(221)
+		plt.plot(frequency, model_magnitude, 'orange', linewidth = 1.0, label = r'${\rm L1 \ Model \ response}$')
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
 		plt.gca().set_xscale(options.tf_frequency_scale)
 		plt.gca().set_yscale(options.tf_magnitude_scale)
-		plt.title(plot_title)
-		plt.ylabel('Magnitude')
+		#plt.title(plot_title)
+		plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
 		if options.tf_frequency_max > 0:
 			plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 		if options.tf_magnitude_max > 0:
 			plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
-		plt.grid(True)
-		ax = plt.subplot(212)
+		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+		ax = plt.subplot(223)
 		ax.set_xscale(options.tf_frequency_scale)
-		plt.plot(frequency, model_phase, 'r', linewidth = 0.5)
-		plt.ylabel('Phase [deg]')
-		plt.xlabel('Frequency [Hz]')
+		plt.plot(frequency, model_phase, 'orange', linewidth = 1.0)
+		plt.ylabel(r'${\rm Phase \ [deg]}$')
+		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 		if options.tf_frequency_max > 0:
 			plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 		if options.tf_phase_max < 1000:
 			plt.ylim(options.tf_phase_min, options.tf_phase_max)
-		plt.grid(True)
-	plt.subplot(211)
-	plt.plot(frequency, magnitude, 'g', linewidth = 0.5, label = 'Filters')
+		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	plt.subplot(221)
+	plt.plot(frequency, magnitude, 'royalblue', linewidth = 1.0, label = r'${\rm L1 \ Filters \ response}$')
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
 	plt.gca().set_xscale(options.tf_frequency_scale)
 	plt.gca().set_yscale(options.tf_magnitude_scale)
-	plt.title(plot_title)
-	plt.ylabel('Magnitude')
+	#plt.title(plot_title)
+	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 	if options.tf_magnitude_max > 0:
 		plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
-	plt.grid(True)
-	ax = plt.subplot(212)
+	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	ax = plt.subplot(223)
 	ax.set_xscale(options.tf_frequency_scale)
-	plt.plot(frequency, phase, 'g', linewidth = 0.5)
-	plt.ylabel('Phase [deg]')
-	plt.xlabel('Frequency [Hz]')
+	plt.plot(frequency, phase, 'royalblue', linewidth = 1.0)
+	plt.ylabel(r'${\rm Phase [deg]}$')
+	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 	if options.tf_phase_max < 1000:
 		plt.ylim(options.tf_phase_min, options.tf_phase_max)
-	plt.grid(True)
-	plt.savefig(tf_file.replace('.txt', '.png'))
-	plt.savefig(tf_file.replace('.txt', '.pdf'))
+	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	#plt.savefig(tf_file.replace('.txt', '.png'))
+	#plt.savefig(tf_file.replace('.txt', '.pdf'))
 
 	# Plots of the ratio filters / model
 	if model_name is not None:
-		plt.figure(figsize = (10, 10))
-		plt.subplot(211)
-		plt.plot(frequency, ratio_magnitude, 'b', linewidth = 0.5, label = 'Filters / Model')
+		#plt.figure(figsize = (10, 12))
+		plt.subplot(222)
+		plt.plot(frequency, ratio_magnitude, 'royalblue', linewidth = 1.0, label = r'${\rm L1 \ Filters / Model}$')
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
 		plt.gca().set_xscale(options.ratio_frequency_scale)
 		plt.gca().set_yscale(options.ratio_magnitude_scale)
-		plt.title(plot_title)
-		plt.ylabel('Magnitude')
+		#plt.title(plot_title)
+		#plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
 		if options.ratio_frequency_max > 0:
 			plt.xlim(options.ratio_frequency_min, options.ratio_frequency_max)
 		if options.ratio_magnitude_max > 0:
 			plt.ylim(options.ratio_magnitude_min, options.ratio_magnitude_max)
-		plt.grid(True)
-		ax = plt.subplot(212)
+		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+		ax = plt.subplot(224)
 		ax.set_xscale(options.ratio_frequency_scale)
-		plt.plot(frequency, ratio_phase, 'b', linewidth = 0.5)
-		plt.ylabel('Phase [deg]')
-		plt.xlabel('Frequency [Hz]')
+		plt.plot(frequency, ratio_phase, 'royalblue', linewidth = 1.0)
+		#plt.ylabel(r'${\rm Phase \ [deg]}$')
+		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 		if options.ratio_frequency_max > 0:
 			plt.xlim(options.ratio_frequency_min, options.ratio_frequency_max)
 		if options.ratio_phase_max < 1000:
 			plt.ylim(options.ratio_phase_min, options.ratio_phase_max)
-		plt.grid(True)
+		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		plt.savefig(tf_file.replace('.txt', '_ratio.png'))
 		plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
 

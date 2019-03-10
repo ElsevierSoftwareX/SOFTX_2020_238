@@ -5,14 +5,14 @@ from math import pi
 import datetime
 import time
 import matplotlib
+from matplotlib import rc
+rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 16
 matplotlib.rcParams['legend.fontsize'] = 12
 matplotlib.rcParams['mathtext.default'] = 'regular'
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from matplotlib import rc
-rc('text', usetex = True)
 import glob
 from optparse import OptionParser, Option
 import matplotlib.pyplot as plt
@@ -78,6 +78,7 @@ if t_start % common_dt:
 if t_end % common_dt:
 	t_end = t_end - t_end % common_dt
 
+t_end = t_end - 1800
 # Make a time vector
 dur = t_end - t_start
 gps_time = numpy.arange(0, dur + common_dt / 2, common_dt)
@@ -107,28 +108,28 @@ for i in range(0, len(intimes)):
 		latency[i].append(outtimes[i][outtimes_start_index + j * out_step][1] - intimes[i][intimes_start_index + j * in_step][1])
 
 # Make the plot
-colors = ['b', 'c', 'g', 'm', 'y', 'r']
+colors = ['indigo', 'darkmagenta', 'orchid', 'cyan', 'g', 'm', 'y', 'r']
 markersize = 150.0 / numpy.sqrt(len(intimes[0]))
 markersize = min(markersize, 8.0)
 markersize = max(markersize, 1.0)
 plt.figure(figsize = (10, 6))
 if len(labels[0]):
-	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = labels[0])
-	leg = plt.legend(fancybox = True, loc = 'upper right', markerscale = 4.0 / markersize, numpoints = 3)
+	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '))
+	leg = plt.legend(fancybox = True, loc = 'upper right', markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.8)
 else:
 	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize)
 if len(options.plot_title):
 	plt.title(options.plot_title)
-plt.ylabel('Latency [s]')
-plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
-plt.ylim(0, 8)
+plt.ylabel(r'${\rm Latency \ [s]}$')
+plt.xlabel(r'${\rm Time \ in \ %s \ since \ %s \ UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
+plt.ylim(0, 18)
 plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 
 for i in range(1, len(intimes)):
 	if len(labels) > 1:
-		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize, label = labels[i])
-		leg = plt.legend(fancybox = True, loc = 'upper right', markerscale = 4.0 / markersize, numpoints = 3)
+		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % labels[i].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '))
+		leg = plt.legend(fancybox = True, loc = 'upper right', markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.8)
 	else:
 		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize)
