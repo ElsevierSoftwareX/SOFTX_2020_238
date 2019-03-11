@@ -33,9 +33,11 @@ import resource
 import datetime
 import time
 import matplotlib
+from matplotlib import rc
+rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
-matplotlib.rcParams['font.size'] = 22
-matplotlib.rcParams['legend.fontsize'] = 18
+matplotlib.rcParams['font.size'] = 32
+matplotlib.rcParams['legend.fontsize'] = 20
 matplotlib.rcParams['mathtext.default'] = 'regular'
 matplotlib.use('Agg')
 import glob
@@ -71,7 +73,8 @@ parser.add_option("--config-file", metavar = "name", help = "Configurations file
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
 parser.add_option("--gstlal-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels to compare to pcal")
 parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels in the raw frames to compare to pcal")
-parser.add_option("--demodulation-time", metavar = "seconds", type = int, default = 150, help = "Time in seconds of low-pass filter used for demodulation. (Default = 150)")
+parser.add_option("--demodulation-time", metavar = "seconds", type = int, default = 128, help = "Time in seconds of low-pass filter used for demodulation. (Default = 128)")
+parser.add_option("--pcal-line-names", metavar = "list", type = str, default = 'ka_pcal,kc_pcal,high_pcal', help = "Comma-separated list of pcal line names in filters file at which to plot ratios (default = 'ka_pcal,kc_pcal,high_pcal')")
 parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.9,1.1;0.9,1.1;0.9,1.1", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.0,6.0;-6.0,6.0;-6.0,6.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
@@ -163,8 +166,12 @@ if len(gstlal_frame_cache_list) != len(gstlal_channels):
 	raise ValueError('Number of gstlal frame caches must equal number of gstlal channels. %d != %d' % (len(gstlal_frame_cache_list), len(gstlal_channels)))
 
 # Read stuff we need from the filters file
-frequencies = [float(filters['ka_pcal_line_freq']), float(filters['kc_pcal_line_freq']), float(filters['high_pcal_line_freq'])]
-pcal_corrections= [float(filters['ka_pcal_corr_re']), float(filters['ka_pcal_corr_im']), float(filters['kc_pcal_corr_re']), float(filters['kc_pcal_corr_im']), float(filters['high_pcal_corr_re']), float(filters['high_pcal_corr_im'])]
+frequencies = []
+pcal_corrections = []
+for name in options.pcal_line_names.split(','):
+	frequencies.append(float(filters["%s_line_freq" % name]))
+	pcal_corrections.append(float(filters["%s_corr_re" % name]))
+	pcal_corrections.append(float(filters["%s_corr_im" % name]))
 
 if not len(options.magnitude_ranges.split(';')) == len(frequencies):
 	raise ValueError("Number of magnitude ranges given is not equal to number of pcal line frequencies (%d != %d)." % (len(options.magnitude_ranges.split(';')), len(frequencies)))
@@ -266,7 +273,7 @@ def pcal2darm(pipeline, name):
 test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
-colors = ['b.', 'limegreen.', 'c.', 'y.', 'r.', 'm.'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['r', 'g', 'y', 'c', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
 channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):
@@ -299,22 +306,23 @@ for i in range(0, len(frequencies)):
 	if i == 0:
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
-	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = r'%s [$\mu$ = %0.3f, $\sigma$ = %0.3f]' % (labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
-	plt.title(r'%s $\Delta L_{\rm free}$ / Pcal at %0.1f Hz' % ( ifo, frequencies[i]))
+	plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
 	if i == 0:
-		plt.ylabel('Magnitude')
+		plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
 	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
 	plt.grid(True)
-	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
-	plt.plot(times, phases[0], colors[0], markersize = markersize, label = r'%s [$\mu$ = %0.3f$^{\circ}$, $\sigma$ = %0.3f$^{\circ}$]' % (labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
-	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+	plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(phases[0]), numpy.std(phases[0])))
+	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	if i == 0:
-		plt.ylabel('Phase [deg]')
-	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
+		plt.ylabel(r'${\rm Phase \  [deg]}$')
+	if len(frequencies) < 3 or i == int((len(frequencies) - 0.1) / 2.0):
+		plt.xlabel(r'${\rm Time \  in \  %s \  since \  %s \  UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
 	plt.grid(True)
@@ -326,12 +334,12 @@ for i in range(0, len(frequencies)):
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
-		plt.plot(times, magnitudes[j], colors[j % 6], markersize = markersize, label = r'%s [$\mu$ = %0.3f, $\sigma$ = %0.3f]' % (labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
-		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+		plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
-		plt.plot(times, phases[j], colors[j % 6], markersize = markersize, label = r'%s [$\mu$ = %0.3f$^{\circ}$, $\sigma$ = %0.3f$^{\circ}$]' % (labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
-		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
+		plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[j]), numpy.std(phases[j])))
+		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.pdf" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))

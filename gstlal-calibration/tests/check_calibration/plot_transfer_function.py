@@ -33,6 +33,8 @@ import resource
 import datetime
 import time
 import matplotlib
+from matplotlib import rc
+rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 22
 matplotlib.rcParams['legend.fontsize'] = 18
@@ -292,7 +294,7 @@ if options.poles is not None:
 	for i in range(0, len(real_poles) / 2):
 		poles.append(float(real_poles[2 * i]) + 1j * float(real_poles[2 * i + 1]))
 
-colors = ['r', 'g', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['limegreen', 'g', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
 	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")
@@ -328,26 +330,26 @@ for i in range(0, len(labels)):
 	if i == 0:
 		plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.5, label = labels[i])
-	leg = plt.legend(fancybox = True)
-	leg.get_frame().set_alpha(0.5)
+	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.75, label = labels[i].replace('_', '\_'))
+	#leg = plt.legend(fancybox = True)
+	#leg.get_frame().set_alpha(0.8)
 	plt.gca().set_xscale(freq_scale)
 	plt.gca().set_yscale(mag_scale)
 	if i == 0:
-		plt.title(r'%s $%s$ / $%s$' % (ifo, options.numerator_name, options.denominator_name))
-		plt.ylabel('Magnitude')
+		#plt.title(r'%s $%s$ / $%s$' % (ifo, options.numerator_name.replace('_', '\_'), options.denominator_name.replace('_', '\_')))
+		plt.ylabel(r'${\rm Magnitude}$')
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.magnitude_min, options.magnitude_max)
-	plt.grid(True)
+	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax = plt.subplot(212)
 	ax.set_xscale(freq_scale)
-	plt.plot(frequency, phase, colors[i % 6], linewidth = 0.5)
+	plt.plot(frequency, phase, colors[i % 6], linewidth = 0.75)
 	if i == 0:
-		plt.ylabel('Phase [deg]')
-		plt.xlabel('Frequency [Hz]')
+		plt.ylabel(r'${\rm Phase \ [deg]}$')
+		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.phase_min, options.phase_max)
-	plt.grid(True)
+	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 plt.savefig('%s_transfer_functions_%s_%s%s_%d-%d.png' % (ifo, options.numerator_name, options.denominator_name, options.filename_suffix, options.gps_start_time, data_duration))
 plt.savefig('%s_transfer_functions_%s_%s%s_%d-%d.pdf' % (ifo, options.numerator_name, options.denominator_name, options.filename_suffix, options.gps_start_time, data_duration))
 

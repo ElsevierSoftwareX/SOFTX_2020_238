@@ -33,6 +33,8 @@ import resource
 import datetime
 import time
 import matplotlib
+from matplotlib import rc
+rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 22
 matplotlib.rcParams['legend.fontsize'] = 18
@@ -70,8 +72,8 @@ parser.add_option("--numerator-frame-cache", metavar = "name", type = str, help 
 parser.add_option("--denominator-channel-name", metavar = "name", type = str, default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Channel-name of denominator")
 parser.add_option("--numerator-channel-name", metavar = "name", type = str, default = None, help = "Channel-name of numerator")
 parser.add_option("--frequencies", metavar = "list", type = str, help = "List of frequencies at which to take ratios. Semicolons separate frequencies to be put on separate plots, and commas separate frequencies to be put on the same plot.")
-parser.add_option("--filter-time", metavar = "seconds", type = int, default = 20, help = "Length in seconds of the low-pass filter used for demodulation")
-parser.add_option("--average-time", metavar = "seconds", type = int, default = 1, help = "Length in seconds of the running average applied to the ratio")
+parser.add_option("--filter-time", metavar = "seconds", type = int, default = 10, help = "Length in seconds of the low-pass filter used for demodulation")
+parser.add_option("--average-time", metavar = "seconds", type = int, default = 128, help = "Length in seconds of the running average applied to the ratio")
 parser.add_option("--magnitude-ranges", metavar = "list", type = str, help = "List of limits for magnitude plots. Semicolons separate ranges for different plots, and commas separate the min and max of a single plot.")
 parser.add_option("--phase-ranges", metavar = "list", type = str, help = "List of limits for phase plots. Semicolons separate ranges for different plots, and commas separate the min and max of a single plot.")
 parser.add_option("--plot-titles", metavar = "names", type = str, help = "Semicolon-separated list of titles for plots")
@@ -135,7 +137,7 @@ def demod_ratio(pipeline, name):
 		# Take ratio
 		ratio = calibration_parts.complex_division(pipeline, demodulated_numerator, demodulated_denominator)
 		# Average
-		ratio = pipeparts.mkgeneric(pipeline, ratio, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time))
+		ratio = pipeparts.mkgeneric(pipeline, ratio, "lal_smoothkappas", array_size = 1, avg_array_size = int(rate_out * average_time), filter_latency = 1.0)
 		# Find magnitude and phase
 		ratio = pipeparts.mktee(pipeline, ratio)
 		magnitude = pipeparts.mkgeneric(pipeline, ratio, "cabs")
@@ -165,7 +167,7 @@ def demod_ratio(pipeline, name):
 test_common.build_and_run(demod_ratio, "demod_ratio", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
-colors = ['limegreen.', 'y.', 'c.', 'm.', 'g.', 'r.'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['blueviolet', 'darkgreen', 'limegreen', 'khaki', 'b', 'r'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(freq_list)):
 	data = numpy.loadtxt("%s_%s_over_%s_%0.1fHz.txt" % (ifo, options.numerator_channel_name, options.denominator_channel_name, freq_list[i][0]))
 	t_start = data[0][0]
@@ -184,47 +186,48 @@ for i in range(0, len(freq_list)):
 	times = []
 	magnitudes = [[]]
 	phases = [[]]
-	for k in range(0, len(data)):
-		times.append((data[k][0] - t_start) / sec_per_t_unit)
-		magnitudes[0].append(data[k][1])
-		phases[0].append(data[k][2])
-	markersize = 5000.0 / dur
-	markersize = min(markersize, 2.0)
+	for k in range(0, int(len(data) / (filter_time + average_time))):
+		times.append((data[(filter_time + average_time) * k][0] - t_start) / sec_per_t_unit)
+		magnitudes[0].append(data[(filter_time + average_time) * k][1])
+		phases[0].append(data[(filter_time + average_time) * k][2])
+	markersize = 150.0 * numpy.sqrt(float((filter_time + average_time) / dur))
+	markersize = min(markersize, 10.0)
 	markersize = max(markersize, 0.2)
 	# Make plots
 	plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(times, magnitudes[0], colors[0], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
-	plt.title(options.plot_titles.split(';')[i])
-	plt.ylabel('Magnitude')
+	plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.4f, \sigma = %0.4f]$' % (freq_list[i][0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	#plt.title(options.plot_titles.split(';')[i])
+	plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
 	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
 	plt.grid(True)
-	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
-	leg.get_frame().set_alpha(0.5)
+	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
+	leg.get_frame().set_alpha(0.8)
 	plt.subplot(212)
-	plt.plot(times, phases[0], colors[0], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][0], numpy.mean(phases[0]), numpy.std(phases[0])))
-	plt.ylabel('Phase [deg]')
-	plt.xlabel('Time in %s since %s UTC' % (t_unit, time.strftime("%b %d %Y %H:%M:%S", time.gmtime(t_start + 315964782))))
+	plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.',  markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.1f^{\circ}, \sigma = %0.1f^{\circ}]$' % (freq_list[i][0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	plt.ylabel(r'${\rm Phase \ [deg]}$')
+	plt.xlabel(r'${\rm Time \ in \ %s \ since \ %s \ UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
 	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
 	plt.grid(True)
-	leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
-	leg.get_frame().set_alpha(0.5)
+	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
+	leg.get_frame().set_alpha(0.8)
 	for j in range(1, len(freq_list[i])):
 		data = numpy.loadtxt("%s_%s_over_%s_%0.1fHz.txt" % (ifo, options.numerator_channel_name, options.denominator_channel_name, freq_list[i][j]))
 		magnitudes.append([])
 		phases.append([])
-		for k in range(0, len(data)):
-			magnitudes[j].append(data[k][1])
-			phases[j].append(data[k][2])
+		for k in range(0, int(len(data) / (filter_time + average_time))):
+			magnitudes[j].append(data[(filter_time + average_time) * k][1])
+			phases[j].append(data[(filter_time + average_time) * k][2])
 		plt.subplot(211)
-		plt.plot(times, magnitudes[j], colors[j], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
-		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
-		leg.get_frame().set_alpha(0.5)
+		plt.plot(times, magnitudes[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.4f, \sigma = %0.4f]$' % (freq_list[i][j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
+		leg.get_frame().set_alpha(0.8)
 		plt.subplot(212)
-		plt.plot(times, phases[j], colors[j], markersize = markersize, label = '%0.1f Hz [avg = %0.5f, std = %0.5f]' % (freq_list[i][j], numpy.mean(phases[j]), numpy.std(phases[j])))
-		leg = plt.legend(fancybox = True, markerscale = 4.0 / markersize, numpoints = 3)
-		leg.get_frame().set_alpha(0.5)
+		plt.plot(times, phases[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.1f^{\circ}, \sigma = %0.1f^{\circ}]$' % (freq_list[i][j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
+		leg.get_frame().set_alpha(0.8)
 	plt.savefig('%s_%d-%d.png' % (options.plot_titles.split(';')[i].replace(' ', '_'), int(t_start), int(dur)))
+	plt.savefig('%s_%d-%d.pdf' % (options.plot_titles.split(';')[i].replace(' ', '_'), int(t_start), int(dur)))
 
