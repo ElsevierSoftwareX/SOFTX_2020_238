@@ -113,7 +113,7 @@ markersize = min(markersize, 8.0)
 markersize = max(markersize, 1.0)
 plt.figure(figsize = (10, 6))
 if len(labels[0]):
-	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s \ }[\mu = %0.2f \, {\rm s}, \sigma = %0.2f \, {\rm s}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(latency[0]), numpy.std(latency[0])))
+	plt.plot(gps_time, latency[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s \ }[\mu_{1/2} = %0.2f \, {\rm s}, \sigma = %0.2f \, {\rm s}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.median(latency[0]), numpy.std(latency[0])))
 	leg = plt.legend(fancybox = True, loc = 'upper right', markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.8)
 else:
@@ -127,7 +127,7 @@ plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black'
 
 for i in range(1, len(intimes)):
 	if len(labels) > 1:
-		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s \ }[\mu = %0.2f \, {\rm s}, \sigma = %0.2f \, {\rm s}]$' % (labels[i].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(latency[i]), numpy.std(latency[i])))
+		plt.plot(gps_time, latency[i], colors[i % len(colors)], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s \ }[\mu_{1/2} = %0.2f \, {\rm s}, \sigma = %0.2f \, {\rm s}]$' % (labels[i].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.median(latency[i]), numpy.std(latency[i])))
 		leg = plt.legend(fancybox = True, loc = 'upper right', markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.8)
 	else:
