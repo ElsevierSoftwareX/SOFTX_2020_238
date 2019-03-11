@@ -321,6 +321,8 @@ class CoincDatabase(object):
 # =============================================================================
 #
 
+def sim_get_chirp_eff_dist(sim, instrument):
+	return getattr(sim, "eff_dist_%s" % instrument[0].lower()) * sim.mchirp**(5./6.) / 1.22**(5./6.)
 
 def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m","cm","d","cd","c","xc","l","xl","x","ix","v","iv","i")):
 	if not arabics:
@@ -678,7 +680,7 @@ FROM
 			"""):
 			sim = contents.sim_inspiral_table.row_from_cols(values)
 			del sim.process_id, sim.source, sim.simulation_id
-			instruments = frozenset(instrument for instrument, segments in contents.seglists.items() if sim.get_time_geocent() in segments)
+			instruments = frozenset(instrument for instrument, segments in contents.seglists.items() if sim.time_geocent in segments)
 			self.injections.setdefault(sim.waveform, []).append(sim)
 
 	@staticmethod
@@ -764,7 +766,7 @@ FROM
 			""", (self.far_thresh if self.far_thresh is not None else float("+inf"),)):
 				sim = contents.sim_inspiral_table.row_from_cols(values)
 				del sim.process_id, sim.source, sim.simulation_id
-				if sim.get_time_geocent() in zerolag_segments:
+				if sim.time_geocent in zerolag_segments:
 					# any nonzero nonz spin -> precession_bool=True -> precessing injection
 					# all zero nonz spin -> precession_bool=Fales -> non precesssing injection
 					precession_bool = any(s != 0.0 for s in (sim.spin1x, sim.spin1y, sim.spin2x, sim.spin2y))
@@ -785,14 +787,14 @@ FROM
 			# function does not work
 			def decisive_distance(sim, instruments):
 				if len(instruments) > 1:
-					return sorted(sim.get_eff_dist(instrument) for instrument in instruments)[1]
+					return sorted(sim_get_chirp_eff_dist(sim,instrument) for instrument in instruments)[1]
 				else:
-					return sim.get_eff_dist(list(instruments)[0])
+					return sim_get_chirp_eff_dist(sim,list(instruments)[0])
 			def decisive_chirp_distance(sim, instruments):
 				if len(instruments) > 1:
-					return sorted(sim.get_chirp_eff_dist(instrument) for instrument in instruments)[1]
+					return sorted(sim_get_chirp_eff_dist(sim,instrument) for instrument in instruments)[1]
 				else:
-					return sim.get_chirp_eff_dist(list(instruments)[0])
+					return sim_get_chirp_eff_dist(sim,list(instruments)[0])
 
 			def decisive_charsnr(sim, oninstruments):
 				if len(oninstruments) > 3:
@@ -816,7 +818,7 @@ FROM
 				(r"$\textrm{Chirp Decisive Distance vs.\ Eta (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"$\mathrm{Decisive} D_{\mathrm{chirp, eff}}$ ($\mathrm{Mpc}$)", decisive_chirp_distance, "chirpdist_vs_eta"),
 				(r"$\textrm{Decisive Distance vs.\ Total Mass (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_mtotal"),
 				(r"$\textrm{Decisive Distance vs.\ Effective Spin (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_chi"),
-				(r"$\textrm{Decisive Distance vs.\ Time (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_t")
+				(r"$\textrm{Decisive Distance vs.\ Time (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.time_geocent, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_t")
 				)):
 
 				fig, axes = create_plot(x_label, y_label)
@@ -845,7 +847,7 @@ FROM
 				(r"Decisive Characteristic SNR vs.\ Total Mass (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", lambda sim: sim.mass1 + sim.mass2, r"Decisive Characteristic SNR", "dec_expsnr_vs_mtotal"),
 				(r"Decisive Characteristic SNR vs.\ Eta (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\eta$", lambda sim: sim.eta, r"Decisive Characteristic SNR", "dec_expsnr_vs_eta"),
 				(r"Decisive Characteristic SNR vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"Decisive Characteristic SNR", "dec_expsnr_vs_chi"),
-				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.get_time_geocent(), r"Decisivive Characteristic SNR", "dec_expsnr_vs_t")
+				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.time_geocent, r"Decisivive Characteristic SNR", "dec_expsnr_vs_t")
 			)):
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
