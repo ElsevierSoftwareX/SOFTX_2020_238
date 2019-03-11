@@ -367,8 +367,14 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
 	gboolean success = gst_audio_info_from_caps(&element->audio_info, incaps);
 
-	if(success)
+	if(success) {
+		if(GST_AUDIO_INFO_CHANNELS(&element->audio_info) != element->num_templates) {
+			GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("number of channels %d is not equal to number of templates %d", GST_AUDIO_INFO_CHANNELS(&element->audio_info), element->num_templates));
+			success = FALSE;
+		}
 		g_object_set(element->adapter, "unit-size", GST_AUDIO_INFO_BPF(&element->audio_info), NULL);
+	}
+
 
 	/*
 	 * done
@@ -390,9 +396,6 @@ static gboolean start(GstBaseTransform *trans)
 
 	if(!element->bank) {
 		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("no template bank"));
-		success = FALSE;
-	} else if(GST_AUDIO_INFO_CHANNELS(&element->audio_info) != element->num_templates) {
-		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("number of channels is not equal to number of templates"));
 		success = FALSE;
 	} else {
 		for(i=0; i < element->num_templates; i++) {
