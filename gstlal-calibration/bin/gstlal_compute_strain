@@ -294,8 +294,7 @@ expected_kappauim_real = float(TDCFConfigs["expectedkappauimreal"])
 expected_kappauim_imag = float(TDCFConfigs["expectedkappauimimag"])
 expected_kappac = float(TDCFConfigs["expectedkappac"])
 expected_fcc = float(TDCFConfigs["expectedfcc"]) if "expectedfcc" in TDCFConfigs else 0.0
-expected_fs = float(TDCFConfigs["expectedfs"]) if "expectedfs" in TDCFConfigs else 0.0
-expected_srcq = float(TDCFConfigs["expectedsrcq"]) if "expectedsrcq" in TDCFConfigs else 0.0
+# Note: fs and Q are handled later due to the fact that they are handled as complex values
 kappatst_real_var = float(TDCFConfigs["kappatstrealvar"])
 kappatst_imag_var = float(TDCFConfigs["kappatstimagvar"])
 kappapu_real_var = float(TDCFConfigs["kappapurealvar"])
@@ -491,16 +490,30 @@ except:
 	fcc_default = expected_fcc
 	if fcc_default == 0.0:
 		print("Warning: Could not find expected fcc in filters file or config file.  Setting to zero.")
-try:
-	fs_default = float(filters["fs"])
-	srcQ_default = float(filters["srcQ"])
-except:
-	fs_default = expected_fs
-	if fs_default == 0:
-		print("Warning: Could not find expected fs in filters file or config file.  Setting to zero.")
-	srcQ_default = expected_srcq
-	if srcQ_default == 0:
-		print("Warning: Could not find expected srcQ in filters file or config file.  Setting to zero.")
+if "fs_squared" in filters:
+	fs_squared_default = float(filters["fs_squared"])
+elif "expectedfs_squared" in TDCFConfigs:
+	fs_squared_default = float(TDCFConfigs["expectedfs_squared"])
+elif "fs" in filters:
+	fs_squared_default = pow(float(filters["fs"]), 2)
+elif "expectedfs" in TDCFConfigs:
+	fs_squared_default = pow(float(TDCFConfigs["expectedfs"]), 2)
+else:
+	print("Warning: Could not find expected fs in filters file or config file.  Setting to zero.")
+	fs_squared_default = 0
+
+fs_default = numpy.sqrt(complex(fs_squared_default))
+
+if "srcQ" in filters:
+	srcQ_default = complex(filters["srcQ"])
+elif "expectedsrcq" in TDCFConfigs:
+	srcQ_default = complex(TDCFConfigs["srcQ"])
+else:
+	print("Warning: Could not find expected srcQ in filters file or config file.  Setting to zero.")
+	srcQ_default = 0 + 0j
+
+if fs_squared_default < 0:
+	srcQ_default = 1j * srcQ_default
 
 # Load kappa dewhitening factors
 if dewhitening:
@@ -1474,9 +1487,9 @@ if compute_kappac or compute_fcc or compute_fs or compute_srcq:
 
 # compute f_s and Q
 if compute_fs or compute_srcq:
-	expected_Xi = complex((fs_default * fs_default - 1j * src_pcal_line_freq * fs_default / srcQ_default) / (src_pcal_line_freq * src_pcal_line_freq))
-	Xi_real_var = float((pow(fs_default + fs_var, 2) - pow(fs_default, 2.0)) / pow(src_pcal_line_freq, 2))
-	Xi_imag_var = float(fs_var / (srcQ_default * src_pcal_line_freq))
+	expected_Xi = complex((fs_squared_default - 1j * src_pcal_line_freq * fs_default / srcQ_default) / (src_pcal_line_freq * src_pcal_line_freq))
+	Xi_real_var = float((pow(abs(fs_default) + fs_var, 2.0) - pow(abs(fs_default), 2.0)) / pow(src_pcal_line_freq, 2))
+	Xi_imag_var = float(fs_var / (abs(srcQ_default) * src_pcal_line_freq))
 
 	# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
 	if src_pcal_line_freq == act_pcal_line_freq:
@@ -1549,40 +1562,47 @@ if compute_fs or compute_srcq:
 		smooth_XiR, smooth_XiI = calibration_parts.split_into_real(pipeline, smooth_Xi)
 		smooth_XiR_nogate, smooth_XiI_nogate = calibration_parts.split_into_real(pipeline, smooth_Xi_nogate)
 
-	smooth_sqrtXiR = calibration_parts.mkpow(pipeline, smooth_XiR, exponent = 0.5)
-	smooth_sqrtXiR_nogate = calibration_parts.mkpow(pipeline, smooth_XiR_nogate, exponent = 0.5)
-
 	if compute_fs and compute_srcq:
-		smooth_sqrtXiR = pipeparts.mktee(pipeline, smooth_sqrtXiR)
-		smooth_sqrtXiR_nogate = pipeparts.mktee(pipeline, smooth_sqrtXiR_nogate)
+		smooth_XiR = pipeparts.mktee(pipeline, smooth_XiR)
+		smooth_XiR_nogate = pipeparts.mktee(pipeline, smooth_XiR_nogate)
 
 	# compute f_s
 	if compute_fs:
-		smooth_fs = pipeparts.mkaudioamplify(pipeline, smooth_sqrtXiR, src_pcal_line_freq)
-		smooth_fs_nogate = pipeparts.mkaudioamplify(pipeline, smooth_sqrtXiR_nogate, src_pcal_line_freq)
+		smooth_fs_squared_almost = pipeparts.mkaudioamplify(pipeline, smooth_XiR, src_pcal_line_freq)
+		smooth_fs_squared = pipeparts.mkaudioamplify(pipeline, smooth_fs_squared_almost, src_pcal_line_freq)
+		smooth_fs_squared_almost_nogate = pipeparts.mkaudioamplify(pipeline, smooth_XiR_nogate, src_pcal_line_freq)
+		smooth_fs_squared_nogate = pipeparts.mkaudioamplify(pipeline, smooth_fs_squared_almost_nogate, src_pcal_line_freq)
 		if src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification")
 		elif src_pcal_line_freq != act_pcal_line_freq and "pcal4_linefreq" in head_dict:
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs, "current_average", "amplification")
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_nogate, "current_average", "amplification")
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification")
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification")
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification")
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification")
 
-		if compute_calib_statevector or apply_fs:
-			smooth_fs = pipeparts.mktee(pipeline, smooth_fs)
+		smooth_fs_squared = pipeparts.mktee(pipeline, smooth_fs_squared)
 
 	# compute SRC Q_inv
 	if compute_srcq:
-		smooth_sqrtXiR_inv = calibration_parts.mkpow(pipeline, smooth_sqrtXiR, exponent = -1.0)
-		smooth_sqrtXiR_inv_nogate = calibration_parts.mkpow(pipeline, smooth_sqrtXiR_nogate, exponent = -1.0)
-		smooth_srcQ_inv = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, smooth_sqrtXiR_inv, pipeparts.mkaudioamplify(pipeline, smooth_XiI, -1.0)))
-		smooth_srcQ_inv_nogate = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, smooth_sqrtXiR_inv_nogate, pipeparts.mkaudioamplify(pipeline, smooth_XiI_nogate, -1.0)))
+		smooth_sqrtXiR_inv = calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_XiR, matrix = [[1.0, 0.0]])), exponent = -0.5)
+		smooth_sqrtXiR_inv_nogate = calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_XiR_nogate, matrix = [[1.0, 0.0]])), exponent = -0.5)
+		smooth_srcQ_inv = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, smooth_sqrtXiR_inv, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_XiI, matrix = [[-1.0, 0.0]]))))
+		smooth_srcQ_inv_nogate = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, smooth_sqrtXiR_inv_nogate, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_XiI_nogate, matrix = [[-1.0, 0.0]]))))
 
-		# We don't want to correct for Q < 0, since this is nonphysical and such a correction would most likely have the wrong frequency-dependence.
-		if apply_srcq:
-			smooth_srcQ_inv = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "lal_insertgap", bad_data_intervals = [1e-35, 1e35], replace_value = 1e-35, insert_gap = False)
+		smooth_srcQ_inv = pipeparts.mktee(pipeline, smooth_srcQ_inv)
+		smooth_srcQ_inv_nogate = pipeparts.mktee(pipeline, smooth_srcQ_inv_nogate)
 
-		if compute_calib_statevector or apply_srcq:
-			smooth_srcQ_inv = pipeparts.mktee(pipeline, smooth_srcQ_inv)
+		# We need a real-valued version of Q^(-1) to write the the frames.  If we have
+		# an optical spring, the computed Q^(-1) is imaginary, and if we have an optical
+		# antispring, the computed Q^(-1) is real.  To get a sensible real value either
+		# way AND INCLUDE ANY MINUS SIGN, we use Re(Q^(-1)) + Im(Q^(-1)).
+		smooth_srcQ_inv_real = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "creal"), pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "cimag")))
+		smooth_srcQ_inv_nogate = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_nogate, "creal"), pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_nogate, "cimag")))
+
+		smooth_srcQ_inv_real = pipeparts.mktee(pipeline, smooth_srcQ_inv_real)
 
 #
 # TIME-VARYING FACTORS COMPENSATIONS
@@ -1624,8 +1644,13 @@ if apply_fcc or apply_fs or apply_srcq:
 	# There are two zeros that depend on fs and Q, both of which depend on both fs and Q
 	if apply_fs or apply_srcq:
 		variable_invsens_zeros += 2
-		static_invsens_poles.extend([(fs_default / 2.0) * (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5)), 0.0])
-		static_invsens_poles.extend([(fs_default / 2.0) * (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5)), 0.0])
+		SRC_pole1 = (fs_default / 2.0) * (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5))
+		SRC_pole2 = (fs_default / 2.0) * (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5))
+		static_invsens_poles.extend([numpy.real(SRC_pole1), numpy.imag(SRC_pole1)])
+		static_invsens_poles.extend([numpy.real(SRC_pole2), numpy.imag(SRC_pole2)])
+
+		smooth_fs = calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_fs_squared, matrix = [[1.0, 0.0]])), exponent = 0.5)
+		smooth_fs = pipeparts.mktee(pipeline, smooth_fs)
 
 	if apply_fs and apply_srcq:
 		# The variable zeros depend on the computed values of fs and Q
@@ -1635,34 +1660,29 @@ if apply_fcc or apply_fs or apply_srcq:
 
 		SRC_zero1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, sqrt_Q_inv_squared_plus4))
 		SRC_zero1 = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, SRC_zero1, smooth_fs))
-		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, SRC_zero1, matrix = [[0.5, 0.0]])
-		SRC_zero1 = pipeparts.mktogglecomplex(pipeline, SRC_zero1)
+		SRC_zero1 = calibration_parts.complex_audioamplify(pipeline, SRC_zero1, 0.5, 0.0)
 
-		SRC_zero2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, pipeparts.mkaudioamplify(pipeline, sqrt_Q_inv_squared_plus4, -1.0)))
+		SRC_zero2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, calibration_parts.complex_audioamplify(pipeline, sqrt_Q_inv_squared_plus4, -1.0, 0.0)))
 		SRC_zero2 = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, SRC_zero2, smooth_fs))
-		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, SRC_zero2, matrix = [[0.5, 0.0]])
-		SRC_zero2 = pipeparts.mktogglecomplex(pipeline, SRC_zero2)
+		SRC_zero2 = calibration_parts.complex_audioamplify(pipeline, SRC_zero2, 0.5, 0.0)
 
 		tdep_zpk.extend([SRC_zero1, SRC_zero2])
 
 		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
-		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fs, exponent = 2.0), pow(fs_default, -2.0))
+		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, smooth_fs_squared, pow(fs_squared_default, -1.0))
 
 	elif apply_fs:
 		# The variable zeros depend on the computed value of fs and the model value of Q
 		Q_factor1 = (pow(srcQ_default, -1.0) + pow(pow(srcQ_default, -2.0) + 4.0, 0.5)) / 2.0
 		Q_factor2 = (pow(srcQ_default, -1.0) - pow(pow(srcQ_default, -2.0) + 4.0, 0.5)) / 2.0
 
-		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, smooth_fs, matrix = [[Q_factor1, 0.0]])
-		SRC_zero1 = pipeparts.mktogglecomplex(pipeline, SRC_zero1)
-
-		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, smooth_fs, matrix = [[Q_factor2, 0.0]])
-		SRC_zero2 = pipeparts.mktogglecomplex(pipeline, SRC_zero2)
+		SRC_zero1 = calibration_parts.complex_audioamplify(pipeline, smooth_fs, numpy.real(Q_factor1), numpy.imag(Q_factor1))
+		SRC_zero2 = calibration_parts.complex_audioamplify(pipeline, smooth_fs, numpy.real(Q_factor2), numpy.imag(Q_factor2))
 
 		tdep_zpk.extend([SRC_zero1, SRC_zero2])
 
 		# This will be added into tdep_zpk at the end, as required by lal_adaptivefirfilt
-		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, smooth_fs, exponent = 2.0), pow(fs_default, -2.0))
+		variable_invsens_gain = pipeparts.mkaudioamplify(pipeline, smooth_fs_squared, pow(fs_squared_default, -1.0))
 
 	elif apply_srcq:
 		# The variable zeros depend on the model value of fs and the computed value of Q
@@ -1671,12 +1691,10 @@ if apply_fcc or apply_fs or apply_srcq:
 		sqrt_Q_inv_squared_plus4 = pipeparts.mktee(pipeline, sqrt_Q_inv_squared_plus4)
 
 		SRC_zero1 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, sqrt_Q_inv_squared_plus4))
-		SRC_zero1 = pipeparts.mkmatrixmixer(pipeline, SRC_zero1, matrix = [[0.5 * fs_default, 0.0]])
-		SRC_zero1 = pipeparts.mktogglecomplex(pipeline, SRC_zero1)
+		SRC_zero1 = calibration_parts.complex_audioamplify(pipeline, SRC_zero1, 0.5 * numpy.real(fs_default), 0.5 * numpy.imag(fs_default))
 
-		SRC_zero2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, pipeparts.mkaudioamplify(pipeline, sqrt_Q_inv_squared_plus4, -1.0)))
-		SRC_zero2 = pipeparts.mkmatrixmixer(pipeline, SRC_zero2, matrix = [[0.5 * fs_default, 0.0]])
-		SRC_zero2 = pipeparts.mktogglecomplex(pipeline, SRC_zero2)
+		SRC_zero2 = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, smooth_srcQ_inv, calibration_parts.complex_audioamplify(pipeline, sqrt_Q_inv_squared_plus4, -1.0, 0.0)))
+		SRC_zero2 = calibration_parts.complex_audioamplify(pipeline, SRC_zero2, 0.5 * numpy.real(fs_default), 0.5 * numpy.imag(fs_default))
 
 		tdep_zpk.extend([SRC_zero1, SRC_zero2])
 
@@ -2293,13 +2311,13 @@ if compute_calib_statevector:
 	# FS BITS BRANCH
 	#
 	if compute_fs:
-		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs, fs_default, fs_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs_squared, fs_squared_default, [-pow(abs(fs_default) + fs_var, 2), pow(abs(fs_default) + fs_var, 2)], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# SRCQ BITS BRANCH
 	#
 	if compute_srcq:
-		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv, 1.0 / srcQ_default, [srcQinv_min, srcQinv_max], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv_real, 1.0 / (numpy.real(srcQ_default) + numpy.imag(srcQ_default)), [srcQinv_min, srcQinv_max], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# COHERENCE BITS BRANCH
@@ -2796,17 +2814,17 @@ if compute_fcc:
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if compute_fs:
-	fsout = pipeparts.mkaudioconvert(pipeline, smooth_fs)
-	fsout = calibration_parts.mkresample(pipeline, fsout, 1, False, record_kappa_caps)
-	fsout = pipeparts.mkprogressreport(pipeline, fsout, "progress_f_s_%s" % instrument)
+	fs_squared_out = pipeparts.mkaudioconvert(pipeline, smooth_fs_squared)
+	fs_squared_out = calibration_parts.mkresample(pipeline, fs_squared_out, 1, False, record_kappa_caps)
+	fs_squared_out = pipeparts.mkprogressreport(pipeline, fs_squared_out, "progress_f_s_squared_%s" % instrument)
 
-	smooth_fs_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fs_nogate)
-	smooth_fs_nogate = calibration_parts.mkresample(pipeline, smooth_fs_nogate, 1, False, record_kappa_caps)
-	smooth_fs_nogate = pipeparts.mkprogressreport(pipeline, smooth_fs_nogate, "progress_f_s_nogate_%s" % instrument)
+	smooth_fs_squared_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fs_squared_nogate)
+	smooth_fs_squared_nogate = calibration_parts.mkresample(pipeline, smooth_fs_squared_nogate, 1, False, record_kappa_caps)
+	smooth_fs_squared_nogate = pipeparts.mkprogressreport(pipeline, smooth_fs_squared_nogate, "progress_f_s_squared_nogate_%s" % instrument)
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if compute_srcq:
-	srcQ_inv_out = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv)
+	srcQ_inv_out = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv_real)
 	srcQ_inv_out = calibration_parts.mkresample(pipeline, srcQ_inv_out, 1, False, record_kappa_caps)
 	srcQ_inv_out = pipeparts.mkprogressreport(pipeline, srcQ_inv_out, "progress_SRC_Q_%s" % instrument)
 
@@ -2861,8 +2879,8 @@ if compute_fcc:
 	channelmux_input_dict["%s:%sCALIB_F_CC_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_fcc_nogate)
 # Link the f_s to the muxer
 if compute_fs:
-	channelmux_input_dict["%s:%sCALIB_F_S%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, fsout)
-	channelmux_input_dict["%s:%sCALIB_F_S_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_fs_nogate)
+	channelmux_input_dict["%s:%sCALIB_F_S_SQUARED%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, fs_squared_out)
+	channelmux_input_dict["%s:%sCALIB_F_S_SQUARED_NOGATE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, smooth_fs_squared_nogate)
 # Link the src_Q to the muxer
 if compute_srcq:
 	channelmux_input_dict["%s:%sCALIB_SRC_Q_INVERSE%s" % (instrument, chan_prefix, chan_suffix)] = calibration_parts.mkqueue(pipeline, srcQ_inv_out)
