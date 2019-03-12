@@ -110,6 +110,7 @@ CREATE TEMPORARY TABLE
 			sngl_inspiral.process_id AS pid,
 			sngl_inspiral.Gamma1 AS Gamma1,
 			sim_id_combined_far.far AS far,
+			sim_inspiral.simulation_id AS simulation_id,
 			sim_inspiral.*
 		FROM
 			sim_inspiral
@@ -136,7 +137,6 @@ working_filename = dbtables.get_connection_filename(inj_db, tmp_path = tmp_space
 connection = sqlite3.connect(working_filename)
 
 create_sim_coinc_view(connection)
-found_inj_bankid_param = {}
 sim_row = {}
 xmldoc = dbtables.get_xml(connection)
 sim_inspiral_table = lsctables.SimInspiralTable.get_table(xmldoc)
@@ -154,12 +154,9 @@ LIMIT ?
 	process_id = record[0]
 	bank_id = record[1]
 	far = record[2]
-	simrow = record[3:]
-	try:
-		found_inj_bankid_param[(bank_id, process_id)] += 1
-	except KeyError:
-		found_inj_bankid_param[(bank_id, process_id)] = 1
-	sim_row.setdefault((bank_id, process_id), []).append(sim_inspiral_table.row_from_cols(simrow))
+	simid = record[3]
+	simrow = record[4:]
+	sim_row[(bank_id, process_id, simid)] = sim_inspiral_table.row_from_cols(simrow)
 
 master_opts_dict = { 
 	"gps-start-time":None,
@@ -169,7 +166,7 @@ master_opts_dict = {
 	"track-psd": "",
 	"min-instruments": None,
 	"gracedb-far-threshold": 1e-6,
-	"gracedb-service-url": "file://%s/gracedb" % os.getcwd(),
+	"gracedb-service-url": None,
 	"ht-gate-threshold": 50.0,
 	"veto-segments-name": "vetoes",
 	"fir-stride": 0.25,
@@ -230,13 +227,12 @@ def fixrelpath(x, ys):
 	for y in ys:
 		x[y] = "%s/%s" % (analysis_dir, x[y][0])
 
-def new_inj_file(rows, output):
+def new_inj_file(row, output):
 	xmldoc = ligolw.Document()
 	lw = xmldoc.appendChild(ligolw.LIGO_LW())
 	sim_inspiral_table = lsctables.New(lsctables.SimInspiralTable)
 	lw.appendChild(sim_inspiral_table)
-	for row in rows:
-		sim_inspiral_table.append(row)
+	sim_inspiral_table.append(row)
 	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'))
 
 
@@ -250,9 +246,9 @@ try:
 except OSError:
 	pass
 
-for job_id, (bankid, process_id) in enumerate(found_inj_bankid_param, start=1):
+for job_id, (bankid, process_id, simid) in enumerate(sim_row, start=1):
 	# FIXME Need to add option for dist stats output
-	print "\n++ job_id: %s ++\n" % job_id
+	print "++ job_id: %s ++" % job_id
 	job_dict = {}
 	for param, value in connection.cursor().execute("SELECT param, value FROM process_params WHERE process_id == ?", (process_id,)):
 		job_dict.setdefault(param.replace("--",""), []).append(value)
@@ -268,7 +264,7 @@ for job_id, (bankid, process_id) in enumerate(found_inj_bankid_param, start=1):
 
 	# make a custom injection file
 	inj_file_name = "inj_files/%d_%d_%d_inj.xml.gz" % (job_id, bankid, process_id)
-	new_inj_file(sim_row[(bank_id, process_id)], inj_file_name)
+	new_inj_file(sim_row[(bank_id, process_id, simid)], inj_file_name)
 	this_input_dict["injections"] = inj_file_name
 
 	# FIXME hacks for the svd
@@ -281,13 +277,16 @@ for job_id, (bankid, process_id) in enumerate(found_inj_bankid_param, start=1):
 	this_input_dict["ranking-stat-input"] = ranking_stat_pdf
 
 	# just name the output the same as the input
+	outdir = "lloid_files/%d_%d_%d" % (job_id, bankid, process_id)
 	try:
-		os.mkdir("lloid_files/%d_%d_%d" % (job_id, bankid, process_id))
+		os.mkdir(outdir)
 	except OSError:
 		pass
 	
-	output_file_name = "lloid_files/%d_%d_%d/%d_%d_%d_lloid.xml.gz" % (job_id, bankid, process_id, job_id, bankid, process_id)
+	output_file_name = "%s/%d_%d_%d_lloid.xml.gz" % (outdir, job_id, bankid, process_id)
 	this_output_dict["output"] = output_file_name
+
+	this_opts_dict["gracedb-service-url"] = "file://%s/%s" % (os.getcwd(), outdir)
 
 	dagparts.DAGNode(gstlalInspiralInjJob, dag, parent_nodes = [], opts = this_opts_dict, input_files = this_input_dict, output_files = this_output_dict)
 
