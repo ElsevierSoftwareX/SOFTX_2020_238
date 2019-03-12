@@ -60,6 +60,7 @@ import time
 import httplib
 import tempfile
 import os
+import urlparse
 
 from glue import iterutils
 from ligo.lw import ligolw
@@ -395,6 +396,25 @@ class CoincsDocument(object):
 #
 
 
+class FakeGracedbResp(object):
+	def __init__(self):
+		self.status = httplib.CREATED
+	def json(self):
+		return {"graceid": -1}
+
+
+class FakeGracedbClient(object):
+	def __init__(self, service_url):
+		# Assumes that service url is a directory to write files to
+		self.path = urlparse.urlparse(service_url).path
+	def createEvent(self, group, pipeline, filename, filecontents, search):
+		with open(os.path.join(self.path, filename), "w") as f:
+			f.write(filecontents)
+		return FakeGracedbResp()
+	def writeLog(self, gracedb_id, message, filename, filecontents, tagname):
+		return FakeGracedbResp()
+
+
 class GracedBWrapper(object):
 	retries = 5
 	retry_delay = 5.0
@@ -430,7 +450,10 @@ class GracedBWrapper(object):
 		if far_threshold is None or far_threshold < 0.:
 			self.gracedb_client = None
 		else:
-			self.gracedb_client = gracedb.rest.GraceDb(self.service_url)
+			if self.service_url.startswith("file"):
+				self.gracedb_client = FakeGracedbClient(self.service_url)
+			else:
+				self.gracedb_client = gracedb.rest.GraceDb(self.service_url)
 
 	def web_get_gracedb_far_threshold(self):
 		with self.lock:
