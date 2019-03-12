@@ -6,7 +6,6 @@ from gwpy.timeseries import TimeSeriesDict
 from gwpy.timeseries import TimeSeries
 import glob
 from math import pi
-from gwpy.plotter import BodePlot
 import numpy
 from optparse import OptionParser, Option
 
