@@ -731,14 +731,7 @@ WHERE
 		# that have too small a count to have been well measured,
 		# and/or can't be modelled correctly by this fit anyway.
 		mode, = zl.argmax()
-		zlcumsum = zl.array.cumsum()
-		assert zlcumsum[-1] > 1000, "Need at least 1000 zero lag events to compute extinction model"
-		ten_thousand_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 10000)]
-		# Adjust the mode to be at 10,000 events if that LR is higher
-		if ten_thousand_events_lr > mode:
-			mode = ten_thousand_events_lr
-		one_hundred_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 100)]
-		mask = (x < mode) | (x > one_hundred_events_lr)
+		mask = (x < mode) | (zl.at_centres() < zl[mode,] - 15.)
 		zl = numpy.ma.masked_array(zl.array, mask)
 		bg = numpy.ma.masked_array(bg, mask)
 
@@ -762,7 +755,7 @@ WHERE
 			# for non-uniform binning.
 			return numpy.trapz(square_error, x)
 
-		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 5.), xtol = 1e-8, ftol = 1e-8, disp = 0)
+		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 1.), xtol = 1e-8, ftol = 1e-8, disp = 0)
 
 		# compute survival probability model from best fit
 		survival_probability = mk_survival_probability(rate_eff, m)
