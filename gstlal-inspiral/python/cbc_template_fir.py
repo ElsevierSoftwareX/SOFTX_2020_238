@@ -156,6 +156,7 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		hplus = fseries
 	return hplus
 
+
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
 	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
 	# find the index for the peak sample using the epoch returned by
@@ -176,6 +177,7 @@ def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_r
 	# done
 	return data, target_index
 
+
 def condition_ear_warn_template(approximant, data, epoch_time, sample_rate_max, max_shift_time):
 	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
 	# find the index for the peak sample using the epoch returned by
@@ -187,6 +189,7 @@ def condition_ear_warn_template(approximant, data, epoch_time, sample_rate_max, 
 	target_index = int(sample_rate_max * max_shift_time)
 	data = numpy.roll(data, target_index-epoch_index)
 	return data, target_index
+
 
 def compute_autocorrelation_mask( autocorrelation ):
 	'''
