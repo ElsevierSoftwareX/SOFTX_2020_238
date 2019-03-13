@@ -121,9 +121,20 @@ def do_it_to(xmldoc):
 			# the table_name column
 			newrowtype = newtable.RowType
 			def newrow(row, coinc_id_ilwdcls = ilwdchar_tables["coinc_event"]["coinc_event_id"]):
+				# FIXME this is probably a dumb way to do this,
+				# but it shouldn't matter once we have no
+				# reason to convert back to ilwdchar
+				if "event_id" in ilwdchar_tables[row.table_name]:
+					event_id = ilwdchar_tables[row.table_name]["event_id"](row.event_id)
+				elif "simulation_id" in ilwdchar_tables[row.table_name]:
+					event_id = ilwdchar_tables[row.table_name]["simulation_id"](row.event_id)
+				elif "coinc_event_id" in ilwdchar_tables[row.table_name]:
+					event_id = ilwdchar_tables[row.table_name]["coinc_event_id"](row.event_id)
+				else:
+					raise KeyError("event_id, simulation_id or coinc_event_id not in " +  ilwdchar_tables[row.table_name])
 				return newrowtype(
 					table_name = row.table_name,
-					event_id = ilwdchar_tables[row.table_name]["event_id"](row.event_id),
+					event_id = event_id,
 					coinc_event_id = coinc_id_ilwdcls(row.coinc_event_id)
 				)
 
