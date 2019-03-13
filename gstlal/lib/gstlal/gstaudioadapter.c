@@ -92,8 +92,9 @@ static guint samples_remaining(GstBuffer *buf, guint skip)
 
 static guint64 offset(GstAudioAdapter *adapter)
 {
-	guint64 offset = GST_BUFFER_OFFSET(GST_BUFFER(g_queue_peek_head(adapter->queue)));
-	return GST_BUFFER_OFFSET_IS_VALID(offset) ? offset + adapter->skip : GST_BUFFER_OFFSET_NONE;
+	GstBuffer *buf = GST_BUFFER(g_queue_peek_head(adapter->queue));
+	guint64 offset = GST_BUFFER_OFFSET(buf);
+	return GST_BUFFER_OFFSET_IS_VALID(buf) ? offset + adapter->skip : GST_BUFFER_OFFSET_NONE;
 }
 
 
