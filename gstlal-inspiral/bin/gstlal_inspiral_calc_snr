@@ -71,6 +71,7 @@ import sys
 from gstlal import cbc_template_fir
 from gstlal import chirptime
 from gstlal import datasource
+from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import spawaveform
 from gstlal import svd_bank
@@ -92,6 +93,10 @@ from ligo.lw import table
 @lsctables.use_in
 class ContentHandler(ligolw.LIGOLWContentHandler):
 	pass
+
+# disable mkchecktimestamps()
+# FIXME:  python plugin broken until we switch to Python 3
+pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 
 class epilogFormatter(IndentedHelpFormatter):
 	def format_epilog(self, epilog):
