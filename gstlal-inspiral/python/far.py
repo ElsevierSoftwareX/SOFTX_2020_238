@@ -767,6 +767,7 @@ WHERE
 		# compute survival probability model from best fit
 		survival_probability = mk_survival_probability(rate_eff, m)
 
+		self.noise_lr_lnpdf.array[:self.noise_lr_lnpdf.bins[0][mode]] = 0.
 		# apply to background counts and signal counts
 		self.noise_lr_lnpdf.array *= survival_probability
 		self.noise_lr_lnpdf.normalize()
