@@ -1,3 +1,15 @@
+gstlal-calibration (1.2.9-1) unstable; urgency=low
+
+  * Bug fixes to EPICS match checks in CALIB_STATE_VECTOR
+  * Generalized to handle optical spring or antispring in SRC
+  * No longer need to provide expected f_s, f_cc, and src_Q in config file
+  * Noise subtraction gate channel and filter clock channel can now be the
+    same
+  * Remove use of small random number as default in parts of noise subtraction
+    to avoid not having exact reproducibility
+ 
+ -- Madeline Wade <madeline.wade@ligo.org>  Tues, 12 Mar 2019 22:18:23 -0300
+
 gstlal-calibration (1.2.8-1) unstable; urgency=low
 
   * Pcal correction factors can be updated from the front end
