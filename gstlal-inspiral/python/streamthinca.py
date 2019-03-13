@@ -257,7 +257,7 @@ class StreamThinca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = True):
+	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = False):
 		# NOTE:  rankingstat is not used to compute the ranking
 		# statistic, it supplies the detector livetime segment
 		# lists to determine which triggers are eligible for
