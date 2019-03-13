@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+
+import sys
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import array
+from ligo.lw import param
+from ligo.lw import utils as ligolw_utils
+from gstlal import ilwdify
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+param.use_in(LIGOLWContentHandler)
+array.use_in(LIGOLWContentHandler)
+
+
+fname = sys.argv[1]
+xmldoc = ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler)
+xmldoc = ilwdify.do_it_to(xmldoc)
+ligolw_utils.write_filename(xmldoc, fname, gz = fname.endswith('gz'), verbose = True)
