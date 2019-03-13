@@ -2211,7 +2211,7 @@ if compute_calib_statevector:
 					filterclock_channel = calibration_parts.caps_and_progress(pipeline, head_dict[key], filterclock_caps[i], key)
 					if filterclock_channel_list[i][j] == noisesub_gate_channel:
 						filterclock_channel = noisesub_gate_tee = pipeparts.mktee(pipeline, filterclock_channel)
-					filterclock_channel = calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps))
+					filterclock_channel = calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, filterclock_channel, "lal_logicalundersample", required_on = filterclock_bitmask_list[i], status_out = 1), calibstate_caps))
 					filterclock_channels.append(filterclock_channel)
 				elif (filterclock_channel_list[i][j] == obsintent_channel_name and key == "obsintent"):
 					filterclock_channels.append(calibration_parts.mkqueue(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, obsintenttee, "lal_logicalundersample", required_on = pow(2,obs_intent_bitnum), status_out = 1), calibstate_caps)))
@@ -2453,10 +2453,11 @@ if compute_calib_statevector:
 	# EPICS BITS
 	#
 
-	D_epics_threshold = 0.5 + len(D_epics_dict)
-	A_epics_threshold = 0.5 + len(A_epics_dict)
-	C_epics_threshold = 0.5 + len(C_epics_dict)
-	misc_epics_threshold = 0.5 + len(misc_epics_dict)
+	epics_tolerance = 0.0001
+	D_epics_threshold = (1-epics_tolerance)*len(D_epics_dict)
+	A_epics_threshold = (1-epics_tolerance)*len(A_epics_dict)
+	C_epics_threshold = (1-epics_tolerance)*len(C_epics_dict)
+	misc_epics_threshold = (1-epics_tolerance)*len(misc_epics_dict)
 	epics_bits_list = []
 
 	# First, check the EPICS that involve only the digital filter D, EP7 and EP12
@@ -2465,7 +2466,7 @@ if compute_calib_statevector:
 		for EP_key in D_epics_dict:
 			D_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, D_epics_dict[EP_key][0], exponent = -1.0), D_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
-			D_epics_check = pipeparts.mkgeneric(pipeline, D_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
+			D_epics_check = pipeparts.mkgeneric(pipeline, D_epics_check, "lal_insertgap", bad_data_intervals = [1-epics_tolerance, 1+epics_tolerance], replace_value = 0.0, insert_gap = False)
 			D_epics_check_list.append(D_epics_check)
 		D_epics_check = calibration_parts.mkadder(pipeline, tuple(D_epics_check_list))
 		D_epics_bit = pipeparts.mkbitvectorgen(pipeline, D_epics_check, bit_vector = pow(2,D_epics_bitnum), threshold = D_epics_threshold)
@@ -2479,7 +2480,7 @@ if compute_calib_statevector:
 		for EP_key in A_epics_dict:
 			A_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, A_epics_dict[EP_key][0], exponent = -1.0), A_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
-			A_epics_check = pipeparts.mkgeneric(pipeline, A_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
+			A_epics_check = pipeparts.mkgeneric(pipeline, A_epics_check, "lal_insertgap", bad_data_intervals = [1-epics_tolerance, 1+epics_tolerance], replace_value = 0.0, insert_gap = False)
 			A_epics_check_list.append(A_epics_check)
 		A_epics_check = calibration_parts.mkadder(pipeline, tuple(A_epics_check_list))
 		A_epics_bit = pipeparts.mkbitvectorgen(pipeline, A_epics_check, bit_vector = pow(2,A_epics_bitnum), threshold = A_epics_threshold)
@@ -2493,7 +2494,7 @@ if compute_calib_statevector:
 		for EP_key in C_epics_dict:
 			C_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, C_epics_dict[EP_key][0], exponent = -1.0), C_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
-			C_epics_check = pipeparts.mkgeneric(pipeline, C_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
+			C_epics_check = pipeparts.mkgeneric(pipeline, C_epics_check, "lal_insertgap", bad_data_intervals = [1-epics_tolerance, 1+epics_tolerance], replace_value = 0.0, insert_gap = False)
 			C_epics_check_list.append(C_epics_check)
 		C_epics_check = calibration_parts.mkadder(pipeline, tuple(C_epics_check_list))
 		C_epics_bit = pipeparts.mkbitvectorgen(pipeline, C_epics_check, bit_vector = pow(2,C_epics_bitnum), threshold = C_epics_threshold)
@@ -2507,7 +2508,7 @@ if compute_calib_statevector:
 		for EP_key in misc_epics_dict:
 			misc_epics_check = pipeparts.mkaudioamplify(pipeline, calibration_parts.mkpow(pipeline, misc_epics_dict[EP_key][0], exponent = -1.0), misc_epics_dict[EP_key][1])
 			# The above values should be close to one (within 1 / 10^4)
-			misc_epics_check = pipeparts.mkgeneric(pipeline, misc_epics_check, "lal_insertgap", bad_data_intervals = [0.9999, 1.0001], replace_value = 0.0, insert_gap = False)
+			misc_epics_check = pipeparts.mkgeneric(pipeline, misc_epics_check, "lal_insertgap", bad_data_intervals = [1-epics_tolerance, 1+epics_tolerance], replace_value = 0.0, insert_gap = False)
 			misc_epics_check_list.append(misc_epics_check)
 		misc_epics_check = calibration_parts.mkadder(pipeline, tuple(misc_epics_check_list))
 		misc_epics_bit = pipeparts.mkbitvectorgen(pipeline, misc_epics_check, bit_vector = pow(2,misc_epics_bitnum), threshold = misc_epics_threshold)
