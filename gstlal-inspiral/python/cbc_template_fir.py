@@ -255,12 +255,14 @@ def compute_autocorrelation_mask( autocorrelation ):
 def movingmedian(interval, window_size):
 	tmp = numpy.copy(interval)
 	try:
-		# pandas version >= 0.18.1 is required
 		import pandas
-		s = pandas.Series(tmp)
-		out = s.rolling(2 * window_size).median()[2 * window_size - 1 : -1]
-		tmp[window_size : len(interval) - window_size] = numpy.array(out)
-	except (ImportError, AttributeError):
+		try:
+			# pandas version >= 0.18.1 is required
+			tmp[window_size : len(interval) - window_size] = numpy.array(pandas.Series(tmp).rolling(2 * window_size).median()[2 * window_size - 1 : -1])
+		except AttributeError:
+			# pandas version < 0.18.1
+			tmp[window_size : len(interval) - window_size] = pandas.rolling_median(tmp, 2 * window_size)[2 * window_size - 1 : -1]
+	except ImportError:
 		for i in range(window_size, len(interval) - window_size):
 			tmp[i] = numpy.median(interval[i - window_size : i + window_size])
 	return tmp
