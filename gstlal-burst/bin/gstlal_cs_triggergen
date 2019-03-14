@@ -257,7 +257,7 @@ xmldoc.childNodes[-1].appendChild(sngl_burst_table)
 # trigger generator
 #
 
-head = triggergen = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen", threshold = options.threshold, cluster = options.cluster_events, bank_filename = options.template_bank)
+head = triggergen = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen", threshold = options.threshold, cluster = options.cluster_events, bank_filename = options.template_bank, autocorrelation_matrix = numpy.zeros((len(template_bank_table), 403),dtype=numpy.float64))
 
 
 #
