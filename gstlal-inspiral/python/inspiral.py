@@ -760,6 +760,7 @@ class GracedBWrapper(object):
 							gracedb_ids.append(resp_json["graceid"])
 							break
 					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d: %d: %s"  % (filename, attempt, self.retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
+					print >>sys.stderr, resp_json
 					time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 				else:
 					print >>sys.stderr, "gracedb upload of %s failed" % filename
