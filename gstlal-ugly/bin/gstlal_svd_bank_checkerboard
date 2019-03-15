@@ -1,0 +1,123 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2019  Duncan Meacher
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Split SVD bank into 'odd' or 'even' banks"""
+
+
+#
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+import os
+import numpy as np
+import itertools
+from optparse import OptionParser
+
+from lal.utils import CacheEntry
+from gstlal import svd_bank
+from gstlal import inspiral
+
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import array as ligolw_array
+from ligo.lw import param as ligolw_param
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
+
+@ligolw_array.use_in
+@ligolw_param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+        pass
+
+#
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--svd-files", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information (require). Can give multiple files, seperated with a ','." )
+parser.add_option("--outdir", metavar = "directory", type = "str", default = ".", help = "Output directory for modified SVD files.")
+parser.add_option("--even", action = "store_true", help = "Output even rows pf reconstruction matrix. Default is odd.")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+options, filenames = parser.parse_args()
+
+if options.svd_files is None:
+	raise ValueError("SVD file must be selected with, seperated with a ','. --svd-files bank1.xml,bank2.xml,bank3.xml")
+svd_bank_files = options.svd_files.split(',')
+
+#
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+# Loop over all SVD files given in command line
+for bank_file in svd_bank_files:
+	# read in SVD bank file
+	banks = svd_bank.read_banks(bank_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)
+	# Loop over each bank within SVD file
+	for bank in banks:
+		# Loop over each bank_fragment within each bank
+		for n, frag in enumerate(bank.bank_fragments):
+			# Extract odd/even rows of chifacs and mix_matrix from each bank fragment
+			if options.even:
+				chifacs_re = bank.bank_fragments[n].chifacs[2::4]
+				chifacs_im = bank.bank_fragments[n].chifacs[3::4]
+				mix_mat_re = bank.bank_fragments[n].mix_matrix[:, 2::4]
+				mix_mat_im = bank.bank_fragments[n].mix_matrix[:, 3::4]
+			else:
+				chifacs_re = bank.bank_fragments[n].chifacs[0::4]
+				chifacs_im = bank.bank_fragments[n].chifacs[1::4]
+				mix_mat_re = bank.bank_fragments[n].mix_matrix[:, 0::4]
+				mix_mat_im = bank.bank_fragments[n].mix_matrix[:, 1::4]
+
+			bank.bank_fragments[n].chifacs = np.array(list(itertools.chain(*zip(chifacs_re, chifacs_im))))
+			mix_mat_new = np.empty((mix_mat_re.shape[0],mix_mat_re.shape[1]+mix_mat_im.shape[1]))
+			mix_mat_new[:,0::2] = mix_mat_re
+			mix_mat_new[:,1::2] = mix_mat_im
+			bank.bank_fragments[n].mix_matrix = mix_mat_new
+
+		# delete even/odd entries from sngl_inspiral table
+		if options.even:
+			del bank.sngl_inspiral_table[0::2]
+		else:
+			del bank.sngl_inspiral_table[1::2]
+	# Set output path
+	if options.even:
+		out_path = options.outdir+"/even/"
+	else:
+		out_path = options.outdir+"/odd/"
+	# Check output path exists
+	if not os.path.isdir(out_path):
+		os.mkdir(out_path)
+	# Write out checkerboard SVD bank
+	svd_bank.write_bank(out_path+bank_file.split('/')[-1], banks, cliplefts = [0]*len(banks), cliprights = [0]*len(banks), verbose = options.verbose)
+

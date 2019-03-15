@@ -31,4 +31,5 @@ dist_bin_SCRIPTS = \
 	gstlal_condor_top \
 	gstlal_injsplitter \
 	gstlal_reduce_dag \
-	gstlal_dag_run_time
+	gstlal_dag_run_time \
+	gstlal_svd_bank_checkerboard
