@@ -1,6 +1,7 @@
 ACLOCAL_AMFLAGS = -I gnuscripts
 EXTRA_DIST = gstlal-burst.spec
-SUBDIRS = debian lib python bin gst
+
+SUBDIRS = debian lib gst python bin share
 
 # check that the most recent changelog entry's version matches the package
 # version

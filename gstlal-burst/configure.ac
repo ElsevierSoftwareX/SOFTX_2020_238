@@ -16,13 +16,13 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	gstlal-burst.spec \
 	bin/Makefile \
+	debian/control \
+	debian/Makefile \
+	gst/Makefile \
+	gst/lal/Makefile \
 	lib/Makefile \
 	lib/gstlal-burst/gstlal-burst.pc \
 	lib/gstlal-burst/Makefile \
-	gst/Makefile \
-	gst/lal/Makefile \
-	debian/control \
-	debian/Makefile \
 	python/Makefile \
 	python/excesspower/Makefile \
 	python/snax/Makefile \
