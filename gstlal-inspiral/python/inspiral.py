@@ -205,6 +205,62 @@ def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
 
 	return banks
 
+def set_common_snglinspiral_values(sngl_inspiral_table):
+	sngl_inspiral_table[-1].search = sngl_inspiral_table[0].search
+	sngl_inspiral_table[-1].impulse_time = sngl_inspiral_table[0].impulse_time
+	sngl_inspiral_table[-1].impulse_time_ns = sngl_inspiral_table[0].impulse_time_ns
+	sngl_inspiral_table[-1].template_duration = sngl_inspiral_table[0].template_duration
+	sngl_inspiral_table[-1].event_duration = sngl_inspiral_table[0].event_duration
+	sngl_inspiral_table[-1].amplitude = sngl_inspiral_table[0].amplitude
+	sngl_inspiral_table[-1].mass1 = sngl_inspiral_table[0].mass1
+	sngl_inspiral_table[-1].mass2 = sngl_inspiral_table[0].mass2
+	sngl_inspiral_table[-1].mchirp = sngl_inspiral_table[0].mchirp
+	sngl_inspiral_table[-1].mtotal = sngl_inspiral_table[0].mtotal
+	sngl_inspiral_table[-1].eta = sngl_inspiral_table[0].eta
+	sngl_inspiral_table[-1].kappa = sngl_inspiral_table[0].kappa
+	sngl_inspiral_table[-1].chi = sngl_inspiral_table[0].chi
+	sngl_inspiral_table[-1].tau0 = sngl_inspiral_table[0].tau0
+	sngl_inspiral_table[-1].tau2 = sngl_inspiral_table[0].tau2
+	sngl_inspiral_table[-1].tau3 = sngl_inspiral_table[0].tau3
+	sngl_inspiral_table[-1].tau4 = sngl_inspiral_table[0].tau4
+	sngl_inspiral_table[-1].tau5 = sngl_inspiral_table[0].tau5
+	sngl_inspiral_table[-1].ttotal = sngl_inspiral_table[0].ttotal
+	sngl_inspiral_table[-1].psi0 = sngl_inspiral_table[0].psi0
+	sngl_inspiral_table[-1].psi3 = sngl_inspiral_table[0].psi3
+	sngl_inspiral_table[-1].alpha = sngl_inspiral_table[0].alpha
+	sngl_inspiral_table[-1].alpha1 = sngl_inspiral_table[0].alpha1
+	sngl_inspiral_table[-1].alpha2 = sngl_inspiral_table[0].alpha2
+	sngl_inspiral_table[-1].alpha3 = sngl_inspiral_table[0].alpha3
+	sngl_inspiral_table[-1].alpha4 = sngl_inspiral_table[0].alpha4
+	sngl_inspiral_table[-1].alpha5 = sngl_inspiral_table[0].alpha5
+	sngl_inspiral_table[-1].alpha6 = sngl_inspiral_table[0].alpha6
+	sngl_inspiral_table[-1].beta = sngl_inspiral_table[0].beta
+	sngl_inspiral_table[-1].f_final = sngl_inspiral_table[0].f_final
+	sngl_inspiral_table[-1].chisq_dof = sngl_inspiral_table[0].chisq_dof
+	sngl_inspiral_table[-1].bank_chisq = sngl_inspiral_table[0].bank_chisq
+	sngl_inspiral_table[-1].bank_chisq_dof = sngl_inspiral_table[0].bank_chisq_dof
+	sngl_inspiral_table[-1].cont_chisq = sngl_inspiral_table[0].cont_chisq
+	sngl_inspiral_table[-1].cont_chisq_dof = sngl_inspiral_table[0].cont_chisq_dof
+	sngl_inspiral_table[-1].sigmasq = sngl_inspiral_table[0].sigmasq
+	sngl_inspiral_table[-1].rsqveto_duration = sngl_inspiral_table[0].rsqveto_duration
+	sngl_inspiral_table[-1].Gamma0 = sngl_inspiral_table[0].Gamma0
+	sngl_inspiral_table[-1].Gamma1 = sngl_inspiral_table[0].Gamma1
+	sngl_inspiral_table[-1].Gamma2 = sngl_inspiral_table[0].Gamma2
+	sngl_inspiral_table[-1].Gamma3 = sngl_inspiral_table[0].Gamma3
+	sngl_inspiral_table[-1].Gamma4 = sngl_inspiral_table[0].Gamma4
+	sngl_inspiral_table[-1].Gamma5 = sngl_inspiral_table[0].Gamma5
+	sngl_inspiral_table[-1].Gamma6 = sngl_inspiral_table[0].Gamma6
+	sngl_inspiral_table[-1].Gamma7 = sngl_inspiral_table[0].Gamma7
+	sngl_inspiral_table[-1].Gamma8 = sngl_inspiral_table[0].Gamma8
+	sngl_inspiral_table[-1].Gamma9 = sngl_inspiral_table[0].Gamma9
+	sngl_inspiral_table[-1].spin1x = sngl_inspiral_table[0].spin1x
+	sngl_inspiral_table[-1].spin1y = sngl_inspiral_table[0].spin1y
+	sngl_inspiral_table[-1].spin1z = sngl_inspiral_table[0].spin1z
+	sngl_inspiral_table[-1].spin2x = sngl_inspiral_table[0].spin2x
+	sngl_inspiral_table[-1].spin2y = sngl_inspiral_table[0].spin2y
+	sngl_inspiral_table[-1].spin2z = sngl_inspiral_table[0].spin2z
+	sngl_inspiral_table[-1].process_id = sngl_inspiral_table[0].process_id
+
 
 #
 # =============================================================================
@@ -685,9 +741,8 @@ class GracedBWrapper(object):
 					snr_time_series_array = snr_time_series_array[idx0:idxf]
 
 				sngl_inspiral_table.append(sngl_inspiral_table.RowType())
-				# FIXME Ugly
-				for column in sngl_inspiral_table.columnnames:
-					setattr(sngl_inspiral_table[-1], column, getattr(sngl_inspiral_table[0], column))
+
+				set_common_snglinspiral_values(sngl_inspiral_table)
 				sngl_inspiral_table[-1].ifo = ifo
 				sngl_inspiral_table[-1].end = peak_t
 				sngl_inspiral_table[-1].end_time_gmst = lal.GreenwichMeanSiderealTime(peak_t)
@@ -698,7 +753,7 @@ class GracedBWrapper(object):
 				sngl_inspiral_table[-1].event_id = sngl_inspiral_table.get_next_id()
 				for row in process_params_table:
 					# FIXME There's probably code in ligolw somewhere to do this
-					if row.param == "--state-channel-name" and row.value[:2] == ifo:
+					if row.param == "--channel-name" and row.value[:2] == ifo:
 						sngl_inspiral_table[-1].channel = row.value[3:]
 						break
 
