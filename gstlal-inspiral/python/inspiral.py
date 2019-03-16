@@ -671,15 +671,18 @@ class GracedBWrapper(object):
 				else:
 					idxf = snr_time_series_array.shape[0]
 
-				snr_time_series_array = snr_time_series_array[idx0:idxf]
-				if snr_time_series_array.shape[0] != snr_length:
+				if idxf - idx0 != snr_length:
 					if idx0 == 0:
-						snr_time_series_array = numpy.append(snr_time_series_array, numpy.zeros(snr_length - snr_time_series_array.shape[0], dtype=snr_time_series_array.dtype))
+						# We know we don't have enough samples, since we started at the beginning of the available samples the zeros must need to be prepended
+						snr_time_series_array = numpy.concatenate((numpy.zeros(snr_length - (idxf - idx0), dtype=snr_time_series_array.dtype), snr_time_series_array[idx0:idxf]))
 					elif idxf != peak_idx + autocorrelation_length + 1:
-						snr_time_series_array = numpy.insert(snr_time_series_array, 0, numpy.zeros(snr_length - snr_time_series_array.shape[0], dtype=snr_time_series_array.dtype))
+						# We dont have enough samples, we need to append zeros
+						snr_time_series_array = numpy.concatenate((snr_time_series_array[idx0:idxf], numpy.zeros(snr_length - (idxf - idx0), dtype=snr_time_series_array.dtype)))
 					else:
 						print >>sys.stderr, "unexpected conditional while making sub-threshold trigger for %s, skipping. idx0 = %d, idxf = %d" % (ifo, idx0, idxf)
 						continue
+				else:
+					snr_time_series_array = snr_time_series_array[idx0:idxf]
 
 				sngl_inspiral_table.append(sngl_inspiral_table.RowType())
 				# FIXME Ugly
