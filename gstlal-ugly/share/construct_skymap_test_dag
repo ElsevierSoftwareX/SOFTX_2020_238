@@ -38,7 +38,9 @@ CREATE TEMPORARY TABLE
 AS
 	SELECT a.event_id as sid,
 		coinc_event.coinc_event_id as cid,
-		coinc_event.likelihood as lr
+		coinc_event.likelihood as lr,
+		coinc_event.nevents as nevents,
+		coinc_event.instruments as instruments
 	FROM coinc_event_map as a
 		JOIN coinc_event_map AS b ON (b.coinc_event_id == a.coinc_event_id)
 		JOIN coinc_event ON (coinc_event.coinc_event_id == b.event_id)
@@ -48,6 +50,10 @@ AS
 	""")
 
 	connection.cursor().execute("CREATE INDEX IF NOT EXISTS sim_coinc_map_helper_index ON sim_coinc_map_helper (sid, cid);")
+
+#
+# FIXME NOTE FIXME this selects triple times with no more than two ifos to test the itacac sub threshold stuff
+#
 
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
@@ -62,6 +68,10 @@ AS
 				sim_coinc_map_helper
                         WHERE
                                 sid = simulation_id
+			AND
+				nevents < 3
+			AND
+				instruments = "H1,L1,V1"
                         ORDER BY
                                 lr
 			DESC
@@ -180,6 +190,7 @@ master_opts_dict = {
 	"gracedb-search": "AllSky",
 	"channel-name": None,
 	"singles-threshold": "inf",
+	"local-frame-caching":"",
 	"verbose": ""
 }
 
@@ -214,6 +225,9 @@ gstlalInspiralInjJob = dagparts.DAGJob("gstlal_inspiral",
 		"want_graceful_removal":"True",
 		"kill_sig":"15"}
 	)
+noIlwdcharJob = dagparts.DAGJob("ligolw_no_ilwdchar")
+bashJob = dagparts.DAGJob("bash")
+
 
 def updatedict(x, y):
 	for k in x:
@@ -246,6 +260,25 @@ try:
 except OSError:
 	pass
 
+bayesdir = "bayestar_input"
+try:
+	os.mkdir(bayesdir)
+except OSError:
+	pass
+	
+
+f = open("process.sh", "w")
+f.write("""#!/usr/bin/bash
+ID=$1
+FILE=$(gstlal_inspiral_best_coinc_file lloid_files/${ID}/*CBC_AllSky-*-0.xml)
+ligolw_no_ilwdchar ${FILE}
+mkdir -p bayestar_input/${ID}/
+gstlal_ligolw_add_without_reassign ${FILE} inj_files/${ID}_inj.xml.gz --output bayestar_input/${ID}/${ID}_event.xml.gz
+lalapps_inspinjfind --time-window 0.9 bayestar_input/${ID}/${ID}_event.xml.gz
+gstlal_ilwdify bayestar_input/${ID}/${ID}_event.xml.gz
+""")
+f.close()
+
 for job_id, (bankid, process_id, simid) in enumerate(sim_row, start=1):
 	# FIXME Need to add option for dist stats output
 	print "++ job_id: %s ++" % job_id
@@ -264,7 +297,7 @@ for job_id, (bankid, process_id, simid) in enumerate(sim_row, start=1):
 
 	# make a custom injection file
 	inj_file_name = "inj_files/%d_%d_%d_inj.xml.gz" % (job_id, bankid, process_id)
-	new_inj_file(sim_row[(bank_id, process_id, simid)], inj_file_name)
+	new_inj_file(sim_row[(bankid, process_id, simid)], inj_file_name)
 	this_input_dict["injections"] = inj_file_name
 
 	# FIXME hacks for the svd
@@ -282,13 +315,17 @@ for job_id, (bankid, process_id, simid) in enumerate(sim_row, start=1):
 		os.mkdir(outdir)
 	except OSError:
 		pass
-	
+
 	output_file_name = "%s/%d_%d_%d_lloid.xml.gz" % (outdir, job_id, bankid, process_id)
 	this_output_dict["output"] = output_file_name
 
 	this_opts_dict["gracedb-service-url"] = "file://%s/%s" % (os.getcwd(), outdir)
 
-	dagparts.DAGNode(gstlalInspiralInjJob, dag, parent_nodes = [], opts = this_opts_dict, input_files = this_input_dict, output_files = this_output_dict)
+	node = dagparts.DAGNode(gstlalInspiralInjJob, dag, parent_nodes = [], opts = this_opts_dict, input_files = this_input_dict, output_files = this_output_dict)
+
+	# all the remaining post processing
+	node = dagparts.DAGNode(bashJob, dag, parent_nodes = [node], opts = {"":["process.sh", "%d_%d_%d" % (job_id, bankid, process_id)]})
+
 
 dag.write_sub_files()
 dag.write_dag()
