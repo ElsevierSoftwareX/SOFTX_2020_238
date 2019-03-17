@@ -3,7 +3,7 @@
 	dh $@ --with=python2
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-gtk-doc
+	dh_auto_configure -- --enable-gtk-doc --disable-massmodel
 
 override_dh_auto_test:
 	export PYTHONPATH=$$(pwd)/python; \

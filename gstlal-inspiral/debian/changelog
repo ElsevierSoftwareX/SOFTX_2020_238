@@ -1,3 +1,13 @@
+gstlal-inspiral (1.6.3-1) unstable; urgency=low
+
+  * inspiral.py: Fix bug in subthreshold trigger channel name
+  * inspiral.py: Fix bug causing time shift in subthreshold snr time series
+  * inspiral.py: changed ranking stat tag for gracedb uploads 
+  * cbc_template_fir: multiple changes
+  * Bug fixes and performance improvements
+
+ -- Alexander Pace <alexander.pace@ligo.org> Sun, 17 Mar 2019 09:55:37 -0700
+
 gstlal-inspiral (1.6.2-1) unstable; urgency=low
 
   * Enforce that appended zeros in subthreshold trigger generation have same
