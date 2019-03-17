@@ -11,6 +11,7 @@ dist_bin_SCRIPTS = \
 	gstlal_harmonic_mean_psd \
 	gstlal_mock_data_server \
 	gstlal_ilwdify \
+	gstlal_inspiral_best_coinc_file \
 	gstlal_inspiral_treebank \
 	gstlal_inspiral_treebank_dag \
 	gstlal_inspiral_bankviz \
@@ -26,6 +27,7 @@ dist_bin_SCRIPTS = \
 	gstlal_recolor_frames_pipe \
 	gstlal_inj_frames \
 	gstlal_cache_to_segments \
+	gstlal_ligolw_add_without_reassign \
 	gstlal_ll_inspiral_aggregator \
 	gstlal_ll_dq \
 	gstlal_condor_top \
