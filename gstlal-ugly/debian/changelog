@@ -1,3 +1,14 @@
+gstlal-ugly (1.6.2-1) unstable; urgency=low
+
+  * gstlal_svd_bank_checkerboard: Added SVD bank checkerboarding code
+  * some new temp programs
+  * construct_skymap_test_dag: update
+  * gstlal_kafka_dag: add tag information so that multiple analyzes do not
+    have file clashes
+  * Bug fixes and performance improvements
+
+ -- Alexander Pace <alexander.pace@ligo.org> Sun, 17 Mar 2019 09:37:07 -0700
+
 gstlal-ugly (1.6.1-1) unstable; urgency=low
 
   * interpolator: fix bug where interpolator was pushing out nongap buffers
