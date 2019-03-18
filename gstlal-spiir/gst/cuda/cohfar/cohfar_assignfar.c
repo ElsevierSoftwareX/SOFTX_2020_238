@@ -250,6 +250,7 @@ static GstFlowReturn cohfar_assignfar_transform_ip(GstBaseTransform *trans, GstB
 			if (table->is_background == FLAG_EMPTY)
 				continue;
 			icombo = get_icombo(table->ifos);
+			icombo = scan_trigger_ifos(icombo, table);
 			if (icombo < 0) {
 				fprintf(stderr, "icombo not found, cohfar_assignfar\n");
 				exit(0);
