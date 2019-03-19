@@ -333,6 +333,7 @@ test:offline:
     #- yum -y install texlive-base texlive-dvipng
     #- yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
     #- yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc
+    yum -y install bc
     
     # Get the necessary ROM data:
     - git clone https://git.ligo.org/alexander-pace/gstlal-testing-data.git ${GSTLAL_DIR}/gstlal-testing-data
