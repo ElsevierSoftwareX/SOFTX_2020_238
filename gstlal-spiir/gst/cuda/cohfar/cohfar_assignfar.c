@@ -107,15 +107,16 @@ static void update_trigger_fars_lr(PostcohInspiralTable *table, int icombo, Cohf
 	TriggerStats *cur_stats = element->bgstats_1w->multistats[icombo];
 	int hist_trials = element->hist_trials;
 	double n_s = cur_stats->rank_nevent/ (cur_stats->rank_livetime * hist_trials);
-	table->far_1w = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, get_rank_idx(table, element->bgstats_1w, icombo, element->sense_ratio)) *n_s;
-    	table->rank = calc_lr(table, element->bgstats_1w, element->sense_ratio);
+	int rank_idx = get_rank_idx(table, element->bgstats_1w, icombo, element->sense_ratio);
+	table->far_1w = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s;
+    table->rank = calc_lr(table, element->bgstats_1w, element->sense_ratio);
 	cur_stats = element->bgstats_1d->multistats[icombo];
 	n_s = cur_stats->rank_nevent/ (cur_stats->rank_livetime * hist_trials);
-	table->far_1d = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, get_rank_idx(table, element->bgstats_1d, icombo, element->sense_ratio)) *n_s;
+	table->far_1d = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s;
 	cur_stats = element->bgstats_2h->multistats[icombo];
 	if (cur_stats->rank_livetime > 0) {
 		n_s = cur_stats->rank_nevent/ (cur_stats->rank_livetime * hist_trials);
-		table->far_2h = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, get_rank_idx(table, element->bgstats_2h, icombo, element->sense_ratio)) *n_s;
+		table->far_2h = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s;
 	}
 	/* FIXME: currently hardcoded for single detectors FAR */
 	cur_stats = element->bgstats_1w->multistats[0];
