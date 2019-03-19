@@ -736,7 +736,8 @@ class FinalSink(object):
 				gracedb_upload_itrial += 1
 
 		# upload skymap if skymap_fname of the triggers is not empty
-		if len(trigger.skymap_fname) > 0:
+		#if len(trigger.skymap_fname) > 0:
+		if False:
 			# make sure the last round of output dumping is finished 
 			if self.thread_upload_skymap is not None and self.thread_upload_skymap.isAlive():
 				self.thread_upload_skymap.join()
