@@ -112,7 +112,7 @@ class NearestLeafTree(object):
 	False
 	>>> import sys
 	>>> x.to_xml(u"H1").write(sys.stdout) # doctest: +NORMALIZE_WHITESPACE
-	<Array Name="H1:nearestleaftree:array" Type="real_8">
+	<Array Type="real_8" Name="H1:nearestleaftree:array">
 		<Dim>2</Dim>
 		<Dim>2</Dim>
 		<Stream Delimiter=" " Type="Local">
