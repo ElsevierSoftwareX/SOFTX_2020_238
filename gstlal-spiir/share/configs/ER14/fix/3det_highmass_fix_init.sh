@@ -11,7 +11,7 @@
 ######################################################
 myrundir=`pwd`
 spiir_branch=spiir
-spiir_src_dir=/home/spiir/src/gstlal
+spiir_src_dir=/home/qi.chu/softwares/gstlal_er14_src
 cd ${spiir_src_dir}/gstlal
 version_spiir=`git log -b ${spiir_branch} | head -1 | awk '{print $2}'`
 cd ${myrundir}
@@ -21,12 +21,12 @@ cd ${myrundir}
 #  e.g. in gstlal_inspiral_postcohspiir_${user}.sub:
 # executable = $mylocation/bin/gstlal_inspiral_postcohspiir_online
 ######################################################
-mylocation=/home/spiir/opt/gstlocal_er14
+mylocation=/home/qi.chu/support/gstlocal_er14
 
 ######################################################
 #  spiir is a shared account, specify job submitter
 ######################################################
-user=spiir
+user=qi.chu
 submitter=qi.chu
 
 ######################################################
@@ -83,12 +83,16 @@ ndet=3
 ######################################################
 # set the location of the banks (O2 template placement with ER13 PSD)
 ######################################################
-bankdir=/home/manoj.kovalam/ER13/banks/ER13_${latency}
+if (( ${iflive} == 1 )); then # ER13 psd
+	bankdir=/home/manoj.kovalam/ER13/banks/ER13_${latency}
+else
+	bankdir=/home/joel.bosveld/online/banks/gstlal_iir_bank_split
+fi
 
 ######################################################
 #  --cohfar-assignfar-silent-time ${FAR_silent}
 ######################################################
-FAR_silent=43200
+FAR_silent=0
 
 ######################################################
 #  --finalsink-fapupdater-collect-walltime ${wtime1},${wtime2},${wtime3}
@@ -112,9 +116,15 @@ wtime3=7200
 #  the ID of last bank
 ######################################################
 if [ "${SearchType}" == "HighMass" ]; then # higmass
-	start=100
-	nbank=415
-	njob=79
+	if (( ${iflive} == 0 )); then # O2replay bank
+		start=98
+		nbank=412
+		njob=79
+	else
+		start=100
+		nbank=415
+		njob=79
+	fi
 else
 	start=0
 	nbank=99
@@ -130,9 +140,9 @@ if (( ${iflive} == 0 )); then # O2replay psd
     dhH=52
     dhV=26
 else # ER14 psd
-    dhL=140                                                                              
+    dhL=120                                                                              
     dhH=100                                                                                
-    dhV=55                                                                                 
+    dhV=50                                                                                 
 fi
 
 #######################################################
