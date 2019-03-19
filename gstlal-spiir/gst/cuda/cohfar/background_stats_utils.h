@@ -34,7 +34,7 @@
 #include <postcohtable.h>
 
 #ifndef MIN_BACKGROUND_NEVENT
-#define MIN_BACKGROUND_NEVENT 1000000
+#define MIN_BACKGROUND_NEVENT 2000000000 // 2 billion instead of 1 million, about 20hrs
 #endif
 	
 Bins1D *
