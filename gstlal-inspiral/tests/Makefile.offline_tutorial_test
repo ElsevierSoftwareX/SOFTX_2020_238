@@ -77,7 +77,7 @@ TIME=time -p
 # The GPS start time to generate data
 DATASTART = 999999952
 # The GPS stop time to generate data
-DATASTOP = 1000002100
+DATASTOP = 1000012100
 # Sampling rate of fake data
 SAMPLE_RATE = 4096
 
@@ -92,14 +92,16 @@ MIN_IFOS = 2
 # The GPS start time for analysis
 START = 1000000000
 # The GPS end time for analysis
-STOP = 1000002048
+STOP = 1000012000
+# analysis dureation
+DURATION = $(shell echo $(STOP)-$(START) | bc)
 # A user tag for the run
 TAG = gstlal_offline_tutorial
 # Run number
 RUN=run_1
 # A web directory for output
 WEBDIR = WEBDIR/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
-#WEBDIR = ~/public_html/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+#WEBDIR = ~/public_html/gstlal_offline_tutorial/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
 # The number of sub banks in each SVD bank file
 NUMBANKS = 1
 
@@ -126,9 +128,9 @@ HIGH_FREQUENCY_CUTOFF = 1024
 
 # Note: A 10s range is given so that only a single injection is produced.
 # The GPS start time for injections
-INJSTART=1000001020
+INJSTART=1000005020
 # The GPS stop time for injections
-INJSTOP=1000001030
+INJSTOP=1000005030
 
 #############################
 # additional options, e.g., #
@@ -291,7 +293,8 @@ vetoes.xml.gz:
 
 tisi.xml:
 	# Produce time slides file
-	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 $@
+	#lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 $@
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
 	@echo ""
 
 measured_psd.xml.gz: frames.cache
@@ -395,6 +398,15 @@ gstlal_bank.xml.gz: frames.cache
 #	gstlal_inspiral_plot_banks --template-bank-file gstlal_bank.xml.gz --plot-template-bank  --output-dir plots
 #	@echo ""
 
+H1L1-ALL_MASS_MODEL-$(START)-$(DURATION).h5: gstlal_bank.xml.gz measured_psd.xml.gz
+	# gstlal_bank_mass_model_0001
+	$(TIME) gstlal_inspiral_mass_model \
+		--template-bank gstlal_bank.xml.gz\
+		--reference-psd measured_psd.xml.gz \
+		--output H1L1-ALL_MASS_MODEL-$(START)-$(DURATION).h5 \
+		--model ligo
+	@echo ""
+
 H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 	# gstlal_bank_splitter_0001
 	$(TIME) gstlal_bank_splitter \
@@ -427,7 +439,7 @@ L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz: gstlal_bank.xml.gz
 		$<
 	@echo ""
 
-H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measured_psd.xml.gz
+H1-0000_SVD-$(START)-$(DURATION).xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measured_psd.xml.gz
 	# gstlal_svd_bank_0001
 	$(TIME) gstlal_svd_bank \
 		--reference-psd measured_psd.xml.gz \
@@ -446,7 +458,7 @@ H1-0000_SVD-1000000000-2048.xml.gz: H1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measure
 		--samples-max $(SAMPLE_RATE)
 	@echo ""
 
-L1-0000_SVD-1000000000-2048.xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measured_psd.xml.gz
+L1-0000_SVD-$(START)-$(DURATION).xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measured_psd.xml.gz
 	# gstlal_svd_bank_0002
 	$(TIME) gstlal_svd_bank \
 		--reference-psd measured_psd.xml.gz \
@@ -465,57 +477,49 @@ L1-0000_SVD-1000000000-2048.xml.gz: L1-0000_GSTLAL_SPLIT_BANK-0-0.xml.gz measure
 		--samples-max $(SAMPLE_RATE)
 	@echo ""
 
-H1L1-0000_LLOID-1000000000-2048.xml.gz H1L1-0000_DIST_STATS-1000000000-2048.xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-1000000000-2048.xml.gz L1-0000_SVD-1000000000-2048.xml.gz H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz
-	# gstlal_inspiral_0001
-	$(TIME) gstlal_inspiral \
-		--singles-threshold inf \
-		--reference-psd measured_psd.xml.gz \
-		--track-psd  \
-		--psd-fft-length 32 \
-		--output H1L1-0000_LLOID-1000000000-2048.xml.gz \
-		--gps-end-time $(STOP) \
-		--fir-stride 1 \
-		--channel-name H1=$(H1_CHANNEL) \
-		--channel-name=L1=$(L1_CHANNEL) \
-		--data-source frames \
-		--gps-start-time $(START) \
-		--time-slide-file tisi.xml \
-		--tmp-space $(TMPDIR) \
-		--svd-bank H1:H1-0000_SVD-1000000000-2048.xml.gz,L1:L1-0000_SVD-1000000000-2048.xml.gz \
-		--ranking-stat-output H1L1-0000_DIST_STATS-1000000000-2048.xml.gz \
-		--veto-segments-file vetoes.xml.gz \
-		--control-peak-time 0 \
-		--min-instruments $(MIN_IFOS) \
-		--frame-cache frames.cache \
-		--frame-segments-name datasegments \
-		--ht-gate-threshold 100. \
-		--frame-segments-file segments.xml.gz \
-		--coincidence-threshold 0.005 \
-		--verbose
-	@echo ""
-
-H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz: H1L1-ALL_MASS_MODEL-1000000000-2048.h5 L1-0000_SVD-1000000000-2048.xml.gz
+H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-ALL_MASS_MODEL-$(START)-$(DURATION).h5  L1-0000_SVD-$(START)-$(DURATION).xml.gz H1-0000_SVD-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_create_prior_diststats_0001
 	$(TIME) gstlal_inspiral_create_prior_diststats \
 		--instrument H1 \
 		--instrument L1 \
 		--min-instruments $(MIN_IFOS) \
-		--write-likelihood H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz \
+		--write-likelihood H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz \
 		--background-prior 1 \
-		--mass-model-file H1L1-ALL_MASS_MODEL-1187000000-2048.h5 \
-		--svd-file L1-0000_SVD-1000000000-2048.xml.gz
+		--mass-model-file H1L1-ALL_MASS_MODEL-$(START)-$(DURATION).h5 \
+		--svd-file L1-0000_SVD-$(START)-$(DURATION).xml.gz \
 		--verbose
 	@echo ""
 	
-H1L1-ALL_MASS_MODEL-1000000000-2048.h5: gstlal_bank.xml.gz measured_psd.xml.gz
-	$(TIME) gstlal_inspiral_mass_model \
-		--template-bank gstlal_bank.xml.gz\
+H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-$(START)-$(DURATION).xml.gz L1-0000_SVD-$(START)-$(DURATION).xml.gz H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz
+	# gstlal_inspiral_0001
+	$(TIME) gstlal_inspiral \
 		--reference-psd measured_psd.xml.gz \
-		--output H1L1-ALL_MASS_MODEL-1187000000-2048.h5 \
-		--model ligo
+		--frame-segments-file segments.xml.gz \
+		--frame-cache frames.cache \
+		--veto-segments-file vetoes.xml.gz \
+		--time-slide-file tisi.xml \
+		--svd-bank H1:H1-0000_SVD-$(START)-$(DURATION).xml.gz,L1:L1-0000_SVD-$(START)-$(DURATION).xml.gz \
+		--output H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz \
+		--ranking-stat-output H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--data-source frames \
+		--frame-segments-name datasegments \
+		--channel-name H1=$(H1_CHANNEL) \
+		--channel-name L1=$(L1_CHANNEL) \
+		--track-psd  \
+		--psd-fft-length 32 \
+		--fir-stride 1 \
+		--singles-threshold inf \
+		--tmp-space $(TMPDIR) \
+		--control-peak-time 0 \
+		--min-instruments $(MIN_IFOS) \
+		--ht-gate-threshold 100. \
+		--coincidence-threshold 0.005 \
+		--verbose
 	@echo ""
 
-H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-1000000000-2048.xml.gz H1L1-0000_DIST_STATS-1000000000-2048.xml.gz
+H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0001
 	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output $@ \
@@ -524,22 +528,22 @@ H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz: H1L1-0000_CREATE_PRIOR_DIST_ST
 		--verbose
 	@echo ""
 
-H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz: H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz
+H1L1-0000_CALC_RANK_PDFS-$(START)-$(DURATION).xml.gz: H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_calc_rank_pdfs_0001
 	# n samples = 2**18
 	$(TIME) gstlal_inspiral_calc_rank_pdfs \
-		--output H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
+		--output H1L1-0000_CALC_RANK_PDFS-$(START)-$(DURATION).xml.gz \
 		--ranking-stat-samples 262144 \
-		H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz \
+		H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz \
 		--verbose
 	@echo ""
 
-gstlal_inspiral_calc_likelihood_0001: H1L1-0000_LLOID-1000000000-2048.xml.gz H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz
+gstlal_inspiral_calc_likelihood_0001: H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_calc_likelihood_0001
 	$(TIME) gstlal_inspiral_calc_likelihood \
-		--likelihood-url H1L1-0000_MARG_DIST_STATS-1000000000-2048.xml.gz \
+		--likelihood-url H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz \
 		--tmp-space $(TMPDIR) \
-		H1L1-0000_LLOID-1000000000-2048.xml.gz \
+		H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz \
 		--verbose
 	@touch gstlal_inspiral_calc_likelihood_0001
 	@echo ""
@@ -549,28 +553,28 @@ lalapps_run_sqlite_0001: gstlal_inspiral_calc_likelihood_0001
 	$(TIME) lalapps_run_sqlite \
 		--sql-file $(LAL_PATH)/share/gstlal/simplify_and_cluster.sql \
 		--tmp-space $(TMPDIR) \
-		H1L1-0000_LLOID-1000000000-2048.xml.gz
+		H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz
 	@touch lalapps_run_sqlite_0001
 	@echo ""
 
-H1L1-ALL_LLOID-1000000000-2048.sqlite: lalapps_run_sqlite_0001
+H1L1-ALL_LLOID-$(START)-$(DURATION).sqlite: lalapps_run_sqlite_0001
 	# ligolw_sqlite_from_xml_0004
 	$(TIME) ligolw_sqlite \
-		--database H1L1-ALL_LLOID-1000000000-2048.sqlite \
+		--database H1L1-ALL_LLOID-$(START)-$(DURATION).sqlite \
 		--replace \
 		--tmp-space $(TMPDIR) \
 		vetoes.xml.gz \
 		segments.xml.gz \
-		H1L1-0000_LLOID-1000000000-2048.xml.gz \
+		H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz \
 		--verbose
 	@echo ""
 
-gstlal_inspiral_marginalize_likelihood_0002: H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz
+gstlal_inspiral_marginalize_likelihood_0002: H1L1-0000_CALC_RANK_PDFS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0002
 	$(TIME) gstlal_inspiral_marginalize_likelihood \
-		--output H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
+		--output H1L1-0000_CALC_RANK_PDFS-$(START)-$(DURATION).xml.gz \
 		--marginalize ranking-stat-pdf \
-		H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
+		H1L1-0000_CALC_RANK_PDFS-$(START)-$(DURATION).xml.gz \
 		--verbose
 	@touch gstlal_inspiral_marginalize_likelihood_0002
 	@echo ""
@@ -580,14 +584,14 @@ marginalized_likelihood.xml.gz: gstlal_inspiral_marginalize_likelihood_0002
 	$(TIME) gstlal_inspiral_marginalize_likelihood \
 		--output marginalized_likelihood.xml.gz \
 		--marginalize ranking-stat-pdf \
-		H1L1-0000_CALC_RANK_PDFS-1000000000-2048.xml.gz \
+		H1L1-0000_CALC_RANK_PDFS-$(START)-$(DURATION).xml.gz \
 		--verbose
 	@echo ""
 
-gstlal_compute_far_from_snr_chisq_histograms_0001: marginalized_likelihood.xml.gz H1L1-ALL_LLOID-1000000000-2048.sqlite
+gstlal_compute_far_from_snr_chisq_histograms_0001: marginalized_likelihood.xml.gz H1L1-ALL_LLOID-$(START)-$(DURATION).sqlite
 	# gstlal_compute_far_from_snr_chisq_histograms_0001
 	$(TIME) gstlal_compute_far_from_snr_chisq_histograms \
-		--non-injection-db H1L1-ALL_LLOID-1000000000-2048.sqlite \
+		--non-injection-db H1L1-ALL_LLOID-$(START)-$(DURATION).sqlite \
 		--background-bins-file marginalized_likelihood.xml.gz \
 		--tmp-space $(TMPDIR) \
 		--verbose
@@ -609,7 +613,7 @@ gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0
 		--likelihood-file post_marginalized_likelihood.xml.gz \
 		--shrink-data-segments 32.0 \
 		--tmp-space $(TMPDIR) \
-		H1L1-ALL_LLOID-1000000000-2048.sqlite \
+		H1L1-ALL_LLOID-$(START)-$(DURATION).sqlite \
 		--verbose
 	@touch gstlal_inspiral_plotsummary_0001
 	@echo ""
@@ -617,7 +621,7 @@ gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0
 gstlal_inspiral_plot_background_0001: gstlal_inspiral_plotsummary_0001
 	# gstlal_inspiral_plot_background_0001
 	$(TIME) gstlal_inspiral_plot_background \
-		--database H1L1-ALL_LLOID-1000000000-2048.sqlite \
+		--database H1L1-ALL_LLOID-$(START)-$(DURATION).sqlite \
 		--user-tag ALL_LLOID_COMBINED \
 		--output-dir plots \
 		post_marginalized_likelihood.xml.gz
@@ -634,7 +638,7 @@ gstlal_inspiral_summary_page_0001: gstlal_inspiral_plot_background_0001 $(WEBDIR
 		--output-user-tag ALL_LLOID_COMBINED \
 		--glob-path plots \
 		--webserver-dir $(WEBDIR) \
-		--title gstlal-1000000000-1000002048-closed-box
+		--title gstlal-$(START)-$(STOP)-closed-box
 	@touch gstlal_inspiral_summary_page_0001
 	@echo ""
 
@@ -644,7 +648,7 @@ gstlal_inspiral_summary_page_0002: gstlal_inspiral_summary_page_0001
 		--output-user-tag ALL_LLOID_COMBINED \
 		--glob-path plots \
 		--webserver-dir $(WEBDIR)/OPEN-BOX \
-		--title gstlal-1000000000-1000002048-open-box \
+		--title gstlal-$(START)-$(STOP)-open-box \
 		--open-box
 	@echo "Make box unreadable with: chmod a-rwx $(WEBDIR)/OPEN-BOX*"
 	@echo "Open box with: chmod a+rwx $(WEBDIR)/OPEN-BOX*"
