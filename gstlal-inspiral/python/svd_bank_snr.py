@@ -140,7 +140,7 @@ class SNR_Pipeline(object):
 			return Gst.FlowReturn.OK
 
 class LLOID_SNR(SNR_Pipeline):
-	def __init__(self, gw_data_source_info, bank, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = None, veto_segments = None, track_psd = False, width = 32, verbose = False):
+	def __init__(self, gw_data_source_info, bank, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, track_psd = False, width = 32, verbose = False):
 		SNR_Pipeline.__init__(self, name = "gstlal_inspiral_lloid_snr", verbose = verbose)
 		self.snr_info["instrument"] = instrument
 
@@ -196,7 +196,7 @@ class LLOID_SNR(SNR_Pipeline):
 		return self.get_snr_series(row_number, drop_first, drop_last)
 
 class FIR_SNR(SNR_Pipeline):
-	def __init__(self, gw_data_source_info, template, instrument, rate, latency, psd = None, psd_fft_length = 32, width = 32, track_psd = False, verbose = False):
+	def __init__(self, gw_data_source_info, template, instrument, rate, latency, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, width = 32, track_psd = False, verbose = False):
 		SNR_Pipeline.__init__(self, name = "gstlal_inspiral_fir_snr", verbose = verbose)
 		self.snr_info["instrument"] = instrument
 
@@ -217,6 +217,8 @@ class FIR_SNR(SNR_Pipeline):
 					instrument = instrument,
 					psd = psd[instrument],
 					psd_fft_length = psd_fft_length,
+					ht_gate_threshold = ht_gate_threshold,
+					veto_segments = veto_segments,
 					track_psd = track_psd,
 					width = width,
 					statevector = statevector,

@@ -11,9 +11,6 @@ Typical Usages:
 	--gps-start-time
 	--gps-end-time
 	--injection
-	--ht-gate-threshold
-	--veto-segments-file
-	--veto-segments-name
 
 	2. SVD bank options:
 	--svd-bank (require)
@@ -138,11 +135,6 @@ def parse_command_line():
 	group.add_option("--instrument", metavar = "name", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
 	parser.add_option_group(group)
 
-	group = OptionGroup(parser, "Place Holder Options", "There are no needs to input anything")
-	group.add_option("--reconstruction_segment_list", metavar = "None", help = "There is no need to input anything into it, it will be automatically filled if --injection is provided.")
-	group.add_option("--veto-segments", metavar = "None", help = "There is no need to input anything into it, it will be automatically filled if --veto-segments-file and --veto-segments-name are provided.")
-	parser.add_option_group(group)
-
 	parser.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
 
 	options, args = parser.parse_args()
@@ -189,22 +181,6 @@ def parse_command_line():
 		# Setting up output
 		if options.instrument not in set(gw_data_source_info.channel_dict):
 			raise ValueError("No such instrument: %s in detectos: (%s)"% (options.instrument, ", ".join(set(gw_data_source_info.channel_dict))))
-
-		# Setting up injections if provided
-		# FIXME: test me
-		if options.injections:
-			offset_padding = max([int(abs(float(offset)))+2 for offset in bank.sngl_inspiral_table.get_end()])
-			options.reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
-		else:
-			options.reconstruction_segment_list = None
-
-		# Setting up vetos segments if provided
-		if options.veto_segments_file:
-			# FIXME:  this is broken
-			segments_file = ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = ligolw.LIGOLWContentHandler)
-			options.veto_segments = ligolw_segments.segmenttable_get_by_name(segments_file, options.veto_segments_name).coalesce()
-		else:
-			options.veto_segments = None
 
 		return options, gw_data_source_info, bank, psd
 
@@ -261,8 +237,6 @@ if options.mode == 0:
 		options.instrument,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
-		ht_gate_threshold = options.ht_gate_threshold,
-		veto_segments = options.veto_segments,
 		track_psd = options.track_psd,
 		width = options.output_width,
 		verbose = options.verbose
