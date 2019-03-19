@@ -36,9 +36,52 @@
 #include <cohfar/ssvkernel.h>
 #include <cohfar/knn_kde.h>
 #include <pipe_macro.h>
+#include <postcohtable.h>
 
 #define RANK_MIN_LIMIT 1e-100
 #define EPSILON 1e-6
+
+int scan_trigger_ifos(int icombo, PostcohInspiralTable * trigger) {
+	int cur_ifo = 0, one_ifo_size = sizeof(char) * IFO_LEN;
+	char final_ifos[MAX_ALLIFO_LEN];
+	gboolean pass_test = TRUE;
+	if ((icombo == 6 || icombo == 3 || icombo == 4)) { // H1L1, H1V1 or H1L1V1
+		if (trigger->snglsnr_H > EPSILON) {
+			strncpy(final_ifos + IFO_LEN*cur_ifo, "H1", one_ifo_size);
+			cur_ifo++;
+		}
+		else
+			pass_test = FALSE;
+	}
+
+	if ((icombo == 6 || icombo == 3 || icombo == 5)) { // H1L1, L1V1 or H1L1V1
+		if (trigger->snglsnr_L > EPSILON) {
+			strncpy(final_ifos + IFO_LEN*cur_ifo, "L1", one_ifo_size);
+			cur_ifo++;
+		}
+		else
+			pass_test = FALSE;
+
+	}
+
+	if ((icombo == 6 || icombo == 4 || icombo == 5)) { // H1V1, L1V1 or H1L1V1
+		if (trigger->snglsnr_V > EPSILON) {
+			strncpy(final_ifos + IFO_LEN*cur_ifo, "V1", one_ifo_size);
+			cur_ifo++;
+		}
+		else
+			pass_test = FALSE;
+
+	}
+	if (pass_test != TRUE) {
+		strncpy(trigger->ifos, final_ifos, cur_ifo * sizeof(char) * IFO_LEN);
+		trigger->ifos[IFO_LEN*cur_ifo] = '\0';
+		return get_icombo(trigger->ifos);
+	}else 
+		return icombo;
+}
+
+
 int get_icombo(char *ifos) {
 	int icombo = 0; 
 	unsigned len_in = strlen(ifos);
