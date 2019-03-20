@@ -103,7 +103,8 @@ queue 1" >> clean_skymap_${user}.sub
 ##################################################################
 
 echo -e "#!/bin/bash                                                                         
-cat <&0 | tee >(${mylocation}/bin/gstlal_inspiral_postcohspiir_lvalert_plotter --gracedb-service-url=${GraceDB_URL})">lvalert.sh
+cat <&0 | tee >(${mylocation}/bin/gstlal_inspiral_postcohspiir_lvalert_plotter --gracedb-service-url=${GraceDB_URL}) --cuda-postcoh-detrsp-fname ${mymap_prob}">lvalert.sh
+chmod 755 lvalert.sh
 
 echo -e "universe = local
 executable =/bin/lvalert_listen" > lvalert_listen_${user}.sub
