@@ -735,8 +735,32 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->remainder = 0;
 		element->num_since_bad = 0;
 
-		/* If we haven't made a half-Hann window for transitions between zeros and ones yet, do it now */
-		if(!element->ramp) {
+		/* If we haven't made a window for transitions between zeros and ones yet, do it now */
+		if(!element->ramp && element->planck_taper) {
+			/* Make a Planck-taper window */
+			if(element->unit_size_out == 4) {
+				element->ramp = g_malloc(element->transition_samples * sizeof(float));
+				float *ramp = (float *) element->ramp;
+				gint64 i;
+				float i_frac, Z;
+				for(i = 0; i < element->transition_samples; i++) {
+					i_frac = (i + 1.0) / (element->transition_samples + 1.0);
+					Z = 1.0 / i_frac + 1.0 / (i_frac - 1);
+					ramp[i] = (float) (1.0 / (1.0 + expf(Z)));
+				}
+			} else {
+				element->ramp = g_malloc(element->transition_samples * sizeof(double));
+				double *ramp = (double *) element->ramp;
+				gint64 i;
+				double i_frac, Z;
+				for(i = 0; i < element->transition_samples; i++) {
+					i_frac = (i + 1.0) / (element->transition_samples + 1.0);
+					Z = 1.0 / i_frac + 1.0 / (i_frac - 1);
+					ramp[i] = 1.0 / (1.0 + exp(Z));
+				}
+			}
+		} else if(!element->ramp) {
+			/* Make a half-Hann window */
 			if(element->unit_size_out == 4) {
 				element->ramp = g_malloc(element->transition_samples * sizeof(float));
 				float *ramp = (float *) element->ramp;
@@ -842,7 +866,8 @@ enum property {
 	ARG_REQUIRED_OFF,
 	ARG_TRANSITION_SAMPLES,
 	ARG_INVERT_WINDOW,
-	ARG_INVERT_CONTROL
+	ARG_INVERT_CONTROL,
+	ARG_PLANCK_TAPER
 };
 
 
@@ -871,6 +896,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	case ARG_INVERT_CONTROL:
 		element->invert_control = g_value_get_boolean(value);
+		break;
+
+	case ARG_PLANCK_TAPER:
+		element->planck_taper = g_value_get_boolean(value);
 		break;
 
 	default:
@@ -907,6 +936,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	case ARG_INVERT_CONTROL:
 		g_value_set_boolean(value, element->invert_control);
+		break;
+
+	case ARG_PLANCK_TAPER:
+		g_value_set_boolean(value, element->planck_taper);
 		break;
 
 	default:
@@ -1009,6 +1042,17 @@ static void gstlal_dqtukey_class_init(GSTLALDQTukeyClass *klass) {
 			"Invert Control",
 			"If set to True, the conditions required by the bitmasks must not all be met in\n\t\t\t"
 			"order for the output stream to be 1.0",
+			FALSE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PLANCK_TAPER,
+		g_param_spec_boolean(
+			"planck-taper",
+			"Planck Taper",
+			"Set to True to use a Planck-taper window instead of a half-Hann window.",
 			FALSE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

@@ -103,6 +103,7 @@ struct _GSTLALDQTukey {
 	gint64 transition_samples;
 	gboolean invert_window;
 	gboolean invert_control;
+	gboolean planck_taper;
 };
 
 

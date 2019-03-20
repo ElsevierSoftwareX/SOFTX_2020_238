@@ -46,10 +46,10 @@ def lal_dqtukey_01(pipeline, name):
 	# This test passes a random series of integers through lal_dqtukey
 	#
 
-	rate_in = 16		# Hz
+	rate_in = 4		# Hz
 	rate_out = 16384	# Hz
 	buffer_length = 1.0	# seconds
-	test_duration = 300.0	# seconds
+	test_duration = 2.0	# seconds
 	transition_samples = 997
 
 	#
