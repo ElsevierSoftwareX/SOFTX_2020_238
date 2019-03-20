@@ -300,14 +300,14 @@ far_thres=0.0001
 #  --finalsink-singlefar-veto-thresh ${FAR_single_thres} 
 #  apply single-detector-veto threshold
 ######################################################
-FAR_single_thres=0.5
+FAR_single_thres=0.001
 
 ######################################################
 #  --finalsink-superevent-thresh ${FAR_event_thres}
 #  the event FAR threshold (after applying nfac) that we will apply single-detector-veto
 ######################################################
 
-FAR_event_thres=0.0001
+FAR_event_thres=0.00001
 
 ######################################################
 #  --finalsink-fapupdater-interval ${Tfapupdate}
