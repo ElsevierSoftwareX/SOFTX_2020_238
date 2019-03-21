@@ -774,12 +774,12 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_double_complex_series_around_peak(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (double complex *) this_snr_mat, this_maxdata->pad);
-			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, 0.0, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
+			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 
 		} else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_float_complex_series_around_peak(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (float complex *) this_snr_mat, this_maxdata->pad);
-			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, 0.0, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
+			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 		} else
 			g_assert_not_reached();
 	} 
