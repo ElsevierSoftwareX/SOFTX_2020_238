@@ -513,6 +513,29 @@ def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filt
 	# Now apply the filter
 	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.5), fir_matrix = [bandstop], time_domain = td)
 
+def linear_phase_filter(pipeline, head, shift_samples, num_samples = 257):
+	# Apply a linear-phase filter to shift timestamps.  shift_samples is the number
+	# of samples of timestamp shift.  It need not be an integer.  A positive value
+	# advances the output data relative to the timestamps, and a negative value
+	# delays the output.
+
+	# Prefer an odd filter length
+	num_samples = int(num_samples) + (1 - int(num_samples) % 2)
+
+	filter_latency_samples = int(num_samples / 2) + numpy.floor(shift_samples)
+	fractional_shift_samples = shift_samples % 1
+
+	# Make a filter using a sinc table, slightly shifted relative to the samples
+	sinc_arg = numpy.arange(-int(num_samples / 2), 1 + int(num_samples / 2)) + fractional_shift_samples
+	sinc_filter = numpy.sinc(sinc_arg)
+	# Apply a Blackman window
+	sinc_filter *= numpy.blackman(num_samples)
+	# Normalize the filter
+	sinc_filter /= numpy.sum(sinc_filter)
+
+	# Filter the data
+	return mkcomplexfirbank(pipeline, head, latency = filter_latency_samples, fir_matrix = [sinc_filter[::-1]], time_domain = True)
+
 def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
 	# Find the root mean square amplitude of a signal between two frequencies
 	# Downsample to save computational cost
