@@ -181,6 +181,7 @@ zookeeper_job = ZookeeperJob(
 	tag_base = "zookeeper-server-start",
 	condor_commands = condor_commands,
 	tag = options.analysis_tag,
+	universe = options.condor_universe,
 	port = options.zookeeper_port
 )
 kafka_job = KafkaJob(
@@ -190,6 +191,7 @@ kafka_job = KafkaJob(
 	tag = options.analysis_tag,
 	hostname = options.kafka_hostname,
 	port = options.kafka_port,
+	universe = options.condor_universe,
 	zookeeperaddr = "localhost:%d" % options.zookeeper_port
 )
 
