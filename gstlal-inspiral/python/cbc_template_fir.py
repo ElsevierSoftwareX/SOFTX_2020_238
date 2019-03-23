@@ -51,6 +51,7 @@ STATUS: reviewed with actions
 #
 
 
+import bisect
 import cmath
 import math
 import numpy
@@ -253,18 +254,26 @@ def compute_autocorrelation_mask( autocorrelation ):
 
 
 def movingmedian(interval, window_size):
+	interval = list(interval)
 	tmp = numpy.copy(interval)
-	try:
-		import pandas
-		try:
-			# pandas version >= 0.18.1 is required
-			tmp[window_size : len(interval) - window_size] = numpy.array(pandas.Series(tmp).rolling(2 * window_size).median()[2 * window_size - 1 : -1])
-		except AttributeError:
-			# pandas version < 0.18.1
-			tmp[window_size : len(interval) - window_size] = pandas.rolling_median(tmp, 2 * window_size)[2 * window_size - 1 : -1]
-	except ImportError:
-		for i in range(window_size, len(interval) - window_size):
-			tmp[i] = numpy.median(interval[i - window_size : i + window_size])
+	A = None
+	As = None
+	prev = None
+	for i in range(window_size, len(interval)-window_size):
+		if A is None:
+			A = interval[i-window_size:i+window_size]
+			ix = numpy.argsort(A)
+			As = list(numpy.array(A)[ix])
+		else:
+			newdata = interval[i+window_size-1]
+			A = A + [newdata]
+			bisect.insort(As, newdata)
+		if len(As) % 2:
+			tmp[i] = As[len(As)/2]
+		else:
+			tmp[i] = (As[len(As)/2-1] + As[len(As)/2]) / 2.
+		prev = A.pop(0)
+		del As[bisect.bisect_left(As, prev)]
 	return tmp
 
 
