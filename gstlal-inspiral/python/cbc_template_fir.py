@@ -199,9 +199,27 @@ def compute_autocorrelation_mask( autocorrelation ):
 
 
 def movingmedian(interval, window_size):
+	interval = list(interval)
+	import bisect
 	tmp = numpy.copy(interval)
+	A = None
+	As = None
+	prev = None
 	for i in range(window_size, len(interval)-window_size):
-		tmp[i] = numpy.median(interval[i-window_size:i+window_size])
+		if A is None:
+			A = interval[i-window_size:i+window_size]
+			ix = numpy.argsort(A)
+			As = list(numpy.array(A)[ix])
+		else:
+			newdata = interval[i+window_size-1]
+			A = A + [newdata]
+			bisect.insort(As, newdata)
+		if len(As) % 2:
+			tmp[i] = As[len(As)/2]
+		else:
+			tmp[i] = (As[len(As)/2-1] + As[len(As)/2]) / 2.
+		prev = A.pop(0)
+		del As[bisect.bisect_left(As, prev)]
 	return tmp
 
 
