@@ -21,14 +21,15 @@ from lal import series
 from scipy import integrate
 import numpy
 from gstlal import reference_psd
-from ligo.lw import utils as ligolw_utils
+#from ligo.lw import utils as ligolw_utils
+from glue.ligolw import utils as ligolw_utils
 import itertools
 import scipy
 from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 2.5e-7#2.0e-7
+DELTA = 2e-7#2.0e-7
 EIGEN_DELTA_DET = DELTA
 
 # Round a number up to the nearest power of 2
@@ -156,7 +157,6 @@ class Metric(object):
 		self.flow = flow
 		self.fhigh = fhigh
 		self.working_length = int(round(self.duration * 2 * self.fhigh)) + 1
-		print self.working_length
 		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = series.PSDContentHandler)).values()[0], self.df)
 		self.metric_tensor = None
 		self.metric_is_valid = False
@@ -301,12 +301,13 @@ class Metric(object):
 		minus_match_minus_1 = self.match_minus_1(w1, wm[j,j], t_factor = self.neg_t_factor)
 		return -0.5 * (plus_match_minus_1 + minus_match_minus_1 - ftt - fjj) / 2 / delta_t / deltas[j]
 
-	def __call__(self, center, deltas = None):
-
+	def __call__(self, center):#, deltas = None):
+		center = numpy.array(center)
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
 		wp = {}
 		wm = {}
+		deltas = abs(center)**.5 * DELTA + DELTA
 		for i, x in enumerate(deltas):
 			for j, y in enumerate(deltas):
 				dx = numpy.zeros(len(deltas))
@@ -335,41 +336,21 @@ class Metric(object):
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
-		#print "before ", g
-		#g = numpy.array(nearPD(g, nit=3))
-		try:
-			U, S, V = numpy.linalg.svd(g)
-		except numpy.linalg.linalg.LinAlgError:
-			newc = center.copy()
-			newc[0:2] *=0.99
-			return self.__call__(newc, deltas)
+		U, S, V = numpy.linalg.svd(g)
+		#try:
+		#	U, S, V = numpy.linalg.svd(g)
+		#except numpy.linalg.linalg.LinAlgError:
+		#	print "svd error"
+		#	newc = center.copy()
+		#	newc[0:2] *=0.99
+		#	return self.__call__(newc)#, deltas)
 		condition = S < max(S) * EIGEN_DELTA_DET
-		S[condition] = 0.0
+		S[condition] = EIGEN_DELTA_DET
 		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
 		det = numpy.product(S[S>0])
 		eff_dimension = len(S[S>0])
 		w = S
-		#try:
-		#	w, v = numpy.linalg.eigh(g)
-		#except numpy.linalg.linalg.LinAlgError:
-		#	newc = center.copy()
-		#	newc[0:2] -= deltas[0:2]
-		#	return self.__call__(newc, deltas)
-		#mxw = numpy.max(w)
-		#assert numpy.all(w > 0)
-		#if numpy.any(w < 0):
-		#	print w
-		#	return self.__call__(center - deltas, deltas)
 		self.metric_is_valid = True
-		#w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
-		#det = numpy.product(w)
-
-		#eff_dimension = len(w[w >= EIGEN_DELTA_DET * mxw])
-		#w[w<EIGEN_DELTA_METRIC * mxw] = EIGEN_DELTA_METRIC * mxw
-		#g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
-
-		#return g, eff_dimension, numpy.product(S[S>0])
-		#print "after ", g
 
 		return g, eff_dimension, det, self.metric_is_valid, w
 
@@ -386,6 +367,8 @@ class Metric(object):
 		delta = x-y
 		return (dot(delta, delta, metric_tensor))**.5
 
+	def volume_element(self, metric_tensor):
+		return abs(numpy.linalg.det(metric_tensor))**.5
 
 	def metric_match(self, metric_tensor, c1, c2):
 		d2 = self.distance(metric_tensor, c1, c2)**2

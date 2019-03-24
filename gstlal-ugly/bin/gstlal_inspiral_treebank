@@ -19,12 +19,18 @@
 
 import itertools
 import numpy
-from ligo.lw import ligolw
-from ligo.lw import lsctables
-from ligo.lw import table
-from ligo.lw import utils
-from ligo.lw import ilwd
-from ligo.lw.utils import process as ligolw_process
+#from ligo.lw import ligolw
+#from ligo.lw import lsctables
+#from ligo.lw import table
+#from ligo.lw import utils
+#from ligo.lw import ilwd
+#from ligo.lw.utils import process as ligolw_process
+from glue.ligolw import ligolw
+from glue.ligolw import lsctables
+from glue.ligolw import table
+from glue.ligolw import utils
+from glue.ligolw import ilwd
+from glue.ligolw.utils import process as ligolw_process
 from gstlal import metric as metric_module
 from gstlal import tree
 # FIXME dont do this
@@ -165,7 +171,7 @@ def coord_func(coords, positions = positions):
 		out[pi] = coords[i]
 	return out
 
-if True:#args.mcm2:
+if False:#args.mcm2:
 	coord_func = metric_module.M_q_func
 else:
 	coord_func = coord_func
@@ -187,17 +193,17 @@ def trans_M_q(coord_limits):
 	m2limis = [coord_limits[1][0] * 0.9, coord_limits[1][1] * 1.256789]
 	return [Mlimits] +  [m2limis] + coord_limits[2:]
 
-if True:#args.mcm2:
+if False:#args.mcm2:
 	coord_limits_2 = trans_M_q(coord_limits)
 	if args.min_mc:
 		coord_limits_2[0][0] = max(coord_limits_2[0][0], args.min_mc)
 	if args.max_mc:
 		coord_limits_2[0][1] = min(coord_limits_2[0][1], args.max_mc)
 	print coord_limits_2
-	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0], coord_limits[1], coord_limits_2[0]), metric = g_ij, singularity = tree.mc_m2_singularity))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0], coord_limits[1], coord_limits_2[0]), metric = g_ij))
 else:
 	coord_limits_2 = coord_limits
-	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint(x, args.max_q, args.max_mtotal), metric = g_ij, singularity = tree.m1_m2_singularity))
+	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint(x, args.max_q, args.max_mtotal), metric = g_ij))
 
 
 if args.verbose:
