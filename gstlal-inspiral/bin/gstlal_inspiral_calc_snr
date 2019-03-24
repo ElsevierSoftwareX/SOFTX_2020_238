@@ -26,7 +26,10 @@ Typical Usages:
 	--output-width (default = 32bits)
 	--instrument (require)
 	--outdir (require)
+	--start (default = None)
+	--end (default = None)
 	--verbose (default = False)
+	--complex (defaule = False)
 
 --mode 1 (calculate SNR using Finite Impulse Response):
 	1. GW options: also see datasource.GWDataSourceInfo()
@@ -54,7 +57,10 @@ Typical Usages:
 	--output-width (default = 32bits)
 	--instrument (require)
 	--outdir (require)
+	--start (default = None)
+	--end (default = None)
 	--verbose (default = False)
+	--complex (default = False)
 """
 import numpy
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
@@ -129,6 +135,7 @@ def parse_command_line():
 	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
 	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (requires).")
 	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
+	group.add_option("--complex", action = "store_true", help = "Choose whether to output the complex snr or not.")
 	group.add_option("--drop-first", metavar = "seconds", type = "int", default = 0, help = "Dropping the initital '--drop-first' seconds of SNR data (default = 0).")
 	group.add_option("--drop-last", metavar = "seconds", type = "int", default = 0, help = "Dropping the last '--drop-last' seconds of SNR data (default = 0).")
 	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
@@ -141,6 +148,8 @@ def parse_command_line():
 
 	# Setting up GW data
 	gw_data_source_info = datasource.GWDataSourceInfo(options)
+	if options.instrument not in gw_data_source_info.channel_dict.keys():
+		raise ValueError("No such instrument: %s in GWDataSourceInfo: (%s)"% (options.instrument, ", ".join(gw_data_source_info.channel_dict.keys())))
 
 	# Setting up PSD
 	if options.reference_psd:
@@ -174,13 +183,9 @@ def parse_command_line():
 			try:
 				bank = banks[options.sub_bank_id]
 			except IndexError:
-				raise IndexError("Invaild --bank-id %d. Possible id (0-%d)\n" % (options.sub_bank_id, len(banks) - 1))
+				raise IndexError("Invaild --sub-bank-id %d. Possible id (0-%d)\n" % (options.sub_bank_id, len(banks) - 1))
 		if options.row_number >=  bank.bank_fragments[0].mix_matrix.shape[1] / 2:
 			raise ValueError("No such template: Invaild --row-number %d. Possible range (0-%d)\n" % (options.row_number, bank.bank_fragments[0].mix_matrix.shape[1] / 2 - 1))
-
-		# Setting up output
-		if options.instrument not in set(gw_data_source_info.channel_dict):
-			raise ValueError("No such instrument: %s in detectos: (%s)"% (options.instrument, ", ".join(set(gw_data_source_info.channel_dict))))
 
 		return options, gw_data_source_info, bank, psd
 
@@ -242,14 +247,15 @@ if options.mode == 0:
 		verbose = options.verbose
 	)
 
-	if options.row_number is None:
-		# FIXME: put it in one xmldoc
-		for row in range(num_of_row):
-			snrdict = {options.instrument : lloid_snr(row_number = row, drop_first = options.drop_first, drop_last = options.drop_last)}
-			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "snr_%d.xml.gz" % row), verbose = options.verbose)
-	else:
-		snrdict = {options.instrument : lloid_snr(row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)}
-		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "snr.xml.gz"), verbose = options.verbose)
+	for index, snr in enumerate(lloid_snr(COMPLEX = options.complex, row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)):
+		snrdict = {options.instrument: [snr]}
+		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR_%d-%d-%d.xml.gz" % (options.instrument, index, int(snr.epoch), int(snr.data.length * snr.deltaT))), verbose = options.verbose)
+	#
+	# uncomment to save all snrs in one single XML
+	#
+	#snrdict = {options.instrument : lloid_snr(COMPLEX = options.complex, row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)}
+	#tempsnr = 
+	#svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR-%d-%d.xml.gz" % (options.instrument, int(snrdict.values()[0].epoch), int(snrdict.values()[0].data.length * snrdict.values()[0].deltaT))), verbose = options.verbose)
 
 elif options.mode == 1:
 	#FIXME: proper handle for latency
@@ -266,7 +272,5 @@ elif options.mode == 1:
 		verbose = options.verbose
 		)
 
-	#FIXME: allow multiple instruments
-	snrdict = {options.instrument : fir_snr(drop_first = options.drop_first, drop_last = options.drop_last)}
-
-	svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "snr.xml.gz"), verbose = options.verbose)
+	snrdict = {options.instrument : fir_snr(COMPLEX = options.complex, drop_first = options.drop_first, drop_last = options.drop_last)}
+	svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "%s-SNR-%d-%d.xml.gz" % (options.instrument, int(snrdict.values()[0].epoch), int(snrdict.values()[0].data.length * snrdict.values()[0].deltaT))), verbose = options.verbose)

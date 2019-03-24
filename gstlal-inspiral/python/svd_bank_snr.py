@@ -72,18 +72,11 @@ class SNR_Pipeline(object):
 		if self.pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 			raise RuntimeError("pipeline could not be set to NULL.")
 
-	def get_snr_series(self, row_number = 0, drop_first = 0, drop_last = 0):
-		assert drop_first >= 0, "must drop positive number of data"
-		assert drop_last >= 0, "must drop positive number of data"
-		bps = drop_first * int(round(1 / self.snr_info["deltaT"]))
-		bpe = -drop_last * int(round(1 / self.snr_info["deltaT"])) if drop_last != 0 else None
-
-		data = numpy.abs(self.snr_info["data"])[:,row_number][bps:bpe]
-
+	def make_series(self, data):
 		if data.dtype == numpy.float32:
 			tseries = lal.CreateREAL4TimeSeries(
 					name = self.snr_info["instrument"],
-					epoch = self.snr_info["epoch"] + drop_first,
+					epoch = self.snr_info["epoch"],
 					deltaT = self.snr_info["deltaT"],
 					f0 = 0,
 					sampleUnits = lal.DimensionlessUnit,
@@ -93,17 +86,65 @@ class SNR_Pipeline(object):
 		elif data.dtype == numpy.float64:
 			tseries = lal.CreateREAL8TimeSeries(
 					name = self.snr_info["instrument"],
-					epoch = self.snr_info["epoch"] + drop_first,
+					epoch = self.snr_info["epoch"],
 					deltaT = self.snr_info["deltaT"],
 					f0 = 0,
 					sampleUnits = lal.DimensionlessUnit,
 					length = len(data)
 					)
 			tseries.data.data = data
+		elif data.dtype == numpy.complex64:
+			tseries = lal.CreateCOMPLEX8TimeSeries(
+					name = self.snr_info["instrument"],
+					epoch = self.snr_info["epoch"],
+					deltaT = self.snr_info["deltaT"],
+					f0 = 0,
+					sampleUnits = lal.DimensionlessUnit,
+					length = len(data)
+					)
+			tseries.data.data = data
+		elif data.dtype == numpy.complex128:
+			tseries = lal.CreateCOMPLEX16TimeSeries(
+					name = self.snr_info["instrument"],
+					epoch = self.snr_info["epoch"],
+					deltaT = self.snr_info["deltaT"],
+					f0 = 0,
+					sampleUnits = lal.DimensionlessUnit,
+					length = len(data)
+					)
+			tseries.data.data = data
+
 		else:
 			raise ValueError("unsupported type : %s " % data.dtype)
 
 		return tseries
+
+	def get_snr_series(self, COMPLEX = False, row_number = None, drop_first = 0, drop_last = 0):
+		assert drop_first >= 0, "must drop positive number of data"
+		assert drop_last >= 0, "must drop positive number of data"
+		bps = drop_first * int(round(1 / self.snr_info["deltaT"]))
+		bpe = -drop_last * int(round(1 / self.snr_info["deltaT"])) if drop_last != 0 else None
+
+		self.snr_info["epoch"] += drop_first
+		self.snr_info["data"] = self.snr_info["data"][bps:bpe].T
+
+		if row_number is None:
+			temp = []
+			if COMPLEX:
+				for data in self.snr_info["data"]:
+					temp.append(self.make_series(data))
+				return temp
+			else:
+				for data in self.snr_info["data"]:
+					temp.append(numpy.abs(self.make_series(data)))
+				return temp
+		else:
+			self.snr_info["data"] = self.snr_info["data"][row_number]
+			if COMPLEX:
+				return [self.make_series(self.snr_info["data"])]
+			else:
+				return [self.make_series(numpy.abs(self.snr_info["data"]))]
+
 
         def new_preroll_handler(self, elem):
                 with self.lock:
@@ -192,8 +233,8 @@ class LLOID_SNR(SNR_Pipeline):
 		self.run(gw_data_source_info.seg)
                 self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
 
-	def __call__(self, row_number = 0, drop_first = 0, drop_last = 0):
-		return self.get_snr_series(row_number, drop_first, drop_last)
+	def __call__(self, COMPLEX = False, row_number = 0, drop_first = 0, drop_last = 0):
+		return self.get_snr_series(COMPLEX, row_number, drop_first, drop_last)
 
 class FIR_SNR(SNR_Pipeline):
 	def __init__(self, gw_data_source_info, template, instrument, rate, latency, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, width = 32, track_psd = False, verbose = False):
@@ -241,8 +282,8 @@ class FIR_SNR(SNR_Pipeline):
 		self.snr_info["data"] = numpy.vectorize(complex)(self.snr_info["data"][:,0], self.snr_info["data"][:,1])
 		self.snr_info["data"].shape = len(self.snr_info["data"]), 1
 
-	def __call__(self, row_number = 0 , drop_first = 0, drop_last = 0):
-		return self.get_snr_series(row_number, drop_first, drop_last)
+	def __call__(self, COMPLEX = False, row_number = 0 , drop_first = 0, drop_last = 0):
+		return self.get_snr_series(COMPLEX, row_number, drop_first, drop_last)
 
 #=============================================================================================
 #
@@ -256,32 +297,49 @@ def make_xmldoc(snrdict, xmldoc = None, root_name = u"gstlal_inspiral_snr"):
 
 	root = xmldoc.appendChild(ligolw.LIGO_LW())
 	root.Name = root_name
-	for instrument, snr in snrdict.items():
-		if snr.data.data.dtype == numpy.float32:
-			tseries = root.appendChild(lal.series.build_REAL4TimeSeries(snr))
-		elif snr.data.data.dtype == numpy.float64:
-			tseries = root.appendChild(lal.series.build_REAL8TimeSeries(snr))
-		else:
-			raise ValueError("unsupported type : %s" % snr.data.data.dtype)
-		if instrument is not None:
-			tseries.appendChild(ligolw_param.Param.from_pyvalue(u"instrument", instrument))
-
+	for instrument, snrs in snrdict.items():
+		for snr in snrs:
+			if snr.data.data.dtype == numpy.float32:
+				tseries = root.appendChild(lal.series.build_REAL4TimeSeries(snr))
+			elif snr.data.data.dtype == numpy.float64:
+				tseries = root.appendChild(lal.series.build_REAL8TimeSeries(snr))
+			elif snr.data.data.dtype == numpy.complex64:
+				tseries = root.appendChild(lal.series.build_COMPLEX8TimeSeries(snr))
+			elif snr.data.data.dtype == numpy.complex128:
+				tseries = root.appendChild(lal.series.build_COMPLEX16TimeSeries(snr))
+			else:
+				raise ValueError("unsupported type : %s" % snr.data.data.dtype)
 	return xmldoc
 
 def read_xmldoc(xmldoc, root_name = u"gstlal_inspiral_snr"):
 	if root_name is not None:
 		xmldoc, = (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") if elem.Name == root_name)
 
-	result = []
+	result = {}
+	temp = []
 	for elem in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name")):
 		if elem.Name == u"REAL4TimeSeries":
-			result.append((ligolw_param.get_pyvalue(elem, u"instrument"), lal.series.parse_REAL4TimeSeries(elem)))
+			tseries = lal.series.parse_REAL4TimeSeries(elem)
+			temp.append([tseries.name, tseries])
 		elif elem.Name == u"REAL8TimeSeries":
-			result.append((ligolw_param.get_pyvalue(elem, u"instrument"), lal.series.parse_REAL8TimeSeries(elem)))
+			tseries = lal.series.parse_REAL8TimeSeries(elem)
+			temp.append([tseries.name, tseries])
+		elif elem.Name == u"COMPLEX8TimeSeries":
+			tseries = lal.series.parse_COMPLEX8TimeSeries(elem)
+			temp.append([tseries.name, tseries])
+		elif elem.Name == u"COMPLEX16imeSeries":
+			tseries = lal.series.parse_COMPLEX16TimeSeries(elem)
+			temp.append([tseries.name, tseries])
+
+	for i in temp:
+		if i[0] in result.keys():
+			result[i[0]].append(i[1])
+		else:
+			result[i[0]] = [i[1]]
 
 	assert result is not None, "xmldoc contains no LAL Series or LAL Series is unsupported"
 
-	return dict(result)
+	return result
 
 # wrapper for writing snr series to URL
 def write_url(xmldoc, filename, verbose = False):

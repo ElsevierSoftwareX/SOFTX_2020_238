@@ -2,32 +2,45 @@
 """
 Plotter for gstlal_inspiral_calc_snr
 """
+import matplotlib
+matplotlib.use("Agg")
+from matplotlib import pyplot
+import os
 import sys
 from optparse import OptionParser
 
 from gstlal import plotsnr
 
+from lal.utils import CacheEntry
+
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 
-	parser.add_option("-o", "--output", metavar = "filename", help = "The output filename for the SNR plot (require).")
-	parser.add_option("-i", "--input", metavar = "filename", help = "A LIGO light-weight XML file containing SNR time series data (require).")
+	parser.add_option("-o", "--outdir", metavar = "directory", help = "The output directory for the SNR plot (require).")
+	parser.add_option("-i", "--input", metavar = "cache", help = "The input cache containing SNR urls (require).")
+	parser.add_option("-f", "--format", metavar = "file_type", help = "The format of the output plot, can only be '.png' or '.svg' (default = .svg).")
 	parser.add_option("--center", metavar = "gpsSeconds", type = "float", help = "Center the plot to --center (optional).")
+	parser.add_option("--width", metavar = "inch", default = 8, type = "int", help = "The output width of the figure.")
 	parser.add_option("--span", metavar = "seconds", type = "float", help = "The time span around --center (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 
 	options, args = parser.parse_args()
 
-	missing_required_options = []
 	if options.input is None:
-		missing_required_options.append("--input")
-	if options.output is None:
-		missing_required_options.append("--output")
-	if missing_required_options:
-		raise ValueError("Missing required option(s) %s" % ", ".join(missing_required_options))
+		raise ValueError("Missing --input.")
+	if options.outdir is None:
+		raise ValueError("Missing --outdir.")
+	if options.format is not None:
+		if options.format != ".png" and options.format != ".svg":
+			raise ValueError("--format can only be '.png' or '.svg'.")
 
 	return options
 
 options = parse_command_line()
 
-plotsnr.plot_snr(options.input, output = options.output, center = options.center, span = options.span, verbose = options.verbose)
+with open(options.input) as f:
+	suffix = ".svg" if (options.format is None) else options.format
+	for snr_file in f:
+		figure = plotsnr.plot_snr(CacheEntry(snr_file).url, width = options.width, center = options.center, span = options.span, verbose = options.verbose)
+		figure.savefig(os.path.join(options.outdir, CacheEntry(snr_file).description+suffix))
+		pyplot.close(pyplot.gcf())
