@@ -119,14 +119,25 @@ class SNR_Pipeline(object):
 
 		return tseries
 
-	def get_snr_series(self, COMPLEX = False, row_number = None, drop_first = 0, drop_last = 0):
-		assert drop_first >= 0, "must drop positive number of data"
-		assert drop_last >= 0, "must drop positive number of data"
-		bps = drop_first * int(round(1 / self.snr_info["deltaT"]))
-		bpe = -drop_last * int(round(1 / self.snr_info["deltaT"])) if drop_last != 0 else None
+	def get_snr_series(self, COMPLEX = False, row_number = None, start = None, end = None):
+		gps_start = self.snr_info["epoch"].gpsSeconds + self.snr_info["epoch"].gpsNanoSeconds * 10.**-9
+		gps = gps_start + numpy.arange(len(self.snr_info["data"])) * self.snr_info["deltaT"]
 
-		self.snr_info["epoch"] += drop_first
-		self.snr_info["data"] = self.snr_info["data"][bps:bpe].T
+		if start >= end:
+			raise ValueError("Start time must be less than end time.")
+
+		if start - gps[0] >= 0 and start - gps[-1] <= 0:
+			s = abs(gps - start).argmin()
+		else:
+			raise ValueError("Invalid choice of start time %f." % start)
+
+		if end - gps[0] >= 0 and end - gps[-1] <= 0:
+			e = abs(gps - end).argmin()
+		else:
+			raise ValueError("Invalid choice of end time %f." % end)
+
+		self.snr_info["epoch"] = gps[s]
+		self.snr_info["data"] = self.snr_info["data"][s:e].T
 
 		if row_number is None:
 			temp = []
@@ -136,7 +147,7 @@ class SNR_Pipeline(object):
 				return temp
 			else:
 				for data in self.snr_info["data"]:
-					temp.append(numpy.abs(self.make_series(data)))
+					temp.append(self.make_series(numpy.abs(data)))
 				return temp
 		else:
 			self.snr_info["data"] = self.snr_info["data"][row_number]
@@ -233,8 +244,8 @@ class LLOID_SNR(SNR_Pipeline):
 		self.run(gw_data_source_info.seg)
                 self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
 
-	def __call__(self, COMPLEX = False, row_number = 0, drop_first = 0, drop_last = 0):
-		return self.get_snr_series(COMPLEX, row_number, drop_first, drop_last)
+	def __call__(self, COMPLEX = False, row_number = 0, start = None, end = None):
+		return self.get_snr_series(COMPLEX, row_number, start, end)
 
 class FIR_SNR(SNR_Pipeline):
 	def __init__(self, gw_data_source_info, template, instrument, rate, latency, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, width = 32, track_psd = False, verbose = False):
@@ -282,8 +293,8 @@ class FIR_SNR(SNR_Pipeline):
 		self.snr_info["data"] = numpy.vectorize(complex)(self.snr_info["data"][:,0], self.snr_info["data"][:,1])
 		self.snr_info["data"].shape = len(self.snr_info["data"]), 1
 
-	def __call__(self, COMPLEX = False, row_number = 0 , drop_first = 0, drop_last = 0):
-		return self.get_snr_series(COMPLEX, row_number, drop_first, drop_last)
+	def __call__(self, COMPLEX = False, row_number = 0 , start = None, end = None):
+		return self.get_snr_series(COMPLEX, row_number, start, end)
 
 #=============================================================================================
 #
