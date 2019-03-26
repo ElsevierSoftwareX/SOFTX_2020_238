@@ -578,7 +578,7 @@ class GracedBWrapper(object):
 		self.__upload_aux_data(message, filename, tag, fobj.getvalue(), gracedb_ids)
 		del fobj
 
-	def do_alerts(self, last_coincs, psddict, rankingstat_xmldoc_func):
+	def do_alerts(self, last_coincs, psddict, rankingstat_xmldoc_func, seglistdicts):
 		gracedb_ids = []
 
 		# no-op short circuit
@@ -653,7 +653,11 @@ class GracedBWrapper(object):
 			# for the highest peak that is coincident with all
 			# other triggers
 			event_ifos = [event.ifo for event in last_coincs.sngl_inspirals(coinc_event.coinc_event_id)]
-			triggerless_ifos = [ifo for ifo in self.instruments if ifo not in event_ifos]
+			# FIXME not the best way to do this and also not
+			# gauranteed to work if we change segment names. only
+			# consider ifos that are "on" at this time, i.e., in
+			# seglistdicts["whitehtsegments"][ifo]
+			triggerless_ifos = [ifo for ifo in self.instruments if ifo not in event_ifos and end_time in seglistdicts["whitehtsegments"][ifo]]
 			subthreshold_events = []
 			# FIXME Add logic to take highest network snr set of triggers when more than 1 sub-threshold trigger
 			for ifo in triggerless_ifos:
