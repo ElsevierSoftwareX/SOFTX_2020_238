@@ -1,0 +1,101 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2017  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 3 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
+from ligo.lw.utils import segments as ligolw_segments
+from ligo import segments
+from lal import LIGOTimeGPS
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %prog",
+		usage = "%prog [options] [url ...]",
+		description = "Blah blah blah"
+	)
+	parser.add_option("-c", "--coalesce", action = "store_true", help = "Coalesce the segment list.")
+	parser.add_option("-i", "--instrument", metavar = "name", help = "Set the instrument name (require).")
+	parser.add_option("-n", "--name", metavar = "name", default = "vetoes", help = "Set the segment list name (default = \"vetoes\").")
+	parser.add_option("-o", "--output", metavar = "filename", help = "Write output to filename (default = stdout).")
+	parser.add_option("-p", "--padding", metavar = "seconds", type = "float", default = 0.0, help = "Set the padding to add before and after each segment (default = 0).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+	params = options.__dict__.copy()
+
+	if options.instrument is None:
+		raise ValueError("missing --instrument")
+	if options.padding < 0.:
+		raise ValueError("--padding must be >= 0")
+
+	if len(filenames) != 1:
+		raise ValueError("must provide exactly one filename after options")
+
+	return options, filenames, params
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+options, filenames, params = parse_command_line()
+
+
+xmldoc = ligolw.Document()
+xmldoc.appendChild(ligolw.LIGO_LW())
+process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], params)
+
+
+with ligolw_segments.LigolwSegments(xmldoc, process) as xmlsegments:
+	for filename in filenames:
+		segs = segments.segmentlist([segments.segment(LIGOTimeGPS(mid) - float(halfwidth), LIGOTimeGPS(mid) + float(halfwidth)) for mid, halfwidth, taper in map(str.split, open(filename))])
+		segs.protract(options.padding)
+		if options.coalesce:
+			segs.coalesce()
+		xmlsegments.insert_from_segmentlistdict({options.instrument: segs}, options.name)
+
+
+ligolw_utils.write_filename(xmldoc, options.output, (options.output or "stdout").endswith(".gz"))
