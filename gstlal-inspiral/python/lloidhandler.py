@@ -1337,7 +1337,7 @@ class Handler(simplehandler.Handler):
 		assert self.fapfar is not None
 
 		# do alerts
-		self.gracedbwrapper.do_alerts(last_coincs, self.psds, self.__get_rankingstat_xmldoc)
+		self.gracedbwrapper.do_alerts(last_coincs, self.psds, self.__get_rankingstat_xmldoc, self.segmentstracker.seglistdicts)
 
 
 	def web_get_sngls_snr_threshold(self):
