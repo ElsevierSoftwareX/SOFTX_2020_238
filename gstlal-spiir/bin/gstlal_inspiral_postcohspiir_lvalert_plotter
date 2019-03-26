@@ -116,6 +116,7 @@ def call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, even
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--gracedb-service-url", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--cuda-postcoh-detrsp-fname", default="H1L1V1_prob_coeff.xml", help = "The Det array of A matrix to construct prob map (default: H1L1V1_prob_coeff.xml")
 	parser.add_option("--ifos", metavar = "ifo-names", default = "H1L1V1", help = "Set the name of the ifo names (default = \"H1L1\").")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -167,8 +168,6 @@ for process_params in process_params_table:
 		njob = process_params.value
 	if process_params.param == '--cohfar-assignfar-input-fname':
 		assignfar_fnames = process_params.value.split(',')
-	if process_params.param == '--cuda-postcoh-detrsp-fname':
-		cuda_postcoh_detrsp_fname = process_params.value
 	if process_params.param == '--cuda-postcoh-output-skymap':
 		cuda_postcoh_output_skymap = process_params.value
 	
@@ -190,7 +189,7 @@ try:
 except:
 	msg += "no skymap generated in %s" % copied_name
 
-returncode = call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, cuda_postcoh_detrsp_fname, verbose = options.verbose)
+returncode = call_fits_skymap_func(out_cohsnr_fits, out_prob_fits, pipe_skymap_name, gid, end_time, options.cuda_postcoh_detrsp_fname, verbose = options.verbose)
 
 if returncode == 0:
 	if options.verbose:
