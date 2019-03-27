@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Ryan Magee
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+'''
+A program to estimate the coincident data collected across each IFO pair
+'''
+
+from optparse import OptionParser
+import itertools
+import subprocess
+import glob
+
+from ligo import segments
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import segments as ligolw_segments
+from ligo.lw.utils import process as ligolw_process
+from lal import LIGOTimeGPS
+
+
+import sys
+
+
+present = int(subprocess.Popen('lalapps_tconvert', stdout = subprocess.PIPE).communicate()[0])
+
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("--start", type = "float", default = 1235750418.0, help = "Set the start time for collection of data. Defaults to ER14 start time. Required.")
+	parser.add_option("--end", type = "float", default = present, help = "Set the end time for collection of data. Defaults to present day. Required.")
+	parser.add_option("--channels", default = ['H1:DMT-ANALYSIS_READY:1','L1:DMT-ANALYSIS_READY:1','V1:ITF_SCIENCE'], help = "Set channels to be compared. Comma separated list with entires of form 'H1:DMT-ANALYSIS_READY:1'")
+
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+options, filenames = parse_command_line()
+
+# Get segments for each channel
+
+for channel in options.channels:
+	segcommand = "ligolw_segment_query_dqsegdb --segment-url=https://segments.ligo.org -q --gps-start-time %f --gps-end-time %f --include-segments %s --result-name=datasegments -o %s.intermediate" % (options.start, options.end, channel, channel.split(':')[0])
+	segs = subprocess.Popen(segcommand.split(), stdout = subprocess.PIPE)
+	segs.wait()
+
+# Combine segments into a single file
+
+intermediate_files = glob.glob('*.intermediate')
+combined = ['ligolw_add','--ilwd','-o','segments.xml.gz']
+combined.extend(["%s" % x for x in intermediate_files])
+combine = subprocess.Popen(combined, stdout = subprocess.PIPE)
+combine.wait()
+
+rm_intermediates = subprocess.Popen(['rm']+["%s" % x for x in intermediate_files], stdout = subprocess.PIPE)
+rm_intermediates.wait()
+
+# Character formatting/compatibility
+
+ligolw_no_ilwdchar = "ligolw_no_ilwdchar segments.xml.gz"
+ilwd = subprocess.Popen(ligolw_no_ilwdchar.split(), stdout = subprocess.PIPE)
+ilwd.wait()
+datafname = "segments.xml.gz"
+
+# Shamelessly borrowed definition from the itertools documentation
+# (https://docs.python.org/3/library/itertools.html)
+def powerset(iterable):
+	s = list(iterable)
+	return itertools.chain.from_iterable(itertools.combinations(s, r) for r in range(len(s)+1))
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+def extract_segs(fname, segname):
+	llwsegments = ligolw_segments.LigolwSegments(ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler))
+	return llwsegments.get_by_name(segname).coalesce()
+
+
+data = extract_segs(datafname, "datasegments")
+
+ifos = data.keys()
+
+# Iterate over all IFO combos
+
+for ifo_combo in powerset(ifos):
+	if len(ifo_combo) > 1:
+		print "%s"*len(ifo_combo) % (ifo_combo),"time:", abs(data.intersection(ifo_combo)), 'seconds, ', abs(data.intersection(ifo_combo)) / 86400., 'days'
+
