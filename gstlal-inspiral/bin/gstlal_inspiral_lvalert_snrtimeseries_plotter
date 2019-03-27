@@ -29,8 +29,8 @@ matplotlib.rcParams.update({
 	"xtick.labelsize": 10.0,
 	"ytick.labelsize": 10.0,
 	"legend.fontsize": 10.0,
-	"figure.dpi": 600,
-	"savefig.dpi": 600,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
 	"text.usetex": True
 })
 from optparse import OptionParser
