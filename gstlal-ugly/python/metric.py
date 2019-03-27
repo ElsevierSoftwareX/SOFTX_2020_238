@@ -21,15 +21,14 @@ from lal import series
 from scipy import integrate
 import numpy
 from gstlal import reference_psd
-#from ligo.lw import utils as ligolw_utils
-from glue.ligolw import utils as ligolw_utils
+from ligo.lw import utils as ligolw_utils
 import itertools
 import scipy
 from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 2e-7#2.0e-7
+DELTA = 2.0e-7
 EIGEN_DELTA_DET = DELTA
 
 # Round a number up to the nearest power of 2
@@ -158,8 +157,6 @@ class Metric(object):
 		self.fhigh = fhigh
 		self.working_length = int(round(self.duration * 2 * self.fhigh)) + 1
 		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = series.PSDContentHandler)).values()[0], self.df)
-		self.metric_tensor = None
-		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		self.delta_t = DELTA
 		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
@@ -225,10 +222,8 @@ class Metric(object):
 	def match_minus_1(self, w1, w2, t_factor = 1.0):
 		def norm(w):
 			n = numpy.abs(integrate.romb(numpy.conj(w) * w))**.5
-			#n = numpy.abs((numpy.conj(w) * w).sum())**.5
 			return n
 		def ip(w1, w2):
-			#return numpy.abs((numpy.conj(w1) * w2).sum())
 			return numpy.abs(integrate.romb(numpy.conj(w1) * w2))
 
 		try:
@@ -241,20 +236,14 @@ class Metric(object):
 			if m < 1. -  1e-15:
 				return m - 1.0
 			d1 = x - y
-			#m = ip(x,y)
 			mm2 = ip(d1, d1)
 			return -0.5 * mm2
-			#return min(-0.5 * mm2, -0.5 * 4e-16)
 
 		except AttributeError:
 			return None
 
 
 	def __set_diagonal_metric_tensor_component(self, i, wp, wm, deltas, g, w1):
-		#print "diag ", i
-		#plus_match = self.match(w1, wp[i,i])
-		#minus_match = self.match(w1, wp[i,i])
-		#d2mbydx2 = (plus_match + minus_match - 2.) / deltas[i]**2
 		plus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
 		minus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
 		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / deltas[i]**2
@@ -262,11 +251,6 @@ class Metric(object):
 		g[i,i] = -0.5 * d2mbydx2
 
 	def __set_tt_metric_tensor_component(self, center, w1):
-
-		#print "tt "
-		#minus_match = self.match(w1, w1, t_factor = self.neg_t_factor)
-		#plus_match = self.match(w1, w1, t_factor = self.t_factor)
-		#d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
 		minus_match_minus_1 = self.match_minus_1(w1, w1, t_factor = self.neg_t_factor)
 		plus_match_minus_1 = self.match_minus_1(w1, w1, t_factor = self.t_factor)
 		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / self.delta_t**2
@@ -274,12 +258,8 @@ class Metric(object):
 
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), wp, wm, deltas, g, w1):
 		# evaluate symmetrically
-		#print "off diag ", i, j
 		if j <= i:
 			return None
-		#fii = -2 * g[i,i] * deltas[i]**2 + 2
-		#fjj = -2 * g[j,j] * deltas[j]**2 + 2
-		#d2mbydxdy = (self.match(w1, wp[i,j]) + self.match(w1, wm[i,j]) - fii - fjj + 2.) / 2. / deltas[i] / deltas[j]
 		fii = -2 * g[i,i] * deltas[i]**2
 		fjj = -2 * g[j,j] * deltas[j]**2
 		d2mbydxdy = (self.match_minus_1(w1, wp[i,j]) + self.match_minus_1(w1, wm[i,j]) - fii - fjj) / 2. / deltas[i] / deltas[j]
@@ -287,13 +267,6 @@ class Metric(object):
 		return None
 
 	def __set_offdiagonal_time_metric_tensor_component(self, j, wp, wm, deltas, g, g_tt, delta_t, w1):
-		#print "t i ", j
-		#fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
-		#ftt = -2 * g_tt * delta_t**2 + 2.0
-		# Second order
-		#plus_match = self.match(w1, wp[j,j], t_factor = self.t_factor)
-		#minus_match = self.match(w1, wm[j,j], t_factor = self.neg_t_factor)
-		#return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
 		fjj = -2 * g[j,j] * deltas[j]**2
 		ftt = -2 * g_tt * delta_t**2
 		# Second order
@@ -307,7 +280,8 @@ class Metric(object):
 		w1 = self.waveform(center)
 		wp = {}
 		wm = {}
-		deltas = abs(center)**.5 * DELTA + DELTA
+		#deltas = abs(center)**.5 * DELTA + DELTA
+		deltas = abs(center) * DELTA + DELTA
 		for i, x in enumerate(deltas):
 			for j, y in enumerate(deltas):
 				dx = numpy.zeros(len(deltas))
@@ -337,22 +311,12 @@ class Metric(object):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
 		U, S, V = numpy.linalg.svd(g)
-		#try:
-		#	U, S, V = numpy.linalg.svd(g)
-		#except numpy.linalg.linalg.LinAlgError:
-		#	print "svd error"
-		#	newc = center.copy()
-		#	newc[0:2] *=0.99
-		#	return self.__call__(newc)#, deltas)
 		condition = S < max(S) * EIGEN_DELTA_DET
-		S[condition] = EIGEN_DELTA_DET
+		S[condition] = EIGEN_DELTA_DET * max(S)
 		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
 		det = numpy.product(S[S>0])
-		eff_dimension = len(S[S>0])
-		w = S
-		self.metric_is_valid = True
 
-		return g, eff_dimension, det, self.metric_is_valid, w
+		return g, det
 
 
 	def distance(self, metric_tensor, x, y):

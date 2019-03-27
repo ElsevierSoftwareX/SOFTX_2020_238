@@ -79,7 +79,6 @@ def packing_density(n):
 	# this packing density puts two in a cell, we split if there is more
 	# than this expected in a cell
 	# From: http://mathworld.wolfram.com/HyperspherePacking.html
-	return 1.0
 	prefactor = 1.0
 	if n==1:
 		return prefactor
@@ -100,7 +99,7 @@ def packing_density(n):
 
 class HyperCube(object):
 
-	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, effective_dimension = None, det = None, metric_is_valid = False, eigv = None):
+	def __init__(self, boundaries, mismatch, constraint_func = mass_sym_constraint, metric = None, metric_tensor = None, det = None):
 		"""
 		Define a hypercube with boundaries given by boundaries, e.g.,
 
@@ -122,13 +121,10 @@ class HyperCube(object):
 		self.deltas = numpy.array([c[1] - c[0] for c in boundaries])
 		self.metric = metric
 		if self.metric is not None and metric_tensor is None:
-			self.metric_tensor, self.effective_dimension, self.det, self.metric_is_valid, self.eigv = self.metric(self.center)
+			self.metric_tensor, self.det = self.metric(self.center)
 		else:
 			self.metric_tensor = metric_tensor
-			self.effective_dimension = effective_dimension
 			self.det = det
-			self.metric_is_valid = metric_is_valid
-			self.eigv = eigv
 		self.size = self._size()
 		self.tiles = []
 		self.constraint_func = constraint_func
@@ -141,8 +137,7 @@ class HyperCube(object):
 		return (tuple(self.center), tuple(self.deltas)) == (tuple(other.center), tuple(other.deltas))
 
 	def template_volume(self, mismatch):
-		#n = self.N()
-		n = self.effective_dimension
+		n = self.N()
 		return (numpy.pi * mismatch)**(n/2.) / gamma(n/2. +1)
 		# NOTE code below assumes templates are cubes
 		#a = 2 * mismatch**.5 / n**.5
@@ -176,7 +171,7 @@ class HyperCube(object):
 		leftbound[dim,1] = self.center[dim]
 		rightbound[dim,0] = self.center[dim]
 		if reuse_metric:
-			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, metric_is_valid = self.metric_is_valid, eigv = self.eigv), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, effective_dimension = self.effective_dimension, det = self.det, metric_is_valid = self.metric_is_valid, eigv = self.eigv)
+			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, det = self.det), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric, metric_tensor = self.metric_tensor, det = self.det)
 		else:
 			return HyperCube(leftbound, self.__mismatch, self.constraint_func, metric = self.metric), HyperCube(rightbound, self.__mismatch, self.constraint_func, metric = self.metric) 
 
@@ -214,7 +209,7 @@ class HyperCube(object):
 		# Adapted from Owen 1995 (2.16). The ideal number of
 		# templates required to cover the space with
 		# non-overlapping spheres.
-		return self.volume() / self.template_volume(mismatch)
+		return self.volume() / self.template_volume(mismatch) / packing_density(self.N())
 
 	def match(self, other):
 		return self.metric.metric_match(self.metric_tensor, self.center, other.center)
@@ -247,7 +242,7 @@ class Node(object):
 				self.on_boundary = True
 				print "\n\non boundary!!\n\n"
 
-	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, metric_tol = 0.03, max_coord_vol = float(10)):
+	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, metric_tol = 0.1, max_coord_vol = float(10)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]):
 			size = self.cube.num_tmps_per_side(mismatch)
 			self.splitdim = numpy.argmax(size)
@@ -258,6 +253,7 @@ class Node(object):
 				volume_split_condition = False
 				metric_diff = 1.0
 				metric_cond = True
+				tmp_diff = 1.0
 			else:
 				# Get the number of parent templates
 				par_numtmps = self.parent.cube.num_templates(mismatch)
@@ -266,39 +262,23 @@ class Node(object):
 				sib_numtmps = self.sibling.cube.num_templates(mismatch)
 
 				# get our number of templates
-				numtmps = self.cube.num_templates(mismatch)
+				numtmps = max(max(self.cube.num_templates(mismatch), par_numtmps / 2), sib_numtmps)
 
-				#print "self metric:\n", self.cube.metric_tensor
-				#print "sibling metric:\n", self.sibling.cube.metric_tensor
-				#print "parent metric:\n", self.parent.cube.metric_tensor
-
-				#print self.cube.metric_tensor, self.sibling.cube.metric_tensor, self.parent.cube.metric_tensor
 				metric_diff = self.cube.metric_tensor - self.sibling.cube.metric_tensor
 				metric_diff = numpy.linalg.norm(metric_diff) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.sibling.cube.metric_tensor)**.5
 				metric_diff2 = self.cube.metric_tensor - self.parent.cube.metric_tensor
 				metric_diff2 = numpy.linalg.norm(metric_diff2) / numpy.linalg.norm(self.cube.metric_tensor)**.5 / numpy.linalg.norm(self.parent.cube.metric_tensor)**.5
-
-				#print metric_diff, metric_diff2
-
 				metric_diff = max(metric_diff, metric_diff2)
-				#print "metric diff: ", metric_diff, "\n"
-				# take the bigger of self, sibling and parent
-				numtmps = max(max(numtmps, par_numtmps/2.0), sib_numtmps)
 
 				reuse_metric = self.cube #max(mts)[1]
 
 			tmps_per_side = self.cube.num_tmps_per_side(mismatch)
 			# NOTE FIXME work out correct max templates per side
-			if (numtmps >= split_num_templates) or bifurcation < 2 or metric_diff > metric_tol:
-				#print "splitting"
+			if (numtmps >= split_num_templates) or bifurcation < 2:
 				bifurcation += 1
 				if metric_diff <= metric_tol:
-					print "reuse metric"
 					self.cube.metric_tensor = reuse_metric.metric_tensor
-					self.cube.effective_dimension = reuse_metric.effective_dimension
 					self.cube.det = reuse_metric.det
-					self.cube.metric_is_valid = reuse_metric.metric_is_valid
-					self.cube.eigv = reuse_metric.eigv
 					left, right = self.cube.split(self.splitdim, reuse_metric = True)
 				else:
 					left, right = self.cube.split(self.splitdim)
