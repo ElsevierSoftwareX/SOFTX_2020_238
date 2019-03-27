@@ -19,18 +19,18 @@
 
 import itertools
 import numpy
-#from ligo.lw import ligolw
-#from ligo.lw import lsctables
-#from ligo.lw import table
-#from ligo.lw import utils
-#from ligo.lw import ilwd
-#from ligo.lw.utils import process as ligolw_process
-from glue.ligolw import ligolw
-from glue.ligolw import lsctables
-from glue.ligolw import table
-from glue.ligolw import utils
-from glue.ligolw import ilwd
-from glue.ligolw.utils import process as ligolw_process
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import table
+from ligo.lw import utils
+from ligo.lw import ilwd
+from ligo.lw.utils import process as ligolw_process
+#from glue.ligolw import ligolw
+#from glue.ligolw import lsctables
+#from glue.ligolw import table
+#from glue.ligolw import utils
+#from glue.ligolw import ilwd
+#from glue.ligolw.utils import process as ligolw_process
 from gstlal import metric as metric_module
 from gstlal import tree
 # FIXME dont do this
@@ -180,7 +180,7 @@ else:
 g_ij = metric_module.Metric(
 	args.psd_file,
 	coord_func = coord_func,
-	duration = 1.0, # FIXME!!!!!
+	duration = 4.0, # FIXME!!!!!
 	flow = args.flow,
 	fhigh = args.fhigh,
 	approximant = args.approximant)
@@ -238,8 +238,6 @@ for n, c in enumerate(nodes):
 
 	tiles = c.tile(mismatch = mismatch)
 	expected += c.num_templates(mismatch)
-	if not c.metric.metric_is_valid:
-		bad_metrics += 1
 	for t in tiles:
 		row = lsctables.SnglInspiralTable.RowType()
 		row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z = coord_func(t)
