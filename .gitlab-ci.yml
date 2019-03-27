@@ -354,7 +354,7 @@ test:offline:
   artifacts:
     expire_in: 24h
     paths:
-      - gstlal-inspiral/tests
+      - gstlal-inspiral/tests/WEBDIR/gstlal_offline_tutorial
       - public
     when: always
   only:
