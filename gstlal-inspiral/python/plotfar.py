@@ -417,7 +417,10 @@ def plot_horizon_distance_vs_time(rankingstat, (tlo, thi), masses = (1.4, 1.4), 
 		if tref is not None:
 			x -= float(tref)
 		axes.plot(x, y, color = plotutil.colour_from_instruments([instrument]), label = "%s" % instrument)
-		yhi = max(max(y), yhi)
+		try:
+			yhi = max(max(y), yhi)
+		except ValueError:
+			pass
 	if tref is not None:
 		axes.set_xlabel("Time From GPS %.2f (s)" % float(tref))
 	else:
