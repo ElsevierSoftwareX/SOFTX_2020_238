@@ -293,8 +293,8 @@ vetoes.xml.gz:
 
 tisi.xml:
 	# Produce time slides file
-	#lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 $@
-	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
+	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:25.13274:25.13274 $@
+	#lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 $@
 	@echo ""
 
 measured_psd.xml.gz: frames.cache
