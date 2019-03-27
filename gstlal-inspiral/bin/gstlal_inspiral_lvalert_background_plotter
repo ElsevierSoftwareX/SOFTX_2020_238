@@ -48,6 +48,19 @@ from gstlal import far
 from gstlal import lvalert_helper
 from gstlal import plotfar
 
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
+	"text.usetex": True
+})
+
 
 #
 # =============================================================================
