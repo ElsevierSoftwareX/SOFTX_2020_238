@@ -27,7 +27,7 @@ Build-Depends:
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-ligolw-tools,
- python-gobject-dev
+ python-gobject-2-dev
 
 Package: gstlal-inspiral
 Architecture: any

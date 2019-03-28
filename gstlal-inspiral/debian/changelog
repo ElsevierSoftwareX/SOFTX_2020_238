@@ -1,3 +1,19 @@
+gstlal-inspiral (1.6.4-1) unstable; urgency=low
+
+  * lvalert_plots: reduce pressure on gracedb file server
+  * plotfar.py: fix ValueError for misssing instrument
+  * inspiral.py, lloidhandler.py: only provide sub-threshold snr time series
+    if the detector is on at coalescence (Jolien's review request)
+  * cbc_template_fir: moving_median speed improvement
+  * gstlal_itacac.c: actually set the snr threshold when computing chisq
+  * lloidhandler: reduce some of the data going to kafka
+  * gstlal_ll_inspiral_pipe: support external kafka service, remove daily
+    pages - they will be replaced scale out aggregators as future proofing
+  * Revert "normalize the background only using values at likelihood ratios
+    greater than the threshold"
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 28 Mar 2019 07:23:36 -0700
+
 gstlal-inspiral (1.6.3-1) unstable; urgency=low
 
   * inspiral.py: Fix bug in subthreshold trigger channel name
