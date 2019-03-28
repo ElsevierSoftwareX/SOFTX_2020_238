@@ -113,7 +113,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.persist_cadence = options.persist_cadence
 		self.feature_start_time = options.feature_start_time
 		self.feature_end_time = options.feature_end_time
-		self.columns = ['trigger_time', 'frequency', 'q', 'snr', 'phase']
+		self.columns = ['timestamp', 'time', 'snr', 'phase', 'frequency', 'q', 'duration']
 
 		# set whether data source is live
 		self.is_live = data_source_info.data_source in data_source_info.live_sources
@@ -129,22 +129,39 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		# set queue buffer size based on file format
 		if self.save_format == 'hdf5':
-			self.buffer_size = 1 ### 1 second buffers for file-based formats
+			self.buffer_size = 1. ### 1 second buffers for file-based formats
 		else:
 			self.buffer_size = 1. / self.sample_rate
 
 		# set up queue to cache features depending on pipeline mode
 		self.feature_mode = options.feature_mode
 		if self.feature_mode == 'timeseries':
-			self.feature_queue = utils.TimeseriesFeatureQueue(self.keys, self.columns, sample_rate = self.sample_rate, buffer_size = self.buffer_size)
+			self.feature_queue = utils.TimeseriesFeatureQueue(
+				self.keys,
+				self.columns,
+				sample_rate = self.sample_rate,
+				buffer_size = self.buffer_size
+			)
 		elif self.feature_mode == 'etg':
 			self.feature_queue = utils.ETGFeatureQueue(self.keys, self.columns)
 
+		# set up structure to store feature data
 		if self.save_format == 'hdf5':
 			if self.feature_mode == 'timeseries':
-				self.fdata = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.cadence, sample_rate = self.sample_rate, waveform = self.waveform_type)
+				self.fdata = utils.HDF5TimeseriesFeatureData(
+					self.columns,
+					keys = self.keys,
+					cadence = self.cadence,
+					sample_rate = self.sample_rate,
+					waveform = self.waveform_type
+				)
 			elif self.feature_mode == 'etg':
-				self.fdata = utils.HDF5ETGFeatureData(self.columns, keys = self.keys, cadence = self.cadence, waveform = self.waveform_type)
+				self.fdata = utils.HDF5ETGFeatureData(
+					self.columns,
+					keys = self.keys,
+					cadence = self.cadence,
+					waveform = self.waveform_type
+				)
 			else:
 				raise KeyError, 'not a valid feature mode option'
 
@@ -216,13 +233,13 @@ class MultiChannelHandler(simplehandler.Handler):
 					self.last_save_time = self.timestamp
 					self.last_persist_time = self.timestamp
 					if self.save_format =='hdf5':
-						duration = utils.floor_div(self.timestamp + self.persist_cadence, self.persist_cadence) - self.timestamp
+						duration = utils.floor_div(self.timestamp + self.persist_cadence, self.persist_cadence) - self.timestamp + 1
 						self.set_hdf_file_properties(self.timestamp, duration)
 
 				# Save triggers once per cadence if saving to disk
 				if self.save_format == 'hdf5':
 					if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.cadence) or (self.timestamp == self.feature_end_time):
-						self.logger.info("saving features to disk at timestamp = %d, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
+						self.logger.info("saving features to disk at timestamp = %d" % self.timestamp)
 						self.save_features()
 						self.last_save_time = self.timestamp
 
@@ -237,12 +254,13 @@ class MultiChannelHandler(simplehandler.Handler):
 				# add features to respective format specified
 				if self.save_format == 'kafka':
 					if self.data_transfer == 'table':
-						self.logger.info("pushing features to disk at timestamp = %.3f, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
 						self.producer.produce(timestamp = self.timestamp, topic = self.kafka_topic, value = json.dumps(feature_subset))
 					elif self.data_transfer == 'row':
 						for row in itertools.chain(*feature_subset['features'].values()):
 							if row:
 								self.producer.produce(timestamp = self.timestamp, topic = self.kafka_topic, value = json.dumps(row))
+
+					self.logger.info("pushing features to disk at timestamp = %.3f, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
 					self.producer.poll(0) ### flush out queue of sent packets
 				elif self.save_format == 'bottle':
 					self.feature_data.append(feature_subset)
@@ -287,8 +305,17 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
+			feature_row = {
+				'timestamp': utils.floor_div(buftime, 1. / self.sample_rate),
+				'channel': channel,
+				'snr': row.snr,
+				'phase': row.phase,
+				'time': trigger_time,
+				'frequency': waveform['frequency'],
+				'q': waveform['q'],
+				'duration': waveform['duration'],
+			}
 			timestamp = utils.floor_div(buftime, self.buffer_size)
-			feature_row = {'channel':channel, 'snr':row.snr, 'trigger_time':trigger_time, 'frequency':waveform['frequency'], 'q':waveform['q'], 'phase':row.phase}
 			self.feature_queue.append(timestamp, channel, feature_row)
 
 	def save_features(self):
