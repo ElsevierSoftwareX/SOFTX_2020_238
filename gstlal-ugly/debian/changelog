@@ -1,3 +1,10 @@
+gstlal-ugly (1.6.3-1) unstable; urgency=low
+
+  * gstlal_kafka_dag: add condor universe option into kafka/zookeeper jobs
+  * rough tool to estimate background collected among ifo combos
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 28 Mar 2019 07:44:55 -0700
+
 gstlal-ugly (1.6.2-1) unstable; urgency=low
 
   * gstlal_svd_bank_checkerboard: Added SVD bank checkerboarding code
