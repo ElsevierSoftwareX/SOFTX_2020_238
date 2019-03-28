@@ -27,7 +27,9 @@
 
 from collections import Counter, defaultdict, deque
 import glob
+import itertools
 import logging
+import operator
 import os
 import sys
 import timeit
@@ -218,6 +220,17 @@ def gen_formatter():
     """
     return logging.Formatter('%(asctime)s | %(name)s : %(levelname)s : %(message)s')
 
+#----------------------------------
+### other utilities
+
+def group_indices(indices):
+	"""
+	Given a list of indices, groups up indices into contiguous groups.
+	"""
+	for k, group in itertools.groupby(enumerate(indices), lambda (i,x):i-x):
+		yield map(operator.itemgetter(1), group)
+
+
 ####################
 #
 #     classes
@@ -265,9 +278,18 @@ class HDF5TimeseriesFeatureData(FeatureData):
 		"""
 		Saves the current cadence of features to disk and clear out data
 		"""
-		name = "%d_%d" % (start_time, self.cadence)
 		for key in self.keys:
-			create_new_dataset(path, base, self.feature_data[key], name=name, group=key, tmp=tmp, metadata=self.metadata)
+			nonnan_indices = list(numpy.where(numpy.isfinite(self.feature_data[key]['time']))[0])
+
+			### split up and save datasets into contiguous segments
+			for idx_group in group_indices(nonnan_indices):
+				start_idx, end_idx = idx_group[0], idx_group[-1]
+				start = start_time + float(start_idx) / self.sample_rate
+				end = start_time + float(end_idx + 1) / self.sample_rate
+				name = "%.6f_%.6f" % (float(start), float(end - start))
+				create_new_dataset(path, base, self.feature_data[key][start_idx:end_idx], name=name, group=key, tmp=tmp, metadata=self.metadata)
+
+		### clear out current features
 		self.clear()
 
 	def append(self, timestamp, features):
@@ -330,19 +352,19 @@ class TimeseriesFeatureQueue(object):
 
 	Example:
 		>>> # create the queue
-		>>> columns = ['trigger_time', 'snr']
+		>>> columns = ['time', 'snr']
 		>>> channels = ['channel1']
 		>>> queue = TimeseriesFeatureQueue(channels, columns, sample_rate=1, buffer_size=1)
 		>>> # add features
-		>>> queue.append(123450, 'channel1', {'trigger_time': 123450.3, 'snr': 3.0})
-		>>> queue.append(123451, 'channel1', {'trigger_time': 123451.7, 'snr': 6.5})
-		>>> queue.append(123452, 'channel1', {'trigger_time': 123452.4, 'snr': 5.2})
+		>>> queue.append(123450, 'channel1', {'time': 123450.3, 'snr': 3.0})
+		>>> queue.append(123451, 'channel1', {'time': 123451.7, 'snr': 6.5})
+		>>> queue.append(123452, 'channel1', {'time': 123452.4, 'snr': 5.2})
 		>>> # get oldest feature
 		>>> row = queue.pop()
 		>>> row['timestamp']
 		123450
 		>>> row['features']['channel1']
-		[{'snr': 3.0, 'trigger_time': 123450.3}]
+		[{'snr': 3.0, 'time': 123450.3}]
 
 	"""
 	def __init__(self, channels, columns, **kwargs):
@@ -364,7 +386,7 @@ class TimeseriesFeatureQueue(object):
 			self.counter[timestamp] += 1
 
 			### store row, aggregating if necessary
-			idx = self._idx(row['trigger_time'])
+			idx = self._idx(row['time'])
 			if not self.in_queue[timestamp][channel][idx] or (row['snr'] > self.in_queue[timestamp][channel][idx]['snr']):
 				self.in_queue[timestamp][channel][idx] = row
 

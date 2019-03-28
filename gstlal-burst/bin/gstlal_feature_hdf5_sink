@@ -125,8 +125,14 @@ class HDF5StreamSink(object):
         self.persist_cadence = options.persist_cadence
         self.waveform = options.waveform
         self.basename = '%s-%s' % (options.instrument[:1], options.basename)
-        self.columns = ['trigger_time', 'frequency', 'q', 'snr', 'phase']
-        self.feature_data = utils.HDF5TimeseriesFeatureData(self.columns, keys = self.keys, cadence = self.write_cadence, sample_rate = self.sample_rate, waveform = self.waveform)
+        self.columns = ['time', 'frequency', 'q', 'snr', 'phase', 'duration']
+        self.feature_data = utils.HDF5TimeseriesFeatureData(
+			self.columns,
+			keys = self.keys,
+			cadence = self.write_cadence,
+			sample_rate = self.sample_rate,
+			waveform = self.waveform
+		)
 
         ### get base temp directory
         if '_CONDOR_SCRATCH_DIR' in os.environ:
@@ -188,13 +194,14 @@ class HDF5StreamSink(object):
             if self.last_save_time is None:
                 self.last_save_time = self.timestamp
                 self.last_persist_time = self.timestamp
-                duration = utils.floor_div(self.timestamp + self.persist_cadence, self.persist_cadence) - self.timestamp
+                duration = utils.floor_div(self.timestamp + self.persist_cadence, self.persist_cadence) - self.timestamp + 1
                 self.set_hdf_file_properties(self.timestamp, duration)
 
             # Save triggers once per cadence if saving to disk
             if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.write_cadence):
                 logger.info("saving features to disk at timestamp = %f" % self.timestamp)
-                self.feature_data.dump(self.tmp_path, self.feature_name, utils.floor_div(self.last_save_time, self.write_cadence), tmp = True)
+                save_time = utils.floor_div(self.last_save_time, self.write_cadence)
+                self.feature_data.dump(self.tmp_path, self.feature_name, save_time, tmp = True)
                 self.last_save_time = self.timestamp
 
             # persist triggers once per persist cadence if using hdf5 format
