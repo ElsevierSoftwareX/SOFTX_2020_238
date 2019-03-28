@@ -35,4 +35,5 @@ dist_bin_SCRIPTS = \
 	gstlal_kafka_dag \
 	gstlal_reduce_dag \
 	gstlal_dag_run_time \
-	gstlal_svd_bank_checkerboard
+	gstlal_svd_bank_checkerboard \
+	gstlal_get_online_coinc_times
