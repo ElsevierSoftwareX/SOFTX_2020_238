@@ -158,7 +158,7 @@ if options.analyze_additional_hoft:
 # FIXME: Figure out how to make the legend and title appropriate and flexible
 plot.maxes.set_yscale('log')
 plot.paxes.set_yscale("linear")
-plot.save('%s_%s_%s_all_tf.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
+plot.save('%s_%s_%s_all_tf.png' % (ifo, options.gps_start_time, options.gps_end_time))
 
 # Make a plot that compares the ratios of each derived response to the model
 ratio_hoft = hoft_tf / response_fs
@@ -176,7 +176,7 @@ if options.analyze_additional_hoft:
 plot.maxes.set_yscale('linear')
 plot.paxes.set_yscale('linear')
 plot.maxes.set_ylim(0,5)
-plot.save('%s_%s_%s_all_tf_ratio.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
+plot.save('%s_%s_%s_all_tf_ratio.png' % (ifo, options.gps_start_time, options.gps_end_time))
 
 plot = BodePlot(ratio_hoft*3995.1, frequencies = freqs, dB = False, color='#ee0000', linewidth=2)
 if options.analyze_calcs_hoft:
@@ -190,6 +190,6 @@ plot.maxes.set_ylim(.9, 1.1)
 plot.maxes.set_xlim(10, 5000)
 plot.paxes.set_ylim(-5, 5)
 plot.paxes.set_xlim(10, 5000)
-plot.save('%s_%s_%s_all_tf_ratio_zoomed.pdf' % (ifo, options.gps_start_time, options.gps_end_time))
+plot.save('%s_%s_%s_all_tf_ratio_zoomed.png' % (ifo, options.gps_start_time, options.gps_end_time))
 
 
