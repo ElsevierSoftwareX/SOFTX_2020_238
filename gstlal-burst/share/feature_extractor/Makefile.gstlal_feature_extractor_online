@@ -104,7 +104,9 @@ IFO = H1
 
 TAG = production_online
 
-DATA_SOURCE = framexmit
+#DATA_SOURCE = framexmit
+DATA_SOURCE = lvshm
+
 MAX_STREAMS = 100
 SAMPLE_RATE = 16
 
@@ -136,10 +138,12 @@ ifeq ($(IFO),H1)
 	KAFKA_SERVER:=10.21.6.226
 	TARGET_MACHINE:=TARGET.Machine
 	NODE:=node502.dcs.ligo-wa.caltech.edu
+	SHM_PARTITION:=LHO_Data
 else
 	KAFKA_SERVER:=10.9.11.227
 	TARGET_MACHINE:=Machine
 	NODE:=node227.ldas.ligo-la.caltech.edu
+	SHM_PARTITION:=LLO_Data
 endif
 
 # synchronizer/file sink options (kafka only)
@@ -193,12 +197,12 @@ GSTLALSHAREDIR=$(LAL_PATH)/../git/gstlal/gstlal-burst/share
 
 all : online-dag
 	@echo "launch kafka dag first: condor_submit_dag kafka_broker_$(TAG).dag"
-	@echo "then launch online jobs: condor_submit_dag $(IFO)_feature_production_pipe.dag"
+	@echo "then launch online jobs: condor_submit_dag $(IFO)_feature_extraction_pipe.dag"
 
 online-dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST) online-web-deploy
 	gstlal_ll_feature_extractor_pipe \
 		--data-source $(DATA_SOURCE) \
-		--shared-memory-partition H1=LHO_RedDtchr \
+		--shared-memory-partition $(IFO)=$(SHM_PARTITION) \
 		--shared-memory-assumed-duration 1 \
 		--psd-fft-length 8 \
 		--save-format $(SAVE_FORMAT) \
@@ -227,7 +231,7 @@ online-dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST) online-web-deploy
 		--request-timeout $(REQUEST_TIMEOUT) \
 		--latency-timeout $(LATENCY_TIMEOUT) \
 		--kafka-topic $(KAFKA_TOPIC) \
-		--kafka-server $(KAFKA_SERVER) \
+		--kafka-server $(KAFKA_SERVER):$(KAFKA_PORT) \
 		--kafka-partition $(KAFKA_GROUP) \
 		--agg-data-backend $(DATA_BACKEND) \
 		--influx-hostname $(INFLUX_HOSTNAME) \
@@ -242,7 +246,7 @@ online-dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST) online-web-deploy
 kafka_broker_$(TAG).dag : feature_extraction_monitor_$(IFO).yml
 	gstlal_kafka_dag \
 		--analysis-tag $(TAG) \
-		--kafka-hostname $(KAFKA_HOSTNAME) \
+		--kafka-hostname $(KAFKA_SERVER) \
 		--kafka-port $(KAFKA_PORT) \
 		--zookeeper-port $(ZOOKEEPER_PORT) \
 		--analysis-tag $(TAG) \
