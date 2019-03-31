@@ -147,8 +147,9 @@ def parse_command_line():
 	options, args = parser.parse_args()
 
 	# Check SNR series output
-	if options.start >= options.end:
-		raise ValueError("--start must less than --end.")
+	if options.start and options.end:
+		if options.start >= options.end:
+			raise ValueError("--start must less than --end.")
 
 	# Setting up GW data
 	gw_data_source_info = datasource.GWDataSourceInfo(options)
