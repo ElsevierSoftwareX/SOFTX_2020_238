@@ -357,5 +357,5 @@ def write_url(xmldoc, filename, verbose = False):
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith(".gz"), verbose = verbose)
 
 # wrapper for reading snr series from URL
-def read_url(filename, contenthandler, verbose = False):
+def read_url(filename, contenthandler = SNRContentHandler, verbose = False):
 	return ligolw_utils.load_url(filename, verbose = verbose, contenthandler = contenthandler)

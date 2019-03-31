@@ -210,7 +210,6 @@ def parse_command_line():
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
-
 		xmldoc = ligolw_utils.load_url(options.table, contenthandler = ContentHandler, verbose = options.verbose)
 		template_table = table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
 		row = [row for row in template_table if row.ifo == options.instrument]
@@ -220,7 +219,7 @@ def parse_command_line():
 		# work around for building a single whitened template
 		time_slice = numpy.array([(options.sample_rate, 0, options.template_duration)], dtype = [("rate", "int"),("begin", "float"), ("end", "float")])
 		# FIXME: psd[options.instrument] is bad
-		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, options.f_high)
+		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, autocorrelation_length = None, fhigh = options.f_high)
 		template, autocorrelation, sigma = workspace.make_whitened_template(row[0])
 
 		return options, gw_data_source_info, template, psd
