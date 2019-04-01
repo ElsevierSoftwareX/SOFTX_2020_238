@@ -341,7 +341,7 @@ def read_xmldoc(xmldoc, root_name = u"gstlal_inspiral_snr"):
 		elif elem.Name == u"COMPLEX8TimeSeries":
 			tseries = lal.series.parse_COMPLEX8TimeSeries(elem)
 			temp.append([tseries.name, tseries])
-		elif elem.Name == u"COMPLEX16imeSeries":
+		elif elem.Name == u"COMPLEX16TimeSeries":
 			tseries = lal.series.parse_COMPLEX16TimeSeries(elem)
 			temp.append([tseries.name, tseries])
 
