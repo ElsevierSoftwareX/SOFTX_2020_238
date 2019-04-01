@@ -989,7 +989,7 @@ class CoincsDocFromPostcoh(object):
 			row.template_duration = trigger.template_duration
 			row.event_duration = 0
 			row.amplitude = 0
-			row.eff_distance = getattr(trigger, "deff_%s" % ifo[0])
+			row.eff_distance = float('nan')
 			row.coa_phase = getattr(trigger, "coaphase_%s" % ifo[0])
 			row.mass1 = trigger.mass1 
 			row.mass2 = trigger.mass2
