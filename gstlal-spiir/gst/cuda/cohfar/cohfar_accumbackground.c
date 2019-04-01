@@ -106,16 +106,18 @@ static GstFlowReturn cohfar_accumbackground_chain (GstPad * pad, GstBuffer * inb
 static gboolean cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event);
 static void cohfar_accumbackground_dispose (GObject *object);
 
-static void update_stats_icombo(PostcohInspiralTable *intable, int icombo, TriggerStatsXML *stats)
+static void update_stats_icombo(PostcohInspiralTable *intable, int icombo, int ncombo, TriggerStatsXML *stats)
 {
 	int nifo, isingle, write_ifo_mapping[MAX_NIFO];
+	// update the multi-IFO background at the last bin.
 	if (icombo > -1) {
-		trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, stats->multistats[icombo]->feature, stats->multistats[icombo]);
+		trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, stats->multistats[ncombo-1]->feature, stats->multistats[ncombo-1]);
 
 	nifo = strlen(intable->ifos)/IFO_LEN;
 	/* add single detector stats */
 	get_write_ifo_mapping(IFOComboMap[icombo].name, nifo, write_ifo_mapping);
 
+	// update single-IFO background according the single-IFO decomposition
 	for (isingle=0; isingle< nifo; isingle++){
 		int write_isingle = write_ifo_mapping[isingle];
 		trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), stats->multistats[write_isingle]->feature, stats->multistats[write_isingle]);
@@ -219,11 +221,9 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 			fprintf(stderr, "invalid ifo combo in cohfar_accumbackground at GPS %d, outentries %d, table flag %d, cohsnr %f\n", ligo_time.gpsSeconds, outentries, intable->is_background, intable->cohsnr);
 		}
 		if (intable->is_background == FLAG_BACKGROUND) {
-			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo(intable, element->ncombo-1, bgstats); //update the last icombo and single IFO stats
+			update_stats_icombo(intable, icombo, element->ncombo, bgstats); //update the last ncombo and single IFO stats
 		} else if (intable->is_background == FLAG_FOREGROUND){ /* coherent trigger entry */
-			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo(intable, element->ncombo-1, zlstats); //update the last icombo and single IFO stats
+			update_stats_icombo(intable, icombo, element->ncombo, zlstats); //update the last ncombo and single IFO stats
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} else {

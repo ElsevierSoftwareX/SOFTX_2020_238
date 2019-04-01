@@ -74,7 +74,7 @@ trigger_stats_xml_create(char *ifos, int stats_type);
 void
 trigger_stats_xml_destroy(TriggerStatsXML * stats);
 
-double
+float
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats);
 #endif /* __BACKGROUND_STATS_UTILS_H__ */
 

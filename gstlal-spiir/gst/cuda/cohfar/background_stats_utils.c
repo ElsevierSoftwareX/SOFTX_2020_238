@@ -1544,7 +1544,7 @@ trigger_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D
 
 }
 
-double
+float
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 {
 	RankingStats *rank = stats->rank;
@@ -1553,6 +1553,9 @@ gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 	double rank_val = trigger_stats_get_val_from_map(snr, chisq, rank->rank_map);
 	/* the bins1D_get_idx will compute log10(x) first and then find index, so need to 10^rank_val for this function */
 	int rank_idx = bins1D_get_idx(pow(10, rank_val), rank->rank_pdf);
-	return gsl_vector_get(rank->rank_fap->data, rank_idx);
+	double fap = gsl_vector_get(rank->rank_fap->data, rank_idx);
+	if (fap < FLT_MIN && fap > 0)
+		fap = FLT_MIN;
+	return fap;
 }
 
