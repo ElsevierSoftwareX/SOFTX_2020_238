@@ -30,7 +30,7 @@ The steps to produce the full analysis dag file are:
  3. Generate/copy template bank and then split this into sub-banks
  4. Run gstlal_inspiral_pipe to produce offline analysis dag
 
-The information contained within this page is based off the O2 BNS test dag, an offline analysis focused on 100,000s centered around GW170817. The dag used to perform the analysis can be produced using a `Makefile <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HL_test_dag_O2>`_ that generats most of the required files. This tutorial will just cover the HL detector pair configureation, though a HLV Makefile can be found `here <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HLV_test_dag_O2>`_. In this tutorial we detail each stage of the Makefile needed to run an offline analysis.
+The information contained within this page is based off the O2 BNS test dag, an offline analysis focused on 100,000s centered around GW170817. The dag used to perform the analysis can be produced using a `Makefile <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HL_test_dag_O2>`_ that generates most of the required files. This tutorial will just cover the HL detector pair configuration, though a HLV Makefile can be found `here <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HLV_test_dag_O2>`_. In this tutorial we detail each stage of the Makefile needed to run an offline analysis.
 
 Analysis variables defined at the top of offline Makefile
 ---------------------------------------------------------
@@ -63,7 +63,7 @@ Set output directory for summary page of results. ::
 
  MCHIRP_INJECTIONS := 0.5:100.0:1_injections.xml
 
-Used to specify injection file, and chirpmass range over which to filter it. Multiple injection files can be given at once, these should be space seperated, with no whitespace at the end of the line. ::
+Used to specify injection file, and chirpmass range over which to filter it. Multiple injection files can be given at once, these should be space separated, with no whitespace at the end of the line. ::
 
  VETODEF = /path/to/H1L1-CBC_VETO_DEFINER_CLEANED_C02_O2_1164556817-23176801.xml
 
@@ -75,7 +75,7 @@ Veto definer file. Used to determine what data to veto. See https://git.ligo.org
  LIGO_SEGMENTS="$*:DCH-CLEAN_SCIENCE_C02:1"
 
  # The LIGO frame types
- # C02 cleaened
+ # C02 cleaned
  HANFORD_FRAME_TYPE='H1_CLEANED_HOFT_C02'
  LIVINGSTON_FRAME_TYPE='L1_CLEANED_HOFT_C02'
 
@@ -88,7 +88,7 @@ Gravitational wave data segment, frame type, and channel name information. See h
 
  include /path/to/Makefile.offline_analysis_rules
 
-Full path to [Makefile.offline_analysis_rules](https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/Makefile.offline_analysis_rules). This file contains sets of ruls for string parsing/manipulation used within the main Makefile and an up-to-date version must be included.
+Full path to [Makefile.offline_analysis_rules](https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/Makefile.offline_analysis_rules). This file contains sets of rules for string parsing/manipulation used within the main Makefile and an up-to-date version must be included.
 
 
 Generate segments, vetoes, frame cache, and tisi files
@@ -98,12 +98,12 @@ Generating frame.cache file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The frame.cache file contains the full paths to the Gravitational Wave data .gwf files using the following format:  
-Detector site identfier, frame type, start GPS time, duration, full path to file ::
+Detector site identifier, frame type, start GPS time, duration, full path to file ::
 
  H H1__H1_CLEANED_HOFT_C02 1186998263 4096 file://localhost/hdfs/frames/O2/hoft_C02_clean/H1/H-H1_CLEANED_HOFT_C02-11869/H-H1_CLEANED_HOFT_C02-1186998263-4096.gwf
 
 
-If the .gwf data files are stored locally, then you can produce individuel detector frame cache files with::
+If the .gwf data files are stored locally, then you can produce individual detector frame cache files with::
 
  gw_data_find -o H -t $(HANFORD_FRAME_TYPE) -l -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > H1_frame.cache
  gw_data_find -o L -t $(LIVINGSTON_FRAME_TYPE) -l -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > L1_frame.cache
@@ -123,12 +123,12 @@ And then create a combined frame.cache file with some additional formating::
 Generating segments.xml.gz and vetoes.xml.gz files
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The segments.xml.gz file contains a list of all data segments that should be analyised. The vetoes.xml.gz file contains a list of all data segments that should be ignored. ::
+The segments.xml.gz file contains a list of all data segments that should be analysed. The vetoes.xml.gz file contains a list of all data segments that should be ignored. ::
 
  ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > %_segmentspadded.xml
  ligolw_no_ilwdchar $*_segmentspadded.xml
 
-This returns an initial segments list. This command makes use of some Makefile variables segmentspadded files for each detector specified by $IFOS. ligolw_no_ilwdchar is run on the output files to convert some table column types from ilwd:char to int4s. This command will beed to be run on any xml file produced by a non-gstlal program. ::
+This returns an initial segments list. This command makes use of some Makefile variables segmentspadded files for each detector specified by $IFOS. ligolw_no_ilwdchar is run on the output files to convert some table column types from ilwd:char to int4s. This command will need to be run on any xml file produced by a non-gstlal program. ::
 
  ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
  ligolw_no_ilwdchar H1-VETOTIME_CAT*.xml
@@ -181,7 +181,7 @@ Generate analysis time slides file.
 Generate/copy template bank and then split this into sub-banks
 --------------------------------------------------------------
 
-The next step is to aquire a template bank that will be used to filter the data. The BNS Makefile produces its own BNS template bank containing ~13,500 templates (parametters are shown below) but there are also existing template bank that can be used. If you are using a pre-existing template bank, then much of the next two sections can be ignored/removed. ::
+The next step is to acquire a template bank that will be used to filter the data. The BNS Makefile produces its own BNS template bank containing ~13,500 templates (parameters are shown below) but there are also existing template bank that can be used. If you are using a pre-existing template bank, then much of the next two sections can be ignored/removed. ::
 
  ############################
  # Template bank parameters #
