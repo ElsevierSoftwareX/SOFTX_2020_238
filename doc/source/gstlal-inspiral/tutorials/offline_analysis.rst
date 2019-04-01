@@ -280,8 +280,8 @@ lalapps_tmpltbank is a rather old program and newer ones exist, such as lalapps_
 
 This program needs to be run on the template bank being used to split it up into sub banks that will be passed to the singular value decompositon code within the pipeline.
 
- Run gstlal_inspiral_pipe to produce offline analysis dag
----------------------------------------------------------
+Run gstlal_inspiral_pipe to produce offline analysis dag
+--------------------------------------------------------
 
 The final stage of the Makefile that produces the analysis dag. ::
 
