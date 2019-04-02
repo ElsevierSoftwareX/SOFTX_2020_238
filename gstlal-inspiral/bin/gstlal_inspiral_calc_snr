@@ -185,12 +185,12 @@ def parse_command_line():
 		if banks is None:
 			raise ValueError("svd bank is empty: Invaild --svd-bank %s" % options.svd_bank)
 		else:
-			try:
+			if 0 <= options.sub_bank_id < len(banks) :
 				bank = banks[options.sub_bank_id]
-			except IndexError:
-				raise IndexError("Invaild --sub-bank-id %d. Possible id (0-%d)\n" % (options.sub_bank_id, len(banks) - 1))
-		if options.row_number >=  bank.bank_fragments[0].mix_matrix.shape[1] / 2:
-			raise ValueError("No such template: Invaild --row-number %d. Possible range (0-%d)\n" % (options.row_number, bank.bank_fragments[0].mix_matrix.shape[1] / 2 - 1))
+			else:
+				raise ValueError("Invaild --sub-bank-id %d. Possible id [0-%d)\n" % (options.sub_bank_id, len(banks)))
+		if not( 0 <= options.row_number < len(bank.sngl_inspiral_table) ):
+			raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(bank.sngl_inspiral_table)))
 
 		return options, gw_data_source_info, bank, psd
 
