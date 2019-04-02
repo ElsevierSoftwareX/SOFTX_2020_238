@@ -27,9 +27,9 @@ The steps to produce the full analysis dag file are:
 
  1. Set analysis variables defined at top of offline Makefile.
  2. Generate frame cache, segments, vetoes, and tisi files.
- 3. Produce injection file
+ 3. Produce injection file.
  4. Generate/copy template bank and then split this into sub-banks.
- 5. Run gstlal_inspiral_pipe to produce offline analysis dag and sub files.
+ 5. Run ``gstlal_inspiral_pipe`` to produce offline analysis dag and sub files.
 
 The information contained within this page is based off the O2 BNS HL test dag, an offline analysis focused on 100,000s centered around GW170817. The dag used to perform the analysis can be produced using a `Makefile <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HL_test_dag_O2>`_ that generates most of the required files. This tutorial will just cover the HL detector pair configuration, though a HLV Makefile can be found `here <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HLV_test_dag_O2>`_. In this tutorial we detail each stage of the Makefile needed to run an offline analysis.
 
@@ -91,7 +91,7 @@ Gravitational wave data segment, frame type, and channel name information. See h
 
  include /path/to/Makefile.offline_analysis_rules
 
-Full path to [Makefile.offline_analysis_rules](https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/Makefile.offline_analysis_rules). This file contains sets of rules for string parsing/manipulation used within the main Makefile and an up-to-date version must be included.
+Full path to `Makefile.offline_analysis_rules <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/Makefile.offline_analysis_rules>`_. This file contains sets of rules for string parsing/manipulation used within the main Makefile and an up-to-date version must be included.
 
 Generate frame cache, segments, vetoes, and tisi files
 ------------------------------------------------------
@@ -99,7 +99,7 @@ Generate frame cache, segments, vetoes, and tisi files
 frame.cache file
 ^^^^^^^^^^^^^^^^
 
-The frame.cache file contains the full paths to the Gravitational Wave data .gwf files using the following format:  
+The frame.cache file contains the full paths to the gravitational wave data .gwf files using the following format:  
 
 Detector site identifier, frame type, start GPS time, duration, full path to file ::
 
@@ -112,7 +112,7 @@ If the .gwf data files are stored locally, then you can produce individual detec
 
 The ``awk`` command provides some formating to put the output in the required format.
 
-If the data must be accessed via CVMFS then the following option needs to be added to the ``gw_data_find`` arguments::
+If the data must be accessed via `CVMFS <https://www.gw-openscience.org/cvmfs/>`_ then the following option needs to be added to the ``gw_data_find`` arguments::
 
  --server datafind.ligo.org:443
 
@@ -130,7 +130,7 @@ The segments.xml.gz file contains a list of all data segments that should be ana
  ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > %_segmentspadded.xml
  ligolw_no_ilwdchar $*_segmentspadded.xml
 
-This returns an initial segments list. This command makes use of some Makefile variables segmentspadded files for each detector specified by $IFOS. ``ligolw_no_ilwdchar`` is run on the output files to convert some table column types from ilwd:char to int4s. This command will need to be run on any xml file produced by a non-gstlal program. ::
+This returns an initial segments list. This command makes use of some Makefile variables to produce segmentspadded.xml files for each detector specified by $IFOS. ``ligolw_no_ilwdchar`` is run on the output files to convert some table column types from ilwd:char to int4s. This command will need to be run on any xml file produced by a non-gstlal program. ::
 
  ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
  ligolw_no_ilwdchar H1-VETOTIME_CAT*.xml
@@ -167,7 +167,7 @@ Combine all veto files into single vetoes.xml.gz file.
 
 tisi.xml.gz and inj_tisi.xml.gz file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Tisi (time slide) files are used for the offsetting of events used within the analysis for the calculation of the background.::
+Tisi (time slide) files are used for the offsetting of events used within the analysis for the calculation of the background. ::
 
  lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 inj_tisi.xml
 
@@ -250,7 +250,7 @@ Injection set parameters. The injection file is then produced with this command:
 Generate/copy template bank and then split this into sub-banks
 --------------------------------------------------------------
 
-The next step is to acquire a template bank that will be used to filter the data. The BNS Makefile produces its own BNS template bank containing ~13,500 templates (parameters are shown below) but there are also existing template bank that can be used. If you are using a pre-existing template bank, then much of the next two sections can be ignored/removed, though some parameters are still used.
+The next step is to acquire a template bank that will be used to filter the data. The BNS Makefile produces its own BNS template bank containing ~13,500 templates (parameters are shown below) but there are also existing template bank that can be used. If you are using a pre-existing template bank, then much of the next two code blocks can be ignored/removed, though some parameters are still used elsewhere.
 
 **Note. lalapps_tmpltbank is deprecated code and should not be used for actual analyses.** It is used here as it is faster to run than more modern codes such as `lalapps_cbc_sbank <https://lscsoft.docs.ligo.org/lalsuite/lalapps/namespacelalapps__cbc__sbank.html>`_. ::
 
@@ -391,25 +391,25 @@ The final stage of the Makefile that produces the analysis dag. ::
 Additional commands and submitting the dag
 ------------------------------------------
 
-There are some additional commands and output that are/can be run at the end of the Makefile to perform various tasks. ::
+There are some additional commands that can be run at the end of the Makefile to perform various tasks.  ::
 
  sed -i 's/.*queue.*/Requirements = regexp("Intel.*v[3-5]", TARGET.cpuinfo_model_name)\n&/' *.sub
 
-A sed command that makes jobs only run on intel architecture. Only needed if using an optimised build. ::
+A ``sed`` command that makes jobs only run on intel architecture. Only needed if using an optimised build. ::
 
  sed -i 's/.*request_memory.*/#&\n+MemoryUsage = ( 2048 ) * 2 \/ 3\nrequest_memory = ( MemoryUsage ) * 3 \/ 2\nperiodic_hold = ( MemoryUsage >= ( ( RequestMemory ) * 3 \/ 2 ) )\nperiodic_release = (JobStatus == 5) \&\& ((CurrentTime - EnteredCurrentStatus) > 180) \&\& (HoldReasonCode != 34)/' *.sub
  sed -i 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral.sub
  sed -i 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral_inj.sub
 
-A set of sed commands to to make the memory request of jobs dynamical. These commands shouldn't be needed for most standard cases, but if you notice that jobs are being placed on hold by condor for going over their requested memory allocation, then these should allow the jobs to run. ::
+A set of ``sed`` commands to to make the memory request of jobs dynamical. These commands shouldn't be needed for most standard cases, but if you notice that jobs are being placed on hold by condor for going over their requested memory allocation, then these should allow the jobs to run. ::
 
  sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub
 
-A sed command to set ``GSTLAL_FIR_WHITEN=0`` for all jobs. Required in all cases. This environment variable is sometimes also set within the env.sh file when sourcing an environment, if it was built by the user. This sed command should be included if using the system build. ::
+A ``sed`` command to set ``GSTLAL_FIR_WHITEN=0`` for all jobs. Required in all cases. This environment variable is sometimes also set within the env.sh file when sourcing an environment, if it was built by the user. This sed command should be included if using the system build. ::
 
  sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=$(MKLROOT)/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
-A sed command to force the use of MKL libraries for injection SNRs. Only needed if using an optimised build.
+A ``sed`` command to force the use of MKL libraries for injection SNRs. Only needed if using an optimised build.
 
 Running the Makefile
 --------------------
@@ -421,7 +421,7 @@ Assuming you have all the prerequisites, running the BNS Makefile as it is only 
  * Line 129: Set path to veto definer file
  * Line 183: Set path to Makefile.offline_analysis_rules
 
-Then to run it, ensuring you have the correct environment set, run with: make -f Makefile.BNS_HL_test_dag_O2
+Then ensuring you have the correct environment set, run with: make -f Makefile.BNS_HL_test_dag_O2
 
 Submitting the dag
 ------------------
