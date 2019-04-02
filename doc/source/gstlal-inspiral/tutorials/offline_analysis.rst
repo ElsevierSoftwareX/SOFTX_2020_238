@@ -13,7 +13,7 @@ Introduction
 
 This tutorial will help you to setup and run a offline gravitational wave search for binary neutron stars. The information contained within this document can easily be modified to perform a wide range of searches.
 
-The offline analysis has a somewhat involved setup procedure which is usually performed with use of a Makefile. This documentation covers everything needed to set up a offline search. The analysis itself is performed by a pipeline contained within a dag (Directed Acyclic Graph) that is managed by condor. The dag and job sub files are produced by running gstlal_inspiral_pipe. This program requires several input files that are produced in several steps, all of which are detailed below. These input files are:
+The offline analysis has a somewhat involved setup procedure which is usually performed with use of a Makefile. This documentation covers everything needed to set up a offline search. The analysis itself is performed by a pipeline contained within a dag (Directed Acyclic Graph) that is managed by condor. The dag and job sub files are produced by running ``gstlal_inspiral_pipe``. This program requires several input files that are produced in several steps, all of which are detailed below. These input files are:
 
  * segments.xml.gz
  * vetoes.xml.gz
@@ -27,8 +27,9 @@ The steps to produce the full analysis dag file are:
 
  1. Set analysis variables defined at top of offline Makefile.
  2. Generate frame cache, segments, vetoes, and tisi files.
- 3. Generate/copy template bank and then split this into sub-banks.
- 4. Run gstlal_inspiral_pipe to produce offline analysis dag and sub files.
+ 3. Produce injection file
+ 4. Generate/copy template bank and then split this into sub-banks.
+ 5. Run gstlal_inspiral_pipe to produce offline analysis dag and sub files.
 
 The information contained within this page is based off the O2 BNS HL test dag, an offline analysis focused on 100,000s centered around GW170817. The dag used to perform the analysis can be produced using a `Makefile <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HL_test_dag_O2>`_ that generates most of the required files. This tutorial will just cover the HL detector pair configuration, though a HLV Makefile can be found `here <https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/share/O3/offline/O2/Makefile.BNS_HLV_test_dag_O2>`_. In this tutorial we detail each stage of the Makefile needed to run an offline analysis.
 
@@ -48,7 +49,7 @@ This should be your albert.einstein user identification. This is only needed if 
  IFOS = H1 L1
  MIN_IFOS = 2
 
-Define which detectors to include within the analysis. H1, L1, and V1 are currently supported. Set minimum number of operational detectors for which to analyise. Able to analyse single detector time. ::
+Define which detectors to include within the analysis. H1, L1, and V1 are currently supported. Set minimum number of operational detectors for which to analyse. Able to analyse single detector time. ::
 
  START = 1187000000
  STOP = 1187100000
@@ -109,9 +110,9 @@ If the .gwf data files are stored locally, then you can produce individual detec
  gw_data_find -o H -t $(HANFORD_FRAME_TYPE) -l -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > H1_frame.cache
  gw_data_find -o L -t $(LIVINGSTON_FRAME_TYPE) -l -s $(START) -e $(STOP) --url-type file | awk '{ print $$1" $*_"$$2" "$$3" "$$4" "$$5}' > L1_frame.cache
 
-The awk command provides some formating to put the output in the required format.
+The ``awk`` command provides some formating to put the output in the required format.
 
-If the data must be accessed via CVMFS then the following option needs to be added to the gw_data_find arguments::
+If the data must be accessed via CVMFS then the following option needs to be added to the ``gw_data_find`` arguments::
 
  --server datafind.ligo.org:443
 
@@ -129,7 +130,7 @@ The segments.xml.gz file contains a list of all data segments that should be ana
  ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > %_segmentspadded.xml
  ligolw_no_ilwdchar $*_segmentspadded.xml
 
-This returns an initial segments list. This command makes use of some Makefile variables segmentspadded files for each detector specified by $IFOS. ligolw_no_ilwdchar is run on the output files to convert some table column types from ilwd:char to int4s. This command will need to be run on any xml file produced by a non-gstlal program. ::
+This returns an initial segments list. This command makes use of some Makefile variables segmentspadded files for each detector specified by $IFOS. ``ligolw_no_ilwdchar`` is run on the output files to convert some table column types from ilwd:char to int4s. This command will need to be run on any xml file produced by a non-gstlal program. ::
 
  ligolw_segments_from_cats_dqsegdb --segment-url=$(SEG_SERVER) --veto-file=$(VETODEF) --gps-start-time $(START) --gps-end-time $(STOP) --cumulative-categories
  ligolw_no_ilwdchar H1-VETOTIME_CAT*.xml
@@ -156,7 +157,7 @@ Combine initial segment files with CAT1 veto times removed to produce segments.x
  gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file %_vetoes.xml.tmp --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
  gstlal_segments_operations --union --segment-name vetoes --output-file %_vetoes.xml --output-segment-name vetoes %_vetoes.xml.tmp $*-gates.xml
 
-Include gating times into CAT3 veto times files. The gating files contain additional times to veto that are not included within the veto definer file. The ascii files are converted into readable xml files with lauras_txt_files_to_xml. ::
+Include gating times into CAT3 veto times files. The gating files contain additional times to veto that are not included within the veto definer file. The ascii files are converted into readable xml files with ``lauras_txt_files_to_xml``. ::
 
  ligolw_add --output vetoes.xml.gz $(VETOES_FILES)
  ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time vetoes.xml.gz
@@ -177,13 +178,81 @@ Generate injection time slides file. ::
 
 Generate analysis time slides file.
 
+Produce injection file
+----------------------
+
+As stated above, at least one injection file must be passed to ``gstlal_inspiral_pipe``. The Makefile contains a command to produce a single BNS injection set that covers the full analysis period. These parameters can be easily adjusted for different searches. Alternative injection generation codes exist, such as `lvc_rates_injections <https://git.ligo.org/RatesAndPopulations/lvc-rates-and-pop/blob/master/bin/lvc_rates_injections>`_, which can produce injections above a minimum SNR threshold. ::
+
+ ##############
+ # Injections #
+ ##############
+ 
+ # Change as appropriate, whitespace is important
+ MCHIRP_INJECTIONS := 0.5:100.0:1_injections.xml
+ # Minimum component mass 1 for injections
+ INJ_MIN_MASS1 = 1.35
+ # Maximum component mass 1 for injections
+ INJ_MAX_MASS1 = 1.45
+ # Minimum component mass 2 for injections
+ INJ_MIN_MASS2 = 1.35
+ # Maximum component mass 2 for injections
+ INJ_MAX_MASS2 = 1.45
+ # Mean component mass 1 for injections
+ INJ_MEAN_MASS1 = 1.4
+ # Mean component mass 2 for injections
+ INJ_MEAN_MASS2 = 1.4
+ # Standard dev component mass 1 for injections
+ INJ_STD_MASS1 = 0.01
+ # Standard dev component mass 2 for injections
+ INJ_STD_MASS2 = 0.01
+ # Minimum total mass for injections
+ INJ_MIN_TOTAL_MASS = 2.7
+ # Maximum total mass for injections
+ INJ_MAX_TOTAL_MASS = 2.9
+ # minimum frequency for injections. NOTE this should be lower than the intended filtering frequency
+ INJ_FLOW = 15
+ # Minimum injection distance in kpc
+ INJ_MIN_DIST = 20000
+ # Maximum injection distance in kpc
+ INJ_MAX_DIST = 200000
+
+Injection set parameters. The injection file is then produced with this command::
+
+ lalapps_inspinj \
+         --m-distr gaussian \
+         --min-mass1 $(INJ_MIN_MASS1) \
+         --max-mass1 $(INJ_MAX_MASS1) \
+         --min-mass2 $(INJ_MIN_MASS2) \
+         --max-mass2 $(INJ_MAX_MASS2) \
+         --min-mtotal $(INJ_MIN_TOTAL_MASS) \
+         --max-mtotal $(INJ_MAX_TOTAL_MASS) \
+         --mean-mass1 $(INJ_MEAN_MASS1) \
+         --mean-mass2 $(INJ_MEAN_MASS2) \
+         --stdev-mass1 $(INJ_STD_MASS1) \
+         --stdev-mass2 $(INJ_STD_MASS2) \
+         --gps-start-time $(START) \
+         --gps-end-time $(STOP) \
+         --disable-spin \
+         --d-distr uniform \
+         --i-distr uniform \
+         --min-distance $(INJ_MIN_DIST) \
+         --max-distance $(INJ_MAX_DIST) \
+         --waveform TaylorT4threePointFivePN \
+         --l-distr random \
+         --f-lower $(INJ_FLOW) \
+         --time-step 20 \
+         --t-distr uniform \
+         --time-interval 3 \
+         --seed 51056 \
+         --output 1_injections.xml
+ ligolw_no_ilwdchar 1_injections.xml
 
 Generate/copy template bank and then split this into sub-banks
 --------------------------------------------------------------
 
 The next step is to acquire a template bank that will be used to filter the data. The BNS Makefile produces its own BNS template bank containing ~13,500 templates (parameters are shown below) but there are also existing template bank that can be used. If you are using a pre-existing template bank, then much of the next two sections can be ignored/removed, though some parameters are still used.
 
-**Note. lalapps_tmpltbank is deprecated code and should not be used for actual analyses. It is used here as it is faster to run than more modern codes such as `lalapps_cbc_sbank <https://lscsoft.docs.ligo.org/lalsuite/lalapps/namespacelalapps__cbc__sbank.html>`_. ** ::
+**Note. lalapps_tmpltbank is deprecated code and should not be used for actual analyses.** It is used here as it is faster to run than more modern codes such as `lalapps_cbc_sbank <https://lscsoft.docs.ligo.org/lalsuite/lalapps/namespacelalapps__cbc__sbank.html>`_. ::
 
  ############################
  # Template bank parameters #
@@ -261,7 +330,7 @@ Template bank parameters. The bank is then produced with this command::
  ligolw_no_ilwdchar H1-TMPLTBANK-$(START)-2048.xml
  gstlal_inspiral_add_template_ids H1-TMPLTBANK-$(START)-2048.xml
 
-After obtaining a bank gstlal_inspiral_add_template_ids needs to be run on it in order to work with the mass model used in the main analysis. ::
+After obtaining a bank ``gstlal_inspiral_add_template_ids`` needs to be run on it in order to work with the mass model used in the main analysis. ::
 
  mkdir -p $*_split_bank
  gstlal_bank_splitter \
@@ -270,7 +339,7 @@ After obtaining a bank gstlal_inspiral_add_template_ids needs to be run on it in
          --output-path $*_split_bank \
          --approximant $(APPROXIMANT1) \
          --approximant $(APPROXIMANT2) \
-         --output-cache $@ \
+         --output-cache %_split_bank.cache \
          --overlap $(OVERLAP) \
          --instrument $* \
          --n $(NUM_SPLIT_TEMPLATES) \
@@ -336,16 +405,11 @@ A set of sed commands to to make the memory request of jobs dynamical. These com
 
  sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub
 
-A sed command to set 'GSTLAL_FIR_WHITEN=0' for all jobs. Required in all cases. This environment variable is sometimes also set within the env.sh file when sourcing an environment, if it was built by the user. This sed command should be included if using the system build. ::
+A sed command to set ``GSTLAL_FIR_WHITEN=0`` for all jobs. Required in all cases. This environment variable is sometimes also set within the env.sh file when sourcing an environment, if it was built by the user. This sed command should be included if using the system build. ::
 
  sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=$(MKLROOT)/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
-A sed command to force the use of MKL libraries for injection SNRs. Only needed if using an optimised build. ::
-
- Submit with: condor_submit_dag trigger_pipe.dag
- Monitor with: tail -f trigger_pipe.dag.dagman.out | grep -v -e ULOG -e monitoring
-
-Commands for submitting the dag to condor and then to monitor the status of the dag. The grep command provides some formatting to the output, removing superfluous information.
+A sed command to force the use of MKL libraries for injection SNRs. Only needed if using an optimised build.
 
 Running the Makefile
 --------------------
@@ -358,4 +422,12 @@ Assuming you have all the prerequisites, running the BNS Makefile as it is only 
  * Line 183: Set path to Makefile.offline_analysis_rules
 
 Then to run it, ensuring you have the correct environment set, run with: make -f Makefile.BNS_HL_test_dag_O2
+
+Submitting the dag
+------------------
+
+Commands for submitting the dag to condor and then to monitor the status of the dag are output at the end of its running. The ``grep`` command provides some formatting to the output, removing superfluous information::
+
+ Submit with: condor_submit_dag trigger_pipe.dag
+ Monitor with: tail -f trigger_pipe.dag.dagman.out | grep -v -e ULOG -e monitoring
 
