@@ -43,12 +43,12 @@ An accounting tag used to measure LDG computational use. See https://ldas-gridmo
 
  GROUP_USER=albert.einstein
 
-This should be your albert.einstein user idenification. This is only needed if using a shared account. ::
+This should be your albert.einstein user identification. This is only needed if using a shared account. ::
 
  IFOS = H1 L1
  MIN_IFOS = 2
 
-Define which detectors to include within the analysis. H1, L1, and V1 are currently supported. Set minimum number of operational dectors for which to analyise. Able to analyse single detector time. ::
+Define which detectors to include within the analysis. H1, L1, and V1 are currently supported. Set minimum number of operational detectors for which to analyise. Able to analyse single detector time. ::
 
  START = 1187000000
  STOP = 1187100000
@@ -149,20 +149,20 @@ Produce CAT1 vetoes file. ::
  gstlal_segments_operations --diff --output-file segments.xml.gz segdb.xml CAT1_vetoes.xml.gz
  gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(START) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output segments.xml.gz segments.xml.gz
 
-Combine initial segment files with CAT1 vetoe times removed to produce segments.xml.gz file. ::
+Combine initial segment files with CAT1 veto times removed to produce segments.xml.gz file. ::
 
  ./lauras_txt_files_to_xml -i $* -c -o $*-gates.xml $*-GATES-1163203217-24537601.txt
  ligolw_no_ilwdchar $*-gates.xml
  gstlal_segments_operations --union --segment-name VETO_CAT3_CUMULATIVE --output-file %_vetoes.xml.tmp --output-segment-name vetoes $*-VETOTIME_CAT3-*.xml $*-VETOTIME_CAT3-*.xml
  gstlal_segments_operations --union --segment-name vetoes --output-file %_vetoes.xml --output-segment-name vetoes %_vetoes.xml.tmp $*-gates.xml
 
-Include gating times into CAT3 veto times files. The gating files contain aditional times to veto that are not included within the veto definer file. The ascii files are converted into readable xml files with lauras_txt_files_to_xml. ::
+Include gating times into CAT3 veto times files. The gating files contain additional times to veto that are not included within the veto definer file. The ascii files are converted into readable xml files with lauras_txt_files_to_xml. ::
 
  ligolw_add --output vetoes.xml.gz $(VETOES_FILES)
  ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time vetoes.xml.gz
  gzip vetoes.xml.gz
 
-Combine all vetoe files into single vetoes.xml.gz file.
+Combine all veto files into single vetoes.xml.gz file.
 
 tisi.xml.gz and inj_tisi.xml.gz file
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -280,7 +280,7 @@ After obtaining a bank gstlal_inspiral_add_template_ids needs to be run on it in
          --num-banks $(NUMBANKS) \
          H1-TMPLTBANK-$(START)-2048.xml
 
-This program needs to be run on the template bank being used to split it up into sub banks that will be passed to the singular value decompositon code within the pipeline.
+This program needs to be run on the template bank being used to split it up into sub banks that will be passed to the singular value decomposition code within the pipeline.
 
 Run gstlal_inspiral_pipe to produce offline analysis dag
 --------------------------------------------------------
@@ -326,17 +326,17 @@ There are some additional commands and output that are/can be run at the end of 
 
  sed -i 's/.*queue.*/Requirements = regexp("Intel.*v[3-5]", TARGET.cpuinfo_model_name)\n&/' *.sub
 
-A sed command that makes jobs only run on intel arcatechture. Only needed if using an optimised build. ::
+A sed command that makes jobs only run on intel architecture. Only needed if using an optimised build. ::
 
  sed -i 's/.*request_memory.*/#&\n+MemoryUsage = ( 2048 ) * 2 \/ 3\nrequest_memory = ( MemoryUsage ) * 3 \/ 2\nperiodic_hold = ( MemoryUsage >= ( ( RequestMemory ) * 3 \/ 2 ) )\nperiodic_release = (JobStatus == 5) \&\& ((CurrentTime - EnteredCurrentStatus) > 180) \&\& (HoldReasonCode != 34)/' *.sub
  sed -i 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral.sub
  sed -i 's@+MemoryUsage = ( 2048 ) \* 2 / 3@+MemoryUsage = ( 6000 ) \* 2 / 3@' gstlal_inspiral_inj.sub
 
-A set of sed commands to to make the memory requet of jobs dynamical. These commands shouldn't be needed for most standard cases, but if you notice that jobs are being placed on hold by condor for going over their requested memory allowcation, then these should allow the jobs to run. ::
+A set of sed commands to to make the memory request of jobs dynamical. These commands shouldn't be needed for most standard cases, but if you notice that jobs are being placed on hold by condor for going over their requested memory allocation, then these should allow the jobs to run. ::
 
  sed -i "/^environment/s?\$$?GSTLAL_FIR_WHITEN=0;?" *.sub
 
-A sed command to set 'GSTLAL_FIR_WHITEN=0' for all jobs. Required in all cases. This environment variable is sometimes also set within the env.sh file when sourcing an enviroment, if it was built by the user. This sed command should be included if using the system build. ::
+A sed command to set 'GSTLAL_FIR_WHITEN=0' for all jobs. Required in all cases. This environment variable is sometimes also set within the env.sh file when sourcing an environment, if it was built by the user. This sed command should be included if using the system build. ::
 
  sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=$(MKLROOT)/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
 
@@ -357,5 +357,5 @@ Assuming you have all the prerequisites, running the BNS Makefile as it is only 
  * Line 129: Set path to veto definer file
  * Line 183: Set path to Makefile.offline_analysis_rules
 
-Then to run it, ensuring you have the correct envirnment set, run with: make -f Makefile.BNS_HL_test_dag_O2
+Then to run it, ensuring you have the correct environment set, run with: make -f Makefile.BNS_HL_test_dag_O2
 
