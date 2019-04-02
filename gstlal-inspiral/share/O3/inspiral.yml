@@ -4,42 +4,60 @@ dashboard:
   image: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/static/gstlal.png
   tabs:
     - name: Summary
-      url: https://docs.google.com/document/d/e/2PACX-1vSXj6m6A5qHuP4FR6V9fmv2u_mjHH3G-c0T8BWDLiusYOk81rZMRDWWbNnKkcGcQcHx9Ce07bF40DEK/pub
+      url: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/doc.html
     - name: Shifts
-      url: /
+      url: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/schedule.html
+    - name: Chat
+      url: https://chat.ligo.org/ligo/channels/gstlal
     - name: Docs
       url: https://lscsoft.docs.ligo.org/gstlal
     - name: Git
       url: https://git.ligo.org/lscsoft/gstlal
-  GPS: -1
-  Duration: 600
+  gps: -10
+  duration: 600
 
 plots:
   # likelihood history timeseries
   - title: Likelihood
     type: TimeSeries
     measurement: likelihood_history_across_jobs
-    #measurement: likelihood_history
-    column: data
-    aggregate: max
+    schema:
+      column: data
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
 
   # likelihood history heatmap (by job)
   - title: Likelihood by Job
     type: TimeHeatMap
     measurement: likelihood_history
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # FAR history
   - title: FAR
     type: TimeSeries
     measurement: far_history_across_jobs
-    #measurement: far_history
-    column: data
-    aggregate: min
+    schema:
+      column: data
+      aggregate: min
     layout:
       yaxis:
         type: log
@@ -56,172 +74,356 @@ plots:
   - title: FAR by Job
     type: TimeHeatMap
     measurement: far_history
-    column: data
-    aggregate: min
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: min
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # latency history
   - title: Latency
     type: TimeSeries
     measurement: latency_history_across_jobs
-    #measurement: latency_history
-    column: data
-    aggregate: max
+    schema:
+      column: data
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
 
   # latency history heatmap (by job)
   - title: Latency by Job
     type: TimeHeatMap
     measurement: latency_history
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # network snr history
   - title: Network SNR
     type: TimeSeries
-    measurement: snr_history
-    column: data
-    aggregate: max
+    measurement: snr_history_across_jobs
+    schema:
+      column: data
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
 
   # snr history
   - title: H1 SNR
     type: TimeSeries
-    measurement: H1_snr_history
-    column: data
-    aggregate: max
+    measurement: H1_snr_history_across_jobs
+    schema:
+      column: data
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
+
   - title: L1 SNR
     type: TimeSeries
-    measurement: L1_snr_history
-    column: data
-    aggregate: max
+    measurement: L1_snr_history_across_jobs
+    schema:
+      column: data
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
+
   - title: V1 SNR
     type: TimeSeries
-    measurement: V1_snr_history
-    column: data
-    aggregate: max
+    measurement: V1_snr_history_across_jobs
+    schema:
+      column: data
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
 
   # ram history heatmap (by job)
   - title: RAM Usage by Job
     type: TimeHeatMap
     measurement: ram_history
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # noise
   - title: Noise
     type: TimeSeries
     measurement: noise
-    column: data
-    aggregate: max
-    params:
-      - - ifo
+    schema:
+      column: data
+      # bug sets job instead of ifo
+      #tag: ifo
+      #tag_key: ifo
+      tag: job
+      tag_key: job
+      aggregate: max
+      #ifo:
+      job:
         - H1
-      - - ifo
         - L1
-      - - ifo
         - V1
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
 
   # range history
   - title: Range History
     type: TimeSeries
     measurement: range_history
-    column: data
-    aggregate: max
-    params:
-      - - ifo
+    schema:
+      column: data
+      # bug sets job instead of ifo
+      #tag: ifo
+      #tag_key: ifo
+      tag: job
+      tag_key: job
+      aggregate: max
+      #ifo:
+      job:
         - H1
-      - - ifo
         - L1
-      - - ifo
         - V1
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
     value:
 
   # uptime heatmaps (by job)
   - title: H1 Uptime by Job
     type: TimeHeatMap
     measurement: H1_statevector_on
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
+
   - title: L1 Uptime by Job
     type: TimeHeatMap
     measurement: L1_statevector_on
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
+
   - title: V1 Uptime by Job
     type: TimeHeatMap
     measurement: V1_statevector_on
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # downtime heatmaps (by job)
   - title: H1 Downtime by Job
     type: TimeHeatMap
     measurement: H1_statevector_off
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
+
   - title: L1 Downtime by Job
     type: TimeHeatMap
     measurement: L1_statevector_off
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
+
   - title: V1 Downtime by Job
     type: TimeHeatMap
     measurement: V1_statevector_off
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # strain dropped heatmaps (by job)
   - title: H1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: H1_strain_dropped
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
+
   - title: L1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: L1_strain_dropped
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
+
   - title: V1 Strain Dropped by Job
     type: TimeHeatMap
     measurement: V1_strain_dropped
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
+    layout:
+      margin:
+        l: 40
+        r: 20
+        t: 10
+        b: 20
+    data_options:
+      colorscale: "Viridis"
     value:
 
   # time since last plot
   - title: Time Since Last Heartbeat
     type: Bar
     measurement: ram_history
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
     layout:
       xaxis:
         title:
@@ -229,6 +431,7 @@ plots:
       yaxis:
         title:
           text: Time since last heartbeat [s]
+        range: [0, 10]
       margin:
         l: 40
         r: 20
@@ -240,9 +443,11 @@ plots:
   - title: Last Latency by Job
     type: Bar
     measurement: latency_history
-    column: data
-    aggregate: max
-    tag: job
+    schema:
+      column: data
+      tag: job
+      tag_key: job
+      aggregate: max
     layout:
       xaxis:
         title:
@@ -250,6 +455,7 @@ plots:
       yaxis:
         title:
           text: Latency [s]
+        range: [0, 30]
       margin:
         l: 40
         r: 20
@@ -257,15 +463,17 @@ plots:
         b: 40
     value: checked
 
-  # FIXME: add time since trigger plot
-
 nagios:
-  lookback: 600
-  measurement: ram_history
-  column: data
-  aggregate: max
-  num_tags: 327
-  tag: job
+  heartbeat:
+    lookback: 600
+    measurement: ram_history
+    column: data
+    aggregate: max
+    alert_type: heartbeat
+    alert_settings:
+      tag_type: job
+      tag_format: 4digit
+      num_tags: 327
 
 measurements:
   ram_history:
@@ -282,13 +490,6 @@ measurements:
 
 database:
   backend: influxdb
-  #backend: hdf5
-
-  # hdf5 backend settings
-  rootdir: /home/gstlalcbc/replay/last_2_wks_o2/trigs.hyper
-  basename: aggregator
-
-  # influxdb backend settings
-  name: gstlal_inspiral
-  hostname: 10.9.0.112
+  db: gstlal_inspiral_er14
+  hostname: 10.14.0.100
   port: 8086
