@@ -124,23 +124,6 @@ static void update_stats_icombo_lr(PostcohInspiralTable *intable, int icombo, in
 	}	
 }
 
-static void update_stats_icombo(PostcohInspiralTable *intable, int icombo, TriggerStatsXML *stats)
-{
-	int nifo, isingle, write_ifo_mapping[MAX_NIFO];
-	if (icombo > -1) {
-		trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, stats->multistats[icombo]->feature, stats->multistats[icombo]);
-
-	nifo = strlen(intable->ifos)/IFO_LEN;
-	/* add single detector stats */
-	get_write_ifo_mapping(IFOComboMap[icombo].name, nifo, write_ifo_mapping);
-
-	for (isingle=0; isingle< nifo; isingle++){
-		int write_isingle = write_ifo_mapping[isingle];
-		trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), stats->multistats[write_isingle]->feature, stats->multistats[write_isingle]);
-	}
-	}	
-}
-
 /*
  * ============================================================================
  *

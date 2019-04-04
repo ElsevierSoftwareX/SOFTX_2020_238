@@ -78,7 +78,7 @@ trigger_stats_xml_create(char *ifos, int stats_type);
 void
 trigger_stats_xml_destroy(TriggerStatsXML * stats);
 
-double
+float
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats);
 
 double
@@ -89,6 +89,9 @@ get_prob_noise (double cohsnr, double cmbchisq, TriggerStats *margi_stats);
 
 double
 get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml);
+
+double
+get_prob_null(PostcohInspiralTable *intable);
 
 double
 get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio);

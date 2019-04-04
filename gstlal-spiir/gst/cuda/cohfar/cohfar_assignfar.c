@@ -47,6 +47,9 @@
 
 #include <time.h>
 #define DEFAULT_STATS_NAME "stats.xml.gz"
+/* make sure the far value to be 0 to indicate no background event yet, or > FLT_MIN */
+#define BOUND(a,b) (((b)>0)?((b)<(a)?(a):(b)):0)
+
 /* required minimal background events */
 /*
  * ============================================================================
@@ -108,38 +111,40 @@ static void update_trigger_fars_lr(PostcohInspiralTable *table, int icombo, Cohf
 	int hist_trials = element->hist_trials;
 	double n_s = cur_stats->rank_nevent/ (cur_stats->rank_livetime * hist_trials);
 	int rank_idx = get_rank_idx(table, element->bgstats_1w, icombo, element->sense_ratio);
-	table->far_1w = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s;
+	table->far_1w = BOUND(FLT_MIN, gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s);
     table->rank = calc_lr(table, element->bgstats_1w, element->sense_ratio);
 	cur_stats = element->bgstats_1d->multistats[icombo];
 	n_s = cur_stats->rank_nevent/ (cur_stats->rank_livetime * hist_trials);
-	table->far_1d = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s;
+	table->far_1d = BOUND(FLT_MIN, gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s);
 	cur_stats = element->bgstats_2h->multistats[icombo];
 	if (cur_stats->rank_livetime > 0) {
 		n_s = cur_stats->rank_nevent/ (cur_stats->rank_livetime * hist_trials);
-		table->far_2h = gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s;
+		table->far_2h = BOUND(FLT_MIN, gsl_vector_get((gsl_vector*)cur_stats->rank->rank_fap->data, rank_idx) *n_s);
 	}
 	/* FIXME: currently hardcoded for single detectors FAR */
 	cur_stats = element->bgstats_1w->multistats[0];
-	table->far_h_1w = gen_cdf_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+	table->far_h_1w = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	cur_stats = element->bgstats_1w->multistats[1];
-	table->far_l_1w = gen_cdf_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+	table->far_l_1w = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	cur_stats = element->bgstats_1w->multistats[2];
-	table->far_v_1w = gen_cdf_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+	table->far_v_1w = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	cur_stats = element->bgstats_1d->multistats[0];
-	table->far_h_1d = gen_cdf_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+	table->far_h_1d = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	cur_stats = element->bgstats_1d->multistats[1];
-	table->far_l_1d = gen_cdf_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+	table->far_l_1d = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	cur_stats = element->bgstats_1d->multistats[2];
-	table->far_v_1d = gen_cdf_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+	table->far_v_1d = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	cur_stats = element->bgstats_2h->multistats[0];
 	if (cur_stats->feature_livetime > 0) {
-		table->far_h_2h = gen_cdf_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+		table->far_h_2h = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_H, (double)table->chisq_H, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 		cur_stats = element->bgstats_2h->multistats[1];
-		table->far_l_2h = gen_cdf_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+		table->far_l_2h = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_L, (double)table->chisq_L, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 		cur_stats = element->bgstats_2h->multistats[2];
-		table->far_v_2h = gen_cdf_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials);
+		table->far_v_2h = BOUND(FLT_MIN, gen_cdf_from_feature((double)table->snglsnr_V, (double)table->chisq_V, cur_stats)*cur_stats->feature_nevent/ (cur_stats->feature_livetime * hist_trials));
 	}
-	GST_DEBUG_OBJECT(element, "%s, trigger ifo %s, lr 1w %e, lr 1d %e, lr 2h %e, 1w p_noise %e, p_signal %e, cohsnr %f, cmbchisq %f, nullsnr %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f far_1w %e far_1d %e far_2h %e idx 1w %d, idx 1d %d, idx 2h %d, \n", table->ifos, table->pivotal_ifo, table->rank, calc_lr(table, element->bgstats_1d->multistats[icombo], element->sense_ratio), calc_lr(table, element->bgstats_2h->multistats[icombo], element->sense_ratio), get_prob_noise_sngl(icombo, table, element->bgstats_1d), get_prob_snrs(icombo, table, element->sense_ratio), table->cohsnr, table->cmbchisq, table->nullsnr, table->snglsnr_L, table->snglsnr_H, table->snglsnr_V, table->chisq_L, table->chisq_H, table->chisq_V, table->far_1w, table->far_1d, table->far_2h, get_rank_idx(table, element->bgstats_1w, icombo, element->sense_ratio), get_rank_idx(table, element->bgstats_1d, icombo, element->sense_ratio), get_rank_idx(table, element->bgstats_2h, icombo, element->sense_ratio));
+	icombo = get_icombo(table->ifos);
+	GST_DEBUG_OBJECT(element, "gps %d, %s, trigger ifo %s, lr 1w %e, 1w p_noise %e, p_signal %e, p_null %e\n", table->end_time.gpsSeconds, table->ifos, table->pivotal_ifo, table->rank, get_prob_noise_sngl(icombo, table, element->bgstats_1w), get_prob_snrs(icombo, table, element->sense_ratio), get_prob_null(table));
+	GST_DEBUG_OBJECT(element, "gps %d, cohsnr %f, cmbchisq %f, nullsnr %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f far_1w %e far_1d %e far_2h %e idx 1w %d\n", table->end_time.gpsSeconds,table->cohsnr, table->cmbchisq, table->nullsnr, table->snglsnr_L, table->snglsnr_H, table->snglsnr_V, table->chisq_L, table->chisq_H, table->chisq_V, table->far_1w, table->far_1d, table->far_2h, rank_idx);
 }
 
 static void update_trigger_fars(PostcohInspiralTable *table, int icombo, CohfarAssignfar *element)

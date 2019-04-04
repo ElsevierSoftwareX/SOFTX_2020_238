@@ -523,7 +523,7 @@ double
 get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 {
 	double lgp_snr = 0;
-	float this_mean, this_snr, mismatch = 0.3;
+	float this_mean, this_snr, mismatch = 0.5;
 	if (g_strcmp0(intable->pivotal_ifo, "H1") == 0) {
 		this_snr = intable->snglsnr_H;
 		if (icombo == 6 || icombo == 3) { // H1L1 or H1L1V1
@@ -561,7 +561,7 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 	}
 
 	if (icombo < 6)
-		return lgp_snr - 0.399; // normalize the lgp_snr so is consistent with 3-det lgp_snr. +log10(gaussian.pdf(0, 1))
+		return lgp_snr - 0.399; // If less than 3-ifos, assuming the ghost third SNR is right at the expected value. +log10(gaussian.pdf(0, 1))
 	else
 		return lgp_snr;
 
@@ -576,8 +576,7 @@ calc_lr(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, float *s
 	double lgp_signal = 0;
 	lgp_signal += get_prob_snrs(icombo, intable, sense_ratio);
 	lgp_signal += get_prob_null(intable);
-	if (lgp_signal-lgp_noise > 15)
-		printf("end time %d, ifos %s, cohsnr %f, cmbchisq %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f, signal %f (p_null %f) noise %f\n", intable->end_time_H, intable->ifos, intable->cohsnr, intable->cmbchisq, intable->snglsnr_L, intable->snglsnr_H, intable->snglsnr_V, intable->chisq_L, intable->chisq_H, intable->chisq_V, lgp_signal, get_prob_null(intable), lgp_noise);
+	//	printf("background %d, end time %d, ifos %s, cohsnr %f, cmbchisq %f, nullsnr %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f, lgp_noise %f, lgp_signal %f, lgp_null %f\n", intable->is_background, intable->end_time.gpsSeconds, intable->ifos, intable->cohsnr, intable->cmbchisq, intable->nullsnr, intable->snglsnr_L, intable->snglsnr_H, intable->snglsnr_V, intable->chisq_L, intable->chisq_H, intable->chisq_V, lgp_noise, get_prob_snrs(icombo, intable, sense_ratio), get_prob_null(intable));
 	return lgp_signal-lgp_noise;
 }
 
@@ -1803,7 +1802,7 @@ gen_cdf_from_feature(double snr, double chisq, TriggerStats *stats)
 }
 
 
-double
+float
 gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 {
 	RankingStats *rank = stats->rank;
@@ -1812,7 +1811,10 @@ gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 	double rank_val = trigger_stats_get_val_from_map(snr, chisq, rank->rank_map);
 	/* the bins1D_get_idx will compute log10(x) first and then find index, so need to 10^rank_val for this function */
 	int rank_idx = bins1D_get_idx(pow(10, rank_val), rank->rank_pdf);
-	return gsl_vector_get(rank->rank_fap->data, rank_idx);
+	double fap = gsl_vector_get(rank->rank_fap->data, rank_idx);
+	if (fap < FLT_MIN && fap > 0)
+		fap = FLT_MIN;
+	return fap;
 }
 
 void set_sense_ratio(gchar *value, int *nifo, char **pifos, float *sense_ratio)
