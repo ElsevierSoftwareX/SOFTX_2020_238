@@ -576,7 +576,7 @@ __global__ void ker_coh_max_and_chisq_versatile
             /* set the d_snglsnr_* */
             snglsnr_H[peak_cur + write_ifo_mapping[j] * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
             /* set the d_coa_phase_* */
-            snglsnr_H[peak_cur + (3 + write_ifo_mapping[j]) * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+            snglsnr_H[peak_cur + (3 + write_ifo_mapping[j]) * max_npeak] = atan2(tmp_maxsnr.im, tmp_maxsnr.re);
 
             for (int ishift = threadIdx.x - autochisq_half_len; ishift <= autochisq_half_len; ishift += blockDim.x)
             {
@@ -706,7 +706,6 @@ __global__ void ker_coh_max_and_chisq_versatile
 			nullsnr_bg[output_offset]   = nullstream_max;
             /* background need this for Ntoff */
             pix_idx_bg[output_offset]       = sky_idx;          
-	    //printf("iifo %d, ipeak %d, itrial %d, cohsnr_bg %f\n", iifo, ipeak, itrial, snr_max);
 
         }
         __syncthreads();
@@ -749,7 +748,7 @@ __global__ void ker_coh_max_and_chisq_versatile
             /* set the d_snglsnr_* */
             snglsnr_bg_H[output_offset + write_ifo_mapping[j] * hist_trials * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
             /* set the d_coa_phase_* */
-            snglsnr_bg_H[output_offset + (3 + write_ifo_mapping[j]) * hist_trials * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+            snglsnr_bg_H[output_offset + (3 + write_ifo_mapping[j]) * hist_trials * max_npeak] = atan2(tmp_maxsnr.im, tmp_maxsnr.re);
 
             for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
             {
@@ -984,7 +983,7 @@ __global__ void ker_coh_max_and_chisq
             /* set the d_snglsnr_* */
             snglsnr_H[peak_cur + write_ifo_mapping[j] * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
             /* set the d_coa_phase_* */
-            snglsnr_H[peak_cur + (3 + write_ifo_mapping[j]) * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+            snglsnr_H[peak_cur + (3 + write_ifo_mapping[j]) * max_npeak] = atan2(tmp_maxsnr.im, tmp_maxsnr.re);
             
             for (int ishift = threadIdx.x - autochisq_half_len; ishift <= autochisq_half_len; ishift += blockDim.x)
             {
@@ -1145,7 +1144,7 @@ __global__ void ker_coh_max_and_chisq
             /* set the d_snglsnr_* */
             snglsnr_bg_H[output_offset + write_ifo_mapping[j] * hist_trials * max_npeak] =  sqrt(tmp_maxsnr.re * tmp_maxsnr.re + tmp_maxsnr.im * tmp_maxsnr.im);
             /* set the d_coa_phase_* */
-            snglsnr_bg_H[output_offset + (3 + write_ifo_mapping[j]) * hist_trials * max_npeak] = atan(tmp_maxsnr.re / tmp_maxsnr.im);
+            snglsnr_bg_H[output_offset + (3 + write_ifo_mapping[j]) * hist_trials * max_npeak] = atan2(tmp_maxsnr.im, tmp_maxsnr.re);
 
             for (int ishift = srcLane - autochisq_half_len; ishift <= autochisq_half_len; ishift += WARP_SIZE)
             {
