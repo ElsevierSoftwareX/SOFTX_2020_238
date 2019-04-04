@@ -65,6 +65,10 @@ parser.add_option("--ratio-phase-max", metavar = "degrees", type = float, defaul
 
 options, filenames = parser.parse_args()
 
+# FIXME: Hard-coded CALCS dewhitening stuff.  We should have a file with a history of this for H1 and L1, or something like that.
+zeros = [30+0j,30+0j,30+0j,30+0j,30+0j,30+0j,-3.009075115760242e3+3.993177550236464e3j,-3.009075115760242e3+-3.993177550236464e3j,-5.839434764093102e2+6.674504477214695e3j,-5.839434764093102e2-6.674504477214695e3j]
+poles = [0.3+0j,0.3+0j,0.3+0j,0.3+0j,0.3+0j,0.3+0j,1.431097327857237e2+8.198751100282409e3j,1.431097327857237e2-8.198751100282409e3j,8.574723070843939e2+1.636154629741894e4j,8.574723070843939e2-1.636154629741894e4j]
+
 #
 # Load in the filters file that contains filter coefficients, etc.
 # Search the directory tree for files with names matching the one we want.
@@ -72,31 +76,62 @@ options, filenames = parser.parse_args()
 
 # Identify any files that have filters transfer functions in them
 tf_files = [f for f in os.listdir(options.tf_file_directory) if (os.path.isfile(f) and ('GDS' in f or 'DCS' in f) and 'npz' in f and 'filters_transfer_function' in f and '.txt' in f)]
+# Check if we have something from CALCS data
+calcs_tf_file = [f for f in os.listdir(options.tf_file_directory) if (os.path.isfile(f) and 'CALCS_response' in f and '.txt' in f)]
+if len(calcs_tf_file):
+	tf_files.append(calcs_tf_file[0])
+
+# Move response function transfer function to the end so they can be plotted together
+for i in range(0, len(tf_files)):
+	if '_response_' in tf_files[i] and "CALCS" in tf_files[i]:
+		response_file = tf_files.pop(i)
+		tf_files.append(response_file)
+for i in range(0, len(tf_files)):
+	if '_response_' in tf_files[i] and "GDS" in tf_files[i]:
+		response_file = tf_files.pop(i)
+		tf_files.append(response_file)
+for i in range(0, len(tf_files)):
+	if '_response_' in tf_files[i] and "DCS" in tf_files[i]:
+		response_file = tf_files.pop(i)
+		tf_files.append(response_file)
+
+found_response = False
+response_count = 0
+colors = ['orangered', 'silver', 'royalblue', 'maroon']
 for tf_file in tf_files:
-	filters_name = tf_file.split('_npz')[0] + '.npz'
-	# Search the directory tree for filters files with names matching the one we want.
-	filters_paths = []
-	print("\nSearching for %s ..." % filters_name)
-	# Check the user's home directory
-	for dirpath, dirs, files in os.walk(os.environ['HOME']):
-		if filters_name in files:
-			# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
-			if dirpath.count("GDSFilters") > 0:
-				filters_paths.insert(0, os.path.join(dirpath, filters_name))
-			else:
-				filters_paths.append(os.path.join(dirpath, filters_name))
-	# Check if there is a checkout of the entire calibration SVN
-	for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
-		if filters_name in files:
-			# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
-			if dirpath.count("GDSFilters") > 0:
-				filters_paths.insert(0, os.path.join(dirpath, filters_name))
-			else:
-				filters_paths.append(os.path.join(dirpath, filters_name))
-	if not len(filters_paths):
-		raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
-	print("Loading calibration filters from %s\n" % filters_paths[0])
-	filters = numpy.load(filters_paths[0])
+	filters_name = None
+	if '_npz' in tf_file:
+		filters_name = tf_file.split('_npz')[0] + '.npz'
+	elif '_response_' in tf_file:
+		for tf_file_backup in tf_files:
+			if '_npz' in tf_file_backup:
+				filters_name = tf_file_backup.split('_npz')[0] + '.npz'
+	if filters_name is not None:
+		# Search the directory tree for filters files with names matching the one we want.
+		filters_paths = []
+		print("\nSearching for %s ..." % filters_name)
+		# Check the user's home directory
+		for dirpath, dirs, files in os.walk(os.environ['HOME']):
+			if filters_name in files:
+				# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+				if dirpath.count("GDSFilters") > 0:
+					filters_paths.insert(0, os.path.join(dirpath, filters_name))
+				else:
+					filters_paths.append(os.path.join(dirpath, filters_name))
+		# Check if there is a checkout of the entire calibration SVN
+		for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
+			if filters_name in files:
+				# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
+				if dirpath.count("GDSFilters") > 0:
+					filters_paths.insert(0, os.path.join(dirpath, filters_name))
+				else:
+					filters_paths.append(os.path.join(dirpath, filters_name))
+		if not len(filters_paths):
+			raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
+		print("Loading calibration filters from %s\n" % filters_paths[0])
+		filters = numpy.load(filters_paths[0])
+	else:
+		filters = []
 
 	model_jump_delay = options.filters_model_jump_delay
 	# Determine what transfer function this is
@@ -131,6 +166,7 @@ for tf_file in tf_files:
 		plot_title = "Inverse Sensing Correction Transfer Function"
 		model_name = "res_corr_model" if "res_corr_model" in filters else None
 	elif '_response_' in tf_file:
+		found_response = True
 		plot_title = "Response Function"
 		model_name = "response_function" if "response_function" in filters else None
 		model_jump_delay = options.response_model_jump_delay
@@ -140,9 +176,33 @@ for tf_file in tf_files:
 
 	ifo = ''
 	if 'H1' in tf_file:
-		ifo = 'H1 '
+		ifo = 'H1'
 	if 'L1' in tf_file:
-		ifo = 'L1 '
+		ifo = 'L1'
+
+	if 'CALCS' in tf_file:
+		cal_version = 'Front\\mbox{-}end'
+	elif 'GDS' in tf_file:
+		cal_version = 'GDS'
+	elif 'DCS' in tf_file:
+		cal_version = 'DCS'
+	else:
+		cal_version = 'Filters'
+
+	if '_tst_' in tf_file:
+		component = 'TST'
+	elif '_pum_' in tf_file:
+		component = 'PUM'
+	elif '_uim_' in tf_file:
+		component = 'UIM'
+	elif '_pumuim_' in tf_file:
+		component = 'PUMUIM'
+	elif '_tst_' in tf_file:
+		component = 'TST'
+	elif '_res_' in tf_file:
+		component = 'C inv'
+	elif '_response_' in tf_file:
+		component = 'Response'
 
 	# Remove unwanted lines from transfer function file, and re-format wanted lines
 	f = open(tf_file, 'r')
@@ -165,6 +225,12 @@ for tf_file in tf_files:
 	for j in range(0, len(data)):
 		frequency.append(data[j][0])
 		tf_at_f = (data[j][1] + 1j * data[j][2]) * numpy.exp(-2j * numpy.pi * data[j][0] * model_jump_delay)
+		if 'CALCS' in tf_file:
+			# Apply dewhitening here
+			for z in zeros:
+				tf_at_f = tf_at_f * (1.0 + 1j * frequency[j] / z)
+			for p in poles:
+				tf_at_f = tf_at_f / (1.0 + 1j * frequency[j] / p)
 		filters_tf.append(tf_at_f)
 		magnitude.append(abs(tf_at_f))
 		phase.append(numpy.angle(tf_at_f) * 180.0 / numpy.pi)
@@ -210,10 +276,11 @@ for tf_file in tf_files:
 				index += 1
 
 	# Filter transfer function plots
-	plt.figure(figsize = (10, 8))
-	if model_name is not None:
+	if not response_count:
+		plt.figure(figsize = (10, 8))
+	if model_name is not None and model_name is not 'response_function':
 		plt.subplot(221)
-		plt.plot(frequency, model_magnitude, 'orange', linewidth = 1.0, label = r'${\rm L1 \ Model \ response}$')
+		plt.plot(frequency, model_magnitude, colors[0], linewidth = 1.0, label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
 		plt.gca().set_xscale(options.tf_frequency_scale)
@@ -227,7 +294,7 @@ for tf_file in tf_files:
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		ax = plt.subplot(223)
 		ax.set_xscale(options.tf_frequency_scale)
-		plt.plot(frequency, model_phase, 'orange', linewidth = 1.0)
+		plt.plot(frequency, model_phase, colors[0], linewidth = 1.0)
 		plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 		if options.tf_frequency_max > 0:
@@ -236,12 +303,11 @@ for tf_file in tf_files:
 			plt.ylim(options.tf_phase_min, options.tf_phase_max)
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	plt.subplot(221)
-	plt.plot(frequency, magnitude, 'royalblue', linewidth = 1.0, label = r'${\rm L1 \ Filters \ response}$')
+	plt.plot(frequency, magnitude, colors[(response_count + 1) % 4], linewidth = 1.0, label = r'${\rm %s \ %s \ %s}$' % (ifo, cal_version, component))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
 	plt.gca().set_xscale(options.tf_frequency_scale)
 	plt.gca().set_yscale(options.tf_magnitude_scale)
-	#plt.title(plot_title)
 	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
@@ -250,7 +316,7 @@ for tf_file in tf_files:
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax = plt.subplot(223)
 	ax.set_xscale(options.tf_frequency_scale)
-	plt.plot(frequency, phase, 'royalblue', linewidth = 1.0)
+	plt.plot(frequency, phase, colors[(response_count + 1) % 4], linewidth = 1.0)
 	plt.ylabel(r'${\rm Phase [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 	if options.tf_frequency_max > 0:
@@ -258,14 +324,12 @@ for tf_file in tf_files:
 	if options.tf_phase_max < 1000:
 		plt.ylim(options.tf_phase_min, options.tf_phase_max)
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
-	#plt.savefig(tf_file.replace('.txt', '.png'))
-	#plt.savefig(tf_file.replace('.txt', '.pdf'))
 
 	# Plots of the ratio filters / model
 	if model_name is not None:
 		#plt.figure(figsize = (10, 12))
 		plt.subplot(222)
-		plt.plot(frequency, ratio_magnitude, 'royalblue', linewidth = 1.0, label = r'${\rm L1 \ Filters / Model}$')
+		plt.plot(frequency, ratio_magnitude, colors[(response_count + 1) % 4], linewidth = 1.0, label = r'${\rm %s \ %s / Model}$' % (ifo, cal_version))
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
 		plt.gca().set_xscale(options.ratio_frequency_scale)
@@ -279,7 +343,7 @@ for tf_file in tf_files:
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		ax = plt.subplot(224)
 		ax.set_xscale(options.ratio_frequency_scale)
-		plt.plot(frequency, ratio_phase, 'royalblue', linewidth = 1.0)
+		plt.plot(frequency, ratio_phase, colors[(response_count + 1) % 4], linewidth = 1.0)
 		#plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 		if options.ratio_frequency_max > 0:
@@ -287,6 +351,39 @@ for tf_file in tf_files:
 		if options.ratio_phase_max < 1000:
 			plt.ylim(options.ratio_phase_min, options.ratio_phase_max)
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
-		plt.savefig(tf_file.replace('.txt', '_ratio.png'))
-		plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
+		if not ('_response_' in tf_file):
+			plt.savefig(tf_file.replace('.txt', '_ratio.png'))
+			plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
+	if '_response_' in tf_file:
+		response_count += 1
+
+if response_count:
+	# Now add the model response function
+	plt.subplot(221)
+	plt.plot(frequency, model_magnitude, colors[0], linewidth = 1.0, linestyle = '--', label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
+	leg = plt.legend(fancybox = True)
+	leg.get_frame().set_alpha(0.5)
+	plt.gca().set_xscale(options.tf_frequency_scale)
+	plt.gca().set_yscale(options.tf_magnitude_scale)
+	#plt.title(plot_title)
+	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
+	if options.tf_frequency_max > 0:
+		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
+	if options.tf_magnitude_max > 0:
+		plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
+	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	ax = plt.subplot(223)
+	ax.set_xscale(options.tf_frequency_scale)
+	plt.plot(frequency, model_phase, colors[0], linewidth = 1.0, linestyle = '--')
+	plt.ylabel(r'${\rm Phase \ [deg]}$')
+	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
+	if options.tf_frequency_max > 0:
+		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
+	if options.tf_phase_max < 1000:
+		plt.ylim(options.tf_phase_min, options.tf_phase_max)
+	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+plt.savefig(tf_file.replace('.txt', '_ratio.png'))
+plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
+
+
 

@@ -22,7 +22,7 @@ PLOT_WARMUP_TIME = 256
 PLOT_COOLDOWN_TIME = 256
 
 GDSCONFIGS = Filters/ER14/GDSFilters/H1GDS_noisesub_test_1232874910.ini 
-DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
+DCSCONFIGS = Filters/ER14/GDSFilters/L1DCS_1235491416_best.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
@@ -33,7 +33,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: highpass_filter_ASD_GDS filters_tf_GDS
+all: filters_tf_all
 
 ###############################################
 ### These commands should change less often ###
@@ -126,12 +126,15 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 filters_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
-filters_tfs_GDS:
-	#$(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache $(IFO)1_hoft_GDS_BEST_frames.cache
-	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
-
 filters_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
+
+filters_tf_CALCS: $(IFO)1_easy_raw_frames.cache
+	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
+
+filters_tf_all: 
+	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache $(IFO)1_hoft_DCS_frames.cache
+	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.8 --ratio-magnitude-max 1.2 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
 latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
@@ -145,6 +148,9 @@ CALCS_GDS_ASD: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 
 GDS_over_CALCS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-DELTAL_EXTERNAL_DQ --denominator-name 'CALCS' --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --numerator-name 'GDS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -180.0 --phase-max 180.0 --labels 'GDS / CALCS' --poles '30,0,30,0,30,0,30,0,30,0,30,0,-3.009075115760242e3,3.993177550236464e3,-3.009075115760242e3,-3.993177550236464e3,-5.839434764093102e2,6.674504477214695e3,-5.839434764093102e2,-6.674504477214695e3' --zeros '0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,1.431097327857237e2,8.198751100282409e3,1.431097327857237e2,-8.198751100282409e3,8.574723070843939e2,1.636154629741894e4,8.574723070843939e2,-1.636154629741894e4' --gain 3994.5
+
+CALCS_response: $(IFO)1_easy_raw_frames.cache
+	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-DARM_ERR_DBL_DQ --denominator-name 'DARM_ERR' --numerator-frame-cache-list $(IFO)1_easy_raw_frames.cache --numerator-channel-list CAL-DELTAL_EXTERNAL_DQ --numerator-name 'CALCS' --use-median --frequency-min 0.5 --frequency-max 8192 --magnitude-min 1e-15 --magnitude-max 1e-3 --phase-min -180.0 --phase-max 180.0 --labels 'CALCS response' --zeros '30,0,30,0,30,0,30,0,30,0,30,0,-3.009075115760242e3,3.993177550236464e3,-3.009075115760242e3,-3.993177550236464e3,-5.839434764093102e2,6.674504477214695e3,-5.839434764093102e2,-6.674504477214695e3' --poles '0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,1.431097327857237e2,8.198751100282409e3,1.431097327857237e2,-8.198751100282409e3,8.574723070843939e2,1.636154629741894e4,8.574723070843939e2,-1.636154629741894e4'
 
 GDS_over_C02: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_C02_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_C02_frames.cache --denominator-channel-name DCS-CALIB_STRAIN_C02 --denominator-name 'C02' --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --numerator-name 'GDS' --use-median --magnitude-min 0.7 --magnitude-max 1.3 --phase-min -20.0 --phase-max 20.0 --labels 'GDS / C02'
