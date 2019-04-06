@@ -81,11 +81,35 @@ options, filenames = parse_command_line()
 # handler for obtaining psd
 #
 
-class PSDHandler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, firbank):
-		simplehandler.Handler.__init__(self,mainloop, pipeline)
+class PipelineHandler(simplehandler.Handler):
+	def __init__(self, mainloop, pipeline, template_bank, firbank):
+		simplehandler.Handler.__init__(self, mainloop, pipeline)
+		self.template_bank = template_bank
 		self.firbank = firbank
 		self.triggergen = triggergen
+		# use central_freq to uniquely identify templates
+		self.sigma = dict((row.central_freq, 0.0) for row in template_bank)
+		# counter for controlling how often we update PSD
+		self.update_psd = 0
+
+	def appsink_new_buffer(self, elem):
+		buf = elem.emit("pull-sample").get_buffer()
+		events = []
+		for i in range(buf.n_memory()):
+			memory = buf.peek_memory(i)
+			result, mapinfo = memory.map(Gst.MapFlags.READ)
+			assert result
+			if mapinfo.data:
+				events.extend(snglbursttable.GSTLALSnglBurst.from_buffer(mapinfo.data))
+			memory.unmap(mapinfo)
+		# put info of each event in the sngl burst table
+		for event in events:
+			event.process_id = process.process_id
+			event.event_id = sngl_burst_table.get_next_id()
+			event.amplitude = event.snr / self.sigma[event.central_freq]
+			sngl_burst_table.append(event)
+			# event counter
+			search_summary.nevents += 1
 
 	def do_on_message(self, bus, message):
 		if message.type == Gst.MessageType.ELEMENT and  message.get_structure().get_name() == "spectrum":
@@ -95,73 +119,87 @@ class PSDHandler(simplehandler.Handler):
 			stability = float(message.src.get_property("n-samples")) / message.src.get_property("average-samples")
 
 			if stability > 0.3:
-				print >> sys.stderr, "At GPS time", timestamp, "PSD stable"
-				template_t = [None] * len(template_bank_table)
-				autocorr = [None] * len(template_bank_table)
-				# make templates, whiten, put into firbank
-				for i, row in enumerate(template_bank_table):
-					# linearly polarized, so just use plus mode time series
-					template_t[i], _ = lalsimulation.GenerateStringCusp(1.0,row.central_freq,1.0/options.sample_rate)
-					# zero-pad it to 32 seconds to obtain same deltaF as the PSD
-					template_t[i] = lal.ResizeREAL8TimeSeries(template_t[i],-int(32*options.sample_rate - template_t[i].data.length)//2,int(32*options.sample_rate))
-					# setup of frequency domain
-					length = template_t[i].data.length
-					duration = float(length) / options.sample_rate
-					epoch = -(length-1) // 2 /options.sample_rate
-					template_f = lal.CreateCOMPLEX16FrequencySeries("template_freq", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("strain s"), length // 2 + 1)
-					fplan = lal.CreateForwardREAL8FFTPlan(length,0)
-					# FFT to frequency domain
-					lal.REAL8TimeFreqFFT(template_f,template_t[i],fplan)
-					# set DC and Nyquist to zero
-					template_f.data.data[0] = 0.0
-					template_f.data.data[template_f.data.length-1] = 0.0
-					# whiten
-					template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd)
-					# obtain autocorr time series by squaring template and inverse FFT it
-					template_f_squared = lal.CreateCOMPLEX16FrequencySeries("whitened template_freq squared", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("s"), length // 2 + 1)
-					autocorr_t = lal.CreateREAL8TimeSeries("autocorr_time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
-					rplan = lal.CreateReverseREAL8FFTPlan(length,0)
-					template_f_squared.data.data = abs(template_f.data.data)**2
-					lal.REAL8FreqTimeFFT(autocorr_t,template_f_squared,rplan)
-					# normalize autocorrelation by central (maximum) value
-					autocorr_t.data.data /= numpy.max(autocorr_t.data.data)
-					autocorr_t = autocorr_t.data.data
-					max_index = numpy.argmax(autocorr_t)
-					# find the index of the third extremum for the template with lowest high-f cutoff.
-					# we do this because we know that the template with the lowest high-f cutoff will have
-					# the largest chi2_index.
-					if i == 0:
-						extr_ctr = 0
-						chi2_index = 0
-						for j in range(max_index+1, len(autocorr_t)):
-							slope1 = autocorr_t[j+1] - autocorr_t[j]
-							slope0 = autocorr_t[j] - autocorr_t[j-1]
-							chi2_index += 1
-							if(slope1 * slope0 < 0):
-								extr_ctr += 1
-								if(extr_ctr == 2):
-									break
-					assert extr_ctr == 2, 'could not find 3rd extremum'
-					# extract the part within the third extremum, setting the peak to be the center.
-					autocorr[i] = numpy.concatenate((autocorr_t[1:(chi2_index+1)][::-1], autocorr_t[:(chi2_index+1)]))
-					assert len(autocorr[i])%2==1, 'autocorr must have odd number of samples'
-					# Inverse FFT template bank back to time domain
-					template_t[i] = lal.CreateREAL8TimeSeries("whitened template time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
-					lal.REAL8FreqTimeFFT(template_t[i],template_f,rplan)
-					# normalize
-					template_t[i].data.data /= numpy.sqrt(numpy.dot(template_t[i].data.data, template_t[i].data.data))
-					template_t[i] = template_t[i].data.data
-				firbank.set_property("latency", -(len(template_t[0]) - 1) // 2)
-				firbank.set_property("fir_matrix", template_t)
-				triggergen.set_property("autocorrelation_matrix", autocorr)
-				self.firbank = firbank
-				self.triggergen = triggergen
+				if self.update_psd > 0:
+					# do nothing, just decrease the counter
+					self.update_psd -= 1
+				else:
+					# PSD counter reached zero
+					print >> sys.stderr, "At GPS time", timestamp, "updating PSD"
+					# NOTE this initialization determines how often the PSD gets updated. This should be given by the user, or we can think of other fancier updates.
+					self.update_psd = 10
+					template_t = [None] * len(self.template_bank)
+					autocorr = [None] * len(self.template_bank)
+					# make templates, whiten, put into firbank
+					# FIXME Currently works only for cusps. this for-loop needs to be revisited when searching for other sources (kinks, ...)
+					for i, row in enumerate(self.template_bank):
+						# Obtain cusp waveform. A cusp signal is linearly polarized, so just use plus mode time series
+						template_t[i], _ = lalsimulation.GenerateStringCusp(1.0,row.central_freq,1.0/options.sample_rate)
+						# zero-pad it to 32 seconds to obtain same deltaF as the PSD
+						template_t[i] = lal.ResizeREAL8TimeSeries(template_t[i],-int(32*options.sample_rate - template_t[i].data.length)//2,int(32*options.sample_rate))
+						# setup of frequency domain
+						length = template_t[i].data.length
+						duration = float(length) / options.sample_rate
+						epoch = -(length-1) // 2 / options.sample_rate
+						template_f = lal.CreateCOMPLEX16FrequencySeries("template_freq", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("strain s"), length // 2 + 1)
+						fplan = lal.CreateForwardREAL8FFTPlan(length,0)
+						# FFT to frequency domain
+						lal.REAL8TimeFreqFFT(template_f,template_t[i],fplan)
+						# set DC and Nyquist to zero
+						template_f.data.data[0] = 0.0
+						template_f.data.data[template_f.data.length-1] = 0.0
+						# whiten
+						assert template_f.deltaF == psd.deltaF, "freq interval not same between template and PSD"
+						template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd)
+						# Obtain the normalization for getting the amplitude of signal from SNR
+						# Integrate over frequency range covered by template. Note that template_f is already whitened.
+						sigmasq = 0.0
+						sigmasq = numpy.trapz(4.0 * template_f.data.data**2, dx = psd.deltaF)
+						self.sigma[row.central_freq] = numpy.sqrt(sigmasq.real)
+						# obtain autocorr time series by squaring template and inverse FFT it
+						template_f_squared = lal.CreateCOMPLEX16FrequencySeries("whitened template_freq squared", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("s"), length // 2 + 1)
+						autocorr_t = lal.CreateREAL8TimeSeries("autocorr_time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
+						rplan = lal.CreateReverseREAL8FFTPlan(length,0)
+						template_f_squared.data.data = abs(template_f.data.data)**2
+						lal.REAL8FreqTimeFFT(autocorr_t,template_f_squared,rplan)
+						# normalize autocorrelation by central (maximum) value
+						autocorr_t.data.data /= numpy.max(autocorr_t.data.data)
+						autocorr_t = autocorr_t.data.data
+						max_index = numpy.argmax(autocorr_t)
+						# find the index of the third extremum for the template with lowest high-f cutoff.
+						# we don't want to do this for all templates, because we know that 
+						# the template with the lowest high-f cutoff will have the largest chi2_index.
+						if i == 0:
+							extr_ctr = 0
+							chi2_index = 0
+							for j in range(max_index+1, len(autocorr_t)):
+								slope1 = autocorr_t[j+1] - autocorr_t[j]
+								slope0 = autocorr_t[j] - autocorr_t[j-1]
+								chi2_index += 1
+								if(slope1 * slope0 < 0):
+									extr_ctr += 1
+									if(extr_ctr == 2):
+										break
+						assert extr_ctr == 2, 'could not find 3rd extremum'
+						# extract the part within the third extremum, setting the peak to be the center.
+						autocorr[i] = numpy.concatenate((autocorr_t[1:(chi2_index+1)][::-1], autocorr_t[:(chi2_index+1)]))
+						assert len(autocorr[i])%2==1, 'autocorr must have odd number of samples'
+						# Inverse FFT template bank back to time domain
+						template_t[i] = lal.CreateREAL8TimeSeries("whitened template time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
+						lal.REAL8FreqTimeFFT(template_t[i],template_f,rplan)
+						# normalize
+						template_t[i].data.data /= numpy.sqrt(numpy.dot(template_t[i].data.data, template_t[i].data.data))
+						template_t[i] = template_t[i].data.data
+					firbank.set_property("latency", -(len(template_t[0]) - 1) // 2)
+					firbank.set_property("fir_matrix", template_t)
+					triggergen.set_property("autocorrelation_matrix", autocorr)
+					self.firbank = firbank
+					self.triggergen = triggergen
 			else:
 				# use templates with all zeros during burn-in period, that way we won't get any triggers.
 				print >> sys.stderr, "At GPS time", timestamp, "burn in period"
-				template = [None] * len(template_bank_table)
-				autocorr = [None] * len(template_bank_table)
-				for i, row in enumerate(template_bank_table):
+				template = [None] * len(self.template_bank)
+				autocorr = [None] * len(self.template_bank)
+				for i, row in enumerate(self.template_bank):
 					template[i], _ = lalsimulation.GenerateStringCusp(1.0,30,1.0/options.sample_rate)
 					template[i] = lal.ResizeREAL8TimeSeries(template[i], -int(32*options.sample_rate - template[i].data.length)//2 ,int(32*options.sample_rate))
 					template[i] = template[i].data.data
@@ -252,6 +290,23 @@ process = ligolw_process.register_to_xmldoc(xmldoc, "StringSearch", options.__di
 sngl_burst_table = lsctables.New(lsctables.SnglBurstTable, ["process:process_id", "event_id","ifo","search","channel","start_time","start_time_ns","peak_time","peak_time_ns","duration","central_freq","bandwidth","amplitude","snr","confidence","chisq","chisq_dof"])
 xmldoc.childNodes[-1].appendChild(sngl_burst_table)
 
+#
+# append search_summary table
+# nevents will be filled out later
+#
+
+search_summary_table = lsctables.New(lsctables.SearchSummaryTable, ["process:process_id", "comment", "ifos", "in_start_time", "in_start_time_ns", "in_end_time", "in_end_time_ns", "out_start_time", "out_start_time_ns", "out_end_time", "out_end_time_ns", "nevents", "nnodes"])
+xmldoc.childNodes[-1].appendChild(search_summary_table)
+search_summary = lsctables.SearchSummary()
+search_summary.process_id = process.process_id
+if options.user_tag:
+	search_summary.comment = options.user_tag
+search_summary.ifos = template_bank_table[0].ifo
+search_summary.out_start = search_summary.in_start = LIGOTimeGPS(options.gps_start_time)
+search_summary.out_end = search_summary.in_end = LIGOTimeGPS(options.gps_end_time)
+search_summary.nnodes = 1
+search_summary.nevents = 0
+
 
 #
 # trigger generator
@@ -260,26 +315,15 @@ xmldoc.childNodes[-1].appendChild(sngl_burst_table)
 head = triggergen = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen", threshold = options.threshold, cluster = options.cluster_events, bank_filename = options.template_bank, autocorrelation_matrix = numpy.zeros((len(template_bank_table), 403),dtype=numpy.float64))
 
 
+mainloop = GObject.MainLoop()
+handler = PipelineHandler(mainloop, pipeline, template_bank_table, firbank)
+
+
 #
 # appsync
 #
 
-def appsink_new_buffer(elem):
-	buf = elem.emit("pull-sample").get_buffer()
-	events = []
-	for i in range(buf.n_memory()):
-		memory = buf.peek_memory(i)
-		result, mapinfo = memory.map(Gst.MapFlags.READ)
-		assert result
-		if mapinfo.data:
-			events.extend(snglbursttable.GSTLALSnglBurst.from_buffer(mapinfo.data))
-		memory.unmap(mapinfo)
-	for event in events:
-		event.process_id = process.process_id
-		event.event_id = sngl_burst_table.get_next_id()
-		sngl_burst_table.append(event)
-
-appsync = pipeparts.AppSync(appsink_new_buffer = appsink_new_buffer)
+appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
 appsync.add_sink(pipeline, head, caps = Gst.Caps.from_string("application/x-lal-snglburst"))
 
 
@@ -295,18 +339,15 @@ options.gps_start_time = LIGOTimeGPS(options.gps_start_time)
 options.gps_end_time = LIGOTimeGPS(options.gps_end_time)
 datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time);
 
-
 if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline did not enter playing state")
 
 
-mainloop = GObject.MainLoop()
-handler = PSDHandler(mainloop, pipeline, firbank)
 mainloop.run()
-
 
 #
 # write output to disk
 #
 
+search_summary_table.append(search_summary)
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
