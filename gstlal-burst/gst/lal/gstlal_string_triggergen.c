@@ -239,7 +239,16 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 		for(channel = 0; channel < element->num_templates; channel++, snrsample++) {
 			float snr = fabsf(*snrsample);
 			if(snr >= element->threshold) {
+				/*
+				 * If this is the first sample above threshold (i.e. snr of trigger is (re)set to 0), record the start time.
+				 */
+				if(element->bank[channel].snr < element->threshold)
+					element->bank[channel].start_time = t;
+				/*
+				 * Keep track of last time above threshold and the duration.
+				 */
 				element->last_time[channel] = t;
+				element->bank[channel].duration = XLALGPSDiff(&element->last_time[channel], &element->bank[channel].start_time);
 				if(snr > element->bank[channel].snr) {
 					/*
 					 * Higher SNR than the "current winner". Update.
@@ -406,6 +415,8 @@ static gboolean start(GstBaseTransform *trans)
 			 */
 
 			XLALINT8NSToGPS(&element->bank[i].peak_time, 0);
+			XLALINT8NSToGPS(&element->bank[i].start_time, 0);
+			element->bank[i].duration = 0;
 			element->bank[i].snr = 0;
 
 			/*
