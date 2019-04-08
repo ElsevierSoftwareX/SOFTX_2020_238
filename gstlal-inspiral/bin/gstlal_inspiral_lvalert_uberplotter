@@ -1,0 +1,245 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2012  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+### A program to request some followup data from a running gstlal_inspiral job based on gracedb submissions notified by lvalert
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import json
+import urlparse
+import logging
+from optparse import OptionParser
+import os
+import sys
+
+os.environ["MPLCONFIGDIR"] = "/tmp"
+
+
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from ligo.gracedb import rest as gracedb
+from lalinspiral.thinca import InspiralCoincDef
+
+
+from gstlal import far
+from gstlal import lvalert_helper
+from gstlal import plotfar
+
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
+	"text.usetex": True
+})
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		usage = "%prog [options] [graceID ...]",
+		description = "%prog generates a suite of plots displaying the data used to assess the significance of a candidate event in gracedb.  This program can be run manually with one more more gracedb IDs provided on the command line.  If no gracedb IDs are given on the command line, the tool assumes it is being run as an lvalert_listen client, and retrieves the candidate ID to process from a json blob ingested from stdin."
+	)
+	parser.add_option("--gracedb-service-url", metavar = "URL", default="%s" % gracedb.DEFAULT_SERVICE_URL, help = "GraceDb service url to upload to (default: %s)" % gracedb.DEFAULT_SERVICE_URL)
+	parser.add_option("--max-snr", metavar = "SNR", type = "float", default = 200., help = "Set the upper bound of the SNR ranges in plots (default = 200).")
+	parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = don't).")
+	parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+
+	options, gid_list = parser.parse_args()
+
+	if not gid_list:
+		# FIXME:  lvalert_listen doesn't allow command-line
+		# options, enable logging for online analysis
+		options.verbose = True
+
+	# can only call basicConfig once (otherwise need to switch to more
+	# complex logging configuration)
+	if options.verbose:
+		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+	else:
+		logging.basicConfig(format = "%(asctime)s:%(message)s")
+
+	if options.no_upload and options.output_path is None:
+		raise ValueError("--no-upload without setting --ouput-path disables all output")
+
+	return options, gid_list
+
+
+#
+# =============================================================================
+#
+#                                Local Library
+#
+# =============================================================================
+#
+
+
+def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml.gz"):
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+
+	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = ranking_data_filename)
+	ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.RankingStat.LIGOLWContentHandler)[0]
+
+	rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+	if rankingstat is None:
+		raise ValueError("failed to extract CoincParams object from '%s'" % ranking_data_filename)
+	# RankingStat objects are never written to disk .finish()ed
+	rankingstat.finish()
+
+	# RankingStatPDF objects are never written to disk extincted
+	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
+
+	return coinc_xmldoc, rankingstat, rankingstatpdf, fapfar
+
+
+def plot_snrchisq(instrument, rankingstat, plot_type, max_snr, snrchisq = None):
+	snr, chisq = snrchisq if snrchisq is not None else (None, None)
+	return plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+	
+
+#
+# command line
+#
+
+
+options, gid_list = parse_command_line()
+
+
+if not gid_list:
+	lvalert_data = json.loads(sys.stdin.read())
+	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
+	logging.info("lvalert data: %s" % repr(lvalert_data))
+	if "filename" in lvalert_data["data"]:
+		filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
+		if filename not in (u"ranking_data.xml.gz",):
+			logging.info("filename is not 'ranking_data.xml.gz'.  skipping")
+			sys.exit()
+		gid_list = [str(lvalert_data["uid"])]
+	else:
+		logging.info("json key filename not in lvalert data, skipping")
+
+
+#
+# connect to gracedb, loop over IDs
+#
+
+
+gracedb_client = gracedb.GraceDb(options.gracedb_service_url)
+
+
+for gid in gid_list:
+	#
+	# download candidate's data
+	#
+
+
+	coinc_xmldoc, rankingstat, rankingstatpdf, fapfar = get_files(gracedb_client, gid)
+	coinc_event_table = lsctables.CoincTable.get_table(coinc_xmldoc)
+	coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+	try:
+		coinc_event, = coinc_event_table
+		coinc_inspiral, = coinc_inspiral_table
+	except ValueError:
+		raise ValueError("document does not contain exactly one candidate")
+	if [(row.search, row.search_coinc_type) for row in lsctables.CoincDefTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_event.coinc_def_id] != [(InspiralCoincDef.search, InspiralCoincDef.search_coinc_type)]:
+		raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
+	offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
+	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+
+
+	#
+	# generate plots
+	#
+
+
+	for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
+		for instrument in rankingstat.instruments:
+			if instrument in sngl_inspirals:
+				# place marker on plot
+				fig = plot_snrchisq(instrument, rankingstat, plot_type, options.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
+			else:
+				# no sngl for this instrument
+				fig = plot_snrchisq(instrument, rankingstat, plot_type, options.max_snr)
+			filename = "%s_%s_%s_snrchi.png" % (gid, instrument, plot_type)
+			if not options.no_upload:
+				lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
+			if options.output_path is not None:
+				filename = os.path.join(options.output_path, filename)
+				logging.info("writing %s ..." % filename)
+				fig.savefig(filename)
+
+
+	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
+	filename = "%s_likehoodratio_ccdf.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
+	if options.output_path is not None:
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
+
+
+	fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
+	filename = "%s_horizon_distances.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
+	if options.output_path is not None:
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
+
+
+	fig = plotfar.plot_rates(rankingstat)
+	filename = "%s_rates.png" % gid
+	if not options.no_upload:
+		lvalert_helper.upload_fig(fig, gracedb_client, gid, filename = filename, log_message = "Instrument combo rates", tagname = "background")
+	if options.output_path is not None:
+		filename = os.path.join(options.output_path, filename)
+		logging.info("writing %s ..." % filename)
+		fig.savefig(filename)
