@@ -47,6 +47,7 @@ Typical Usages:
 	--sample-rate (default = 2048Hz)
 	--f-low (default = 10)
 	--f-high (optional)
+	--template-psd (require)
 
 	3. PSD / Whiten options:
 	--reference-psd (optional)
@@ -124,13 +125,15 @@ def parse_command_line():
 	group.add_option("--sample-rate", metavar = "Hz", default = 2048, type = "int", help = "Sampling rate of the template and SNR for mode 1")
 	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
 	group.add_option("--f-high", metavar = "Hz", type = "float", help = "The maximum frequency of GW signal")
+	group.add_option("--template-psd", metavar = "filename", help = "The psd for whitening template (require).")
 	parser.add_option_group(group)
 
-	group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")
-	group.add_option("--ht-gate-threshold", metavar= "sigma", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to excise glitches in units of standard deviation (optional)")
-	group.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
-	group.add_option("--veto-segments-name", metavar = "name", default = "vetoes", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (default = 'veto') (optional).")
-	parser.add_option_group(group)
+	# FIXME: implement it if needed
+	#group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")
+	#group.add_option("--ht-gate-threshold", metavar= "sigma", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to excise glitches in units of standard deviation (optional)")
+	#group.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	#group.add_option("--veto-segments-name", metavar = "name", default = "vetoes", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (default = 'veto') (optional).")
+	#parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
 	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (requires).")
@@ -208,6 +211,8 @@ def parse_command_line():
 			missing_required_options.append("--instrument")
 		if options.template_duration is None:
 			missing_required_options.append("--template-duration")
+		if options.template_psd is None:
+			missing_required_options.append("--template-psd")
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
@@ -217,10 +222,11 @@ def parse_command_line():
 		if len(row) != 1 :
 			raise ValueError("Expecting only one template for --instrument=%s or cannot find template for --instrument=%s" %(options.instrument, options.instrument))
 
+		template_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_url(options.template_psd, contenthandler = lal.series.PSDContentHandler))
+
 		# work around for building a single whitened template
 		time_slice = numpy.array([(options.sample_rate, 0, options.template_duration)], dtype = [("rate", "int"),("begin", "float"), ("end", "float")])
-		# FIXME: psd[options.instrument] is bad
-		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, psd[options.instrument], options.f_low, time_slice, autocorrelation_length = None, fhigh = options.f_high)
+		workspace = cbc_template_fir.templates_workspace(template_table, options.approximant, template_psd[options.instrument], options.f_low, time_slice, autocorrelation_length = None, fhigh = options.f_high)
 		template, autocorrelation, sigma = workspace.make_whitened_template(row[0])
 
 		return options, gw_data_source_info, template, psd
