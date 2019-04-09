@@ -259,6 +259,10 @@ demodulation_filter_time = int(TDCFConfigs["demodulationfiltertime"])
 coherence_unc_threshold = float(TDCFConfigs["coherenceuncthreshold"])
 actuation_filter_update_time = float(TDCFConfigs["actuationfilterupdatetime"])
 actuation_filter_averaging_time = float(TDCFConfigs["actuationfilteraveragingtime"])
+adaptive_tst_filter_samples = int(TDCFConfigs["adaptivetstfiltersamples"]) if "adaptivetstfiltersamples" in TDCFConfigs else 129
+adaptive_pum_filter_samples = int(TDCFConfigs["adaptivepumfiltersamples"]) if "adaptivepumfiltersamples" in TDCFConfigs else 129
+adaptive_uim_filter_samples = int(TDCFConfigs["adaptiveuimfiltersamples"]) if "adaptiveuimfiltersamples" in TDCFConfigs else 129
+adaptive_pumuim_filter_samples = int(TDCFConfigs["adaptivepumuimfiltersamples"]) if "adaptivepumuimfiltersamples" in TDCFConfigs else 129
 actuation_filter_taper_length = int(TDCFConfigs["actuationfiltertaperlength"])
 sensing_filter_update_time = float(TDCFConfigs["sensingfilterupdatetime"])
 sensing_filter_averaging_time = float(TDCFConfigs["sensingfilteraveragingtime"])
@@ -1608,22 +1612,6 @@ if compute_fs or compute_srcq:
 # TIME-VARYING FACTORS COMPENSATIONS
 #
 
-if apply_complex_kappatst:
-	# We will apply an adaptive FIR filter to the TST component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_tst_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_ktsttee, static_filter = tstfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, variable_filter_length = len(tstfilt), adaptive_filter_length = len(tstfilt), tukey_param = 0.5, filter_sample_rate = tstchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_tst_filter")
-
-if apply_complex_kappapum:
-	# We will apply an adaptive FIR filter to the PUM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pum_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kpumtee, static_filter = pumfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, variable_filter_length = len(pumfilt), adaptive_filter_length = len(pumfilt), tukey_param = 0.5, filter_sample_rate = pumchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pum_filter")
-
-if apply_complex_kappauim:
-	# We will apply an adaptive FIR filter to the UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_uim_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kuimtee, static_filter = uimfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, variable_filter_length = len(uimfilt), adaptive_filter_length = len(uimfilt), tukey_param = 0.5, filter_sample_rate = uimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_uim_filter")
-
-if apply_complex_kappapu:
-	# We will apply an adaptive FIR filter to the PUM/UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pumuim_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kputee, static_filter = pumuimfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, variable_filter_length = len(pumuimfilt), adaptive_filter_length = len(pumuimfilt), tukey_param = 0.5, filter_sample_rate = pumuimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pumuim_filter")
-
 if apply_fcc or apply_fs or apply_srcq:
 	# We will apply an adaptive FIR filter to DARM_ERR that allows corrections for poles, zeros, and gain
 	# We need to track the number of time-dependent and static zeros and poles in the adaptive filter
@@ -1811,26 +1799,27 @@ if any(act_highpass):
 	tst_filter_settle_time += float(len(act_highpass)-act_highpass_delay)/tstchainsr
 	tst_filter_latency += float(act_highpass_delay)/tstchainsr
 
-if apply_complex_kappatst:
-	if filter_latency_factor == 0:
-		# Filter the TST chain with an adaptive TST actuation filter that includes a gain and linear-phase correction from kappa_tst
-		tst = pipeparts.mkgeneric(pipeline, tst, "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = actuation_filter_taper_length, name = "TST_filter")
-		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-		adaptive_tst_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, tst, "adaptive_filter", "kernel")
-	else:
-		# Filter the TST chain with an adaptive TST actuation filter that includes a gain and linear-phase correction from kappa_tst
-		tst = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, tst), "lal_tdwhiten", kernel = tstfilt[::-1], latency = tstdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "TST_filter")
-		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-		adaptive_tst_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, tst, "adaptive_filter", "kernel")
-		adaptive_tst_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, tst, "filter_endtime", "kernel_endtime")
-
-else:
-	# Filter the TST chain with the static TST actuation filter
-	tst = pipeparts.mkfirbank(pipeline, tst, latency = tstdelay, fir_matrix = [tstfilt[::-1]], time_domain = td)
-
+# Filter the TST chain with the static TST actuation filter
+tst = pipeparts.mkfirbank(pipeline, tst, latency = tstdelay, fir_matrix = [tstfilt[::-1]], time_domain = td)
 tst_filter_settle_time += float(len(tstfilt)-tstdelay)/tstchainsr
 tst_filter_latency += float(tstdelay)/tstchainsr
 
+if apply_complex_kappatst and filter_latency_factor == 0:
+	# Filter the TST chain with an adaptive TST actuation filter that includes a gain and linear-phase correction from kappa_tst.  Apply updates as soon as possible with minimal latency.
+	tst = calibration_parts.linear_phase_filter(pipeline, tst, 0.0, num_samples = adaptive_tst_filter_samples, filter_update = smooth_ktsttee, sample_rate = tstchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, taper_length = actuation_filter_taper_length)
+	tst_filter_settle_time += float(adaptive_tst_filter_samples) / 2.0 / tstchainsr
+	tst_filter_latency += float(adaptive_tst_filter_samples) / 2.0 / tstchainsr
+elif apply_complex_kappatst:
+	# Filter the TST chain with an adaptive TST actuation filter that includes a gain and linear-phase correction from kappa_tst.  Apply updates at fixed timestamps to ensure reproducibility.
+	tst = calibration_parts.linear_phase_filter(pipeline, tst, 0.0, num_samples = adaptive_tst_filter_samples, filter_update = smooth_ktsttee, sample_rate = tstchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, taper_length = actuation_filter_taper_length, kernel_endtime = 0, filter_timeshift = 1000000000 * actuation_filter_update_time)
+	tst_filter_settle_time += float(adaptive_tst_filter_samples) / 2.0 / tstchainsr
+	tst_filter_latency += float(adaptive_tst_filter_samples) / 2.0 / tstchainsr
+elif apply_kappatst:
+	# Apply only the real part of \kappa_tst as a correction to A_tst
+	ktst_for_tst = calibration_parts.mkresample(pipeline, smooth_ktstRtee, 3, False, tstchainsr)
+	tst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, ktst_for_tst, tst))
+
+# If we want, measure the transfer function applied by the TST filter(s)
 if test_filters:
 	tst = pipeparts.mktee(pipeline, tst)
 	tst_tf = calibration_parts.mkinterleave(pipeline, [tst, tst_before_filters])
@@ -1840,12 +1829,6 @@ if test_filters:
 	tst_tf_dur = tst_tf_dur - (tst_tf_dur + 8) % 16
 	num_tst_ffts = int(tst_tf_dur / 8)
 	calibration_parts.mktransferfunction(pipeline, tst_tf, fft_length = 16 * tstchainsr, fft_overlap = 8 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
-
-# apply kappa_tst if we haven't already
-if apply_kappatst and not apply_complex_kappatst:
-	# Only apply the real part of \kappa_tst as a correction to A_tst
-	ktst_for_tst = calibration_parts.mkresample(pipeline, smooth_ktstRtee, 3, False, tstchainsr)
-	tst = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, ktst_for_tst, tst))
 
 # resample the TST actuation chain if necessary
 if tstchainsr < actsr:
@@ -1874,25 +1857,30 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_filter_settle_time += float(len(act_highpass)-act_highpass_delay)/uimchainsr
 		uim_filter_latency += float(act_highpass_delay)/uimchainsr
 
-	if apply_complex_kappapum:
-		if filter_latency_factor == 0:
-			# Filter the PUM chain with an adaptive PUM actuation filter that includes a gain and linear-phase correction from kappa_pum
-			pum = pipeparts.mkgeneric(pipeline, pum, "lal_tdwhiten", kernel = pumfilt[::-1], latency = pumdelay, taper_length = actuation_filter_taper_length, name = "PUM_filter")
-			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-			adaptive_pum_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pum, "adaptive_filter", "kernel")
-		else:
-			# Filter the PUM chain with an adaptive PUM actuation filter that includes a gain and linear-phase correction from kappa_pum
-			pum = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, pum), "lal_tdwhiten", kernel = pumfilt[::-1], latency = pumdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "PUM_filter")
-			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-			adaptive_pum_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pum, "adaptive_filter", "kernel")
-			adaptive_pum_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, pum, "filter_endtime", "kernel_endtime")
-	else:
-		# Filter the PUM chain with the static PUM actuation filter
-		pum = pipeparts.mkfirbank(pipeline, pum, latency = pumdelay, fir_matrix = [pumfilt[::-1]], time_domain = td)
-
+	# Filter the PUM and UIM paths with the static PUM and UIM actuation filters
+	pum = pipeparts.mkfirbank(pipeline, pum, latency = pumdelay, fir_matrix = [pumfilt[::-1]], time_domain = td)
 	pum_filter_settle_time += float(len(pumfilt)-pumdelay)/pumchainsr
 	pum_filter_latency += float(pumdelay)/pumchainsr
+	uim = pipeparts.mkfirbank(pipeline, uim, latency = uimdelay, fir_matrix = [uimfilt[::-1]], time_domain = td)
+	uim_filter_settle_time += float(len(uimfilt)-uimdelay)/uimchainsr
+	uim_filter_latency += float(uimdelay)/uimchainsr
 
+	if apply_complex_kappapum and filter_latency_factor == 0:
+		# Filter the PUM chain with an adaptive PUM actuation filter that includes a gain and linear-phase correction from kappa_pum.  Apply updates as soon as possible with minimal latency.
+		pum = calibration_parts.linear_phase_filter(pipeline, pum, 0.0, num_samples = adaptive_pum_filter_samples, filter_update = smooth_kpumtee, sample_rate = pumchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = pum_act_line_freq, taper_length = actuation_filter_taper_length)
+		pum_filter_settle_time += float(adaptive_pum_filter_samples) / 2.0 / pumchainsr
+		pum_filter_latency += float(adaptive_pum_filter_samples) / 2.0 / pumchainsr
+	elif apply_complex_kappapum:
+		# Filter the PUM chain with an adaptive PUM actuation filter that includes a gain and linear-phase correction from kappa_pum.  Apply updates at fixed timestamps to ensure reproducibility.
+		pum = calibration_parts.linear_phase_filter(pipeline, pum, 0.0, num_samples = adaptive_pum_filter_samples, filter_update = smooth_kpumtee, sample_rate = pumchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = pum_act_line_freq, taper_length = actuation_filter_taper_length, kernel_endtime = 0, filter_timeshift = 1000000000 * actuation_filter_update_time)
+		pum_filter_settle_time += float(adaptive_pum_filter_samples) / 2.0 / pumchainsr
+		pum_filter_latency += float(adaptive_pum_filter_samples) / 2.0 / pumchainsr
+	elif apply_kappapum:
+		# Apply only the real part of kappa_pum as a correction to A_pum
+		kpum_for_pum = calibration_parts.mkresample(pipeline, smooth_kpumRtee, 3, False, pumchainsr)
+		pum = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kpum_for_pum, pum))
+
+	# If we want, measure the transfer function applied by the PUM filter(s)
 	if test_filters:
 		pum = pipeparts.mktee(pipeline, pum)
 		pum_tf = calibration_parts.mkinterleave(pipeline, [pum, pum_before_filters])
@@ -1903,25 +1891,22 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		num_pum_ffts = int(pum_tf_dur / 8)
 		calibration_parts.mktransferfunction(pipeline, pum_tf, fft_length = 16 * pumchainsr, fft_overlap = 8 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
 
-	if apply_complex_kappauim:
-		if filter_latency_factor == 0:
-			# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim
-			uim = pipeparts.mkgeneric(pipeline, uim, "lal_tdwhiten", kernel = uimfilt[::-1], latency = uimdelay, taper_length = actuation_filter_taper_length, name = "UIM_filter")
-			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-			adaptive_uim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, uim, "adaptive_filter", "kernel")
-		else:
-			# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim
-			uim = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, uim), "lal_tdwhiten", kernel = uimfilt[::-1], latency = uimdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "UIM_filter")
-			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-			adaptive_uim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, uim, "adaptive_filter", "kernel")
-			adaptive_uim_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, uim, "filter_endtime", "kernel_endtime")
-	else:
-		# Filter the UIM chain with the static UIM actuation filter
-		uim = pipeparts.mkfirbank(pipeline, uim, latency = uimdelay, fir_matrix = [uimfilt[::-1]], time_domain = td)
+	if apply_complex_kappauim and filter_latency_factor == 0:
+		# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim.  Apply updates as soon as possible with minimal latency.
+		uim = calibration_parts.linear_phase_filter(pipeline, uim, 0.0, num_samples = adaptive_uim_filter_samples, filter_update = smooth_kuimtee, sample_rate = uimchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = uim_act_line_freq, taper_length = actuation_filter_taper_length)
+		uim_filter_settle_time += float(adaptive_uim_filter_samples) / 2.0 / uimchainsr
+		uim_filter_latency += float(adaptive_uim_filter_samples) / 2.0 / uimchainsr
+	elif apply_complex_kappauim:
+		# Filter the UIM chain with an adaptive UIM actuation filter that includes a gain and linear-phase correction from kappa_uim.  Apply updates at fixed timestamps to ensure reproducibility.
+		uim = calibration_parts.linear_phase_filter(pipeline, uim, 0.0, num_samples = adaptive_uim_filter_samples, filter_update = smooth_kuimtee, sample_rate = uimchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = uim_act_line_freq, taper_length = actuation_filter_taper_length, kernel_endtime = 0, filter_timeshift = 1000000000 * actuation_filter_update_time)
+		uim_filter_settle_time += float(adaptive_uim_filter_samples) / 2.0 / uimchainsr
+		uim_filter_latency += float(adaptive_uim_filter_samples) / 2.0 / uimchainsr
+	elif apply_kappauim:
+		# Apply only the real part of kappa_uim as a correction to A_uim
+		kuim_for_uim = calibration_parts.mkresample(pipeline, smooth_kuimRtee, 3, False, uimchainsr)
+		uim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kuim_for_uim, uim))
 
-	uim_filter_settle_time += float(len(uimfilt)-uimdelay)/uimchainsr
-	uim_filter_latency += float(uimdelay)/uimchainsr
-
+	# If we want, measure the transfer function applied by the UIM filter(s)
 	if test_filters:
 		uim = pipeparts.mktee(pipeline, uim)
 		uim_tf = calibration_parts.mkinterleave(pipeline, [uim, uim_before_filters])
@@ -1931,17 +1916,6 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 		uim_tf_dur = uim_tf_dur - (uim_tf_dur + 8) % 16
 		num_uim_ffts = int(uim_tf_dur / 8)
 		calibration_parts.mktransferfunction(pipeline, uim_tf, fft_length = 16 * uimchainsr, fft_overlap = 8 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
-
-	# apply kappa_pum if we haven't already
-	if apply_kappapum and not apply_complex_kappapum:
-		# Only apply the real part of kappa_pum as a correction to A_pum
-		kpum_for_pum = calibration_parts.mkresample(pipeline, smooth_kpumRtee, 3, False, pumchainsr)
-		pum = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kpum_for_pum, pum))
-	# apply kappa_uim if we haven't already
-	if apply_kappauim and not apply_complex_kappauim:
-		# Only apply the real part of kappa_uim as a correction to A_uim
-		kuim_for_uim = calibration_parts.mkresample(pipeline, smooth_kuimRtee, 3, False, uimchainsr)
-		uim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kuim_for_uim, uim))
 
 	# resample the PUM actuation path if necessary
 	if pumchainsr < actsr:
@@ -1962,32 +1936,33 @@ else:
 	# Remove any DC component
 	if remove_dc:
 		pumuim = calibration_parts.removeDC(pipeline, pumuim, pumuimchainsr)
-	# High-pass filter the PUM/UIM chain
+	# High-pass filter the PUM/UIM path
 	if any(act_highpass):
 		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = act_highpass_delay, fir_matrix = [act_highpass[::-1]], time_domain = td)
 		pumuim_filter_settle_time += float(len(act_highpass)-act_highpass_delay)/pumuimchainsr
 		pumuim_filter_latency += float(act_highpass_delay)/pumuimchainsr
 
-	if apply_complex_kappapu:
-		if filter_latency_factor == 0:
-			# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a gain and linear-phase correction from kappa_pu
-			pumuim = pipeparts.mkgeneric(pipeline, pumuim, "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = actuation_filter_taper_length, name = "PUMUIM_filter")
-			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-			adaptive_pumuim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pumuim, "adaptive_filter", "kernel")
-		else:
-			# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a gain and linear-phase correction from kappa_pu
-			pumuim = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, pumuim), "lal_tdwhiten", kernel = pumuimfilt[::-1], latency = pumuimdelay, taper_length = actuation_filter_taper_length, kernel_endtime = 0, name = "PUMUIM_filter")
-			# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
-			adaptive_pumuim_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, pumuim, "adaptive_filter", "kernel")
-			adaptive_pumuim_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, pumuim, "filter_endtime", "kernel_endtime")
-
-	else:
-		# Filter the PUM/UIM chain with the static PUM/UIM actuation filter
-		pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = pumuimdelay, fir_matrix = [pumuimfilt[::-1]], time_domain = td)
-
+	# Filter the PUM/UIM path with the static PUM/UIM actuation filter
+	pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = pumuimdelay, fir_matrix = [pumuimfilt[::-1]], time_domain = td)
 	pumuim_filter_settle_time += float(len(pumuimfilt)-pumuimdelay)/pumuimchainsr
 	pumuim_filter_latency += float(pumuimdelay)/pumuimchainsr
 
+	if apply_complex_kappapu and filter_latency_factor == 0:
+		# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a gain and linear-phase correction from kappa_pumuim.  Apply updates as soon as possible with minimal latency.
+		pumuim = calibration_parts.linear_phase_filter(pipeline, pumuim, 0.0, num_samples = adaptive_pumuim_filter_samples, filter_update = smooth_kputee, sample_rate = pumuimchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, taper_length = actuation_filter_taper_length)
+		pumuim_filter_settle_time += float(adaptive_pumuim_filter_samples) / 2.0 / pumuimchainsr
+		pumuim_filter_latency += float(adaptive_pumuim_filter_samples) / 2.0 / pumuimchainsr
+	elif apply_complex_kappapu:
+		# Filter the PUM/UIM chain with an adaptive PUM/UIM actuation filter that includes a gain and linear-phase correction from kappa_pu.  Apply updates at fixed timestamps to ensure reproducibility.
+		pumuim = calibration_parts.linear_phase_filter(pipeline, pumuim, 0.0, num_samples = adaptive_pumuim_filter_samples, filter_update = smooth_kputee, sample_rate = pumuimchainsr, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = darm_ctrl_line_freq, taper_length = actuation_filter_taper_length, kernel_endtime = 0, filter_timeshift = 1000000000 * actuation_filter_update_time)
+		pumuim_filter_settle_time += float(adaptive_pumuim_filter_samples) / 2.0 / pumuimchainsr
+		pumuim_filter_latency += float(adaptive_pumuim_filter_samples) / 2.0 / pumuimchainsr
+	elif apply_kappapu:
+		# Apply only the real part of kappa_pu as a correction to A_pu
+		kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, False, pumuimchainsr)
+		pumuim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kpu_for_pu, pumuim))
+
+	# If we want, measure the transfer function applied by the PUM/UIM filter(s)
 	if test_filters:
 		pumuim = pipeparts.mktee(pipeline, pumuim)
 		pumuim_tf = calibration_parts.mkinterleave(pipeline, [pumuim, pumuim_before_filters])
@@ -1997,13 +1972,6 @@ else:
 		pumuim_tf_dur = pumuim_tf_dur - (pumuim_tf_dur + 8) % 16
 		num_pumuim_ffts = int(pumuim_tf_dur / 8)
 		calibration_parts.mktransferfunction(pipeline, pumuim_tf, fft_length = 16 * pumuimchainsr, fft_overlap = 8 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
-
-	# apply kappa_pu if we haven't already
-	if apply_kappapu and not apply_complex_kappapu:
-		# Only apply the real part of \kappa_pu as a correction to A_pu
-		kpu_for_pu = calibration_parts.mkresample(pipeline, smooth_kpuRtee, 3, False, pumuimchainsr)
-		pumuim = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, kpu_for_pu, pumuim))
-
 
 	# resample the PUM/UIM actuation chain if necessary
 	if pumuimchainsr < actsr:
