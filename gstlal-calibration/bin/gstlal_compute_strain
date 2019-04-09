@@ -511,7 +511,7 @@ fs_default = numpy.sqrt(complex(fs_squared_default))
 if "srcQ" in filters:
 	srcQ_default = complex(filters["srcQ"])
 elif "expectedsrcq" in TDCFConfigs:
-	srcQ_default = complex(TDCFConfigs["srcQ"])
+	srcQ_default = complex(TDCFConfigs["expectedsrcq"])
 else:
 	print("Warning: Could not find expected srcQ in filters file or config file.  Setting to zero.")
 	srcQ_default = 0 + 0j

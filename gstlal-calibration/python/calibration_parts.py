@@ -513,7 +513,7 @@ def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filt
 	# Now apply the filter
 	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.5), fir_matrix = [bandstop], time_domain = td)
 
-def linear_phase_filter(pipeline, head, shift_samples, num_samples = 257, gain = 1.0, filter_update = None, sample_rate = 2048, update_samples = 320, average_samples = 1, phase_measurement_frequency = 100, taper_length = 320, kernel_endtime = None, filter_time_shift = 0):
+def linear_phase_filter(pipeline, head, shift_samples, num_samples = 257, gain = 1.0, filter_update = None, sample_rate = 2048, update_samples = 320, average_samples = 1, phase_measurement_frequency = 100, taper_length = 320, kernel_endtime = None, filter_timeshift = 0):
 
 	# Apply a linear-phase filter to shift timestamps.  shift_samples is the number
 	# of samples of timestamp shift.  It need not be an integer.  A positive value
@@ -548,7 +548,7 @@ def linear_phase_filter(pipeline, head, shift_samples, num_samples = 257, gain =
 		else:
 			# Update filters at specified timestamps to ensure reproducibility
 			head = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, head), "lal_tdwhiten", kernel = sinc_filter, latency = int(num_samples / 2), taper_length = taper_length, kernel_endtime = kernel_endtime)
-			filter_update = mkadaptivefirfilt(pipeline, filter_update, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency, filter_time_shift = filter_time_shift, tukey_param = 0.5)
+			filter_update = mkadaptivefirfilt(pipeline, filter_update, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency, filter_timeshift = filter_timeshift, tukey_param = 0.5)
 			filter_update.connect("notify::adaptive-filter", update_filter, head, "adaptive_filter", "kernel")
 			filter_update.connect("notify::filter-endtime", update_property_simple, head, "filter_endtime", "kernel_endtime")
 	return head
