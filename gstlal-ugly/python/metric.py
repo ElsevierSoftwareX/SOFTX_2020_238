@@ -28,8 +28,8 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 2.0e-7
-EIGEN_DELTA_DET = DELTA
+DELTA = 2e-7
+EIGEN_DELTA_DET = 2e-7
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -280,8 +280,13 @@ class Metric(object):
 		w1 = self.waveform(center)
 		wp = {}
 		wm = {}
+		# FIXME assumes m1,m2,spins... as the coordinates
+		deltas = numpy.zeros(len(center))
+		deltas[0:2] = abs(center[0:2])**.5 * DELTA
+		deltas[2:] += DELTA
+		#deltas = numpy.ones(len(center), dtype=float) * DELTA
 		#deltas = abs(center)**.5 * DELTA + DELTA
-		deltas = abs(center) * DELTA + DELTA
+		#deltas = abs(center) * DELTA + DELTA
 		for i, x in enumerate(deltas):
 			for j, y in enumerate(deltas):
 				dx = numpy.zeros(len(deltas))
