@@ -97,7 +97,6 @@ for i in range(0, len(tf_files)):
 
 found_response = False
 response_count = 0
-colors = ['orangered', 'silver', 'royalblue', 'maroon']
 for tf_file in tf_files:
 	filters_name = None
 	if '_npz' in tf_file:
@@ -182,10 +181,13 @@ for tf_file in tf_files:
 
 	if 'CALCS' in tf_file:
 		cal_version = 'Front\\mbox{-}end'
+		color = 'silver'
 	elif 'GDS' in tf_file:
 		cal_version = 'GDS'
+		color = 'royalblue'
 	elif 'DCS' in tf_file:
 		cal_version = 'DCS'
+		color = 'maroon'
 	else:
 		cal_version = 'Filters'
 
@@ -280,7 +282,7 @@ for tf_file in tf_files:
 		plt.figure(figsize = (10, 8))
 	if model_name is not None and model_name is not 'response_function':
 		plt.subplot(221)
-		plt.plot(frequency, model_magnitude, colors[0], linewidth = 1.0, label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
+		plt.plot(frequency, model_magnitude, 'orangered', linewidth = 1.0, label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
 		plt.gca().set_xscale(options.tf_frequency_scale)
@@ -294,7 +296,7 @@ for tf_file in tf_files:
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		ax = plt.subplot(223)
 		ax.set_xscale(options.tf_frequency_scale)
-		plt.plot(frequency, model_phase, colors[0], linewidth = 1.0)
+		plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0)
 		plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 		if options.tf_frequency_max > 0:
@@ -303,7 +305,7 @@ for tf_file in tf_files:
 			plt.ylim(options.tf_phase_min, options.tf_phase_max)
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	plt.subplot(221)
-	plt.plot(frequency, magnitude, colors[(response_count + 1) % 4], linewidth = 1.0, label = r'${\rm %s \ %s \ %s}$' % (ifo, cal_version, component))
+	plt.plot(frequency, magnitude, color, linewidth = 1.0, label = r'${\rm %s \ %s \ %s}$' % (ifo, cal_version, component))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
 	plt.gca().set_xscale(options.tf_frequency_scale)
@@ -316,7 +318,7 @@ for tf_file in tf_files:
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax = plt.subplot(223)
 	ax.set_xscale(options.tf_frequency_scale)
-	plt.plot(frequency, phase, colors[(response_count + 1) % 4], linewidth = 1.0)
+	plt.plot(frequency, phase, color, linewidth = 1.0)
 	plt.ylabel(r'${\rm Phase [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 	if options.tf_frequency_max > 0:
@@ -329,7 +331,7 @@ for tf_file in tf_files:
 	if model_name is not None:
 		#plt.figure(figsize = (10, 12))
 		plt.subplot(222)
-		plt.plot(frequency, ratio_magnitude, colors[(response_count + 1) % 4], linewidth = 1.0, label = r'${\rm %s \ %s / Model}$' % (ifo, cal_version))
+		plt.plot(frequency, ratio_magnitude, color, linewidth = 1.0, label = r'${\rm %s \ %s / Model}$' % (ifo, cal_version))
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
 		plt.gca().set_xscale(options.ratio_frequency_scale)
@@ -343,7 +345,7 @@ for tf_file in tf_files:
 		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		ax = plt.subplot(224)
 		ax.set_xscale(options.ratio_frequency_scale)
-		plt.plot(frequency, ratio_phase, colors[(response_count + 1) % 4], linewidth = 1.0)
+		plt.plot(frequency, ratio_phase, color, linewidth = 1.0)
 		#plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 		if options.ratio_frequency_max > 0:
@@ -360,7 +362,7 @@ for tf_file in tf_files:
 if response_count:
 	# Now add the model response function
 	plt.subplot(221)
-	plt.plot(frequency, model_magnitude, colors[0], linewidth = 1.0, linestyle = '--', label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
+	plt.plot(frequency, model_magnitude, 'orangered', linewidth = 1.0, linestyle = '--', label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
 	plt.gca().set_xscale(options.tf_frequency_scale)
@@ -374,7 +376,7 @@ if response_count:
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax = plt.subplot(223)
 	ax.set_xscale(options.tf_frequency_scale)
-	plt.plot(frequency, model_phase, colors[0], linewidth = 1.0, linestyle = '--')
+	plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0, linestyle = '--')
 	plt.ylabel(r'${\rm Phase \ [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 	if options.tf_frequency_max > 0:

@@ -4,25 +4,25 @@
 #################################
 
 # which interferometer (H or L)
-IFO = L
+IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
-OBSRUN = ER14
+OBSRUN = O2
 
-START = $(shell echo 1235815424 - 256 | bc)
+START = $(shell echo 1185760000 - 300 | bc)
 #1229094912
 #1225967424
 #1185763328
-END = $(shell echo 1235819520 + 256 | bc)
+END = $(shell echo 1185760000 + 10000 | bc)
 #1229099008
 #1225968448
 #1185771520
 SHMRUNTIME = 36000
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 256
-PLOT_COOLDOWN_TIME = 256
+PLOT_WARMUP_TIME = 300
+PLOT_COOLDOWN_TIME = 300
 
 GDSCONFIGS = Filters/ER14/GDSFilters/H1GDS_noisesub_test_1232874910.ini 
-DCSCONFIGS = Filters/ER14/GDSFilters/L1DCS_1235491416_best.ini
+DCSCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepCorrections_Cleaning.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
@@ -33,7 +33,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: filters_tf_all
+all: DCS_pcal2darm_plots filters_tf_DCS
 
 ###############################################
 ### These commands should change less often ###
@@ -114,8 +114,9 @@ $(IFO)1_hoft_GDS_BEST_frames.cache: $(IFO)1_easy_raw_frames.cache filters frames
 GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --config-file '$(GDSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list GDS-CALIB_STRAIN --labels GDS-CALIB_STRAIN
 
-DCS_pcal2darm_plots: (IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache
-	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_DCS_LINES_frames.cache,$(IFO)1_hoft_DCS_LINES_frames.cache --config-file '$(DCSLINESCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN --labels 'H1:DCS-CALIB_STRAIN,H1:DCS-CALIB_STRAIN_CLEAN'
+DCS_pcal2darm_plots: $(IFO)1_hoft_DCS_TEST_frames.cache
+	#(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache
+	python pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_FCC_frames.cache,$(IFO)1_hoft_DCS_TEST_frames.cache' --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_TX_PD_OUT_DQ --gstlal-channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'Scalars,Cavity pole,All'
 
 pcal_DCS_transfer_functions: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_FCC_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-PCALY_TX_PD_OUT_DQ --denominator-correction y_arm_pcal_corr --numerator-correction arm_length --frequency-max 400 --numerator-frame-cache-list $(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_FCC_frames.cache,$(IFO)1_hoft_DCS_TEST_frames.cache --numerator-channel-list DCS-CALIB_STRAIN_CLEAN,DCS-CALIB_STRAIN_CLEAN,DCS-CALIB_STRAIN_CLEAN --config-file $(DCSCONFIGS) --use-median --labels 'Only scalar corrections,Cavity pole corrections,All corrections'
@@ -126,7 +127,7 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 filters_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
-filters_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
+filters_tf_DCS: $(IFO)1_hoft_DCS_TEST_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
 filters_tf_CALCS: $(IFO)1_easy_raw_frames.cache

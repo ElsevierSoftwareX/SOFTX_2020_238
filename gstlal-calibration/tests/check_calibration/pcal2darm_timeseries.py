@@ -230,11 +230,13 @@ def pcal2darm(pipeline, name):
 
 	# Check if we are taking pcal-to-darm ratios for gstlal calibrated data
 	if options.gstlal_channel_list is not None:
+		cache_num = 0
 		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(channel_list)]):
 			# Get gstlal channels from the gstlal frames
 			hoft_data = pipeparts.mklalcachesrc(pipeline, location = cache, cache_dsc_regex = ifo)
 			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
-			hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0)
+			hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0, element_name_suffix = "_%d" % cache_num)
+			cache_num = cache_num + 1
 			hoft = calibration_parts.caps_and_progress(pipeline, hoft, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", label)
 			deltal = pipeparts.mkaudioamplify(pipeline, hoft, arm_length)
 			deltal = pipeparts.mktee(pipeline, deltal)
