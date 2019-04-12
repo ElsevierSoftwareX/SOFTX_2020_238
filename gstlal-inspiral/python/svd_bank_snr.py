@@ -14,6 +14,7 @@ from gi.repository import GObject, Gst, GstAudio
 GObject.threads_init()
 Gst.init(None)
 
+from gstlal import cbc_template_fir
 from gstlal import datasource
 from gstlal import lloidparts
 from gstlal import multirate_datasource
@@ -25,11 +26,13 @@ from gstlal import simplehandler
 import lal
 from lal import LIGOTimeGPS
 import lal.series
+import lalsimulation as lalsim
 
 from ligo.lw import array as ligolw_array
 from ligo.lw import ligolw
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils
+from ligo.lw import lsctables
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -295,6 +298,24 @@ class FIR_SNR(SNR_Pipeline):
                 self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
 		self.snr_info["data"] = numpy.vectorize(complex)(self.snr_info["data"][:,0], self.snr_info["data"][:,1])
 		self.snr_info["data"].shape = len(self.snr_info["data"]), 1
+
+	@staticmethod
+	def make_template(template_table, template_psd, sample_rate, approximant, instrument, f_low, f_high = None, autocorrelation_length = None, verbose = False):
+		row = [row for row in template_table if row.ifo == instrument]
+		if len(row) != 1 :
+			raise ValueError("Expecting only one template for instrument=%s or cannot find template for instrument=%s" % (instrument, instrument))
+
+		template_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_url(template_psd, contenthandler = lal.series.PSDContentHandler))
+		if instrument not in set(template_psd):
+			raise ValueError("No such instrument: %s in template psd: (%s)"% (instrument, ", ".join(set(template_psd))))
+
+		# work around for building a single whitened template
+		template_duration = lalsim.SimInspiralChirpTimeBound(f_low, row[0].mass1 * lal.MSUN_SI, row[0].mass2 * lal.MSUN_SI, 0., 0.)
+		time_slice = numpy.array([(sample_rate, 0, template_duration)], dtype = [("rate", "int"),("begin", "float"), ("end", "float")])
+		workspace = cbc_template_fir.templates_workspace(template_table, approximant, template_psd[instrument], f_low, time_slice, autocorrelation_length = None, fhigh = f_high)
+		template, autocorrelation, sigma = workspace.make_whitened_template(row[0])
+
+		return template, row[0].end
 
 	def __call__(self, COMPLEX = False, row_number = 0 , start = None, end = None):
 		return self.get_snr_series(COMPLEX, row_number, start, end)
