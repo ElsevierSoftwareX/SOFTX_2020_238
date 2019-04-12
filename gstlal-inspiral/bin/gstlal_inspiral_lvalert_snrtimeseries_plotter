@@ -116,9 +116,9 @@ for gid in gid_list:
 
 	# create two dicts keyed by event id: the first dict contains
 	# COMPLEX8TimeSeries which contain the snr time series, the second dict
-	# contains a tuple with the ifo and template number
+	# contains the template row
 	timeseries_ligolw_dict = dict((ligolw_param.get_pyvalue(elem, u"event_id"), lalseries.parse_COMPLEX8TimeSeries(elem)) for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"COMPLEX8TimeSeries")
-	eventid_ifotemplate_id_dict = dict((row.event_id, (row.ifo, row.template_id)) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
+	eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
 
 	# Parse the bank files
 	# NOTE This assumes --svd-bank will also be provided once in the ProcessParamsTable
@@ -132,7 +132,7 @@ for gid in gid_list:
 	for i, bank in enumerate(banks.values()[0]):
 		for j, row in enumerate(bank.sngl_inspiral_table):
 			# The templates should all have the same template_id, so just grab one
-			if row.template_id == eventid_ifotemplate_id_dict.values()[0][-1]:
+			if row.template_id == eventid_trigger_dict.values()[0].template_id:
 				banknum = i
 				tmpltnum = j
 				break
@@ -150,12 +150,12 @@ for gid in gid_list:
 	FigureCanvas(fig)
 
 	for i, (eventid, complex8timeseries) in enumerate(timeseries_ligolw_dict.items()):
-		ifo = eventid_ifotemplate_id_dict[eventid][0]
+		ifo = eventid_trigger_dict[eventid].ifo
 		complex_snr_timeseries = complex8timeseries.data.data
 		autocorr_length = complex8timeseries.data.length
 		time = numpy.linspace(float(complex8timeseries.epoch), float(complex8timeseries.epoch)+(autocorr_length-1)*complex8timeseries.deltaT, autocorr_length)
 
-		peakoffset = numpy.argmax((complex_snr_timeseries * complex_snr_timeseries.conjugate()).real)
+		peakoffset = numpy.argmin(abs(time - eventid_trigger_dict[eventid].end))
 		phase = numpy.angle(complex_snr_timeseries[peakoffset])
 		snr = (complex_snr_timeseries * numpy.exp(-1.j * phase)).real
 		snrsigma = numpy.sqrt(2)
