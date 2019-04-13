@@ -191,7 +191,7 @@ CREATE INDEX tmpindex1 ON _cluster_info_ (coinc_event_id);
 CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, ranking_stat);
 
 --
--- delete coincs that are within 4 s of coincs with higher ranking
+-- delete coincs that are within 1 s of coincs with higher ranking
 -- statistic in the same category.  break ties by root-sum-square of SNRs,
 -- break ties by coinc_event_id
 --
@@ -206,7 +206,7 @@ WHERE
 			_cluster_info_ AS _cluster_info_a_
 			JOIN _cluster_info_ AS _cluster_info_b_ ON (
 				_cluster_info_b_.category == _cluster_info_a_.category
-				AND (_cluster_info_b_.end_time BETWEEN _cluster_info_a_.end_time - 4.0 AND _cluster_info_a_.end_time + 4.0)
+				AND (_cluster_info_b_.end_time BETWEEN _cluster_info_a_.end_time - 1.0 AND _cluster_info_a_.end_time + 1.0)
 				AND (_cluster_info_b_.ranking_stat > _cluster_info_a_.ranking_stat OR
 					_cluster_info_b_.ranking_stat == _cluster_info_a_.ranking_stat AND (_cluster_info_b_.snr >  _cluster_info_a_.snr OR _cluster_info_b_.snr == _cluster_info_a_.snr AND (_cluster_info_b_.coinc_event_id >  _cluster_info_a_.coinc_event_id))
 				)
