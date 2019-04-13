@@ -701,15 +701,8 @@ WHERE
 		# fitting to the observed zero-lag ranking statistic
 		# histogram
 
-		bg = self.noise_lr_lnpdf.array
 		x = self.noise_lr_lnpdf.bins[0].centres()
 		assert (x == self.zero_lag_lr_lnpdf.bins[0].centres()).all()
-		# compute the pre-clustered background's CCDF
-		ccdf = bg[::-1].cumsum()[::-1]
-		ccdf /= ccdf[0]
-
-		def mk_survival_probability(rate_eff, m):
-			return numpy.exp(-rate_eff * ccdf**m)
 
 		# some candidates are rejected by the ranking statistic,
 		# causing there to be a spike in the zero-lag density at ln
@@ -719,55 +712,31 @@ WHERE
 		# here to prevent that from happening (assume density
 		# estimation kernel = 4 bins wide, with 10 sigma impulse
 		# length)
-		zl = self.zero_lag_lr_lnpdf.copy()
-		zl.array[:40] = 0.
-		if not zl.array.any():
+		zl_counts = self.zero_lag_lr_lnpdf.array.copy()
+		zl_counts[:40] = 0.
+		if not zl_counts.any():
 			raise ValueError("zero-lag counts are all zero")
 
-		# masked array containing the zerolag data for the fit.
-		# the mask selects the bins to be *ignored* for the fit.
-		# this is intended to decouple the fit from bins that
-		# potentially contain a genuine zero-lag population and/or
-		# that have too small a count to have been well measured,
-		# and/or can't be modelled correctly by this fit anyway.
-		mode, = zl.argmax()
-		zlcumsum = zl.array.cumsum()
-		assert zlcumsum[-1] > 1000, "Need at least 1000 zero lag events to compute extinction model"
-		ten_thousand_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 10000)]
-		# Adjust the mode to be at 10,000 events if that LR is higher
-		if ten_thousand_events_lr > mode:
-			mode = ten_thousand_events_lr
-		one_hundred_events_lr = x[zlcumsum.searchsorted(zlcumsum[-1] - 100)]
-		mask = (x < mode) | (x > one_hundred_events_lr)
-		zl = numpy.ma.masked_array(zl.array, mask)
-		bg = numpy.ma.masked_array(bg, mask)
+		# get the noise counts
+		noise_counts = self.noise_lr_lnpdf.array.copy()
 
-		def ssr((norm, rate_eff, m)):
-			# explicitly exclude disallowed parameter values
-			if norm <= 0. or rate_eff <= 0. or m <= 0.:
-				return PosInf
+		# get the zerolag counts.
+		# we model the tail of the distribution - top 1% - where
+		# clustering only effects the result at a 1% level.
+		onepercent = zl_counts.cumsum().searchsorted(zl_counts.sum() * 0.99)
 
-			# the extinction model applied to the background
-			# counts
-			model = norm * bg * mk_survival_probability(rate_eff, m)
+		# normalize the counts
+		noise_counts /= noise_counts.sum()
+		zl_counts /= zl_counts.sum()
 
-			# the Poisson variance in each bin, clipped to 1
-			model_var = numpy.where(model > 1., model, 1.)
+		# compute survival probability
+		norm = zl_counts[onepercent] / noise_counts[onepercent]
+		zl_counts[onepercent:] = 0
+		noise_counts[onepercent:] = 0
+		survival_probability = zl_counts / noise_counts
+		survival_probability[onepercent:] = norm
+		survival_probability[numpy.isnan(survival_probability)] = 0.0
 
-			# square residual in units of variance
-			square_error = (zl - model)**2. / model_var
-
-			# sum-of-square residuals \propto integral of
-			# residual over x co-ordinate.  integral accounts
-			# for non-uniform binning.
-			return numpy.trapz(square_error, x)
-
-		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 5.), xtol = 1e-8, ftol = 1e-8, disp = 0)
-
-		# compute survival probability model from best fit
-		survival_probability = mk_survival_probability(rate_eff, m)
-
-		self.noise_lr_lnpdf.array[:self.noise_lr_lnpdf.bins[0][mode]] = 0.
 		# apply to background counts and signal counts
 		self.noise_lr_lnpdf.array *= survival_probability
 		self.noise_lr_lnpdf.normalize()
