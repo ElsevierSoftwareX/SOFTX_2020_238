@@ -19,7 +19,6 @@
 
 import sys
 import os
-import subprocess
 import re
 import time
 import logging
@@ -31,6 +30,7 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
 import multiprocessing
+import glob
 
 
 matplotlib.rcParams.update({
@@ -133,16 +133,13 @@ except OSError:
 
 
 # FIXME hardcodes gps digits to 5 to match current
-subprocess.call(["ls %s/* | lalapps_path2cache > %s/%s.cache" % (str(gps)[:5], wd, str(gps))], shell=True)
-subprocess.call(["ls %s/* | lalapps_path2cache >> %s/%s.cache" % (str(gps - 100000)[:5], wd, str(gps))], shell=True)
-subprocess.call(["ls %s/* | lalapps_path2cache >> %s/%s.cache" % (str(gps + 100000)[:5], wd, str(gps))], shell=True)
+ce = map(CacheEntry.from_T050017, sum((glob.glob(pattern) for pattern in [os.path.join(str(gps)[:5],"*.xml.gz"), os.path.join(str(gps - 100000)[:5],"*.xml.gz"), os.path.join(str(gps + 100000)[:5],"*.xml.gz")]), []))
 
 
 # Parse the files in many threads
 # FIXME don't hard code this regex
 pattern = re.compile("0[0-9]{3}_LLOID$")
 pool = multiprocessing.Pool(8)
-ce = [CacheEntry(l) for l in open("%s/%s.cache" % (wd, str(gps)))]
 sngl = []
 for res in pool.map(parse, [c for c in ce if gps in c.segment and pattern.match(c.description)]):
 	sngl.extend(res)
