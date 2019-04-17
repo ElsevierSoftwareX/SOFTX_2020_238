@@ -45,7 +45,7 @@ LALSUITE_REPO:=${PWD}/git/lalsuite
 
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
-LIGOSCALD_GIT=1
+LIGOSCALD_GIT=0
 LIGOSEGMENTS_GIT=0
 PYTHONLIGOLW_GIT=0
 GLUE_GIT=0
@@ -56,7 +56,7 @@ LALSUITE_GIT=0
 # an unknown branch.
 #
 GSTLAL_GIT_BRANCH="master"
-LIGOSCALD_GIT_BRANCH="v0.2.x"
+LIGOSCALD_GIT_BRANCH="master"
 LIGOSEGMENTS_GIT_BRANCH="master"
 PYTHONLIGOLW_GIT_BRANCH="master"
 GLUE_GIT_BRANCH="master"
@@ -68,8 +68,7 @@ GSTLALCALIBRATION=gstlal-calibration-1.2.7
 GSTLALBURST=gstlal-burst-0.0.5
 GSTLALUGLY=gstlal-ugly-1.5.6
 GSTLAL=gstlal-1.4.1
-LIGOSCALD=ligo-scald-0.2.1
-URLLIB3=urllib3-1.10.2
+LIGOSCALD=ligo-scald-0.3.0
 LIGOSEGMENTS=ligo-segments-1.2.0
 PYTHONLIGOLW=python-ligo-lw-1.4.0
 GLUE=lscsoft-glue-1.60.0
@@ -105,7 +104,6 @@ GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
 LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/$(LIGOSCALD)-py2.7.egg
-URLLIB3_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/$(URLLIB3)-py2.7.egg
 LIGOSEGMENTS_TARGET=$(PYTHON_DIR)/ligo_segments-1.2.0-py2.7-linux-x86_64.egg
 PYTHONLIGOLW_TARGET=$(PYTHON_DIR)/python_ligo_lw-1.4.0-py2.7.egg-info
 GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
@@ -142,7 +140,6 @@ GSTLALBURST_TAR_TARGET=$(TAR_DIR)/$(GSTLALBURST).tar.gz
 GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
 GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
 LIGOSCALD_TAR_TARGET=$(TAR_DIR)/$(LIGOSCALD).tar.gz
-URLLIB3_TAR_TARGET=$(TAR_DIR)/$(URLLIB3).tar.gz
 LIGOSEGMENTS_TAR_TARGET=$(TAR_DIR)/$(LIGOSEGMENTS).tar.gz
 PYTHONLIGOLW_TAR_TARGET=$(TAR_DIR)/$(PYTHONLIGOLW).tar.gz
 GLUE_TAR_TARGET=$(TAR_DIR)/$(GLUE).tar.gz
@@ -359,10 +356,10 @@ $(GSTLAL_TARGET) : $(LIGOSCALD_TARGET)
 # ligo-scald
 ligo-scald : $(LOGS_DIR)/ligo-scald.txt
 
-$(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/urllib3.txt $(LIGOSCALD_TARGET)
+$(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/ligo-segments.txt $(LIGOSCALD_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(LIGOSCALD_TARGET) : $(URLLIB3_TARGET)
+$(LIGOSCALD_TARGET) : $(LIGOSEGMENTS_TARGET)
 	@echo $(GREEN)ligo-scald$(WHITE) 1>&2
 	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
 		cd $(LIGOSCALD_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
@@ -370,17 +367,6 @@ $(LIGOSCALD_TARGET) : $(URLLIB3_TARGET)
 		tar -xzf $(TAR_DIR)/$(LIGOSCALD).tar.gz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LIGOSCALD) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	fi ;
-
-# urllib3
-urllib3 : $(LOGS_DIR)/urllib3.txt
-
-$(LOGS_DIR)/urllib3.txt : $(LOGS_DIR)/ligo-segments.txt $(URLLIB3_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(URLLIB3_TARGET) : $(LIGOSEGMENTS_TARGET)
-	@echo $(GREEN)urllib3$(WHITE) 1>&2
-	tar -xzf $(TAR_DIR)/$(URLLIB3).tar.gz -C $(SRC_DIR) ; \
-	cd $(SRC_DIR)/$(URLLIB3) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 
 # ligo-segments
 ligo-segments : $(LOGS_DIR)/ligo-segments.txt
@@ -763,11 +749,8 @@ $(LOGS_DIR)/patch.txt : $(LOGS_DIR)/tar.txt
 $(LOGS_DIR)/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(KAFKA_PYTHON_TAR_TARGET) : $(URLLIB3_TAR_TARGET)
+$(KAFKA_PYTHON_TAR_TARGET) : $(LIBRDKAFKA_TAR_TARGET)
 	wget --no-check-certificate https://github.com/confluentinc/confluent-kafka-python/archive/v$(KAFKA_PYTHON).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -nc
-
-$(URLLIB3_TAR_TARGET) : $(LIBRDKAFKA_TAR_TARGET)
-	wget --no-check-certificate https://files.pythonhosted.org/packages/10/c7/8ed1d80ca1901a9ddbcbe2323a5c73049c4f957eecdb80d85577aa49dfa4/$(URLLIB3).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(LIBRDKAFKA_TAR_TARGET) : $(GDS_TAR_TARGET)
 	wget --no-check-certificate https://github.com/edenhill/librdkafka/archive/v$(LIBRDKAFKA).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -nc
@@ -902,9 +885,6 @@ clean-install :
 
 clean-gstlal :
 	rm -rf $(LOGS_DIR)/gstlal.txt $(GSTLAL_TARGET) $(GSTLALUGLY_TARGET) $(GSTLALBURST_TARGET) $(GSTLALCALIB_TARGET) $(GSTLALINSPIRAL_TARGET)
-
-clean-urllib3 :
-	rm -rf $(LOGS_DIR)/urllib3.txt $(URLLIB3_TARGET)
 
 clean-kafka-python :
 	rm -rf $(LOGS_DIR)/kafka-python.txt $(KAFKA_PYTHON_TARGET)

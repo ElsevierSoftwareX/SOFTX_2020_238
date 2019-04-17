@@ -37,7 +37,7 @@ DEPS_DIR:=/path/to/deps/dir
 
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
-LIGOSCALD_GIT=1
+LIGOSCALD_GIT=0
 LIGOSEGMENTS_GIT=0
 PYTHONLIGOLW_GIT=0
 GLUE_GIT=0
@@ -60,7 +60,7 @@ GSTLALCALIBRATION=gstlal-calibration-1.2.1
 GSTLALBURST=gstlal-burst-0.0.5
 GSTLALUGLY=gstlal-ugly-1.5.5
 GSTLAL=gstlal-1.4.1
-LIGOSCALD=ligo-scald-0.1.0
+LIGOSCALD=ligo-scald-0.3.0
 LIGOSEGMENTS=ligo-segments-1.1.1
 PYTHONLIGOLW=python-ligo-lw-1.4.0
 GLUE=lscsoft-glue-1.60.0
