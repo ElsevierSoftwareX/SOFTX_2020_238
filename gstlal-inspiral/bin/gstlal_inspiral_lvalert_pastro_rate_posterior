@@ -212,6 +212,7 @@ def hpd_credible_interval(alpha, rv):
 	else:
 		a = scipy.optimize.brentq(lambda x: rv.pdf(x) - p, rv.a, rv.mode())
 	b = scipy.optimize.brentq(lambda x: rv.pdf(x) - p, rv.mode(), rv.b)
+        print "credible interval computed for %f [%f, %f]" %(alpha, a, b)
 	return a, b
 
 def false_alarm_probability(event_f_over_b, rv):
@@ -300,9 +301,9 @@ def get_ln_f_over_b(rankingstatpdf, ln_likelihood_ratios):
         if any(math.isnan(ln_lr) for ln_lr in ln_likelihood_ratios):
                 raise ValueError("NaN log likelihood ratio encountered")
 
-        f = rankingstatpdf.signal_likelihood_pdfs[None]
-        b = rankingstatpdf.background_likelihood_pdfs[None]
-        ln_f_over_b = numpy.array([numpy.log(f[ln_lr,])-numpy.log(b[ln_lr,]) for ln_lr in ln_likelihood_ratios])
+        f = rankingstatpdf.signal_lr_lnpdf
+        b = rankingstatpdf.noise_lr_lnpdf
+        ln_f_over_b = numpy.array([f[ln_lr,]-b[ln_lr,] for ln_lr in ln_likelihood_ratios])
         if numpy.isnan(numpy.exp(ln_f_over_b)).any():
                 raise ValueError("NaN encountered in ranking statistic PDF ratios")
         if numpy.isinf(numpy.exp(ln_f_over_b)).any():
