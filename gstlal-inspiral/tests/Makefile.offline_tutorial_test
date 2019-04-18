@@ -77,7 +77,7 @@ TIME=time -p
 # The GPS start time to generate data
 DATASTART = 999999952
 # The GPS stop time to generate data
-DATASTOP = 1000012100
+DATASTOP = 1000002100
 # Sampling rate of fake data
 SAMPLE_RATE = 4096
 
@@ -92,7 +92,7 @@ MIN_IFOS = 2
 # The GPS start time for analysis
 START = 1000000000
 # The GPS end time for analysis
-STOP = 1000012000
+STOP = 1000002048
 # analysis dureation
 DURATION = $(shell echo $(STOP)-$(START) | bc)
 # A user tag for the run
@@ -128,9 +128,9 @@ HIGH_FREQUENCY_CUTOFF = 1024
 
 # Note: A 10s range is given so that only a single injection is produced.
 # The GPS start time for injections
-INJSTART=1000005020
+INJSTART=1000001020
 # The GPS stop time for injections
-INJSTOP=1000005030
+INJSTOP=1000001030
 
 #############################
 # additional options, e.g., #
