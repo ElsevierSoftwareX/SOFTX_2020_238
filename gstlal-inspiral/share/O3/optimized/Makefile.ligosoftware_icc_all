@@ -316,11 +316,11 @@ $(GSTLALUGLY_TARGET) : $(GSTLAL_TARGET)
 	@echo $(GREEN)gstlal-ugly$(WHITE) 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal-ugly && echo | ./00init.sh ; \
-		cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR) --without-doxygen ; \
+		cd $(GSTLAL_REPO)/gstlal-ugly && ./configure --prefix=$(INSTALL_DIR) --without-doxygen --with-webdir=$(GSTLAL_WEBVIS_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-ugly && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xzkf $(TAR_DIR)/$(GSTLALUGLY).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(GSTLALUGLY) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen ; \
+		cd $(SRC_DIR)/$(GSTLALUGLY) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen --with-webdir=$(GSTLAL_WEBVIS_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALUGLY) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 

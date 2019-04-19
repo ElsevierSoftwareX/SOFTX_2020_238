@@ -18,9 +18,3 @@ webvis_SCRIPTS = \
 webviscgi_SCRIPTS = \
 	gstlal \
 	mobile
-
-dist_pkgdata_DATA = \
-	gstlal.css \
-	gstlal.html \
-	gstlal.js \
-	gstlal.png
