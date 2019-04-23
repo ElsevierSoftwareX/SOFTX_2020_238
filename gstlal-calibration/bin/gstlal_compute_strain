@@ -496,8 +496,8 @@ except:
 		print("Warning: Could not find expected fcc in filters file or config file.  Setting to zero.")
 if "fs_squared" in filters:
 	fs_squared_default = float(filters["fs_squared"])
-elif "expectedfs_squared" in TDCFConfigs:
-	fs_squared_default = float(TDCFConfigs["expectedfs_squared"])
+elif "expectedfssquared" in TDCFConfigs:
+	fs_squared_default = float(TDCFConfigs["expectedfssquared"])
 elif "fs" in filters:
 	fs_squared_default = pow(float(filters["fs"]), 2)
 elif "expectedfs" in TDCFConfigs:

@@ -79,6 +79,7 @@ parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = 
 parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.0,6.0;-6.0,6.0;-6.0,6.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
 parser.add_option("--file-name-suffix", metavar = "name", type = str, default = "", help = "Suffix for naming unique file.")
+parser.add_option("--pcal-time-advance", metavar = "seconds", type = float, default = 0.0, help = "Time advance in seconds applied to the Pcal channel. Default = 0.0")
 
 options, filenames = parser.parse_args()
 
@@ -172,6 +173,12 @@ for name in options.pcal_line_names.split(','):
 	frequencies.append(float(filters["%s_line_freq" % name]))
 	pcal_corrections.append(float(filters["%s_corr_re" % name]))
 	pcal_corrections.append(float(filters["%s_corr_im" % name]))
+if(options.pcal_time_advance):
+	for i in range(0, len(pcal_corrections) / 2):
+		corr = pcal_corrections[2 * i] + 1j * pcal_corrections[2 * i + 1]
+		corr *= numpy.exp(2.0 * numpy.pi * 1j * frequencies[i] * options.pcal_time_advance)
+		pcal_corrections[2 * i] = numpy.real(corr)
+		pcal_corrections[2 * i + 1] = numpy.imag(corr)
 
 if not len(options.magnitude_ranges.split(';')) == len(frequencies):
 	raise ValueError("Number of magnitude ranges given is not equal to number of pcal line frequencies (%d != %d)." % (len(options.magnitude_ranges.split(';')), len(frequencies)))
