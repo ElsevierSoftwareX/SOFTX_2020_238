@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-import sys
 import numpy
+import sys
 import gi
 gi.require_version('Gst','1.0')
 from gi.repository import GObject
@@ -78,11 +78,11 @@ options, filenames = parse_command_line()
 
 
 #
-# handler for obtaining psd
+# handler for updating templates using psd, and getting triggers
 #
 
 class PipelineHandler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, template_bank, firbank):
+	def __init__(self, mainloop, pipeline, template_bank, firbank, triggergen):
 		simplehandler.Handler.__init__(self, mainloop, pipeline)
 		self.template_bank = template_bank
 		self.firbank = firbank
@@ -103,6 +103,7 @@ class PipelineHandler(simplehandler.Handler):
 				events.extend(snglbursttable.GSTLALSnglBurst.from_buffer(mapinfo.data))
 			memory.unmap(mapinfo)
 		# put info of each event in the sngl burst table
+		print >> sys.stderr, "got", len(events), "events"
 		for event in events:
 			event.process_id = process.process_id
 			event.event_id = sngl_burst_table.get_next_id()
@@ -135,11 +136,12 @@ class PipelineHandler(simplehandler.Handler):
 						# Obtain cusp waveform. A cusp signal is linearly polarized, so just use plus mode time series
 						template_t[i], _ = lalsimulation.GenerateStringCusp(1.0,row.central_freq,1.0/options.sample_rate)
 						# zero-pad it to 32 seconds to obtain same deltaF as the PSD
-						template_t[i] = lal.ResizeREAL8TimeSeries(template_t[i],-int(32*options.sample_rate - template_t[i].data.length)//2,int(32*options.sample_rate))
+						# FIXME we have to make the number of samples in the template odd, but if we do that here deltaF of freq domain template will be different from psd's deltaF, and whitening cannot be done. So we keep it exactly 32 seconds, and after getting a whitened template we add a sample of 0 in the tail.
+						template_t[i] = lal.ResizeREAL8TimeSeries(template_t[i], -int(32*options.sample_rate - template_t[i].data.length) // 2, int(32*options.sample_rate))
 						# setup of frequency domain
 						length = template_t[i].data.length
 						duration = float(length) / options.sample_rate
-						epoch = -(length-1) // 2 / options.sample_rate
+						epoch = - float(length // 2) / options.sample_rate
 						template_f = lal.CreateCOMPLEX16FrequencySeries("template_freq", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("strain s"), length // 2 + 1)
 						fplan = lal.CreateForwardREAL8FFTPlan(length,0)
 						# FFT to frequency domain
@@ -156,9 +158,9 @@ class PipelineHandler(simplehandler.Handler):
 						sigmasq = numpy.trapz(4.0 * template_f.data.data**2, dx = psd.deltaF)
 						self.sigma[row.central_freq] = numpy.sqrt(sigmasq.real)
 						# obtain autocorr time series by squaring template and inverse FFT it
-						template_f_squared = lal.CreateCOMPLEX16FrequencySeries("whitened template_freq squared", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("s"), length // 2 + 1)
+						template_f_squared = lal.CreateCOMPLEX16FrequencySeries("whitened template_freq squared", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("strain s"), length // 2 + 1)
 						autocorr_t = lal.CreateREAL8TimeSeries("autocorr_time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
-						rplan = lal.CreateReverseREAL8FFTPlan(length,0)
+						rplan = lal.CreateReverseREAL8FFTPlan(length, 0)
 						template_f_squared.data.data = abs(template_f.data.data)**2
 						lal.REAL8FreqTimeFFT(autocorr_t,template_f_squared,rplan)
 						# normalize autocorrelation by central (maximum) value
@@ -184,16 +186,17 @@ class PipelineHandler(simplehandler.Handler):
 						autocorr[i] = numpy.concatenate((autocorr_t[1:(chi2_index+1)][::-1], autocorr_t[:(chi2_index+1)]))
 						assert len(autocorr[i])%2==1, 'autocorr must have odd number of samples'
 						# Inverse FFT template bank back to time domain
-						template_t[i] = lal.CreateREAL8TimeSeries("whitened template time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
+						template_t[i] = lal.CreateREAL8TimeSeries("whitened template_time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
 						lal.REAL8FreqTimeFFT(template_t[i],template_f,rplan)
 						# normalize
-						template_t[i].data.data /= numpy.sqrt(numpy.dot(template_t[i].data.data, template_t[i].data.data))
 						template_t[i] = template_t[i].data.data
-					firbank.set_property("latency", -(len(template_t[0]) - 1) // 2)
-					firbank.set_property("fir_matrix", template_t)
-					triggergen.set_property("autocorrelation_matrix", autocorr)
-					self.firbank = firbank
-					self.triggergen = triggergen
+						template_t[i] /= numpy.sqrt(numpy.dot(template_t[i], template_t[i]))
+						# FIXME to make the sample number odd we add 1 sample in the end here
+						template_t[i] = numpy.append(template_t[i], 0.0)
+						assert len(template_t[i])%2==1, 'template must have odd number of samples'
+					self.firbank.set_property("latency", (len(template_t[0]) - 1) // 2)
+					self.firbank.set_property("fir_matrix", template_t)
+					self.triggergen.set_property("autocorrelation_matrix", autocorr)
 			else:
 				# use templates with all zeros during burn-in period, that way we won't get any triggers.
 				print >> sys.stderr, "At GPS time", timestamp, "burn in period"
@@ -201,17 +204,15 @@ class PipelineHandler(simplehandler.Handler):
 				autocorr = [None] * len(self.template_bank)
 				for i, row in enumerate(self.template_bank):
 					template[i], _ = lalsimulation.GenerateStringCusp(1.0,30,1.0/options.sample_rate)
-					template[i] = lal.ResizeREAL8TimeSeries(template[i], -int(32*options.sample_rate - template[i].data.length)//2 ,int(32*options.sample_rate))
+					template[i] = lal.ResizeREAL8TimeSeries(template[i], -int(32*options.sample_rate - template[i].data.length + 1) // 2, int(32*options.sample_rate + 1))
 					template[i] = template[i].data.data
 					template[i] *= 0.0
 					# Set autocorrealtion to zero vectors as well.
 					# The length is set to be similar to that obtained when the PSD is stable, but probably the length doesn't matter
 					autocorr[i] = numpy.zeros(403)
-				firbank.set_property("latency",-(len(template[0]) - 1) // 2)
-				firbank.set_property("fir_matrix", template)
-				triggergen.set_property("autocorrelation_matrix", autocorr)
-				self.firbank = firbank
-				self.triggergen = triggergen
+				self.firbank.set_property("latency", (len(template[0]) - 1) // 2)
+				self.firbank.set_property("fir_matrix", template)
+				self.triggergen.set_property("autocorrelation_matrix", autocorr)
 			return True
 		return False
 
@@ -316,7 +317,7 @@ head = triggergen = pipeparts.mkgeneric(pipeline, head, "lal_string_triggergen",
 
 
 mainloop = GObject.MainLoop()
-handler = PipelineHandler(mainloop, pipeline, template_bank_table, firbank)
+handler = PipelineHandler(mainloop, pipeline, template_bank_table, firbank, triggergen)
 
 
 #
