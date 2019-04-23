@@ -12,14 +12,14 @@ START = $(shell echo 1239840000 - 364 | bc)
 #1229094912
 #1225967424
 #1185763328
-END = $(shell echo 1239861600 + 364 | bc)
+END = $(shell echo 1239926400 + 364 | bc)
 #1229099008
 #1225968448
 #1185771520
 SHMRUNTIME = 36000
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 300
-PLOT_COOLDOWN_TIME = 300
+PLOT_WARMUP_TIME = 364
+PLOT_COOLDOWN_TIME = 364
 
 GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1239476409_test.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_test.ini
@@ -33,7 +33,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: $(IFO)1_hoft_GDS_TEST_frames.cache
+all: noise_subtraction_ASD_C00
 
 ###############################################
 ### These commands should change less often ###
@@ -171,6 +171,9 @@ noise_subtraction_ASD_DCS_LINES: $(IFO)1_hoft_DCS_frames.cache
 noise_subtraction_ASD_GDS: $(IFO)1_hoft_GDS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_hoft_GDS_frames.cache --calcs-channel-name GDS-CALIB_STRAIN --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache --hoft-channel-name GDS-CALIB_STRAIN_CLEAN
 
+noise_subtraction_ASD_C00: $(IFO)1_C00_frames.cache
+	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_C00_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
+
 highpass_filter_ASD_GDS:
 	#$(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache $(IFO)1_hoft_GDS_BEST_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_GDS_OLD_frames.cache,$(IFO)1_hoft_GDS_BETTER_frames.cache,$(IFO)1_hoft_GDS_BEST_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN,GDS-CALIB_STRAIN' --ASD-fmin 0.1 --ASD-labels '6s Tukey-windowed actuation filter,3.5s Kaiser-windowed actuation filter,Additional high-pass in residual path'
@@ -180,9 +183,6 @@ noise_subtraction_ASD_DCH_DCS: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_clean_C02_f
 
 noise_subtraction_ASD_DCS_TEST: $(IFO)1_hoft_DCS_TEST_frames.cache
 	./ASD_comparison_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_hoft_DCS_TEST_frames.cache --calcs-channel-name DCS-CALIB_STRAIN --hoft-frame-cache $(IFO)1_hoft_DCS_TEST_frames.cache --hoft-channel-name DCS-CALIB_STRAIN_CLEAN
-
-noise_subtraction_ASD_C00: $(IFO)1_C00_frames.cache
-	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_C00_frames.cache --calcs-channel-name GDS-CALIB_STRAIN --hoft-frame-cache $(IFO)1_C00_frames.cache --hoft-channel-name GDS-CALIB_STRAIN_CLEAN
 
 noise_subtraction_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_hoft_GDS_frames.cache --denominator-frame-cache $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN_CLEAN --denominator-channel-name GDS-CALIB_STRAIN --magnitude-min 0.0 --magnitude-max 1.5 --phase-min -20.0 --phase-max 20.0 --numerator-name 'CLEAN' --denominator-name 'STRAIN' --labels 'CALIB_STRAIN_CLEAN / CALIB_STRAIN' --use-median
