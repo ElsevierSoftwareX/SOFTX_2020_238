@@ -316,7 +316,7 @@ int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int l
 int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, GstClockTimeDiff *timediff)
 {
 	int i;
-	gint64 gpsns = 0;
+	gint64 gpsns = G_MAXINT64;
 	gint64 offset = 0;
 	for (i = 0; i < length; i++) {
 		offset = XLALGPSToINT8NS(&(bankarray[i].end));
