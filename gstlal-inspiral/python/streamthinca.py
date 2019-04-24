@@ -46,7 +46,6 @@ import time
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
-from gstlal.snglinspiraltable import GSTLALSnglInspiral as SnglInspiral
 import lal
 from lalburst import snglcoinc
 from lalinspiral import thinca

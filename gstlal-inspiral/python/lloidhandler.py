@@ -85,6 +85,7 @@ from gstlal import inspiral
 from gstlal import pipeio
 from gstlal import simplehandler
 from gstlal import streamthinca
+from gstlal.snglinspiraltable import GSTLALSnglInspiral as SnglInspiral
 import lal
 from lal import LIGOTimeGPS
 from lal import rate
@@ -970,7 +971,7 @@ class Handler(simplehandler.Handler):
 				# FIXME why does mapinfo.data come out as
 				# an empty list on some occasions???
 				if mapinfo.data:
-					events.extend(streamthinca.SnglInspiral.from_buffer(mapinfo.data))
+					events.extend(SnglInspiral.from_buffer(mapinfo.data))
 				memory.unmap(mapinfo)
 
 			# FIXME:  ugly way to get the instrument
