@@ -4,7 +4,7 @@ SUBDIRS = excesspower snax
 
 pkgpythondir = $(pkgpyexecdir)
 
-pkgpython_PYTHON = snglbursttable.py
+pkgpython_PYTHON = snglbursttable.py streamburca.py
 
 pkgpyexec_LTLIBRARIES = _snglbursttable.la
 
