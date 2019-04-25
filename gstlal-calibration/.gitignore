@@ -37,3 +37,4 @@ tests/*/*/raw_frames/**
 tests/*/*/Filters/**
 tests/*/*/Frames/**
 tests/*/*/*.swp
+tests/DCS_test/H1/out.txt
