@@ -50,12 +50,12 @@ $(IFO)1_C02_frames.cache:
 
 # Calibrate GDS testing data
 $(IFO)1_hoft_GDS_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
+	#gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1_TEST-*.gwf | lalapps_path2cache > $@
 
 # Calibrate GDS testing data with no kappas applied for response function test
 $(IFO)1_hoft_GDS_no_kappas_frames.cache: $(IFO)1_raw_frames.cache filters framesdir
-	gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGSNOKAPPAS)
+	#gstlal_compute_strain --gps-start-time $(SHORT_START) --gps-end-time $(SHORT_END) --frame-cache $(IFO)1_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGSNOKAPPAS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1_TEST_NOKAPPAS*.gwf | lalapps_path2cache > $@
 
 

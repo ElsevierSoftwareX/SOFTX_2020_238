@@ -36,3 +36,4 @@ tests/pydarm_GDS_filter_tests/L1/raw_frames/**
 tests/*/*/raw_frames/**
 tests/*/*/Filters/**
 tests/*/*/Frames/**
+tests/*/*/*.swp
