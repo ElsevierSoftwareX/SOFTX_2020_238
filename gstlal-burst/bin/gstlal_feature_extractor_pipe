@@ -42,6 +42,7 @@ from gstlal.fxtools import multichannel_datasource
 from gstlal.fxtools import multirate_datasource
 from gstlal.fxtools import utils
 
+PSD_DROP_TIME = 512
 
 # =============================
 #
@@ -56,11 +57,11 @@ def analysis_segments(ifo, allsegs, boundary_seg, segment_length, max_template_l
 	segsdict = segments.segmentlistdict()
 
 	# start pad to allow whitener to settle + the maximum template_length
-	start_pad = multirate_datasource.PSD_DROP_TIME + max_template_length
+	start_pad = PSD_DROP_TIME + max_template_length
 
 	segsdict[ifo] = segments.segmentlist([boundary_seg])
 	segsdict[ifo] = segsdict[ifo].protract(start_pad)
-	segsdict[ifo] = gstlaldagparts.breakupsegs(segsdict[ifo], segment_length, start_pad)
+	segsdict[ifo] = dagparts.breakupsegs(segsdict[ifo], segment_length, start_pad)
 	if not segsdict[ifo]:
 		del segsdict[ifo]
 
@@ -102,7 +103,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 
 			# define analysis times
 			gps_start_time = int(seg[0])
-			feature_start_time = gps_start_time + multirate_datasource.PSD_DROP_TIME + max_template_length
+			feature_start_time = gps_start_time + PSD_DROP_TIME + max_template_length
 			feature_end_time = min(int(seg[1]), options.gps_end_time)
 
 			feature_extractor_nodes[(ii, seg)] = \
@@ -170,7 +171,7 @@ def parse_command_line():
 
 	# sanity check to enforce a minimum segment length
 	# Minimum segment length chosen so that the overlap is a ~33% hit in run time
-	min_segment_length = int(4 * multirate_datasource.PSD_DROP_TIME)
+	min_segment_length = int(4 * PSD_DROP_TIME)
 	assert options.segment_length >= min_segment_length
 
 	return options, filenames

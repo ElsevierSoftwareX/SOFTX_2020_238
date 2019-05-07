@@ -95,12 +95,12 @@ STOP  = 1187100000
 
 # save preferences
 OUTPATH = $(PWD)
-SAMPLE_RATE = 1
+SAMPLE_RATE = 16
 SAVE_CADENCE = 20
 PERSIST_CADENCE = 200
 
 # Parameter space config of waveforms
-WAVEFORM = sine_gaussian
+WAVEFORM = tapered_sine_gaussian
 MISMATCH = 0.03
 QHIGH = 40
 
@@ -196,6 +196,7 @@ dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
 		--frame-cache frame.cache \
 		--frame-segments-file segments.xml.gz \
 		--frame-segments-name datasegments \
+		--psd-fft-length 8 \
 		--local-frame-caching \
 		--sample-rate $(SAMPLE_RATE) \
 		--cadence $(SAVE_CADENCE) \
@@ -219,7 +220,6 @@ dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
 		--request-disk 12GB \
 		--verbose \
 		--disable-web-service
-#		--web-dir $(WEBDIR) \
 
 # Pull latest channel list
 $(CHANNEL_LIST) : frame.cache
@@ -237,12 +237,6 @@ frame.cache :
 	elif [[ $(IFO) == L1 ]] ; then \
 		gw_data_find -o L -t L1_R -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	fi
-
-# FIXME Add webpages once we have output
-# Make webpage directory and copy files across
-#$(WEBDIR) : $(MAKEFILE_LIST)
-#	mkdir -p $(WEBDIR)/OPEN-BOX
-#	cp $(MAKEFILE_LIST) $@
 
 clean :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite *.html Images *.css *.js segments.xml.gz *.ini
