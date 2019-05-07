@@ -1,8 +1,8 @@
 SHELL := /bin/bash # Use bash syntax
 
-########################
-#        Guide         #
-########################
+#################################################################################
+# GUIDE                                                                         #
+#################################################################################
 
 # Author: Patrick Godwin (patrick.godwin@ligo.org)
 #
@@ -31,16 +31,109 @@ SHELL := /bin/bash # Use bash syntax
 #     * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
 #
 #   Waveform parameters:
-#     * WAVEFORM: type of waveform used to perform matched filtering (sine_gaussian/half_sine_gaussian).
+#     * WAVEFORM: type of waveform used to perform matched filtering.
+#                 options: sine_gaussian/half_sine_gaussian/tapered_sine_gaussian
 #     * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
 #     * QHIGH: maximum value of Q
 #
 #   Data transfer/saving:
 #     * OUTPATH: directory in which to save features.
-#     * SAMPLE_RATE: rate at which to aggregate features for a given channel. Can be sampled at 1 Hz or higher (powers of 2).
+#     * SAMPLE_RATE: rate at which to aggregate features for a given channel.
+#                    Can be sampled at 1 Hz or higher (powers of 2).
 #     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
 #     * PERSIST_CADENCE: span of a typical hdf5 file.
 #
+# To generate the DAG needed to start an analysis, run:
+#
+#   $ make -f Makefile.gstlal_feature_extractor_offline
+#
+
+#################################################################################
+# CONFIGURATION                                                                 #
+#################################################################################
+
+#-------------------------------------
+### User/Accounting Tags
+
+ACCOUNTING_TAG=ligo.dev.o2.detchar.onlinedq.idq
+GROUP_USER=albert.einstein
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+# Set accounting tag at:
+#     https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+
+#-------------------------------------
+### Analysis configuration
+
+# analysis times
+START = 1187000000
+STOP  = 1187100000
+
+# save preferences
+OUTPATH = $(PWD)
+SAMPLE_RATE = 16
+SAVE_CADENCE = 20
+PERSIST_CADENCE = 200
+
+# parameter space for waveforms
+WAVEFORM = tapered_sine_gaussian
+MISMATCH = 0.03
+QHIGH = 40
+
+#-------------------------------------
+### Channel list configuration
+
+IFO = H1
+#IFO = L1
+
+EPOCH = O2
+LEVEL = standard
+
+CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
+
+# if not specified, use all sections (replace spaces with underscores'_')
+SECTION_INCLUDE =
+
+# if not specified, use defaults
+SAFETY_INCLUDE = safe unsafe unsafeabove2kHz unknown
+FIDELITY_EXCLUDE =
+
+# if specified, override safety checks for these channels
+UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
+
+# parse include/excludes into command line options
+SECTION_INCLUDE_COMMANDS := $(addprefix --section-include ,$(SECTION_INCLUDE))
+SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include ,$(SAFETY_INCLUDE))
+FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude ,$(FIDELITY_EXCLUDE))
+UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAFE_CHANNEL_INCLUDE))
+
+#-------------------------------------
+### Segment configuration
+
+# Info from https://wiki.ligo.org/viewauth/LSC/JRPComm/ObsRun2
+
+SEG_SERVER=https://segments.ligo.org
+# C00
+LIGO_SEGMENTS="$(IFO):DMT-ANALYSIS_READY:1"
+# C01
+#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C01:1"
+# C02
+#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
+
+#################################################################################
+# DAG CONFIGURATION (OPTIONAL)                                                  #
+#################################################################################
+
+# length of time to process for a given job
+SEGMENT_LENGTH = 4000
+
+# don't generally have to mess with this, provides padding
+# to account for PSD estimation
+SEG_PAD = 1000
+SEGMENT_TRIM = 0
+SEGMENT_MIN_LENGTH = 512
+FSTART=$(shell echo $$((${START}-${SEG_PAD})))
+
 # Setting the number of streams (ADVANCED USAGE):
 #
 #     * MAX_SERIAL_STREAMS: Maximum # of streams that a single gstlal_feature_extractor job will
@@ -67,122 +160,14 @@ SHELL := /bin/bash # Use bash syntax
 #   determine the structure of the offline DAG. Doing so will also change the memory usage for each job, and so you'll
 #   need to tread lightly. Changing CONCURRENCY in particular may cause I/O locks due to jobs fighting to read from the same
 #   frame file.
-#
-# In order to start up offline runs, you'll need an installation of gstlal. An installation Makefile that
-# includes Kafka dependencies are located at: gstlal/gstlal-burst/share/feature_extractor/Makefile.gstlal_idq_icc
-#
-# To run, making sure that the correct environment is sourced:
-#
-#   $ make -f Makefile.gstlal_feature_extractor_offline
-#
-
-########################
-# User/Accounting Tags #
-########################
-
-# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
-ACCOUNTING_TAG=ligo.dev.o3.detchar.onlinedq.idq
-GROUP_USER=albert.einstein
-CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
-
-#########################
-# Triggering parameters #
-#########################
-
-# analysis times
-START = 1187000000
-STOP  = 1187100000
-
-# save preferences
-OUTPATH = $(PWD)
-SAMPLE_RATE = 16
-SAVE_CADENCE = 20
-PERSIST_CADENCE = 200
-
-# Parameter space config of waveforms
-WAVEFORM = tapered_sine_gaussian
-MISMATCH = 0.03
-QHIGH = 40
-
-# Detector
-CLUSTER:=$(shell hostname -d)
-
-##########################
-# Auxiliary channel info #
-##########################
-
-IFO = H1
-#IFO = L1
-
-EPOCH = O2
-LEVEL = standard
-
-CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
-
-# if not specified, use all sections (replace spaces with underscores'_')
-SECTION_INCLUDE =
-
-# if not specified, use defaults
-SAFETY_INCLUDE =
-FIDELITY_EXCLUDE =
-
-# if specified, override safety checks for these channels
-UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
-
-# parse include/excludes into command line options
-SECTION_INCLUDE_COMMANDS := $(addprefix --section-include ,$(SECTION_INCLUDE))
-SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include ,$(SAFETY_INCLUDE))
-FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude ,$(FIDELITY_EXCLUDE))
-UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAFE_CHANNEL_INCLUDE))
-
-################
-# Segment info #
-################
-
-# Info from https://wiki.ligo.org/viewauth/LSC/JRPComm/ObsRun2
-# Select correct calibration type
-# GSTLAL_SEGMENTS Options
-SEG_SERVER=https://segments.ligo.org
-# C00
-LIGO_SEGMENTS="$(IFO):DMT-ANALYSIS_READY:1"
-# C01
-#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C01:1"
-# C02
-#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
-
-# length of time to process for a given job
-SEGMENT_LENGTH = 4000
-
-# don't generally have to mess with this, provides padding
-# to account for PSD estimation
-SEG_PAD = 1000
-SEGMENT_TRIM = 0
-SEGMENT_MIN_LENGTH = 512
-FSTART=$(shell echo $$((${START}-${SEG_PAD})))
-
-#########################
-# DAG architecture info #
-#########################
 
 MAX_PARALLEL_STREAMS = 600
 MAX_SERIAL_STREAMS = 210
 CONCURRENCY = 1
 
-#################
-# Web directory #
-#################
-
-# A user tag for the run
-#TAG = O2_C00
-# Run number
-#RUN = run_1
-# A web directory for output (note difference between cit+uwm and Atlas)
-# cit & uwm
-#WEBDIR = ~/public_html/observing/$(TAG)/$(START)-$(STOP)-$(RUN)
-
-############
-# Workflow #
-############
+#################################################################################
+# WORKFLOW                                                                      #
+#################################################################################
 
 all : dag
 	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
@@ -228,7 +213,8 @@ $(CHANNEL_LIST) : frame.cache
 # Produce segments file
 segments.xml.gz : frame.cache
 	ligolw_segment_query_dqsegdb --segment-url=${SEG_SERVER} -q --gps-start-time ${FSTART} --gps-end-time ${STOP} --include-segments=$(LIGO_SEGMENTS) --result-name=datasegments > $@
-	ligolw_cut --ilwdchar-compat --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
+	ligolw_no_ilwdchar $@
+	ligolw_cut --delete-column segment:segment_def_cdb --delete-column segment:creator_db --delete-column segment_definer:insertion_time $@
 	gstlal_segments_trim --trim $(SEGMENT_TRIM) --gps-start-time $(FSTART) --gps-end-time $(STOP) --min-length $(SEGMENT_MIN_LENGTH) --output $@ $@
 
 frame.cache :
