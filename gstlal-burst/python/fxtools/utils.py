@@ -38,6 +38,8 @@ import h5py
 import numpy
 
 from lal import gpstime
+from lal.utils import CacheEntry
+
 from gstlal import aggregator
 
 
@@ -188,8 +190,6 @@ def latency_name(stage_name, stage_num, channel, rate=None):
 #----------------------------------
 ### logging utilities
 
-# FIXME: shamelessly copied from iDQ's logs module, until this dependency is added in to gstlal-iDQ proper.
-
 def get_logger(logname, log_level=10, rootdir='.', verbose=False):
     '''
     standardize how we instantiate loggers
@@ -206,19 +206,23 @@ def get_logger(logname, log_level=10, rootdir='.', verbose=False):
         handlers.append( logging.StreamHandler() )
 
     # add handlers to logger
-    formatter = gen_formatter()
+    formatter = logging.Formatter('%(asctime)s | %(name)s : %(levelname)s : %(message)s')
     for handler in handlers:
         handler.setFormatter( formatter )
         logger.addHandler( handler )
 
     return logger
 
-def gen_formatter():
-    """
-    standarizes formatting for loggers
-    returns an instance of logging.Formatter
-    """
-    return logging.Formatter('%(asctime)s | %(name)s : %(levelname)s : %(message)s')
+#----------------------------------
+### cache utilities
+
+def path2cache(rootdir, pathname):
+	"""
+	given a rootdir and a glob-compatible pathname that may contain shell-style wildcards,
+	will find all files that match and populate a Cache.
+	NOTE: this will only work with files that comply with the T050017 file convention.
+	"""
+	return [CacheEntry.from_T050017(file_) for file_ in glob.iglob(os.path.join(rootdir, pathname))]
 
 #----------------------------------
 ### other utilities
