@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2019 Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+__usage__ = "gstlal_feature_combiner [--options]"
+__description__ = "an executable to combine features from the batch pipeline to provide a more user-friendly output"
+__author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
+
+# =============================
+# 
+#           preamble
+#
+# =============================
+
+from collections import defaultdict
+import itertools
+import optparse
+import os
+import sys
+import shutil
+
+import h5py
+import numpy
+
+from gstlal.fxtools import utils
+
+# =============================================================================
+#
+#                               FUNCTIONS
+#
+# =============================================================================
+
+def parse_command_line():
+	"""
+	Parse command line inputs.
+	"""
+	parser = optparse.OptionParser(usage=__usage__, description=__description__)
+
+	group = optparse.OptionGroup(parser, "Combiner Options", "General settings for configuring the file combiner.")
+	group.add_option("-v","--verbose", default=False, action="store_true", help = "Print to stdout in addition to writing to automatically generated log.")
+	group.add_option("--log-level", type = "int", default = 10, help = "Sets the verbosity of logging. Default = 10.")
+	group.add_option("--rootdir", metavar = "path", default = ".", help = "Sets the root directory where features, logs, and metadata are stored.")
+	group.add_option("--basename", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Sets the basename for files written to disk. Default = GSTLAL_IDQ_FEATURES")
+	group.add_option("--instrument", metavar = "string", default = "H1", help = "Sets the instrument for files written to disk. Default = H1")
+	group.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
+	parser.add_option_group(group)
+
+	opts, args = parser.parse_args()
+	
+	return opts, args
+
+
+# ===================
+#
+#        main
+#
+# ===================
+
+if __name__ == "__main__":
+	options, args = parse_command_line()
+
+    ### set up logging
+	logger = utils.get_logger(
+		'-'.join([options.tag, 'combiner']),
+		log_level=options.log_level,
+		rootdir=options.rootdir,
+		verbose=options.verbose
+	)
+
+	### get base temp directory
+	if '_CONDOR_SCRATCH_DIR' in os.environ:
+		tmp_dir = os.environ['_CONDOR_SCRATCH_DIR']
+	else:
+		tmp_dir = os.environ['TMPDIR']
+
+	### build cache of hdf5-formatted features, grouped by segment
+	pattern = '{ifo}-{basename}/{ifo}-{basename}-*/{ifo}-{basename}-*/{ifo}-{basename}-*.h5'.format(
+		basename=options.basename,
+		ifo=options.instrument[0],
+	)
+	cache = sorted(utils.path2cache(options.rootdir, pattern), key=lambda x: x.segment)
+	grouped_cache = [(seg, list(group)) for seg, group in itertools.groupby(cache, key=lambda x: x.segment)]
+
+	### combine features in each stride
+	for seg, cache in grouped_cache:
+		logger.info('combining features within times: {} - {}'.format(*seg))
+		features = defaultdict(dict)
+
+		### assume filenames, metadata is the same in each group
+		dirname = os.path.split(os.path.dirname(cache[0].path))[0]
+		filename = os.path.splitext(os.path.basename(cache[0].path))[0]
+		metadata = {}
+		with h5py.File(cache[0].path, 'r') as f:
+			metadata['waveform'] = f.attrs.get('waveform')
+			metadata['sample_rate'] = f.attrs.get('sample_rate')
+
+		### load features
+		for entry in cache:
+			with h5py.File(entry.path, 'r') as f:
+				channels = f.keys()
+				for channel in channels:
+					dsets = f[channel].keys()
+					for dset in dsets:
+						features[channel][dset] = numpy.array(f[channel][dset])
+
+		### save combined features to disk
+		for channel in features.keys():
+			for dset in features[channel].keys():
+				utils.create_new_dataset(tmp_dir, filename, features[channel][dset], name=dset, group=channel, tmp=True, metadata=metadata)
+
+		final_path = os.path.join(dirname, filename)+".h5"
+		tmp_path = os.path.join(tmp_dir, filename)+".h5.tmp"
+		logger.info('saving features to: {}'.format(final_path))
+		shutil.move(tmp_path, final_path)

@@ -3,6 +3,7 @@ dist_bin_SCRIPTS = \
 	gstlal_excesspower \
 	gstlal_excesspower_trigvis \
 	gstlal_feature_aggregator \
+	gstlal_feature_combiner \
 	gstlal_feature_extractor \
 	gstlal_feature_extractor_pipe \
 	gstlal_ll_feature_extractor_pipe \
