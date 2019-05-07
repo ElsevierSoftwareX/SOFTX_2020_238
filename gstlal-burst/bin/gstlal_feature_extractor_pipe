@@ -214,11 +214,23 @@ condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command,
 feature_extractor_job = dagparts.DAGJob("gstlal_feature_extractor", condor_commands = condor_commands)
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, data_source_info.seg, options.segment_length, max_template_length=max_template_length)
 
+combiner_condor_options = {"request_memory":"4GB", "request_cpus":2, "want_graceful_removal":"True", "kill_sig":"15"}
+feature_combiner_job = dagparts.DAGJob("gstlal_feature_combiner", condor_commands = combiner_condor_options)
+
 #
 # set up jobs
 #
 
 feature_extractor_nodes = feature_extractor_node_gen(feature_extractor_job, dag, [], segsdict, ifo, options, data_source_info, max_template_length=max_template_length)
+
+feature_combiner_options = {
+	"verbose": options.verbose,
+	"rootdir": os.path.join(options.out_path, "gstlal_feature_extractor"),
+	"basename": options.description,
+	"instrument": ifo,
+	"tag": "offline",
+}
+feature_combiner_nodes = dagparts.DAGNode(feature_combiner_job, dag, parent_nodes = feature_extractor_nodes.values(), opts = feature_combiner_options)
 
 #
 # write out dag and sub files
