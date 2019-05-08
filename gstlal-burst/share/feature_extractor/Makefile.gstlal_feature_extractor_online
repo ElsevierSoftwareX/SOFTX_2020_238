@@ -1,25 +1,16 @@
 SHELL := /bin/bash # Use bash syntax
 
-########################
-#        Guide         #
-########################
+#################################################################################
+# GUIDE                                                                         #
+#################################################################################
 
 # Author: Patrick Godwin (patrick.godwin@ligo.org)
 #
 # This Makefile is designed to launch online feature extractor jobs as well
 # as auxiliary jobs as needed (synchronizer/hdf5 file sinks).
 #
-# There are four separate modes that can be used to launch online jobs:
-#
-#   1. Auxiliary channel ingestion:
-#
-#     a. Reading from framexmit protocol (DATA_SOURCE=framexmit).
-#        This mode is recommended when reading in live data from LHO/LLO.
-#
-#     b. Reading from shared memory (DATA_SOURCE=lvshm).
-#        This mode is recommended for reading in data for O2 replay (e.g. UWM).
-#
-#  2. Data transfer of features:
+# There are two separate modes that can be used to launch online jobs,
+# corresponding to the data transfer of features:
 #
 #     a. Saving features directly to disk, e.g. no data transfer.
 #        This will save features to disk directly from the feature extractor,
@@ -32,143 +23,87 @@ SHELL := /bin/bash # Use bash syntax
 #        where it can be read by other processes (e.g. iDQ). In addition, an streaming
 #        hdf5 file sink is launched where it'll dump features periodically to disk.
 #
-# Configuration options:
+# To get the full list of commands, run:
 #
-#   General:
-#     * TAG: sets the name used for logging purposes, Kafka topic naming, etc.
+#   $ make help -f Makefile.gstlal_feature_extractor_online
 #
-#   Data ingestion (using detchar channel list INI):
-#     * IFO: select the IFO for auxiliary channels to be ingested (H1/L1).
-#     * EPOCH: set epoch (O1/O2/etc).
-#     * LEVEL: set types of channels to look over (standard/reduced).
-#     * SECTION_INCLUDE: specify sections to include (no sections imply all sections).
-#     * SAFETY_INCLUDE: specify safety types to include (default: safe).
-#     * FIDELITY_EXCLUDE: specify fidelity types to exclude (default: none).
-#     * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
-#     * MAX_STREAMS: Maximum # of streams that a single gstlal_feature_extractor process will
-#         process. This is determined by sum_i(channel_i * # rates_i). Number of rates for a
-#         given channels is determined by log2(max_rate/min_rate) + 1.
+# For example, to generate the DAG needed to start an analysis, run:
 #
-#   Waveform parameters:
-#     * WAVEFORM: type of waveform used to perform matched filtering (sine_gaussian/half_sine_gaussian).
-#     * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
-#     * QHIGH: maximum value of Q
-#
-#   Data transfer/saving:
-#     * OUTPATH: directory in which to save features.
-#     * SAMPLE_RATE: rate at which to aggregate features for a given channel. Can be sampled at 1 Hz or higher (powers of 2).
-#     * SAVE_FORMAT: determines whether to transfer features downstream or save directly (kafka/hdf5).
-#     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
-#     * PERSIST_CADENCE: span of a typical hdf5 file.
-#
-#   Kafka options:
-#     * KAFKA_TOPIC: basename of topic for features generated from feature_extractor
-#     * KAFKA_SERVER: Kafka server address where Kafka is hosted. If features are run in same location,
-#         as in condor's local universe, setting localhost:port is fine. Otherwise you'll need to determine
-#         the IP address where your Kafka server is running (using 'ip addr show' or equivalent).
-#     * KAFKA_GROUP: group for which Kafka producers for feature_extractor jobs report to.
-#
-#   Synchronizer/File sink options:
-#     * PROCESSING_CADENCE: cadence at which incoming features are processed, so as to limit polling
-#         of topics repeatedly, etc. Default value of 0.1s is fine.
-#     * REQUEST_TIMEOUT: timeout for waiting for a single poll from a Kafka consumer.
-#     * LATENCY_TIMEOUT: timeout for the feature synchronizer before older features are dropped. This
-#         is to prevent a single feature extractor job from holding up the online pipeline. This will
-#         also depend on the latency induced by the feature extractor, especially when using templates
-#         that have latencies associated with them such as Sine-Gaussians.
-#
-# In order to start up online runs, you'll need an installation of gstlal. An installation Makefile that
-# includes Kafka dependencies are located at: gstlal/gstlal-burst/share/feature_extractor/Makefile.gstlal_idq_icc
-#
-# To run, making sure that the correct environment is sourced:
-#
-#   $ make -f Makefile.gstlal_feature_extractor_online
-#
+#   $ make dag -f Makefile.gstlal_feature_extractor_online
 
-########################
-# User/Accounting Tags #
-########################
+#################################################################################
+# CONFIGURATION                                                                 #
+#################################################################################
 
-# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+#-------------------------------------
+### User/Accounting Tags
+
 ACCOUNTING_TAG=ligo.prod.o3.detchar.onlinedq.idq
-GROUP_USER=patrick.godwin
+GROUP_USER=albert.einstein
 
 CONDOR_UNIVERSE=vanilla
 
-#########################
-# Online DAG Parameters #
-#########################
+# Set accounting tag at:
+#     https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
 
-IFO = H1
-#IFO = L1
+#-------------------------------------
+### Analysis configuration
 
+#  General:
+#    * TAG: sets the name used for logging purposes, Kafka topic naming, etc.
+#    * SAMPLE_RATE: rate at which to aggregate features for a given channel.
+#        Can be sampled at 1 Hz or higher (powers of 2).
+#
+#  Data transfer/saving:
+#    * DATA_SOURCE: data source where auxiliary channel timeseries are read from (lvshm/framexmit).
+#    * SAVE_FORMAT: determines whether to transfer features downstream or save directly (kafka/hdf5).
+#    * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
+#    * PERSIST_CADENCE: span of a typical hdf5 file.
+#    * OUTPATH: directory in which to save features.
+#
+#  Waveform parameters:
+#    * WAVEFORM: type of waveform used to perform matched filtering.
+#        options: sine_gaussian/half_sine_gaussian/tapered_sine_gaussian
+#    * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
+#    * QHIGH: maximum value of Q
+
+SAMPLE_RATE = 16
 TAG = production_online
 
-#DATA_SOURCE = framexmit
+# data transfer/save options
 DATA_SOURCE = lvshm
+SAVE_FORMAT = kafka
+SAVE_CADENCE = 20
+PERSIST_CADENCE = 20
+OUTPATH = $(PWD)
 
-MAX_STREAMS = 100
-SAMPLE_RATE = 16
-
-# Parameter space config of waveform
+# parameter space for waveforms
 WAVEFORM = tapered_sine_gaussian
 MISMATCH = 0.03
 QHIGH = 40
 
-# data transfer options
-OUTPATH = $(PWD)
-SAVE_FORMAT = kafka
+#-------------------------------------
+### Channel list configuration
 
-# save options
-SAVE_CADENCE = 20
-PERSIST_CADENCE = 20
+#  * IFO: select the IFO for auxiliary channels to be ingested (H1/L1).
+#  * EPOCH: set epoch (O1/O2/etc).
+#  * LEVEL: set types of channels to look over (standard/reduced).
+#  * SECTION_INCLUDE: specify sections to include (no sections imply all sections).
+#  * SAFETY_INCLUDE: specify safety types to include (default: safe).
+#  * FIDELITY_EXCLUDE: specify fidelity types to exclude (default: none).
+#  * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
 
-# aggregator settings
-DATA_BACKEND = influx
-INFLUX_HOSTNAME:=${INFLUXDB_HOSTNAME}
-INFLUX_PORT = 8086
-DATABASE_NAME = $(IFO)_gstlal_features
-
-# kafka options
-KAFKA_TOPIC = gstlal_features
-KAFKA_GROUP = feature_production_online
-KAFKA_PORT = 9182
-ZOOKEEPER_PORT = 2271
-ifeq ($(IFO),H1)
-	KAFKA_SERVER:=10.21.6.226
-	TARGET_MACHINE:=TARGET.Machine
-	NODE:=node502.dcs.ligo-wa.caltech.edu
-	SHM_PARTITION:=LHO_Data
-else
-	KAFKA_SERVER:=10.9.11.227
-	TARGET_MACHINE:=Machine
-	NODE:=node227.ldas.ligo-la.caltech.edu
-	SHM_PARTITION:=LLO_Data
-endif
-
-# synchronizer/file sink options (kafka only)
-PROCESSING_CADENCE = 0.001
-REQUEST_TIMEOUT = 0.025
-LATENCY_TIMEOUT = 10
-
-# cluster where analysis is run
-CLUSTER:=$(shell hostname -d)
-
-##########################
-# Auxiliary channel info #
-##########################
+IFO = H1
+#IFO = L1
 
 EPOCH = O3
 LEVEL = lldetchar
 
-# if not using standard .ini file, comment and supply custom channel list instead
 CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
-#CHANNEL_LIST = custom_channel_list.txt
 
 # target channel
 TARGET_CHANNEL = $(IFO):CAL-DELTAL_EXTERNAL_DQ
 
-### used for channel list .ini file
 # if not specified, use all sections (replace spaces with underscores'_')
 SECTION_INCLUDE = 
 
@@ -185,21 +120,70 @@ SAFETY_INCLUDE_COMMANDS := $(addprefix --safety-include ,$(SAFETY_INCLUDE))
 FIDELITY_EXCLUDE_COMMANDS := $(addprefix --fidelity-exclude ,$(FIDELITY_EXCLUDE))
 UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAFE_CHANNEL_INCLUDE))
 
-#######################
-# Other key variables #
-#######################
+#-------------------------------------
+### Synchronizer/File sink configuration
 
-GSTLALSHAREDIR=$(LAL_PATH)/../git/gstlal/gstlal-burst/share
+#  * PROCESSING_CADENCE: cadence at which incoming features are processed, so as to limit polling
+#      of topics repeatedly, etc. Default value of 0.1s is fine.
+#  * REQUEST_TIMEOUT: timeout for waiting for a single poll from a Kafka consumer.
+#  * LATENCY_TIMEOUT: timeout for the feature synchronizer before older features are dropped. This
+#      is to prevent a single feature extractor job from holding up the online pipeline. This will
+#      also depend on the latency induced by the feature extractor, especially when using templates
+#      that have latencies associated with them such as Sine-Gaussians.
 
-############
-# Workflow #
-############
+PROCESSING_CADENCE = 0.001
+REQUEST_TIMEOUT = 0.025
+LATENCY_TIMEOUT = 10
 
-all : online-dag
-	@echo "launch kafka dag first: condor_submit_dag kafka_broker_$(TAG).dag"
-	@echo "then launch online jobs: condor_submit_dag $(IFO)_feature_extraction_pipe.dag"
+#-------------------------------------
+### Aggregator configuration
 
-online-dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST) online-web-deploy
+DATA_BACKEND = influx
+INFLUX_HOSTNAME:=${INFLUXDB_HOSTNAME}
+INFLUX_PORT = 8086
+DATABASE_NAME = $(IFO)_gstlal_features
+
+#-------------------------------------
+### Kafka configuration
+
+#  * KAFKA_TOPIC: basename of topic for features generated from feature_extractor
+#  * KAFKA_SERVER: Kafka server address where Kafka is hosted. If features are run in same location,
+#      as in condor's local universe, setting localhost:port is fine. Otherwise you'll need to determine
+#      the IP address where your Kafka server is running (using 'ip addr show' or equivalent).
+#  * KAFKA_GROUP: group for which Kafka producers for feature_extractor jobs report to.
+
+KAFKA_TOPIC = gstlal_features
+KAFKA_GROUP = feature_production_online
+KAFKA_PORT = 9182
+ZOOKEEPER_PORT = 2271
+ifeq ($(IFO),H1)
+	KAFKA_SERVER:=10.21.6.226
+	TARGET_MACHINE:=TARGET.Machine
+	NODE:=node502.dcs.ligo-wa.caltech.edu
+	SHM_PARTITION:=LHO_Online
+else
+	KAFKA_SERVER:=10.9.11.227
+	TARGET_MACHINE:=Machine
+	NODE:=node227.ldas.ligo-la.caltech.edu
+	SHM_PARTITION:=LLO_Online
+endif
+
+#-------------------------------------
+### DAG parallelization configuration
+
+#  * MAX_STREAMS: Maximum # of streams that a single gstlal_feature_extractor process will
+#      process. This is determined by sum_i(channel_i * # rates_i). Number of rates for a
+#      given channels is determined by log2(max_rate/min_rate) + 1.
+
+MAX_STREAMS = 100
+
+#################################################################################
+# WORKFLOW                                                                      #
+#################################################################################
+.PHONY: dag dashboard clean clean-all
+
+## Generate online analysis DAG
+dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST)
 	gstlal_ll_feature_extractor_pipe \
 		--data-source $(DATA_SOURCE) \
 		--shared-memory-partition $(IFO)=$(SHM_PARTITION) \
@@ -242,8 +226,10 @@ online-dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST) online-web-deploy
 		--auxiliary-request-memory 8GB \
 		--verbose \
 		--disable-web-service ; \
+	@echo "launch kafka dag first: condor_submit_dag kafka_broker_$(TAG).dag"
+	@echo "then launch online jobs: condor_submit_dag $(IFO)_feature_extraction_pipe.dag"
 
-kafka_broker_$(TAG).dag : feature_extraction_monitor_$(IFO).yml
+kafka_broker_$(TAG).dag :
 	gstlal_kafka_dag \
 		--analysis-tag $(TAG) \
 		--kafka-hostname $(KAFKA_SERVER) \
@@ -256,25 +242,90 @@ kafka_broker_$(TAG).dag : feature_extraction_monitor_$(IFO).yml
 		--condor-command='Requirements=(TARGET.HasLowLatencyDetcharFrames =?= True) && ($(TARGET_MACHINE) == "$(NODE)")' \
 		$(CONDOR_COMMANDS) \
 
-online-web-deploy : feature_extraction_monitor_$(IFO).yml
-	scald deploy -c feature_extraction_monitor_$(IFO).yml -o ~/public_html -e -n $(IFO)_feature_extraction_monitor
+## Deploy online dashboard
+dashboard : feature_extraction_monitor_$(IFO).yml
+	scald deploy -c $^ -o ~/public_html -e -n $(IFO)_feature_extraction_monitor
 
 feature_extraction_monitor_$(IFO).yml :
-	cp $(GSTLALSHAREDIR)/feature_extractor/monitoring/$@ .
+	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal-burst/share/feature_extractor/monitoring/$@
 
 # Pull latest channel list
 $(CHANNEL_LIST) :
 	if [ "$(LEVEL)" = "lldetchar" ]; then \
-		cp $(GSTLALSHAREDIR)/feature_extractor/$(EPOCH)/channel_lists/$@ . ; \
+		wget https://git.ligo.org/reed.essick/ligo-channel-lists/raw/lldetchar/$(EPOCH)/$@ ; \
 	else \
 		wget https://git.ligo.org/detchar/ligo-channel-lists/raw/master/$(EPOCH)/$@ ; \
 	fi ;
 
-clean-lite :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.txt
-
+## Clean directory of DAG-related files.
 clean :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt
 
+## Clean directory of all files, including data products.
 clean-all :
 	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt monitor aggregator features snapshots synchronizer gstlal_feature_* kafka* zookeeper*
+
+#################################################################################
+# SELF DOCUMENTING COMMANDS                                                     #
+#################################################################################
+
+.DEFAULT_GOAL := help
+
+# Inspired by <http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html>
+# sed script explained:
+# /^##/:
+# 	* save line in hold space
+# 	* purge line
+# 	* Loop:
+# 		* append newline + line to hold space
+# 		* go to next line
+# 		* if line starts with doc comment, strip comment character off and loop
+# 	* remove target prerequisites
+# 	* append hold space (+ newline) to line
+# 	* replace newline plus comments by `---`
+# 	* print line
+# Separate expressions are necessary because labels cannot be delimited by
+# semicolon; see <http://stackoverflow.com/a/11799865/1968>
+.PHONY: help
+help:
+	@echo "$$(tput bold)Usage:$$(tput sgr0)"
+	@echo
+	@echo "    Launch online feature extraction jobs."
+	@echo
+	@echo "$$(tput bold)Available commands:$$(tput sgr0)"
+	@echo
+	@sed -n -e "/^## / { \
+		h; \
+		s/.*//; \
+		:doc" \
+		-e "H; \
+		n; \
+		s/^## //; \
+		t doc" \
+		-e "s/:.*//; \
+		G; \
+		s/\\n## /---/; \
+		s/\\n/ /g; \
+		p; \
+	}" ${MAKEFILE_LIST} \
+	| LC_ALL='C' sort --ignore-case \
+	| awk -F '---' \
+		-v ncol=$$(tput cols) \
+		-v indent=19 \
+		-v col_on="$$(tput setaf 6)" \
+		-v col_off="$$(tput sgr0)" \
+	'{ \
+		printf "%s%*s%s ", col_on, -indent, $$1, col_off; \
+		n = split($$2, words, " "); \
+		line_length = ncol - indent; \
+		for (i = 1; i <= n; i++) { \
+			line_length -= length(words[i]) + 1; \
+			if (line_length <= 0) { \
+				line_length = ncol - indent - length(words[i]) - 1; \
+				printf "\n%*s ", -indent, " "; \
+			} \
+			printf "%s ", words[i]; \
+		} \
+		printf "\n"; \
+	}' \
+	| more $(shell test $(shell uname) = Darwin && echo '--no-init --raw-control-chars')

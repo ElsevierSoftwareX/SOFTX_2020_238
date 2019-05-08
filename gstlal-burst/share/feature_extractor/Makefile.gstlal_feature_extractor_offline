@@ -15,37 +15,13 @@ SHELL := /bin/bash # Use bash syntax
 #  * Data ingestion: all options
 #  * Waveform parameters: WAVEFORM, MISMATCH, QHIGH
 #
-# Configuration options:
+# To get the full list of commands, run:
 #
-#   Analysis times:
-#     * START: set the analysis gps start time
-#     * STOP: set the analysis gps stop time
-#
-#   Data ingestion (using detchar channel list INI):
-#     * IFO: select the IFO for auxiliary channels to be ingested (H1/L1).
-#     * EPOCH: set epoch (O1/O2/etc).
-#     * LEVEL: set types of channels to look over (standard/reduced).
-#     * SECTION_INCLUDE: specify sections to include (no sections imply all sections).
-#     * SAFETY_INCLUDE: specify safety types to include (default: safe).
-#     * FIDELITY_EXCLUDE: specify fidelity types to exclude (default: none).
-#     * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
-#
-#   Waveform parameters:
-#     * WAVEFORM: type of waveform used to perform matched filtering.
-#                 options: sine_gaussian/half_sine_gaussian/tapered_sine_gaussian
-#     * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
-#     * QHIGH: maximum value of Q
-#
-#   Data transfer/saving:
-#     * OUTPATH: directory in which to save features.
-#     * SAMPLE_RATE: rate at which to aggregate features for a given channel.
-#                    Can be sampled at 1 Hz or higher (powers of 2).
-#     * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
-#     * PERSIST_CADENCE: span of a typical hdf5 file.
+#   $ make help -f Makefile.gstlal_feature_extractor_offline
 #
 # To generate the DAG needed to start an analysis, run:
 #
-#   $ make -f Makefile.gstlal_feature_extractor_offline
+#   $ make dag -f Makefile.gstlal_feature_extractor_offline
 #
 
 #################################################################################
@@ -65,15 +41,37 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 #-------------------------------------
 ### Analysis configuration
 
+#  General:
+#    * TAG: sets the name used for logging purposes, Kafka topic naming, etc.
+#    * SAMPLE_RATE: rate at which to aggregate features for a given channel.
+#        Can be sampled at 1 Hz or higher (powers of 2).
+#
+#  Analysis times:
+#    * START: set the analysis gps start time
+#    * STOP: set the analysis gps stop time
+#
+#  Waveform parameters:
+#    * WAVEFORM: type of waveform used to perform matched filtering.
+#                options: sine_gaussian/half_sine_gaussian/tapered_sine_gaussian
+#    * MISMATCH: maximum mismatch between templates (corresponding to Omicron's mismatch definition).
+#    * QHIGH: maximum value of Q
+#
+#  Data transfer/saving:
+#    * SAVE_CADENCE: span of a typical dataset within an hdf5 file.
+#    * PERSIST_CADENCE: span of a typical hdf5 file.
+#    * OUTPATH: directory in which to save features.
+
+SAMPLE_RATE = 16
+TAG = production_offline
+
 # analysis times
 START = 1187000000
 STOP  = 1187100000
 
-# save preferences
-OUTPATH = $(PWD)
-SAMPLE_RATE = 16
+# data transfer/save options
 SAVE_CADENCE = 20
 PERSIST_CADENCE = 200
+OUTPATH = $(PWD)
 
 # parameter space for waveforms
 WAVEFORM = tapered_sine_gaussian
@@ -82,6 +80,14 @@ QHIGH = 40
 
 #-------------------------------------
 ### Channel list configuration
+
+#  * IFO: select the IFO for auxiliary channels to be ingested (H1/L1).
+#  * EPOCH: set epoch (O1/O2/etc).
+#  * LEVEL: set types of channels to look over (standard/reduced).
+#  * SECTION_INCLUDE: specify sections to include (no sections imply all sections).
+#  * SAFETY_INCLUDE: specify safety types to include (default: safe).
+#  * FIDELITY_EXCLUDE: specify fidelity types to exclude (default: none).
+#  * UNSAFE_CHANNEL_INCLUDE: specify unsafe channels to include, ignoring safety information.
 
 IFO = H1
 #IFO = L1
@@ -168,11 +174,9 @@ CONCURRENCY = 1
 #################################################################################
 # WORKFLOW                                                                      #
 #################################################################################
+.PHONY: dag clean clean-all
 
-all : dag
-	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
-
-# Run etg pipe to produce dag
+## Generate offline analysis DAG
 dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
 	gstlal_feature_extractor_pipe \
 		--data-source frames \
@@ -205,6 +209,7 @@ dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
 		--request-disk 12GB \
 		--verbose \
 		--disable-web-service
+	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
 
 # Pull latest channel list
 $(CHANNEL_LIST) : frame.cache
@@ -224,5 +229,75 @@ frame.cache :
 		gw_data_find -o L -t L1_R -l  -s $(FSTART) -e $(STOP) --url-type file -O $@ ; \
 	fi
 
+## Clean directory of DAG-related files.
 clean :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite *.html Images *.css *.js segments.xml.gz *.ini
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite *.html segments.xml.gz *.ini
+
+## Clean directory of all files, including data products.
+clean-all :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite *.html segments.xml.gz *.ini gstlal_feature_*
+
+#################################################################################
+# SELF DOCUMENTING COMMANDS                                                     #
+#################################################################################
+
+.DEFAULT_GOAL := help
+
+# Inspired by <http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html>
+# sed script explained:
+# /^##/:
+# 	* save line in hold space
+# 	* purge line
+# 	* Loop:
+# 		* append newline + line to hold space
+# 		* go to next line
+# 		* if line starts with doc comment, strip comment character off and loop
+# 	* remove target prerequisites
+# 	* append hold space (+ newline) to line
+# 	* replace newline plus comments by `---`
+# 	* print line
+# Separate expressions are necessary because labels cannot be delimited by
+# semicolon; see <http://stackoverflow.com/a/11799865/1968>
+.PHONY: help
+help:
+	@echo "$$(tput bold)Usage:$$(tput sgr0)"
+	@echo
+	@echo "    Launch offline feature extraction jobs."
+	@echo
+	@echo "$$(tput bold)Available commands:$$(tput sgr0)"
+	@echo
+	@sed -n -e "/^## / { \
+		h; \
+		s/.*//; \
+		:doc" \
+		-e "H; \
+		n; \
+		s/^## //; \
+		t doc" \
+		-e "s/:.*//; \
+		G; \
+		s/\\n## /---/; \
+		s/\\n/ /g; \
+		p; \
+	}" ${MAKEFILE_LIST} \
+	| LC_ALL='C' sort --ignore-case \
+	| awk -F '---' \
+		-v ncol=$$(tput cols) \
+		-v indent=19 \
+		-v col_on="$$(tput setaf 6)" \
+		-v col_off="$$(tput sgr0)" \
+	'{ \
+		printf "%s%*s%s ", col_on, -indent, $$1, col_off; \
+		n = split($$2, words, " "); \
+		line_length = ncol - indent; \
+		for (i = 1; i <= n; i++) { \
+			line_length -= length(words[i]) + 1; \
+			if (line_length <= 0) { \
+				line_length = ncol - indent - length(words[i]) - 1; \
+				printf "\n%*s ", -indent, " "; \
+			} \
+			printf "%s ", words[i]; \
+		} \
+		printf "\n"; \
+	}' \
+	| more $(shell test $(shell uname) = Darwin && echo '--no-init --raw-control-chars')
