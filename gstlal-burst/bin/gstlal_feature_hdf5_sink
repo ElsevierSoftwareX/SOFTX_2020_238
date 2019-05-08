@@ -91,6 +91,7 @@ class HDF5StreamSink(object):
     """
     def __init__(self, logger, options):
         logger.info('setting up hdf5 stream sink...')
+        self.tag = options.tag
 
         ### initialize timing options
         self.request_timeout = options.request_timeout
@@ -98,8 +99,10 @@ class HDF5StreamSink(object):
         self.is_running = False
 
         ### kafka settings
-        self.kafka_settings = {'bootstrap.servers': options.kafka_server,
-                               'group.id': 'group_1'}
+        self.kafka_settings = {
+            'bootstrap.servers': options.kafka_server,
+            'group.id': 'hdf5_sink_{}'.format(self.tag)
+        }
 
         ### initialize consumers
         self.consumer = Consumer(self.kafka_settings)
