@@ -2,6 +2,13 @@
 Changelog
 #########
 
+spiir-O3-v2 (2018-05-09)
+==================
+
+- Apply a simple cut for triggers before uploading them to GraceDB. Check if the FAR is less than 1e-6Hz and coherent SNR is less than 8. If so, do not upload.
+
+- Update the configuration file for planned changes to use CLEAN channels.
+
 spiir-O3 (2018-04-03)
 ==================
 
