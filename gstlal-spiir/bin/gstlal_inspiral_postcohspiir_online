@@ -212,6 +212,7 @@ def parse_command_line():
     parser.add_option("--finalsink-singlefar-veto-thresh", type = "float", default = 0.01, help = "at least two detectors have fars less than this single far veto threshold. ")
     parser.add_option("--finalsink-chisq-ratio-thresh", type = "float", default = 8, help = "any two detectors have chisq ratio less than this threshold. ")
     parser.add_option("--finalsink-superevent-thresh", type = "float", default = 3.8e-7, help = "the superevent thresh which we will apply all kinds of vetoes. ")
+    parser.add_option("--finalsink-opa-cohsnr-thresh", type = "float", default = 8, help = "the cohsnr thresh that all OPA events need to be larger than.")
     parser.add_option("--finalsink-gracedb-far-threshold", type = "float", default = None, help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent")
     parser.add_option("--finalsink-gracedb-group", default = "Test", help = "gracedb group, default is Test")
     parser.add_option("--finalsink-gracedb-search", default = "LowMass", help = "gracedb type, default is LowMass")
@@ -486,6 +487,7 @@ finalsink = postcoh_finalsink.FinalSink(
 			singlefar_veto_thresh = options.finalsink_singlefar_veto_thresh,
 			chisq_ratio_veto_thresh = options.finalsink_chisq_ratio_thresh,
 			superevent_thresh = options.finalsink_superevent_thresh,
+			opa_cohsnr_thresh = options.finalsink_opa_cohsnr_thresh,
             gracedb_far_threshold = options.finalsink_gracedb_far_threshold,
             gracedb_group = options.finalsink_gracedb_group,
             gracedb_search = options.finalsink_gracedb_search,
