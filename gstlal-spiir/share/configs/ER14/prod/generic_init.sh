@@ -233,15 +233,21 @@ fi
 # 
 ######################################################
 mynodename="postcohspiir"
+# Use only INTENT bit and CBC injection bit
 onbits=290
+# Use INTENT and HOFT_OK bits, do not use injection bits
+onbits=3
+V1onbits=2
 
 if (( ${iflive} == 1 )); then
     if (( ${ndet} == 2)); then
-        mychannel="H1=GDS-GATED_STRAIN --channel-name L1=GDS-GATED_STRAIN"
+        #mychannel="H1=GDS-GATED_STRAIN --channel-name L1=GDS-GATED_STRAIN"
+        mychannel="H1=GDS-CALIB_STRAIN_CLEAN --channel-name L1=GDS-CALIB_STRAIN_CLEAN"
         mystate="H1=GDS-CALIB_STATE_VECTOR --state-channel-name L1=GDS-CALIB_STATE_VECTOR  --state-vector-on-bits H1=${onbits} --state-vector-on-bits L1=${onbits}  --state-vector-off-bits H1=0 --state-vector-off-bits L1=0"
 	else
-        mychannel="H1=GDS-GATED_STRAIN --channel-name L1=GDS-GATED_STRAIN  --channel-name V1=Hrec_hoft_16384Hz_Gated"
-        mystate="H1=GDS-CALIB_STATE_VECTOR --state-channel-name L1=GDS-CALIB_STATE_VECTOR  --state-channel-name V1=DQ_ANALYSIS_STATE_VECTOR --state-vector-on-bits H1=${onbits} --state-vector-on-bits L1=${onbits} --state-vector-on-bits V1=${onbits}  --state-vector-off-bits H1=0 --state-vector-off-bits L1=0  --state-vector-off-bits V1=0"
+        #mychannel="H1=GDS-GATED_STRAIN --channel-name L1=GDS-GATED_STRAIN  --channel-name V1=Hrec_hoft_16384Hz_Gated"
+        mychannel="H1=GDS-CALIB_STRAIN_CLEAN --channel-name L1=GDS-CALIB_STRAIN_CLEAN  --channel-name V1=Hrec_hoft_16384Hz_Gated"
+        mystate="H1=GDS-CALIB_STATE_VECTOR --state-channel-name L1=GDS-CALIB_STATE_VECTOR  --state-channel-name V1=DQ_ANALYSIS_STATE_VECTOR --state-vector-on-bits H1=${onbits} --state-vector-on-bits L1=${onbits} --state-vector-on-bits V1=${V1onbits}  --state-vector-off-bits H1=0 --state-vector-off-bits L1=0  --state-vector-off-bits V1=0"
 	fi
 else # O2 replay
     if (( ${ndet} == 2)); then
