@@ -12,6 +12,7 @@ dist_bin_SCRIPTS = \
 	gstlal_mock_data_server \
 	gstlal_ilwdify \
 	gstlal_inspiral_best_coinc_file \
+	gstlal_inspiral_check_livetimes \
 	gstlal_inspiral_treebank \
 	gstlal_inspiral_treebank_dag \
 	gstlal_inspiral_bankviz \
