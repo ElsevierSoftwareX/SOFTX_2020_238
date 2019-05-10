@@ -1,0 +1,8 @@
+all: latency_test
+
+latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
+	python ../../check_calibration/latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
+
+clean:
+	rm *.png
+
