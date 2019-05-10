@@ -28,13 +28,7 @@ Requires: lalinspiral-python >= @MIN_LALINSPIRAL_VERSION@
 Requires: gsl
 Requires: ligo-gracedb >= 1.11
 Requires: python-%{gstreamername}
-Requires: python2-lal >= @MIN_LAL_VERSION@
-Requires: python2-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
-Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
-Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
-Requires: python2-ligo-scald
-Requires: numpy >= @MIN_NUMPY_VERSION@
-Requires: scipy
+BuildRequires: pkgconfig >= 0.18.0
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 BuildRequires: graphviz

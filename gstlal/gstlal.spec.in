@@ -37,6 +37,7 @@ Requires: python-%{gstreamername}
 Requires: python-gobject >= @MIN_PYGOBJECT_VERSION@
 Requires: scipy
 Requires: zlib
+BuildRequires: pkgconfig >= 0.18.0
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: fftw-devel >= 3
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@

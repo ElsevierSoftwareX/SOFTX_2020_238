@@ -97,7 +97,7 @@ case `cat /etc/redhat-release 2> /dev/null` in
     ;;
 esac
 LT_INIT
-PKG_PROG_PKG_CONFIG()
+PKG_PROG_PKG_CONFIG(0.18.0)
 
 
 #
