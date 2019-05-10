@@ -25,7 +25,7 @@ Build-Depends:
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libnds2-client-dev (>= @MIN_NDS_VERSION@),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
- pkg-config,
+ pkg-config (>= 0.18.0),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-ligolw-tools,
