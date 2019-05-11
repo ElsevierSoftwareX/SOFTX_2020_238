@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 #
 # Copyright (C) 2011-2014 Chad Hanna
+# Copyright (C) 2019      Patrick Godwin
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -30,46 +31,51 @@
 ### ----------------------------------------
 ###
 ### .. graphviz:: ../images/trigger_pipe.dot
-### 
-
+###
 
 """
 This program makes a dag to run gstlal_inspiral offline
 """
 
-__author__ = 'Chad Hanna <chad.hanna@ligo.org>'
+__author__ = 'Chad Hanna <chad.hanna@ligo.org>, Patrick Godwin <patrick.godwin@ligo.org>'
 
-##############################################################################
-# import standard modules and append the lalapps prefix to the python path
-import sys, os, stat
+#----------------------------------------------------------
+### imports
+
 import itertools
-import numpy
+import os
 from optparse import OptionParser
+import sys
+import stat
 
-##############################################################################
-# import the modules we need to build the pipeline
+import numpy
+
 import lal
 import lal.series
 from lal.utils import CacheEntry
-from glue import pipeline
+
 from ligo import segments
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 import ligo.lw.utils as ligolw_utils
 import ligo.lw.utils.segments as ligolw_segments
-from gstlal import inspiral, inspiral_pipe
+
+from gstlal import inspiral
+from gstlal import inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource
+
+
+#----------------------------------------------------------
+### ligolw initialization
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 lsctables.use_in(LIGOLWContentHandler)
 
 
-#
-# Utility functions
-#
-
+#----------------------------------------------------------
+### utility functions
 
 def sim_tag_from_inj_file(injections):
 	if injections is None:
@@ -85,7 +91,8 @@ def get_bank_params(bank_cache, options, verbose = False):
 				xmldoc = ligolw_utils.load_filename(ce.path, verbose = verbose, contenthandler = LIGOLWContentHandler)
 				snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
 				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-				template_mchirp_dict[ce.path] = [min(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2]), max(snglinspiraltable.getColumnByName('mchirp')[options.overlap[n]/2:-options.overlap[n]/2])]
+				idx = options.overlap[n]/2
+				template_mchirp_dict[ce.path] = [min(snglinspiraltable.getColumnByName('mchirp')[idx:-idx]), max(snglinspiraltable.getColumnByName('mchirp')[idx:-idx])]
 				xmldoc.unlink()
 
 	return max_time, template_mchirp_dict
@@ -106,11 +113,9 @@ def subdir_path(dirlist):
 		pass
 	return output_path
 
-#
-# get a dictionary of all the disjoint 2+ detector combination segments
-#
-
 def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_template_length, min_instruments = 2):
+	"""get a dictionary of all the disjoint 2+ detector combination segments
+	"""
 	segsdict = segments.segmentlistdict()
 	# 512 seconds for the whitener to settle + the maximum template_length FIXME don't hard code
 	start_pad = 512 + max_template_length
@@ -118,10 +123,6 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 	segment_length = int(5 * start_pad)
 	for n in range(min_instruments, 1 + len(analyzable_instruments_set)):
 		for ifo_combos in itertools.combinations(list(analyzable_instruments_set), n):
-			# never analyze H1H2 or H2L1 times
-			#if set(ifo_combos) == set(('H1', 'H2')) or set(ifo_combos) == set(('L1', 'H2')):
-			#	print >> sys.stderr, "not analyzing: ", ifo_combos, " only time"
-			#	continue
 			segsdict[frozenset(ifo_combos)] = allsegs.intersection(ifo_combos) - allsegs.union(analyzable_instruments_set - set(ifo_combos))
 			segsdict[frozenset(ifo_combos)] &= segments.segmentlist([boundary_seg])
 			segsdict[frozenset(ifo_combos)] = segsdict[frozenset(ifo_combos)].protract(start_pad)
@@ -129,118 +130,6 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 			if not segsdict[frozenset(ifo_combos)]:
 				del segsdict[frozenset(ifo_combos)]
 	return segsdict
-
-def psd_node_gen(refPSDJob, dag, parent_nodes, segsdict, channel_dict, options):
-	psd_nodes = {}
-	for ifos in segsdict:
-		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
-		for seg in segsdict[ifos]:
-			psd_nodes[(ifos, seg)] = \
-				dagparts.DAGNode(refPSDJob, dag, parent_nodes = parent_nodes,
-					opts = {"gps-start-time":int(seg[0]),
-						"gps-end-time":int(seg[1]),
-						"data-source":"frames",
-						"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict, ifos = ifos),
-						"psd-fft-length":options.psd_fft_length,
-						"frame-segments-name": options.frame_segments_name},
-					input_files = {	"frame-cache":options.frame_cache,
-							"frame-segments-file":options.frame_segments_file},
-					output_files = {"write-psd":dagparts.T050017_filename(ifos, "REFERENCE_PSD", seg, '.xml.gz', path = subdir_path([refPSDJob.output_path, str(int(seg[0]))[:5]]))}
-				)
-	return psd_nodes
-
-def inj_psd_node_gen(segsdict, options):
-	psd_nodes = {}
-	psd_cache_files = {}
-	for ce in map(CacheEntry, open(options.psd_cache)):
-		psd_cache_files.setdefault(frozenset(lsctables.instrumentsproperty.get(ce.observatory)), []).append((ce.segment, ce.path))
-	for ifos in segsdict:
-		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda (s, p): s)
-		ref_psd_file_num = 0
-		for seg in segsdict[ifos]:
-			while int(reference_psd_files[ref_psd_file_num][0][0]) < int(seg[0]):
-				ref_psd_file_num += 1
-			psd_nodes[(ifos, seg)] = reference_psd_files[ref_psd_file_num][1]
-	ref_psd_parent_nodes = []
-	return psd_nodes, ref_psd_parent_nodes
-
-def model_node_gen(modelJob, dag, parent_nodes, instruments, options, seg, template_bank, psd):
-	if options.mass_model_file is None:
-		# choose, arbitrarily, the lowest instrument in alphabetical order
-		model_file_name = dagparts.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = modelJob.output_path)
-		model_node = dagparts.DAGNode(modelJob, dag,
-			input_files = {"template-bank": template_bank, "reference-psd": psd},
-			opts = {"model":options.mass_model},
-			output_files = {"output": model_file_name},
-			parent_nodes = parent_nodes
-		)
-		return [model_node], model_file_name
-	else:
-		return [], options.mass_model_file
-
-def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, template_mchirp_dict):
-	svd_nodes = {}
-	new_template_mchirp_dict = {}
-	for ifo, list_of_svd_caches in bank_cache.items():
-		bin_offset = 0
-		for j, svd_caches in enumerate(list_of_svd_caches):
-			svd_caches = map(CacheEntry, open(svd_caches))
-			for i, individual_svd_cache in enumerate(ce.path for ce in svd_caches):
-				# First sort out the clipleft, clipright options
-				clipleft = []
-				clipright = []
-				ids = []
-				mchirp_interval = (float("inf"), 0)
-				individual_svd_cache = map(CacheEntry, open(individual_svd_cache))
-				for n, f in enumerate(ce.path for ce in individual_svd_cache):
-					# handle template bank clipping
-					clipleft.append(options.overlap[j] / 2)
-					clipright.append(options.overlap[j] / 2)
-					ids.append("%d_%d" % (i+bin_offset, n))
-					if f in template_mchirp_dict:
-						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
-
-				svd_bank_name = dagparts.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = svdJob.output_path)
-				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
-					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
-
-				svdnode = dagparts.DAGNode(svdJob, dag,
-					parent_nodes = parent_nodes,
-					opts = {"svd-tolerance":options.tolerance,
-						"flow":options.flow,
-						"sample-rate":options.sample_rate,
-						"clipleft":clipleft,
-						"clipright":clipright,
-						"samples-min":options.samples_min[j],
-						"samples-max-256":options.samples_max_256,
-						"samples-max-64":options.samples_max_64,
-						"samples-max":options.samples_max,
-						"autocorrelation-length":options.autocorrelation_length,
-						"bank-id":ids,
-						"identity-transform":options.identity_transform,
-						"ortho-gate-fap":0.5},
-					input_files = {"reference-psd":psd},
-					input_cache_files = {"template-bank-cache":[ce.path for ce in individual_svd_cache]},
-					input_cache_file_name = os.path.basename(svd_bank_name).replace(".xml.gz", ".cache"),
-					output_files = {"write-svd":svd_bank_name}
-					)
-				# impose a priority to help with depth first submission
-				svdnode.set_priority(99)
-				svd_nodes.setdefault(ifo, []).append(svdnode)
-			bin_offset += i+1
-	#
-	# Plot template/svd bank jobs
-	#
-
-	primary_ifo = bank_cache.keys()[0]
-	dagparts.DAGNode(plotBanksJob, dag,
-				parent_nodes = sum(svd_nodes.values(),[]),
-				opts = {"plot-template-bank":"",
-					"output-dir": output_dir},
-				input_files = {"template-bank-file":options.template_bank}
-				)
-
-	return svd_nodes, new_template_mchirp_dict
 
 def create_svd_bank_strings(svd_nodes, instruments = None):
 	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
@@ -269,200 +158,9 @@ def svd_bank_cache_maker(svd_bank_strings, injection = False):
 		for filename in svd_bank_parsed_dict.itervalues():
 			svd_cache_entries.append(CacheEntry.from_T050017(filename))
 
-	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries] 
-
-def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict):
-
-	inspiral_nodes = {}
-	for ifos in segsdict:
-
-		# setup dictionaries to hold the inspiral nodes
-		inspiral_nodes[(ifos, None)] = {}	
-		ignore = {}
-		injection_files = []
-		for injections in options.injections:
-			min_chirp_mass, max_chirp_mass, injections = injections.split(':')
-			injection_files.append(injections)
-			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
-			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
-			ignore[injections] = []
-			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
-				if max_chirp_mass <= bounds[0]:
-					ignore[injections].append(int(bgbin_index))
-					# NOTE putting a break here assumes that the min chirp mass
-					# in a subbank increases with bin number, i.e. XXXX+1 has a
-					# greater minimum chirpmass than XXXX, for all XXXX. Note
-					# that the reverse is not true, bin XXXX+1 may have a lower
-					# max chirpmass than bin XXXX.
-				elif min_chirp_mass > bounds[1]:
-					ignore[injections].append(int(bgbin_index))
-
-		# FIXME choose better splitting?
-		numchunks = 10
-
-		# only use a channel dict with the relevant channels
-		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
-
-		# get the svd bank strings
-		svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
-
-		# get a mapping between chunk counter and bgbin for setting priorities
-		bgbin_chunk_map = {}
-
-		for seg in segsdict[ifos]:
-			if injection_files:
-				output_seg_inj_path = subdir_path([gstlalInspiralInjJob.output_path, str(int(seg[0]))[:5]])
-			
-			if gstlalInspiralJob is None:
-				# injection-only run
-				inspiral_nodes[(ifos, None)].setdefault(seg, [None])
-
-			else:
-				output_seg_path = subdir_path([gstlalInspiralJob.output_path, str(int(seg[0]))[:5]])
-				for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
-					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
-					# setup output names
-					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
-					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [dagparts.T050017_filename(ifos, '%s_DIST_STATS' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
-
-					for bgbin in bgbin_indices:
-						bgbin_chunk_map.setdefault(bgbin, chunk_counter)
-
-					# Calculate the appropriate ht-gate-threshold values according to the scale given
-					threshold_values = None
-					if options.ht_gate_threshold_linear is not None:
-						# A scale is given
-						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
-						# use max mchirp in a given svd bank to decide gate threshold
-						bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
-						threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
-					else:
-						if options.ht_gate_threshold is not None:
-							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
-
-					# non injection node
-					noninjnode = dagparts.DAGNode(gstlalInspiralJob, dag,
-							parent_nodes = sum((svd_node_list[numchunks*chunk_counter:numchunks*(chunk_counter+1)] for svd_node_list in svd_nodes.values()),[]),
-							opts = {"psd-fft-length":options.psd_fft_length,
-								"ht-gate-threshold":threshold_values,
-								"frame-segments-name":options.frame_segments_name,
-								"gps-start-time":int(seg[0]),
-								"gps-end-time":int(seg[1]),
-								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-								"tmp-space":dagparts.condor_scratch_space(),
-								"track-psd":"",
-								"control-peak-time":options.control_peak_time,
-								"coincidence-threshold":options.coincidence_threshold,
-								"singles-threshold":options.singles_threshold,
-								"fir-stride":options.fir_stride,
-								"data-source":"frames",
-								"local-frame-caching":"",
-								"min-instruments":options.min_instruments,
-								"reference-likelihood-file":options.reference_likelihood_file
-								},
-							input_files = {	"time-slide-file":options.time_slide_file,
-									"frame-cache":options.frame_cache,
-									"frame-segments-file":options.frame_segments_file,
-									"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
-									"blind-injections":options.blind_injections,
-									"veto-segments-file":options.vetoes,
-								},
-							input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings)},
-							output_cache_files = {
-									"output-cache":output_names,
-									"ranking-stat-output-cache":dist_stat_names
-								}
-							)
-					# Set a post script to check for file integrity
-					if options.gzip_test:
-						noninjnode.set_post_script("gzip_test.sh")
-						noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
-					# impose a priority to help with depth first submission
-					noninjnode.set_priority(chunk_counter+15)
-					inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
-
-			# process injections
-			for injections in injection_files:
-				# setup output names
-				sim_name = sim_tag_from_inj_file(injections)
-
-				bgbin_svd_bank_strings = [index_bank_string_tuple for i, index_bank_string_tuple in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
-
-				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
-					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
-					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
-					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), seg, '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
-					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
-					try:
-						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
-						parents = [svd_node_list[int(bgbin_index)] for svd_node_list in svd_nodes.values() for bgbin_index in bgbin_indices]
-					except AttributeError:
-						# injection-only run
-						reference_psd = psd_nodes[(ifos, seg)]
-						parents = []
-
-					# Calculate the appropriate ht-gate-threshold values according to the scale given
-					threshold_values = None
-					if options.ht_gate_threshold_linear is not None:
-						# A scale is given
-						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
-						# use max mchirp in a given svd bank to decide gate threshold
-						bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
-						threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
-					else:
-						if options.ht_gate_threshold is not None:
-							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
-
-					# setup injection node
-					injnode = dagparts.DAGNode(gstlalInspiralInjJob, dag, parent_nodes = parents,
-							opts = {"psd-fft-length":options.psd_fft_length,
-								"ht-gate-threshold":threshold_values,
-								"frame-segments-name":options.frame_segments_name,
-								"gps-start-time":int(seg[0]),
-								"gps-end-time":int(seg[1]),
-								"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-								"tmp-space":dagparts.condor_scratch_space(),
-								"track-psd":"",
-								"control-peak-time":options.control_peak_time,
-								"coincidence-threshold":options.coincidence_threshold,
-								"singles-threshold":options.singles_threshold,
-								"fir-stride":options.fir_stride,
-								"data-source":"frames",
-								"local-frame-caching":"",
-								"min-instruments":options.min_instruments,
-								"reference-likelihood-file":options.reference_likelihood_file
-								},
-							input_files = {	"time-slide-file":options.inj_time_slide_file,
-									"frame-cache":options.frame_cache,
-									"frame-segments-file":options.frame_segments_file,
-									"reference-psd":reference_psd,
-									"veto-segments-file":options.vetoes,
-									"injections": injections
-								},
-							input_cache_files = {"svd-bank-cache":svd_names},
-							input_cache_file_name = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017(filename) for filename in svd_names], '.cache').replace('SVD', 'SVD_%s' % sim_name),
-							output_cache_files = {
-									"output-cache":output_names
-								}
-							)
-					# Set a post script to check for file integrity
-					if options.gzip_test:
-						injnode.set_post_script("gzip_test.sh")
-						injnode.add_post_script_arg(" ".join(output_names))
-					# impose a priority to help with depth first submission
-					if bgbin_chunk_map:
-						injnode.set_priority(bgbin_chunk_map[bgbin_indices[-1]]+1)
-					else:
-						injnode.set_priority(chunk_counter+1)
-					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
-
-	# Replace mchirplo:mchirphi:inj.xml with inj.xml
-	options.injections = [inj.split(':')[-1] for inj in options.injections]
-	return inspiral_nodes
+	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries]
 
 def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
-
 	# first get the previous output in a usable form
 	lloid_output = {}
 	for inj in options.injections + [None]:
@@ -497,547 +195,9 @@ def adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict):
 
 	return lloid_output, lloid_diststats
 
-def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, mass_model_add_node, mass_model_file):
 
-	likelihood_nodes = {}
-	rankpdf_nodes = []
-	rankpdf_zerolag_nodes = []
-	outnodes = {}
-	instruments = "".join(sorted(instrument_set))
-	margnodes = {}
-
-	# NOTE! we rely on there being identical templates in each instrument, so we just take one of the values of the svd_nodes which are a dictionary
-	one_ifo_svd_nodes = svd_nodes.values()[0]
-	# Here n counts the bins
-	# first non-injections, which will get skipped if this is an injections-only run
-	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
-		inputs = [o[0] for o in outputs]
-		parents = []
-		[parents.extend(o[1]) for o in outputs]
-		# FIXME we keep this here in case we someday want to have a
-		# mass bin dependent prior, but it really doesn't matter for
-		# the time being.
-		priornode = dagparts.DAGNode(createPriorDistStatsJob, dag,
-				parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node,
-				opts = {"instrument":instrument_set, "background-prior":1, "min-instruments":options.min_instruments},
-				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file},
-				output_files = {"write-likelihood":dagparts.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
-			)
-		# Create a file that has the priors *and* all of the diststats
-		# for a given bin marginalized over time. This is all that will
-		# be needed to compute the likelihood
-		diststats_per_bin_node = dagparts.DAGNode(marginalizeJob, dag,
-			parent_nodes = [priornode] + parents,
-			opts = {"marginalize":"ranking-stat"},
-			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
-			output_files = {"output":dagparts.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = marginalizeJob.output_path)},
-			input_cache_file_name = dagparts.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.cache')
-			)
-
-		calcranknode = dagparts.DAGNode(calcRankPDFsJob, dag,
-				parent_nodes = [diststats_per_bin_node],
-				opts = {"ranking-stat-samples":options.ranking_stat_samples},
-				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":dagparts.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsJob.output_path)}
-			)
-
-		calcrankzerolagnode = dagparts.DAGNode(calcRankPDFsWithZerolagJob, dag,
-				parent_nodes = [diststats_per_bin_node],
-				opts = {"add-zerolag-to-background":"","ranking-stat-samples":options.ranking_stat_samples},
-				input_files = {"":diststats_per_bin_node.output_files["output"]},
-				output_files = {"output":dagparts.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), boundary_seg, '.xml.gz', path = calcRankPDFsWithZerolagJob.output_path)}
-			)
-
-		margnodes['%04d' %(n,)] = diststats_per_bin_node
-		rankpdf_nodes.append(calcranknode)
-		rankpdf_zerolag_nodes.append(calcrankzerolagnode)
-		
-		# Break up the likelihood jobs into chunks to process fewer files, e.g, 16
-		likelihood_nodes.setdefault(None,[]).append(
-			[dagparts.DAGNode(calcLikelihoodJob, dag,
-				parent_nodes = [diststats_per_bin_node],
-				opts = {"tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
-				input_cache_files = {"input-cache":chunked_inputs}
-				) for chunked_inputs in chunks(inputs, 16)]
-			)
-
-	# then injections
-	for inj in options.injections:
-		for n, (outputs, diststats, bgbin_index) in enumerate((lloid_output[sim_tag_from_inj_file(inj)][key], lloid_diststats[key], key) for key in sorted(lloid_output[sim_tag_from_inj_file(inj)].keys())):
-			if outputs is None:
-				continue
-			inputs = [o[0] for o in outputs]
-			parents = []
-			[parents.extend(o[1]) for o in outputs]
-			if margnodes:
-				parents.append(margnodes[bgbin_index])
-				likelihood_url = margnodes[bgbin_index].output_files["output"]
-			else:
-				likelihood_url = diststats[0]
-			# Break up the likelihood jobs into chunks to process fewer files, e.g., 16
-			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
-				[dagparts.DAGNode(calcLikelihoodJobInj, dag,
-					parent_nodes = parents,
-					opts = {"tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"likelihood-url":likelihood_url},
-					input_cache_files = {"input-cache":chunked_inputs}
-					) for chunked_inputs in chunks(inputs, 16)]
-				)
-
-	
-	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
-	files_to_group = 40
-	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
-		# Flatten the nodes for this sub bank
-		nodes = flatten(nodes)
-		merge_nodes = []
-		# Flatten the input/output files from calc_likelihood
-		inputs = flatten([node.input_files["input-cache"] for node in nodes])
-		if inj is None:
-			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
-			for n in range(0, len(inputs), files_to_group):
-				merge_nodes.append(dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = nodes,
-					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"":inputs[n:n+files_to_group]}
-					)
-				)
-				if options.copy_raw_results:
-					merge_nodes[-1].set_pre_script("store_raw.sh")
-					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
-
-			# Merging all the dbs from the same sub bank
-			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
-				db = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite') 
-				db = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(db).description[:4]]), db)
-				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-					input_cache_files = {"input-cache":inputs},
-					output_files = {"database":db},
-					input_cache_file_name = os.path.basename(db).replace('.sqlite','.cache')
-				)
-				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"":db}
-				)
-				outnodes.setdefault(None, []).append(sqlitenode)
-		else:
-			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
-			for n in range(0, len(inputs), files_to_group):
-				merge_nodes.append(dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = nodes,
-					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"":inputs[n:n+files_to_group]}
-					)
-				)
-				if options.copy_raw_results:
-					merge_nodes[-1].set_pre_script("store_raw.sh")
-					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
-
-			# Merging all the dbs from the same sub bank and injection run
-			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
-				injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs], '.sqlite')
-				injdb = os.path.join(subdir_path([toSqliteJob.output_path, CacheEntry.from_T050017(injdb).description[:4]]), injdb)
-				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = merge_nodes,
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-					input_cache_files = {"input-cache":inputs},
-					output_files = {"database":injdb},
-					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
-				)
-				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"":injdb}
-				)
-				outnodes.setdefault(sim_tag_from_inj_file(inj), []).append(sqlitenode)
-
-	# make sure outnodes has a None key, even if its value is an empty list
-	outnodes.setdefault(None, [])
-
-	return rankpdf_nodes, rankpdf_zerolag_nodes, outnodes
-
-def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
-	rankpdf_nodes = sorted([CacheEntry(line).path for line in open(options.rank_pdf_cache)], key = lambda s: int(os.path.basename(s).split('-')[1].split('_')[0]))
-	rankpdf_zerolag_nodes = []
-	outnodes = {}
-	if options.num_files_per_background_bin == 1:
-		bgbin_lloid_map = {}
-		# Get list of all files for each background bin (will be same length for each bin)
-		for ce in map(CacheEntry, open(options.lloid_cache)):
-			bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
-
-		if len(bgbin_lloid_map.values()[0]) == 1:
-			# Starting with 1:1 mapping between files and bins,
-			# thus no merging is needed yet
-			outnodes[None] = [dbs[0] for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k))]
-			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-				outnodes[sim_tag_from_inj_file(options.injections_for_merger[i])] = [CacheEntry(line).path for line in open(inj_lloid_cache)]
-
-		else:
-			for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
-				noninjdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
-				# merge all of the dbs from the same subbank
-				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-					input_cache_files = {"input-cache":dbs},
-					output_files = {"database":noninjdb},
-					input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
-				)
-
-				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"":noninjdb}
-				)
-
-				outnodes.setdefault(None, []).append(sqlitenode)
-			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-				bgbin_lloid_map = {}
-				for ce in map(CacheEntry, open(inj_lloid_cache)):
-					bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
-
-				for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
-					injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
-					# merge all of the dbs from the same subbank
-					sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-						opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-						input_cache_files = {"input-cache":dbs},
-						output_files = {"database":injdb},
-						input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
-					)
-
-					sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-						opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-						input_files = {"":injdb}
-					)
-
-					outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
-
-	else:
-		# Starting with output of analysis before naming convention
-		# update (commit 5efd78fee6b371c999f510d07be33ec64f385695),
-		# so all lloid files contain gps times for entire run, and are
-		# numbered by iterating through segments in a given bin first
-		# (e.g. files 0000 to 0009 may all belong to bin 0000, then
-		# files 0010 to 0019 would all belong to bin 0001, etc)
-		for ce_list in chunks(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
-			hi_index = ce_list[-1].description.split('_')[0]
-			noninjdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
-
-			# merge all of the dbs from the same subbank
-			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-				input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
-				output_files = {"database":noninjdb},
-				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
-			)
-
-			sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"":noninjdb}
-			)
-
-			outnodes.setdefault(None, []).append(sqlitenode)
-
-		for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-			for ce_list in chunks(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
-				hi_index = ce_list[-1].description.split('_')[0]
-				injdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
-
-				# merge all of the dbs from the same subbank
-				sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = [],
-					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-					input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
-					output_files = {"database":injdb},
-					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
-				)
-
-				sqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-					input_files = {"":injdb}
-				)
-
-				outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
-
-	return rankpdf_nodes, rankpdf_zerolag_nodes, outnodes
-
-def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, cpJob, innodes, ligolw_add_nodes, options, instruments):
-
-	num_chunks = 50
-
-	if options.vetoes is None:
-		vetoes = []
-	else:
-		vetoes = [options.vetoes]
-
-	chunk_nodes = []
-	dbs_to_delete = []
-	# Process the chirp mass bins in chunks to paralellize the merging process
-	for chunk, nodes in enumerate(chunks(innodes[None], num_chunks)):
-		try:
-			dbs = [node.input_files[""] for node in nodes]
-			parents = nodes
-
-		except AttributeError:
-			# analysis started at merger step but seeded by lloid files which
-			# have already been merged into one file per background
-			# bin, thus the analysis will begin at this point
-			dbs = nodes
-			parents = []
-
-		# Merge the final non injection database into chunks
-		noninjdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
-		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = parents,
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-			input_cache_files = {"input-cache": dbs},
-			output_files = {"database":noninjdb},
-			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
-		)
-
-		# cluster the final non injection database
-		noninjsqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"":noninjdb}
-		)
-		chunk_nodes.append(noninjsqlitenode)
-		dbs_to_delete.append(noninjdb)
-
-	# Merge the final non injection database
-	outnodes = []
-	injdbs = []
-	if options.non_injection_db:
-		# injection-only run
-		noninjdb = options.non_injection_db
-
-	else:
-		final_nodes = []
-		for chunk, nodes in enumerate(chunks(innodes[None], 10)):
-			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
-			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = nodes,
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-				input_cache_files = {"input-cache": [node.input_files[""] for node in nodes]},
-				output_files = {"database":noninjdb},
-				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
-			)
-
-			# cluster the final non injection database
-			noninjsqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"":noninjdb}
-			)
-			final_nodes.append(noninjsqlitenode)
-
-		noninjdb = dagparts.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
-		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = final_nodes,
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"": (vetoes + [options.frame_segments_file])},
-			input_cache_files = {"input-cache": [node.input_files[""] for node in final_nodes]},
-			output_files = {"database":noninjdb},
-			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
-		)
-
-		# cluster the final non injection database
-		noninjsqlitenode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"":noninjdb}
-		)
-
-		cpnode = dagparts.DAGNode(cpJob, dag, parent_nodes = [noninjsqlitenode],
-			input_files = {"":"%s %s" % (noninjdb, noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
-		)
-
-		outnodes.append(cpnode)
-
-	# FIXME far-injections currently doesnt work, either fix it or delete it
-	#for injections, far_injections in zip(options.injections, options.far_injections):
-	if options.injections:
-		iterable_injections = options.injections
-	else:
-		iterable_injections = options.injections_for_merger
-
-	for injections in iterable_injections:
-		# extract only the nodes that were used for injections
-		chunk_nodes = []
-
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
-			try:
-				dbs = [injnode.input_files[""] for injnode in injnodes]
-				parents = injnodes
-			except AttributeError:
-				dbs = injnodes
-				parents = []
-
-			# Setup the final output names, etc.
-			injdb = dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs], '.sqlite', path = toSqliteJob.output_path)
-
-
-			# merge
-			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = parents,
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-				input_cache_files = {"input-cache":dbs},
-				output_files = {"database":injdb},
-				input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
-			)
-
-			# cluster
-			clusternode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"":injdb}
-			)
-
-			chunk_nodes.append(clusternode)
-			dbs_to_delete.append(injdb)
-
-
-		final_nodes = []
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
-			# Setup the final output names, etc.
-			injdb = dagparts.T050017_filename(instruments, 'PART_LLOID_%s_CHUNK_%04d' % (sim_tag_from_inj_file(injections), chunk), boundary_seg, '.sqlite')
-
-			# merge
-			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = injnodes,
-				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-				input_cache_files = {"input-cache": [node.input_files[""] for node in injnodes]},
-				output_files = {"database":injdb},
-				input_cache_file_name = injdb.replace('.sqlite','.cache')
-			)
-
-			# cluster
-			clusternode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"":injdb}
-			)
-			final_nodes.append(clusternode)
-
-		# Setup the final output names, etc.
-		injdb = dagparts.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), boundary_seg, '.sqlite')
-		injdbs.append(injdb)
-		injxml = injdb.replace('.sqlite','.xml.gz')
-
-		# FIXME far-injections currently doesnt work, either fix it or delete it
-		'''
-		# If there are injections that are too far away to be seen in a separate file, add them now. 
-		if far_injections is not None:
-			xml_input = [injxml] + [far_injections]
-		else:
-			xml_input = injxml
-		'''
-		xml_input = injxml
-
-		# merge
-		sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = final_nodes + ligolw_add_nodes,
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"": (vetoes + [options.frame_segments_file, injections])},
-			input_cache_files = {"input-cache": [node.input_files[""] for node in final_nodes]},
-			output_files = {"database":injdb},
-			input_cache_file_name = injdb.replace('.sqlite','.cache')
-		)
-
-		# cluster
-		clusternode = dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [sqlitenode],
-			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"":injdb}
-		)
-
-
-		clusternode = dagparts.DAGNode(toXMLJob, dag, parent_nodes = [clusternode],
-			opts = {"tmp-space":dagparts.condor_scratch_space()},
-			output_files = {"extract":injxml},
-			input_files = {"database":injdb}
-		)
-
-		inspinjnode = dagparts.DAGNode(ligolwInspinjFindJob, dag, parent_nodes = [clusternode],
-			opts = {"time-window":0.9},
-			input_files = {"":injxml}
-		)
-
-		sqlitenode = dagparts.DAGNode(toSqliteNoCacheJob, dag, parent_nodes = [inspinjnode],
-			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
-			output_files = {"database":injdb},
-			input_files = {"":xml_input}
-		)
-
-		cpnode = dagparts.DAGNode(cpJob, dag, parent_nodes = [sqlitenode],
-			input_files = {"":"%s %s" % (injdb, injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
-		)
-			
-		outnodes.append(cpnode)
-
-	return injdbs, noninjdb, outnodes, dbs_to_delete
-
-def compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, noninjdb, final_sqlite_nodes):
-	# compute FAPs and FARs
-	# split up the marginilization into groups of 10
-	try:
-		margin = [node.output_files["output"] for node in rankpdf_nodes]
-		parents = rankpdf_nodes
-		margin_zerolag =  [node.output_files["output"] for node in rankpdf_zerolag_nodes]
-		parents_zerolag = rankpdf_zerolag_nodes
-	except AttributeError:
-		# analysis started at merger step
-		margin = rankpdf_nodes
-		parents = []
-		margin_zerolag = rankpdf_zerolag_nodes
-		parents_zerolag = []
-	margout = []
-	margzerolagout = []
-	margnodes = []
-	margzerolagnodes = []
-	margnum = 16
-	for i,n in enumerate(range(0, len(margin), margnum)):
-		margout.append(dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]], '.xml.gz', path = marginalizeJob.output_path))
-		margnodes.append(dagparts.DAGNode(marginalizeJob, dag, parent_nodes = parents,
-			opts = {"marginalize":"ranking-stat-pdf"},
-			output_files = {"output":margout[-1]}, 
-			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
-			input_cache_file_name = os.path.basename(margout[-1]).replace('.xml.gz','.cache')
-		))
-
-		if rankpdf_zerolag_nodes:
-			margzerolagout.append(dagparts.group_T050017_filename_from_T050017_files([CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]], '.xml.gz', path = marginalizeWithZerolagJob.output_path))
-			margzerolagnodes.append(dagparts.DAGNode(marginalizeWithZerolagJob, dag, parent_nodes = parents_zerolag,
-				opts = {"marginalize":"ranking-stat-pdf"},
-				output_files = {"output":margzerolagout[-1]},
-				input_cache_files = {"likelihood-cache":margin_zerolag[n:n+margnum]},
-				input_cache_file_name = os.path.basename(margzerolagout[-1]).replace('.xml.gz','.cache')
-			))
-
-
-	if options.marginalized_likelihood_file:
-		# injection-only run
-		parents = final_sqlite_nodes
-		parents_zerolag = final_sqlite_nodes
-		marginalized_likelihood_file = options.marginalized_likelihood_file
-		marginalized_likelihood_with_zerolag_file = options.marginalized_likelihood_with_zerolag_file
-
-	else:
-		margnode = dagparts.DAGNode(marginalizeJob, dag, parent_nodes = margnodes,
-			opts = {"marginalize":"ranking-stat-pdf"},
-			output_files = {"output":"marginalized_likelihood.xml.gz"},
-			input_cache_files = {"likelihood-cache":margout},
-			input_cache_file_name = "marginalized_likelihood.cache"
-		)
-		parents = [margnode] + final_sqlite_nodes
-		marginalized_likelihood_file = margnode.output_files["output"]
-
-		margnode = dagparts.DAGNode(marginalizeWithZerolagJob, dag, parent_nodes = margzerolagnodes,
-			opts = {"marginalize":"ranking-stat-pdf"},
-			output_files = {"output":"marginalized_likelihood_with_zerolag.xml.gz"},
-			input_cache_files = {"likelihood-cache":margzerolagout},
-			input_cache_file_name = "marginalized_likelihood_with_zerolag.cache"
-		)
-		parents_zerolag = [margnode] + final_sqlite_nodes
-		marginalized_likelihood_with_zerolag_file = margnode.output_files["output"]
-	
-	
-	farnode = dagparts.DAGNode(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents,
-		opts = {"tmp-space":dagparts.condor_scratch_space()},
-		input_files = {"background-bins-file":marginalized_likelihood_file, "injection-db":injdbs, "non-injection-db":noninjdb}
-	)
-	
-	dagparts.DAGNode(gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, parent_nodes = parents_zerolag,
-		opts = {"tmp-space":dagparts.condor_scratch_space()},
-		input_files = {"background-bins-file":marginalized_likelihood_with_zerolag_file, "injection-db":[injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL') for injdb in injdbs], "non-injection-db":noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL')}
-	)
-
-	return farnode, margout + margzerolagout
+#----------------------------------------------------------
+### command line options
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
@@ -1067,7 +227,7 @@ def parse_command_line():
         parser.add_option("--fmax", metavar = "num", type = "float", default = 1600, help = "set the max frequency cutoff, default 1600 (Hz)")
 	parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Set the sample rate.  If not set, the sample rate will be based on the template frequency.  The sample rate must be at least twice the highest frequency in the templates. If provided it must be a power of two")
 	parser.add_option("--identity-transform", action = "store_true", help = "Use identity transform, i.e. no SVD")
-	
+
 	# trigger generation options
 	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
@@ -1079,10 +239,8 @@ def parse_command_line():
 	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
 	parser.add_option("--reference-likelihood-file", metavar = "file", help = "Set a reference likelihood file to compute initial likelihood ratios. Required")
 	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per gstlal_inspiral job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
-	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 	parser.add_option("--ht-gate-threshold", type="float", help="set a threshold on whitened h(t) to veto glitches")
 	parser.add_option("--ht-gate-threshold-linear", metavar = "mchirp_min:ht_gate_threshold_min-mchirp_max:ht_gate_threshold_max", type="string", help = "Set the threshold on whitened h(t) to mark samples as gaps (glitch removal) with a linear scale of mchirp")
-	parser.add_option("--inspiral-executable", default = "gstlal_inspiral", help = "Options gstlal_inspiral | gstlal_iir_inspiral, default gstlal_inspiral")
 	parser.add_option("--blind-injections", metavar = "filename", help = "Set the name of an injection file that will be added to the data without saving the sim_inspiral table or otherwise processing the data differently.  Has the effect of having hidden signals in the input data. Separate injection runs using the --injections option will still occur.")
 	# FIXME far-injections currently doesnt work, either fix it or delete it
 	#parser.add_option("--far-injections", action = "append", help = "Injection files with injections too far away to be seen and are not filtered. Required. See https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/NSBH/MdcInjections/MDC1 for example.")
@@ -1116,6 +274,7 @@ def parse_command_line():
 	parser.add_option("--request-cpu", default = "4", metavar = "integer", help = "set the inspiral CPU count, default = 4")
 	parser.add_option("--request-memory", default = "7GB", metavar = "integer", help = "set the inspiral memory, default = 7GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
+	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
 
 	options, filenames = parser.parse_args()
 
@@ -1140,7 +299,7 @@ def parse_command_line():
 
 	if not options.overlap and not options.svd_bank_cache:
 		options.overlap = [0]*len(options.bank_cache)
-	
+
 	if not options.svd_bank_cache and any(overlap % 2 for overlap in options.overlap):
 		raise ValueError("overlap must be even")
 
@@ -1165,7 +324,6 @@ def parse_command_line():
 	if len(missing_injection_options) == 0 and options.num_banks:
 		raise ValueError("cant specify --num-banks in a run starting at the merger step")
 
-
 	fail = ""
 	required_options = []
 	if len(missing_merger_options) == 3:
@@ -1179,13 +337,10 @@ def parse_command_line():
 	if fail: raise ValueError, fail
 
 	# FIXME far-injections currently doesnt work, either fix it or delete it
-	'''
-	if options.far_injections is not None and len(options.injections) != len(options.far_injections):
-		raise ValueError("number of injection files and far injection files must be equal")
-	if options.far_injections is None:
-		options.far_injections = [None for inj in options.injections]
-	'''
-
+	#if options.far_injections is not None and len(options.injections) != len(options.far_injections):
+	#	raise ValueError("number of injection files and far injection files must be equal")
+	#if options.far_injections is None:
+	#	options.far_injections = [None for inj in options.injections]
 
 	#FIXME a hack to find the sql paths
 	share_path = os.path.split(dagparts.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
@@ -1196,361 +351,1314 @@ def parse_command_line():
 	return options, filenames
 
 
-#
-# Useful variables
-#
+#----------------------------------------------------------
+### DAG setup utilities
 
-options, filenames = parse_command_line()
+def set_up_jobs(options):
+	jobs = {}
 
-if options.bank_cache:
-	# FIXME Add feature for multiple bank caches to online pipeline so that
-	# this functionality can return to inspiral_pipe
-	bank_cache = {}
-	for bank_cache_str in options.bank_cache:
-		for c in bank_cache_str.split(','):
-			ifo = c.split("=")[0]
-			cache = c.replace(ifo+"=","")
-			bank_cache.setdefault(ifo, []).append(cache)
-	detectors = datasource.GWDataSourceInfo(options)
-	channel_dict = detectors.channel_dict
-	if bank_cache:
-		instruments = "".join(sorted(bank_cache.keys()))
-		instrument_set = bank_cache.keys()
-	boundary_seg = detectors.seg
+	# set condor commands
+	base_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"})
+	ref_psd_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"})
+	calc_rank_pdf_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"})
+	svd_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15"})
+	inj_snr_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"})
+	sh_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"})
+	inspiral_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {
+		"request_memory":options.request_memory,
+		"request_cpus":options.request_cpu,
+		"want_graceful_removal":"True",
+		"kill_sig":"15"
+	})
 
-elif options.svd_bank_cache:
-	detectors = datasource.GWDataSourceInfo(options)
-	channel_dict = detectors.channel_dict
-	boundary_seg = detectors.seg
+	if options.dist_stats_cache:
+		# injection-only run
+		jobs['gstlalInspiral'] = None
+		jobs['createPriorDistStats'] = None
+		jobs['calcRankPDFs'] = None
+		jobs['calcRankPDFsWithZerolag'] = None
+		jobs['calcLikelihood'] = None
+		jobs['marginalize'] = None
+		jobs['marginalizeWithZerolag'] = None
 
-else:
-	with open(options.rank_pdf_cache) as f:
-		ce = CacheEntry(f.readline())
-	boundary_seg = ce.segment
-	instruments = ce.observatory
+	elif options.lloid_cache:
+		# analysis starting at merger step
+		jobs['marginalize'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands=base_condor_commands)
+		jobs['marginalizeWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base="gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands=base_condor_commands)
 
-output_dir = "plots"
+	else:
+		# set up jobs only needed for zerolag run
+		jobs['refPSD'] = dagparts.DAGJob("gstlal_reference_psd", condor_commands = ref_psd_condor_commands)
+		jobs['medianPSD'] = dagparts.DAGJob("gstlal_median_of_psds", condor_commands = base_condor_commands)
+		jobs['plotBanks'] = dagparts.DAGJob("gstlal_inspiral_plot_banks", condor_commands = base_condor_commands)
+		jobs['svd'] = dagparts.DAGJob("gstlal_svd_bank", condor_commands = svd_condor_commands)
+		jobs['model'] = dagparts.DAGJob("gstlal_inspiral_mass_model", condor_commands = base_condor_commands)
+		jobs['modelAdd'] = dagparts.DAGJob("gstlal_inspiral_add_mass_models", condor_commands = base_condor_commands)
+		jobs['horizon'] = dagparts.DAGJob("gstlal_plot_psd_horizon", condor_commands = base_condor_commands)
+		jobs['gstlalInspiral'] = dagparts.DAGJob("gstlal_inspiral", condor_commands = inspiral_condor_commands)
+		jobs['createPriorDistStats'] = dagparts.DAGJob("gstlal_inspiral_create_prior_diststats", condor_commands = base_condor_commands)
+		jobs['calcRankPDFs'] = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", condor_commands = calc_rank_pdf_condor_commands)
+		jobs['calcRankPDFsWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", tag_base="gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands=calc_rank_pdf_condor_commands)
+		jobs['calcLikelihood'] = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", condor_commands = base_condor_commands)
+		jobs['marginalize'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = base_condor_commands)
+		jobs['marginalizeWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base="gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands=base_condor_commands)
 
-#
-# Setup the dag
-#
+	# set up rest of jobs
+	jobs['gstlalInspiralInj'] = dagparts.DAGJob("gstlal_inspiral", tag_base="gstlal_inspiral_inj", condor_commands = inspiral_condor_commands)
+	jobs['injSplitter'] = dagparts.DAGJob("gstlal_injsplitter", tag_base="gstlal_injsplitter", condor_commands = base_condor_commands)
+	jobs['gstlalInjSnr'] = dagparts.DAGJob("gstlal_inspiral_injection_snr", condor_commands = inj_snr_condor_commands)
+	jobs['ligolwAdd'] = dagparts.DAGJob("ligolw_add", condor_commands = base_condor_commands)
+	jobs['calcLikelihoodInj'] = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands=base_condor_commands)
+	jobs['ComputeFarFromSnrChisqHistograms'] = dagparts.DAGJob("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = base_condor_commands)
+	jobs['ligolwInspinjFind'] = dagparts.DAGJob("lalapps_inspinjfind", condor_commands = base_condor_commands)
+	jobs['toSqlite'] = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = base_condor_commands)
+	jobs['toSqliteNoCache'] = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml_inj_final", condor_commands = base_condor_commands)
+	jobs['toXML'] = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = base_condor_commands)
+	jobs['lalappsRunSqlite'] = dagparts.DAGJob("lalapps_run_sqlite", condor_commands = base_condor_commands)
+	jobs['plotSummary'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", condor_commands = base_condor_commands)
+	jobs['plotSummaryIsolatePrecession'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base="gstlal_inspiral_plotsummary_isolated_precession", condor_commands=base_condor_commands)
+	jobs['plotSnglInjSummary'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands=base_condor_commands)
+	jobs['plotSnglInjSummaryIsolatePrecession'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base="gstlal_inspiral_plotsummary_isolated_precession_inj", condor_commands=base_condor_commands)
+	jobs['plotSensitivity'] = dagparts.DAGJob("gstlal_inspiral_plot_sensitivity", condor_commands = base_condor_commands)
+	jobs['summaryPage'] = dagparts.DAGJob("gstlal_inspiral_summary_page", condor_commands = base_condor_commands)
+	jobs['plotBackground'] = dagparts.DAGJob("gstlal_inspiral_plot_background", condor_commands = base_condor_commands)
+	jobs['cp'] = dagparts.DAGJob("cp", tag_base = "cp", condor_commands = sh_condor_commands)
+	jobs['rm'] = dagparts.DAGJob("rm", tag_base = "rm_intermediate_merger_products", condor_commands = sh_condor_commands)
 
-try:
-	os.mkdir("logs")
-except:
-	pass
-dag = dagparts.DAG("trigger_pipe")
+	return jobs
 
-if options.max_inspiral_jobs is not None:
-	dag.add_maxjobs_category("INSPIRAL", options.max_inspiral_jobs)
+def set_up_scripts(options):
+	# Make an xml integrity checker
+	if options.gzip_test:
+		with open("gzip_test.sh", "w") as f:
+			f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
+		os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
 
-#
-# Make an xml integrity checker
-#
-
-if options.gzip_test:
-	f = open("gzip_test.sh", "w")
-	f.write("#!/bin/bash\nsleep 60\ngzip --test $@")
-	f.close()
-	os.chmod("gzip_test.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
-
-#
-# A pre script to backup data before feeding to lossy programs
-# (e.g. clustering routines)
-#
-
-f = open("store_raw.sh", "w")
-f.write("""#!/bin/bash
-for f in $@;do mkdir -p $(dirname $f)/raw;cp $f $(dirname $f)/raw/$(basename $f);done""")
-f.close()
-os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
-
-
-#
-# setup the job classes
-#
-
-if options.dist_stats_cache:
-	# injection-only run
-	gstlalInspiralJob = None
-	createPriorDistStatsJob = None
-	calcRankPDFsJob = None
-	calcRankPDFsWithZerolagJob = None
-	calcLikelihoodJob = None
-	marginalizeJob = None
-	marginalizeWithZerolagJob = None
-
-elif options.lloid_cache:
-	# analysis starting at merger step
-	marginalizeJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	marginalizeWithZerolagJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-
-else:
-	# set up jobs only needed for zerolag run
-	refPSDJob = dagparts.DAGJob("gstlal_reference_psd", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
-	medianPSDJob = dagparts.DAGJob("gstlal_median_of_psds", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	plotBanksJob = dagparts.DAGJob("gstlal_inspiral_plot_banks", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	svdJob = dagparts.DAGJob("gstlal_svd_bank", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	modelJob = dagparts.DAGJob("gstlal_inspiral_mass_model", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	modelAddJob = dagparts.DAGJob("gstlal_inspiral_add_mass_models", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	horizonJob = dagparts.DAGJob("gstlal_plot_psd_horizon", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	gstlalInspiralJob = dagparts.DAGJob(options.inspiral_executable, condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
-	createPriorDistStatsJob = dagparts.DAGJob("gstlal_inspiral_create_prior_diststats", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcRankPDFsJob = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcRankPDFsWithZerolagJob = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", tag_base = "gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "request_cpus":"4", "want_graceful_removal":"True", "kill_sig":"15"}))
-	calcLikelihoodJob = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	marginalizeJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-	marginalizeWithZerolagJob = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base = "gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-
-gstlalInspiralInjJob = dagparts.DAGJob(options.inspiral_executable, tag_base="gstlal_inspiral_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}))
-injSplitterJob = dagparts.DAGJob("gstlal_injsplitter", tag_base="gstlal_injsplitter", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-gstlalInjSnrJob = dagparts.DAGJob("gstlal_inspiral_injection_snr", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"2GB", "request_cpus":"2", "want_graceful_removal":"True", "kill_sig":"15"}))
-ligolwAddJob = dagparts.DAGJob("ligolw_add", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-calcLikelihoodJobInj = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-gstlalInspiralComputeFarFromSnrChisqHistogramsJob = dagparts.DAGJob("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-ligolwInspinjFindJob = dagparts.DAGJob("lalapps_inspinjfind", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-toSqliteJob = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-toSqliteNoCacheJob = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml_inj_final", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-toXMLJob = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-lalappsRunSqliteJob = dagparts.DAGJob("lalapps_run_sqlite", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotSummaryJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotSummaryIsolatePrecessionJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_isolated_precession", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotIndividualInjectionsSummaryJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotIndividualInjectionsSummaryIsolatePrecessionJob = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_isolated_precession_inj", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotSensitivityJob = dagparts.DAGJob("gstlal_inspiral_plot_sensitivity", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-pageJob = dagparts.DAGJob("gstlal_inspiral_summary_page", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-plotbackgroundJob = dagparts.DAGJob("gstlal_inspiral_plot_background", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"request_memory":"1GB", "want_graceful_removal":"True", "kill_sig":"15"}))
-cpJob = dagparts.DAGJob("cp", tag_base = "cp", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
-rmJob = dagparts.DAGJob("rm", tag_base = "rm_intermediate_merger_products", condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
-
-#
-# Get mchirp boundaries of banks, maximum duration of templates, and analysis segments
-#
-
-if options.bank_cache:
-	max_time, template_mchirp_dict = get_bank_params(bank_cache, options)
-	segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
-
-if options.psd_cache:
-	template_mchirp_dict, svd_nodes, max_time = inspiral_pipe.get_svd_bank_params(options.svd_bank_cache)
-	segsdict = analysis_segments(set(svd_nodes.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
-	psd_nodes, ref_psd_parent_nodes = inj_psd_node_gen(segsdict, options)
-	instruments = "".join(sorted(svd_nodes.keys()))
-	instrument_set = svd_nodes.keys()
-
-elif options.lloid_cache:
-	# starting analysis at merger step, nothing to do here
-	pass
-
-elif options.reference_psd is None:
-	#
-	# Compute the PSDs for each segment
-	#
+	# A pre script to backup data before feeding to lossy programs
+	# (e.g. clustering routines)
+	with open("store_raw.sh", "w") as f:
+		f.write("""#!/bin/bash
+		for f in $@;do mkdir -p $(dirname $f)/raw;cp $f $(dirname $f)/raw/$(basename $f);done""")
+	os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
 
 
-	psd_nodes = psd_node_gen(refPSDJob, dag, [], segsdict, channel_dict, options)
+#----------------------------------------------------------
+### DAG layers
 
-	#
-	# Make the reference PSD cache
-	#
+def ref_psd_layer(dag, jobs, parent_nodes, segsdict, channel_dict, options):
+	psd_nodes = {}
+	for ifos in segsdict:
+		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+		for seg in segsdict[ifos]:
+			psd_path = subdir_path([jobs['refPSD'].output_path, str(int(seg[0]))[:5]])
+			psd_nodes[(ifos, seg)] = dagparts.DAGNode(
+				jobs['refPSD'],
+				dag,
+				parent_nodes = parent_nodes,
+				opts = {
+					"gps-start-time":int(seg[0]),
+					"gps-end-time":int(seg[1]),
+					"data-source":"frames",
+					"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict, ifos = ifos),
+					"psd-fft-length":options.psd_fft_length,
+					"frame-segments-name": options.frame_segments_name
+				},
+				input_files = {
+					"frame-cache":options.frame_cache,
+					"frame-segments-file":options.frame_segments_file
+				},
+				output_files = {
+					"write-psd":dagparts.T050017_filename(ifos, "REFERENCE_PSD", seg, '.xml.gz', path = psd_path)
+				},
+			)
 
-	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
-	output_cache_file = open('reference_psd.cache', "w")
-	for node in psd_nodes.values():
-		output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(node.output_files["write-psd"])))
-	output_cache_file.close()
+	return psd_nodes
 
-	#
-	# plot the horizon distance
-	#
-
-	dagparts.DAGNode(horizonJob, dag,
-		parent_nodes = psd_nodes.values(),
-		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
-		output_files = {"":dagparts.T050017_filename(instruments, "HORIZON", boundary_seg, '.png', path = output_dir)}
-	)
-
-	#
-	# compute the median PSD
-	#
+def median_psd_layer(dag, jobs, parent_nodes, *args):
+	gpsmod5 = str(int(boundary_seg[0]))[:5]
+	median_psd_path = subdir_path([jobs['medianPSD'].output_path, gpsmod5])
 
 	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_nodes = []
-	for chunk, nodes in enumerate(chunks(psd_nodes.values(), 50)):
+	for chunk, nodes in enumerate(chunks(parent_nodes.values(), 50)):
 		median_psd_node = \
-			dagparts.DAGNode(medianPSDJob, dag,
-				parent_nodes = psd_nodes.values(),
+			dagparts.DAGNode(jobs['medianPSD'], dag,
+				parent_nodes = parent_nodes.values(),
 				input_files = {"": [node.output_files["write-psd"] for node in nodes]},
-				output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD_CHUNK_%04d" % chunk, boundary_seg, '.xml.gz', path = subdir_path([medianPSDJob.output_path, str(int(boundary_seg[0]))[:5]]))}
+				output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD_CHUNK_%04d" % chunk, boundary_seg, '.xml.gz', path = median_psd_path)}
 			)
 		median_psd_nodes.append(median_psd_node)
 
 	median_psd_node = \
-		dagparts.DAGNode(medianPSDJob, dag,
+		dagparts.DAGNode(jobs['medianPSD'], dag,
 			parent_nodes = median_psd_nodes,
 			input_files = {"": [node.output_files["output-name"] for node in median_psd_nodes]},
-			output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([medianPSDJob.output_path, str(int(boundary_seg[0]))[:5]]))}
+			output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([jobs['medianPSD'].output_path, gpsmod5]))}
 		)
+	return median_psd_node
 
-	ref_psd = median_psd_node.output_files["output-name"]
-	ref_psd_parent_nodes = [median_psd_node]
+def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, template_mchirp_dict):
+	svd_nodes = {}
+	new_template_mchirp_dict = {}
+	for ifo, list_of_svd_caches in bank_cache.items():
+		bin_offset = 0
+		for j, svd_caches in enumerate(list_of_svd_caches):
+			svd_caches = map(CacheEntry, open(svd_caches))
+			for i, individual_svd_cache in enumerate(ce.path for ce in svd_caches):
+				# First sort out the clipleft, clipright options
+				clipleft = []
+				clipright = []
+				ids = []
+				mchirp_interval = (float("inf"), 0)
+				individual_svd_cache = map(CacheEntry, open(individual_svd_cache))
+				for n, f in enumerate(ce.path for ce in individual_svd_cache):
+					# handle template bank clipping
+					clipleft.append(options.overlap[j] / 2)
+					clipright.append(options.overlap[j] / 2)
+					ids.append("%d_%d" % (i+bin_offset, n))
+					if f in template_mchirp_dict:
+						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
 
-else:
-	ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
+				svd_bank_name = dagparts.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = jobs['svd'].output_path)
+				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
+					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
 
-	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
-	output_cache_file = open('reference_psd.cache', "w")
-	output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
-	output_cache_file.close()
+				svdnode = dagparts.DAGNode(
+					jobs['svd'],
+					dag,
+					parent_nodes = parent_nodes,
+					opts = {
+						"svd-tolerance":options.tolerance,
+						"flow":options.flow,
+						"sample-rate":options.sample_rate,
+						"clipleft":clipleft,
+						"clipright":clipright,
+						"samples-min":options.samples_min[j],
+						"samples-max-256":options.samples_max_256,
+						"samples-max-64":options.samples_max_64,
+						"samples-max":options.samples_max,
+						"autocorrelation-length":options.autocorrelation_length,
+						"bank-id":ids,
+						"identity-transform":options.identity_transform,
+						"ortho-gate-fap":0.5
+					},
+					input_files = {"reference-psd":psd},
+					input_cache_files = {"template-bank-cache":[ce.path for ce in individual_svd_cache]},
+					input_cache_file_name = os.path.basename(svd_bank_name).replace(".xml.gz", ".cache"),
+					output_files = {"write-svd":svd_bank_name},
+				)
 
-	ref_psd_parent_nodes = []
+				# impose a priority to help with depth first submission
+				svdnode.set_priority(99)
+				svd_nodes.setdefault(ifo, []).append(svdnode)
+			bin_offset += i+1
 
-#
-# Calculate Expected SNR jobs
-#
+	# Plot template/svd bank jobs
+	primary_ifo = bank_cache.keys()[0]
+	dagparts.DAGNode(
+		jobs['plotBanks'],
+		dag,
+		parent_nodes = sum(svd_nodes.values(),[]),
+		opts = {"plot-template-bank":"", "output-dir": output_dir},
+		input_files = {"template-bank-file":options.template_bank},
+	)
 
-num_split_inj_snr_jobs = 100
-ligolw_add_nodes = []
+	return svd_nodes, new_template_mchirp_dict
 
-if not options.lloid_cache and not options.disable_calc_inj_snr:
+def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict):
+	inspiral_nodes = {}
+	for ifos in segsdict:
+
+		# setup dictionaries to hold the inspiral nodes
+		inspiral_nodes[(ifos, None)] = {}
+		ignore = {}
+		injection_files = []
+		for injections in options.injections:
+			min_chirp_mass, max_chirp_mass, injections = injections.split(':')
+			injection_files.append(injections)
+			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
+			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
+			ignore[injections] = []
+			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
+				if max_chirp_mass <= bounds[0]:
+					ignore[injections].append(int(bgbin_index))
+					# NOTE putting a break here assumes that the min chirp mass
+					# in a subbank increases with bin number, i.e. XXXX+1 has a
+					# greater minimum chirpmass than XXXX, for all XXXX. Note
+					# that the reverse is not true, bin XXXX+1 may have a lower
+					# max chirpmass than bin XXXX.
+				elif min_chirp_mass > bounds[1]:
+					ignore[injections].append(int(bgbin_index))
+
+		# FIXME choose better splitting?
+		numchunks = 10
+
+		# only use a channel dict with the relevant channels
+		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
+
+		# get the svd bank strings
+		svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
+
+		# get a mapping between chunk counter and bgbin for setting priorities
+		bgbin_chunk_map = {}
+
+		for seg in segsdict[ifos]:
+			if injection_files:
+				output_seg_inj_path = subdir_path([jobs['gstlalInspiralInj'].output_path, str(int(seg[0]))[:5]])
+
+			if jobs['gstlalInspiral'] is None:
+				# injection-only run
+				inspiral_nodes[(ifos, None)].setdefault(seg, [None])
+
+			else:
+				output_seg_path = subdir_path([jobs['gstlalInspiral'].output_path, str(int(seg[0]))[:5]])
+				for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
+					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
+					# setup output names
+					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
+					dist_stat_names = [dagparts.T050017_filename(ifos, '%s_DIST_STATS' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
+
+					for bgbin in bgbin_indices:
+						bgbin_chunk_map.setdefault(bgbin, chunk_counter)
+
+					# Calculate the appropriate ht-gate-threshold values according to the scale given
+					threshold_values = None
+					if options.ht_gate_threshold_linear is not None:
+						# A scale is given
+						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+						# use max mchirp in a given svd bank to decide gate threshold
+						bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
+						gate_mchirp_ratio = (ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)
+						threshold_values = [gate_mchirp_ratio * (bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
+					else:
+						if options.ht_gate_threshold is not None:
+							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
+
+					# non injection node
+					noninjnode = dagparts.DAGNode(jobs['gstlalInspiral'], dag,
+						parent_nodes = sum((svd_node_list[numchunks*chunk_counter:numchunks*(chunk_counter+1)] for svd_node_list in svd_nodes.values()),[]),
+						opts = {
+							"psd-fft-length":options.psd_fft_length,
+							"ht-gate-threshold":threshold_values,
+							"frame-segments-name":options.frame_segments_name,
+							"gps-start-time":int(seg[0]),
+							"gps-end-time":int(seg[1]),
+							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+							"tmp-space":dagparts.condor_scratch_space(),
+							"track-psd":"",
+							"control-peak-time":options.control_peak_time,
+							"coincidence-threshold":options.coincidence_threshold,
+							"singles-threshold":options.singles_threshold,
+							"fir-stride":options.fir_stride,
+							"data-source":"frames",
+							"local-frame-caching":"",
+							"min-instruments":options.min_instruments,
+							"reference-likelihood-file":options.reference_likelihood_file
+						},
+						input_files = {
+							"time-slide-file":options.time_slide_file,
+							"frame-cache":options.frame_cache,
+							"frame-segments-file":options.frame_segments_file,
+							"reference-psd":psd_nodes[(ifos, seg)].output_files["write-psd"],
+							"blind-injections":options.blind_injections,
+							"veto-segments-file":options.vetoes,
+						},
+						input_cache_files = {"svd-bank-cache":svd_bank_cache_maker(svd_bank_strings)},
+						output_cache_files = {
+							"output-cache":output_names,
+							"ranking-stat-output-cache":dist_stat_names
+						}
+					)
+					# Set a post script to check for file integrity
+					if options.gzip_test:
+						noninjnode.set_post_script("gzip_test.sh")
+						noninjnode.add_post_script_arg(" ".join(output_names + dist_stat_names))
+					# impose a priority to help with depth first submission
+					noninjnode.set_priority(chunk_counter+15)
+					inspiral_nodes[(ifos, None)].setdefault(seg, []).append(noninjnode)
+
+			# process injections
+			for injections in injection_files:
+				# setup output names
+				sim_name = sim_tag_from_inj_file(injections)
+
+				bgbin_svd_bank_strings = [bgbin_svdbank for i, bgbin_svdbank in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
+
+				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
+					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
+					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), seg, '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
+					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
+					try:
+						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
+						parents = [svd_node_list[int(bgbin_index)] for svd_node_list in svd_nodes.values() for bgbin_index in bgbin_indices]
+					except AttributeError:
+						# injection-only run
+						reference_psd = psd_nodes[(ifos, seg)]
+						parents = []
+
+					# Calculate the appropriate ht-gate-threshold values according to the scale given
+					threshold_values = None
+					if options.ht_gate_threshold_linear is not None:
+						# A scale is given
+						mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+						# use max mchirp in a given svd bank to decide gate threshold
+						bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
+						gate_mchirp_ratio = (ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)
+						threshold_values = [gate_mchirp_ratio*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
+					else:
+						if options.ht_gate_threshold is not None:
+							threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
+					svd_files = [CacheEntry.from_T050017(filename) for filename in svd_names]
+					input_cache_name = dagparts.group_T050017_filename_from_T050017_files(svd_files, '.cache').replace('SVD', 'SVD_%s' % sim_name)
+
+					# setup injection node
+					injnode = dagparts.DAGNode(jobs['gstlalInspiralInj'], dag,
+						parent_nodes = parents,
+						opts = {
+							"psd-fft-length":options.psd_fft_length,
+							"ht-gate-threshold":threshold_values,
+							"frame-segments-name":options.frame_segments_name,
+							"gps-start-time":int(seg[0]),
+							"gps-end-time":int(seg[1]),
+							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+							"tmp-space":dagparts.condor_scratch_space(),
+							"track-psd":"",
+							"control-peak-time":options.control_peak_time,
+							"coincidence-threshold":options.coincidence_threshold,
+							"singles-threshold":options.singles_threshold,
+							"fir-stride":options.fir_stride,
+							"data-source":"frames",
+							"local-frame-caching":"",
+							"min-instruments":options.min_instruments,
+							"reference-likelihood-file":options.reference_likelihood_file
+						},
+						input_files = {
+							"time-slide-file":options.inj_time_slide_file,
+							"frame-cache":options.frame_cache,
+							"frame-segments-file":options.frame_segments_file,
+							"reference-psd":reference_psd,
+							"veto-segments-file":options.vetoes,
+							"injections": injections
+						},
+						input_cache_files = {"svd-bank-cache":svd_names},
+						input_cache_file_name = input_cache_name,
+						output_cache_files = {"output-cache":output_names}
+					)
+					# Set a post script to check for file integrity
+					if options.gzip_test:
+						injnode.set_post_script("gzip_test.sh")
+						injnode.add_post_script_arg(" ".join(output_names))
+					# impose a priority to help with depth first submission
+					if bgbin_chunk_map:
+						injnode.set_priority(bgbin_chunk_map[bgbin_indices[-1]]+1)
+					else:
+						injnode.set_priority(chunk_counter+1)
+					inspiral_nodes[(ifos, sim_name)].setdefault(seg, []).append(injnode)
+
+	# Replace mchirplo:mchirphi:inj.xml with inj.xml
+	options.injections = [inj.split(':')[-1] for inj in options.injections]
+	return inspiral_nodes
+
+def expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_snr_jobs):
+	ligolw_add_nodes = []
 	for inj in options.injections:
 		inj_snr_nodes = []
 
-		inj_splitter_node = dagparts.DAGNode(injSplitterJob, dag, parent_nodes=[],
-			opts = {"output-path":injSplitterJob.output_path, "usertag": sim_tag_from_inj_file(inj.split(":")[-1]), "nsplit": num_split_inj_snr_jobs},
+		inj_splitter_node = dagparts.DAGNode(jobs['injSplitter'], dag, parent_nodes=[],
+			opts = {
+				"output-path":jobs['injSplitter'].output_path,
+				"usertag": sim_tag_from_inj_file(inj.split(":")[-1]),
+				"nsplit": num_split_inj_snr_jobs
+			},
 			input_files = {"": inj.split(":")[-1]}
 		)
 		inj_splitter_node.set_priority(98)
 
 		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
-		for i in xrange(num_split_inj_snr_jobs):
-			injSNRnode = dagparts.DAGNode(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
+		for i in range(num_split_inj_snr_jobs):
+			injSNRnode = dagparts.DAGNode(jobs['gstlalInjSnr'], dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
 				opts = {"flow":options.flow,"fmax":options.fmax},
-				input_files = {"injection-file": "%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i), "reference-psd-cache": "reference_psd.cache"
+				input_files = {
+					"injection-file": "%s/%s_INJ_SPLIT_%04d.xml" % (jobs['injSplitter'].output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i),
+					"reference-psd-cache": "reference_psd.cache"
 				}
 			)
 			injSNRnode.set_priority(98)
 			inj_snr_nodes.append(injSNRnode)
 
-		addnode = dagparts.DAGNode(ligolwAddJob, dag, parent_nodes=inj_snr_nodes,
-			input_files = {"": ' '.join(["%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i) for i in xrange(num_split_inj_snr_jobs)])},
+		addnode = dagparts.DAGNode(jobs['ligolwAdd'], dag, parent_nodes=inj_snr_nodes,
+			input_files = {"": ' '.join(["%s/%s_INJ_SPLIT_%04d.xml" % (jobs['injSplitter'].output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i) for i in range(num_split_inj_snr_jobs)])},
 			output_files = {"output": inj.split(":")[-1]}
 		)
 
-		ligolw_add_nodes.append(dagparts.DAGNode(lalappsRunSqliteJob, dag, parent_nodes = [addnode],
+		ligolw_add_nodes.append(dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [addnode],
 			opts = {"sql-file":options.injection_proc_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"":addnode.output_files["output"]}
 			)
 		)
+	return ligolw_add_nodes
 
-if options.bank_cache:
-	#
-	# Compute SVD banks
-	#
-	#svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
-	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
-	model_add_node, model_file_name = model_node_gen(modelJob, dag, ref_psd_parent_nodes, instruments, options, boundary_seg, options.template_bank, ref_psd)
+def summary_plot_layer(dag, jobs, parent_nodes, options):
+	plotnodes = []
 
-if not options.lloid_cache:
-	#
-	# Inspiral jobs by segment
-	#
-
-	inspiral_nodes = inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
-
-	#
-	# Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
-	#
-
-	lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
-
-	#
-	# Setup likelihood jobs, clustering and/or merging
-	#
-
-	rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWithZerolagJob, calcLikelihoodJob, calcLikelihoodJobInj, lalappsRunSqliteJob, toSqliteJob, marginalizeJob, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_add_node, model_file_name)
-
-else:
-	#
-	# Merge lloid files into 1 file per bin if not already 1 file per bin
-	#
-
-	rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options)
-
-#
-# after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
-#
-
-injdbs, noninjdb, final_sqlite_nodes, dbs_to_delete = finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, cpJob, outnodes, ligolw_add_nodes, options, instruments)
-
-#
-# Compute FAP
-#
-
-farnode, margfiles_to_delete = compute_FAP(marginalizeJob, marginalizeWithZerolagJob, gstlalInspiralComputeFarFromSnrChisqHistogramsJob, dag, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, noninjdb, final_sqlite_nodes)
-
-# make summary plots
-plotnodes = []
-
-plotnodes.append(dagparts.DAGNode(plotSummaryJob, dag, parent_nodes=[farnode],
-	opts = {"segments-name": options.frame_segments_name, "tmp-space": dagparts.condor_scratch_space(), "user-tag": "ALL_LLOID_COMBINED", "output-dir": output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "remove-precession": ""},
-	input_files = {"":[noninjdb] + injdbs}
-))
-
-plotnodes.append(dagparts.DAGNode(plotSummaryIsolatePrecessionJob, dag, parent_nodes=[farnode],
-	opts = {"segments-name": options.frame_segments_name, "tmp-space": dagparts.condor_scratch_space(), "user-tag": "PRECESSION_LLOID_COMBINED", "plot-group":1, "output-dir": output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "isolate-precession": ""},
-	input_files = {"":[noninjdb] + injdbs}
-))
-
-for injdb in injdbs:
-	plotnodes.append(dagparts.DAGNode(plotIndividualInjectionsSummaryJob, dag, parent_nodes=[farnode],
-		opts = {"segments-name": options.frame_segments_name, "tmp-space":dagparts.condor_scratch_space(), "user-tag":injdb.replace(".sqlite","").split("-")[1], "plot-group":1, "output-dir":output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "remove-precession": ""},
-		input_files = {"":[noninjdb] + [injdb]}
+	### plot summary
+	plotnodes.append(dagparts.DAGNode(jobs['plotSummary'], dag, parent_nodes=[farnode],
+		opts = {
+			"segments-name": options.frame_segments_name,
+			"tmp-space": dagparts.condor_scratch_space(),
+			"user-tag": "ALL_LLOID_COMBINED",
+			"output-dir": output_dir,
+			"likelihood-file":"post_marginalized_likelihood.xml.gz",
+			"shrink-data-segments": 32.0,
+			"extend-veto-segments": 8.,
+			"remove-precession": ""
+		},
+		input_files = {"":[noninjdb] + injdbs}
 	))
 
-	plotnodes.append(dagparts.DAGNode(plotIndividualInjectionsSummaryIsolatePrecessionJob, dag, parent_nodes=[farnode],
-		opts = {"segments-name": options.frame_segments_name, "tmp-space":dagparts.condor_scratch_space(), "user-tag": injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID","PRECESSION_LLOID"), "plot-group":1, "output-dir":output_dir, "likelihood-file":"post_marginalized_likelihood.xml.gz", "shrink-data-segments": 32.0, "extend-veto-segments": 8., "isolate-precession": ""},
-		input_files = {"":[noninjdb] + [injdb]}
+	### isolated precession plot summary
+	plotnodes.append(dagparts.DAGNode(jobs['plotSummaryIsolatePrecession'], dag, parent_nodes=[farnode],
+		opts = {
+			"segments-name": options.frame_segments_name,
+			"tmp-space": dagparts.condor_scratch_space(),
+			"user-tag": "PRECESSION_LLOID_COMBINED",
+			"plot-group":1,
+			"output-dir": output_dir,
+			"likelihood-file":"post_marginalized_likelihood.xml.gz",
+			"shrink-data-segments": 32.0,
+			"extend-veto-segments": 8.,
+			"isolate-precession": ""
+		},
+		input_files = {"":[noninjdb] + injdbs}
 	))
 
-# make sensitivity plots
-plotnodes.append(dagparts.DAGNode(plotSensitivityJob, dag, parent_nodes=[farnode],
-	opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir, "tmp-space":dagparts.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-source-type":"", "dist-bins":200, "data-segments-name":"datasegments"},
-	input_files = {"zero-lag-database":noninjdb, "":injdbs}
-))
-for injdb in injdbs:
-	plotnodes.append(dagparts.DAGNode(plotSensitivityJob, dag, parent_nodes=[farnode],
-		opts = {"user-tag":injdb.replace(".sqlite","").split("-")[1], "output-dir":output_dir, "tmp-space":dagparts.condor_scratch_space(), "veto-segments-name":"vetoes", "bin-by-source-type":"", "dist-bins":200, "data-segments-name":"datasegments"},
-		input_files = {"zero-lag-database":noninjdb, "":injdb}
+	for injdb in injdbs:
+		### individual injection plot summary
+		plotnodes.append(dagparts.DAGNode(jobs['plotSnglInjSummary'], dag, parent_nodes=[farnode],
+			opts = {
+				"segments-name": options.frame_segments_name,
+				"tmp-space": dagparts.condor_scratch_space(),
+				"user-tag": injdb.replace(".sqlite","").split("-")[1],
+				"plot-group": 1,
+				"output-dir":output_dir,
+				"likelihood-file":"post_marginalized_likelihood.xml.gz",
+				"shrink-data-segments": 32.0,
+				"extend-veto-segments": 8.,
+				"remove-precession": ""
+			},
+			input_files = {"":[noninjdb] + [injdb]}
+		))
+
+		### isolated precession injection plot summary
+		plotnodes.append(dagparts.DAGNode(jobs['plotSnglInjSummaryIsolatePrecession'], dag, parent_nodes=[farnode],
+			opts = {
+				"segments-name": options.frame_segments_name,
+				"tmp-space":dagparts.condor_scratch_space(),
+				"user-tag": injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID","PRECESSION_LLOID"),
+				"plot-group": 1,
+				"output-dir":output_dir,
+				"likelihood-file":"post_marginalized_likelihood.xml.gz",
+				"shrink-data-segments": 32.0,
+				"extend-veto-segments": 8.,
+				"isolate-precession": ""
+			},
+			input_files = {"":[noninjdb] + [injdb]}
+		))
+
+	### sensitivity plots
+	plotnodes.append(dagparts.DAGNode(jobs['plotSensitivity'], dag, parent_nodes=[farnode],
+		opts = {
+			"user-tag":"ALL_LLOID_COMBINED",
+			"output-dir":output_dir,
+			"tmp-space":dagparts.condor_scratch_space(),
+			"veto-segments-name":"vetoes",
+			"bin-by-source-type":"",
+			"dist-bins":200,
+			"data-segments-name":"datasegments"
+		},
+		input_files = {"zero-lag-database":noninjdb, "":injdbs}
+	))
+	for injdb in injdbs:
+		plotnodes.append(dagparts.DAGNode(jobs['plotSensitivity'], dag, parent_nodes=[farnode],
+			opts = {
+				"user-tag": injdb.replace(".sqlite","").split("-")[1],
+				"output-dir":output_dir,
+				"tmp-space":dagparts.condor_scratch_space(),
+				"veto-segments-name":"vetoes",
+				"bin-by-source-type":"",
+				"dist-bins":200,
+				"data-segments-name":"datasegments"
+			},
+			input_files = {"zero-lag-database":noninjdb, "":injdb}
+		))
+
+	### background plots
+	plotnodes.append(dagparts.DAGNode(jobs['plotBackground'], dag, parent_nodes = [farnode],
+		opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir},
+		input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}
 	))
 
+	return plotnodes
 
-# make background plots
-plotnodes.append(dagparts.DAGNode(plotbackgroundJob, dag, parent_nodes = [farnode], opts = {"user-tag":"ALL_LLOID_COMBINED", "output-dir":output_dir}, input_files = {"":"post_marginalized_likelihood.xml.gz", "database":noninjdb}))
+def	clean_merger_products_layer(dag, jobs, plotnodes, dbs_to_delete, margfiles_to_delete):
+	for db in dbs_to_delete:
+		dagparts.DAGNode(jobs['rm'], dag, parent_nodes = plotnodes,
+			input_files = {"": db}
+		)
 
-# make a web page
-dagparts.DAGNode(pageJob, dag, parent_nodes = plotnodes,
-	opts = {"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])), "webserver-dir":options.web_dir, "glob-path":output_dir, "output-user-tag":["ALL_LLOID_COMBINED", "PRECESSION_LLOID_COMBINED"] + [injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs] + [injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID", "PRECESSION_LLOID") for injdb in injdbs]}
-)
+	for margfile in margfiles_to_delete:
+		dagparts.DAGNode(jobs['rm'], dag, parent_nodes = plotnodes,
+			input_files = {"": margfile}
+		)
+	return None
 
-#
-# rm intermediate merger products
-#
-for db in dbs_to_delete:
-	dagparts.DAGNode(rmJob, dag, parent_nodes = plotnodes,
-		input_files = {"": db}
+def inj_psd_layer(segsdict, options):
+	psd_nodes = {}
+	psd_cache_files = {}
+	for ce in map(CacheEntry, open(options.psd_cache)):
+		psd_cache_files.setdefault(frozenset(lsctables.instrumentsproperty.get(ce.observatory)), []).append((ce.segment, ce.path))
+	for ifos in segsdict:
+		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda (s, p): s)
+		ref_psd_file_num = 0
+		for seg in segsdict[ifos]:
+			while int(reference_psd_files[ref_psd_file_num][0][0]) < int(seg[0]):
+				ref_psd_file_num += 1
+			psd_nodes[(ifos, seg)] = reference_psd_files[ref_psd_file_num][1]
+	ref_psd_parent_nodes = []
+	return psd_nodes, ref_psd_parent_nodes
+
+def model_layer(dag, jobs, parent_nodes, instruments, options, seg, template_bank, psd):
+	if options.mass_model_file is None:
+		# choose, arbitrarily, the lowest instrument in alphabetical order
+		model_file_name = dagparts.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = jobs['model'].output_path)
+		model_node = dagparts.DAGNode(jobs['model'], dag,
+			input_files = {"template-bank": template_bank, "reference-psd": psd},
+			opts = {"model":options.mass_model},
+			output_files = {"output": model_file_name},
+			parent_nodes = parent_nodes
+		)
+		return [model_node], model_file_name
+	else:
+		return [], options.mass_model_file
+
+
+def rank_and_merge_layer(dag, jobs, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, mass_model_add_node, mass_model_file):
+	likelihood_nodes = {}
+	rankpdf_nodes = []
+	rankpdf_zerolag_nodes = []
+	outnodes = {}
+	instruments = "".join(sorted(instrument_set))
+	margnodes = {}
+
+	# NOTE! we rely on there being identical templates in each instrument, so we just take one of the values of the svd_nodes which are a dictionary
+	one_ifo_svd_nodes = svd_nodes.values()[0]
+	# Here n counts the bins
+	# first non-injections, which will get skipped if this is an injections-only run
+	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
+		inputs = [o[0] for o in outputs]
+		parents = []
+		[parents.extend(o[1]) for o in outputs]
+		# FIXME we keep this here in case we someday want to have a
+		# mass bin dependent prior, but it really doesn't matter for
+		# the time being.
+		priornode = dagparts.DAGNode(jobs['createPriorDistStats'], dag,
+			parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node,
+			opts = {"instrument":instrument_set, "background-prior":1, "min-instruments":options.min_instruments},
+			input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file},
+			output_files = {"write-likelihood":dagparts.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = jobs['createPriorDistStats'].output_path)}
+		)
+		# Create a file that has the priors *and* all of the diststats
+		# for a given bin marginalized over time. This is all that will
+		# be needed to compute the likelihood
+		diststats_per_bin_node = dagparts.DAGNode(jobs['marginalize'], dag,
+			parent_nodes = [priornode] + parents,
+			opts = {"marginalize":"ranking-stat"},
+			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
+			output_files = {"output":dagparts.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = jobs['marginalize'].output_path)},
+			input_cache_file_name = dagparts.T050017_filename(instruments, '%04d_MARG_DIST_STATS' % (n,), boundary_seg, '.cache')
+		)
+
+		calcranknode = dagparts.DAGNode(jobs['calcRankPDFs'], dag,
+			parent_nodes = [diststats_per_bin_node],
+			opts = {"ranking-stat-samples":options.ranking_stat_samples},
+			input_files = {"":diststats_per_bin_node.output_files["output"]},
+			output_files = {"output":dagparts.T050017_filename(instruments, '%04d_CALC_RANK_PDFS' % (n,), boundary_seg, '.xml.gz', path = jobs['calcRankPDFs'].output_path)}
+		)
+
+		calcrankzerolagnode = dagparts.DAGNode(jobs['calcRankPDFsWithZerolag'], dag,
+			parent_nodes = [diststats_per_bin_node],
+			opts = {"add-zerolag-to-background":"","ranking-stat-samples":options.ranking_stat_samples},
+			input_files = {"":diststats_per_bin_node.output_files["output"]},
+			output_files = {"output":dagparts.T050017_filename(instruments, '%04d_CALC_RANK_PDFS_WZL' % (n,), boundary_seg, '.xml.gz', path = jobs['calcRankPDFsWithZerolag'].output_path)}
+		)
+
+		margnodes['%04d' %(n,)] = diststats_per_bin_node
+		rankpdf_nodes.append(calcranknode)
+		rankpdf_zerolag_nodes.append(calcrankzerolagnode)
+
+		# Break up the likelihood jobs into chunks to process fewer files, e.g, 16
+		likelihood_nodes.setdefault(None,[]).append(
+			[dagparts.DAGNode(jobs['calcLikelihood'], dag,
+				parent_nodes = [diststats_per_bin_node],
+				opts = {"tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
+				input_cache_files = {"input-cache":chunked_inputs}
+				) for chunked_inputs in chunks(inputs, 16)]
+			)
+
+	# then injections
+	for inj in options.injections:
+		lloid_nodes = lloid_output[sim_tag_from_inj_file(inj)]
+		for n, (outputs, diststats, bgbin_index) in enumerate(((lloid_nodes[key], lloid_diststats[key], key) for key in sorted(lloid_nodes.keys()))):
+			if outputs is None:
+				continue
+			inputs = [o[0] for o in outputs]
+			parents = []
+			[parents.extend(o[1]) for o in outputs]
+			if margnodes:
+				parents.append(margnodes[bgbin_index])
+				likelihood_url = margnodes[bgbin_index].output_files["output"]
+			else:
+				likelihood_url = diststats[0]
+			# Break up the likelihood jobs into chunks to process fewer files, e.g., 16
+			likelihood_nodes.setdefault(sim_tag_from_inj_file(inj),[]).append(
+				[dagparts.DAGNode(jobs['calcLikelihoodInj'], dag,
+					parent_nodes = parents,
+					opts = {"tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"likelihood-url":likelihood_url},
+					input_cache_files = {"input-cache":chunked_inputs}
+					) for chunked_inputs in chunks(inputs, 16)]
+				)
+
+
+	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
+	files_to_group = 40
+	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
+		# Flatten the nodes for this sub bank
+		nodes = flatten(nodes)
+		merge_nodes = []
+		# Flatten the input/output files from calc_likelihood
+		inputs = flatten([node.input_files["input-cache"] for node in nodes])
+		if inj is None:
+			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
+			for n in range(0, len(inputs), files_to_group):
+				merge_nodes.append(dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = nodes,
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"":inputs[n:n+files_to_group]}
+					)
+				)
+				if options.copy_raw_results:
+					merge_nodes[-1].set_pre_script("store_raw.sh")
+					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
+
+			# Merging all the dbs from the same sub bank
+			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
+				dbfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs]
+				db = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite')
+				db = os.path.join(subdir_path([jobs['toSqlite'].output_path, CacheEntry.from_T050017(db).description[:4]]), db)
+				sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = merge_nodes,
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+					input_cache_files = {"input-cache":inputs},
+					output_files = {"database":db},
+					input_cache_file_name = os.path.basename(db).replace('.sqlite','.cache')
+				)
+				sqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"":db}
+				)
+				outnodes.setdefault(None, []).append(sqlitenode)
+		else:
+			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
+			for n in range(0, len(inputs), files_to_group):
+				merge_nodes.append(dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = nodes,
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"":inputs[n:n+files_to_group]}
+					)
+				)
+				if options.copy_raw_results:
+					merge_nodes[-1].set_pre_script("store_raw.sh")
+					merge_nodes[-1].add_pre_script_arg(" ".join(inputs[n:n+files_to_group]))
+
+			# Merging all the dbs from the same sub bank and injection run
+			for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
+				injdb_files = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs]
+				injdb = dagparts.group_T050017_filename_from_T050017_files(injdb_files, '.sqlite')
+				injdb = os.path.join(subdir_path([jobs['toSqlite'].output_path, CacheEntry.from_T050017(injdb).description[:4]]), injdb)
+				sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = merge_nodes,
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+					input_cache_files = {"input-cache":inputs},
+					output_files = {"database":injdb},
+					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
+				)
+				sqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"":injdb}
+				)
+				outnodes.setdefault(sim_tag_from_inj_file(inj), []).append(sqlitenode)
+
+	# make sure outnodes has a None key, even if its value is an empty list
+	outnodes.setdefault(None, [])
+
+	return rankpdf_nodes, rankpdf_zerolag_nodes, outnodes
+
+def merge_in_bin_layer(dag, jobs, options):
+	rankpdf_nodes = sorted([CacheEntry(line).path for line in open(options.rank_pdf_cache)], key = lambda s: int(os.path.basename(s).split('-')[1].split('_')[0]))
+	rankpdf_zerolag_nodes = []
+	outnodes = {}
+	if options.num_files_per_background_bin == 1:
+		bgbin_lloid_map = {}
+		# Get list of all files for each background bin (will be same length for each bin)
+		for ce in map(CacheEntry, open(options.lloid_cache)):
+			bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
+
+		if len(bgbin_lloid_map.values()[0]) == 1:
+			# Starting with 1:1 mapping between files and bins,
+			# thus no merging is needed yet
+			outnodes[None] = [dbs[0] for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k))]
+			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
+				outnodes[sim_tag_from_inj_file(options.injections_for_merger[i])] = [CacheEntry(line).path for line in open(inj_lloid_cache)]
+
+		else:
+			for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
+				dbfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs]
+				noninjdb = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite', path = jobs['toSqlite'].output_path)
+				# merge all of the dbs from the same subbank
+				sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = [],
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+					input_cache_files = {"input-cache":dbs},
+					output_files = {"database":noninjdb},
+					input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
+				)
+
+				sqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"":noninjdb}
+				)
+
+				outnodes.setdefault(None, []).append(sqlitenode)
+			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
+				bgbin_lloid_map = {}
+				for ce in map(CacheEntry, open(inj_lloid_cache)):
+					bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
+
+				for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
+					dbfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs]
+					injdb = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite', path = jobs['toSqlite'].output_path)
+					# merge all of the dbs from the same subbank
+					sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = [],
+						opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+						input_cache_files = {"input-cache":dbs},
+						output_files = {"database":injdb},
+						input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
+					)
+
+					sqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+						opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+						input_files = {"":injdb}
+					)
+
+					outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
+
+	else:
+		# Starting with output of analysis before naming convention
+		# update (commit 5efd78fee6b371c999f510d07be33ec64f385695),
+		# so all lloid files contain gps times for entire run, and are
+		# numbered by iterating through segments in a given bin first
+		# (e.g. files 0000 to 0009 may all belong to bin 0000, then
+		# files 0010 to 0019 would all belong to bin 0001, etc)
+		for ce_list in chunks(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
+			hi_index = ce_list[-1].description.split('_')[0]
+			noninjdb = os.path.join(jobs['toSqlite'].output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
+
+			# merge all of the dbs from the same subbank
+			sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = [],
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+				input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
+				output_files = {"database":noninjdb},
+				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
+			)
+
+			sqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"":noninjdb}
+			)
+
+			outnodes.setdefault(None, []).append(sqlitenode)
+
+		for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
+			for ce_list in chunks(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
+				hi_index = ce_list[-1].description.split('_')[0]
+				injdb = os.path.join(jobs['toSqlite'].output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
+
+				# merge all of the dbs from the same subbank
+				sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = [],
+					opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+					input_cache_files = {"input-cache":[ce.path for ce in ce_list]},
+					output_files = {"database":injdb},
+					input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
+				)
+
+				sqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+					opts = {"sql-file":options.injection_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+					input_files = {"":injdb}
+				)
+
+				outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
+
+	return rankpdf_nodes, rankpdf_zerolag_nodes, outnodes
+
+def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instruments):
+	num_chunks = 50
+
+	if options.vetoes is None:
+		vetoes = []
+	else:
+		vetoes = [options.vetoes]
+
+	chunk_nodes = []
+	dbs_to_delete = []
+	# Process the chirp mass bins in chunks to paralellize the merging process
+	for chunk, nodes in enumerate(chunks(innodes[None], num_chunks)):
+		try:
+			dbs = [node.input_files[""] for node in nodes]
+			parents = nodes
+
+		except AttributeError:
+			# analysis started at merger step but seeded by lloid files which
+			# have already been merged into one file per background
+			# bin, thus the analysis will begin at this point
+			dbs = nodes
+			parents = []
+
+		# Merge the final non injection database into chunks
+		dbfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs]
+		noninjdb = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite', path = jobs['toSqlite'].output_path)
+		sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = parents,
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+			input_cache_files = {"input-cache": dbs},
+			output_files = {"database":noninjdb},
+			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
+		)
+
+		# cluster the final non injection database
+		noninjsqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"":noninjdb}
+		)
+		chunk_nodes.append(noninjsqlitenode)
+		dbs_to_delete.append(noninjdb)
+
+	# Merge the final non injection database
+	outnodes = []
+	injdbs = []
+	if options.non_injection_db:
+		# injection-only run
+		noninjdb = options.non_injection_db
+
+	else:
+		final_nodes = []
+		for chunk, nodes in enumerate(chunks(innodes[None], 10)):
+			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
+			sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = nodes,
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+				input_cache_files = {"input-cache": [node.input_files[""] for node in nodes]},
+				output_files = {"database":noninjdb},
+				input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
+			)
+
+			# cluster the final non injection database
+			noninjsqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"":noninjdb}
+			)
+			final_nodes.append(noninjsqlitenode)
+
+		noninjdb = dagparts.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
+		sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = final_nodes,
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"": (vetoes + [options.frame_segments_file])},
+			input_cache_files = {"input-cache": [node.input_files[""] for node in final_nodes]},
+			output_files = {"database":noninjdb},
+			input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
+		)
+
+		# cluster the final non injection database
+		noninjsqlitenode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"":noninjdb}
+		)
+
+		cpnode = dagparts.DAGNode(jobs['cp'], dag, parent_nodes = [noninjsqlitenode],
+			input_files = {"":"%s %s" % (noninjdb, noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
+		)
+
+		outnodes.append(cpnode)
+
+	# FIXME far-injections currently doesnt work, either fix it or delete it
+	#for injections, far_injections in zip(options.injections, options.far_injections):
+	if options.injections:
+		iterable_injections = options.injections
+	else:
+		iterable_injections = options.injections_for_merger
+
+	for injections in iterable_injections:
+		# extract only the nodes that were used for injections
+		chunk_nodes = []
+
+		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
+			try:
+				dbs = [injnode.input_files[""] for injnode in injnodes]
+				parents = injnodes
+			except AttributeError:
+				dbs = injnodes
+				parents = []
+
+			# Setup the final output names, etc.
+			dbfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in dbs]
+			injdb = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite', path = jobs['toSqlite'].output_path)
+
+			# merge
+			sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = parents,
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+				input_cache_files = {"input-cache":dbs},
+				output_files = {"database":injdb},
+				input_cache_file_name = os.path.basename(injdb).replace('.sqlite','.cache')
+			)
+
+			# cluster
+			clusternode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"":injdb}
+			)
+
+			chunk_nodes.append(clusternode)
+			dbs_to_delete.append(injdb)
+
+
+		final_nodes = []
+		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
+			# Setup the final output names, etc.
+			injdb = dagparts.T050017_filename(instruments, 'PART_LLOID_%s_CHUNK_%04d' % (sim_tag_from_inj_file(injections), chunk), boundary_seg, '.sqlite')
+
+			# merge
+			sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = injnodes,
+				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+				input_cache_files = {"input-cache": [node.input_files[""] for node in injnodes]},
+				output_files = {"database":injdb},
+				input_cache_file_name = injdb.replace('.sqlite','.cache')
+			)
+
+			# cluster
+			clusternode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+				opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"":injdb}
+			)
+			final_nodes.append(clusternode)
+
+		# Setup the final output names, etc.
+		injdb = dagparts.T050017_filename(instruments, 'ALL_LLOID_%s' % sim_tag_from_inj_file(injections), boundary_seg, '.sqlite')
+		injdbs.append(injdb)
+		injxml = injdb.replace('.sqlite','.xml.gz')
+
+		# FIXME far-injections currently doesnt work, either fix it or delete it
+		## If there are injections that are too far away to be seen in a separate file, add them now.
+		#if far_injections is not None:
+		#	xml_input = [injxml] + [far_injections]
+		#else:
+		#	xml_input = injxml
+		xml_input = injxml
+
+		# merge
+		sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = final_nodes + ligolw_add_nodes,
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"": (vetoes + [options.frame_segments_file, injections])},
+			input_cache_files = {"input-cache": [node.input_files[""] for node in final_nodes]},
+			output_files = {"database":injdb},
+			input_cache_file_name = injdb.replace('.sqlite','.cache')
+		)
+
+		# cluster
+		clusternode = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
+			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"":injdb}
+		)
+
+
+		clusternode = dagparts.DAGNode(jobs['toXML'], dag, parent_nodes = [clusternode],
+			opts = {"tmp-space":dagparts.condor_scratch_space()},
+			output_files = {"extract":injxml},
+			input_files = {"database":injdb}
+		)
+
+		inspinjnode = dagparts.DAGNode(jobs['ligolwInspinjFind'], dag, parent_nodes = [clusternode],
+			opts = {"time-window":0.9},
+			input_files = {"":injxml}
+		)
+
+		sqlitenode = dagparts.DAGNode(jobs['toSqliteNoCache'], dag, parent_nodes = [inspinjnode],
+			opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
+			output_files = {"database":injdb},
+			input_files = {"":xml_input}
+		)
+
+		cpnode = dagparts.DAGNode(jobs['cp'], dag, parent_nodes = [sqlitenode],
+			input_files = {"":"%s %s" % (injdb, injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
+		)
+
+		outnodes.append(cpnode)
+
+	return injdbs, noninjdb, outnodes, dbs_to_delete
+
+def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, noninjdb, final_sqlite_nodes):
+	# compute FAPs and FARs
+	# split up the marginalization into groups of 10
+	try:
+		margin = [node.output_files["output"] for node in rankpdf_nodes]
+		parents = rankpdf_nodes
+		margin_zerolag =  [node.output_files["output"] for node in rankpdf_zerolag_nodes]
+		parents_zerolag = rankpdf_zerolag_nodes
+	except AttributeError:
+		# analysis started at merger step
+		margin = rankpdf_nodes
+		parents = []
+		margin_zerolag = rankpdf_zerolag_nodes
+		parents_zerolag = []
+	margout = []
+	margzerolagout = []
+	margnodes = []
+	margzerolagnodes = []
+	margnum = 16
+	for i,n in enumerate(range(0, len(margin), margnum)):
+		margfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]]
+		margout.append(dagparts.group_T050017_filename_from_T050017_files(margfiles, '.xml.gz', path = jobs['marginalize'].output_path))
+		margnodes.append(dagparts.DAGNode(jobs['marginalize'], dag, parent_nodes = parents,
+			opts = {"marginalize":"ranking-stat-pdf"},
+			output_files = {"output":margout[-1]},
+			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
+			input_cache_file_name = os.path.basename(margout[-1]).replace('.xml.gz','.cache')
+		))
+
+		if rankpdf_zerolag_nodes:
+			margzerolag_files = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]]
+			margzerolagout.append(dagparts.group_T050017_filename_from_T050017_files(margzerolag_files, '.xml.gz', path = jobs['marginalizeWithZerolag'].output_path))
+			margzerolagnodes.append(dagparts.DAGNode(jobs['marginalizeWithZerolag'], dag, parent_nodes = parents_zerolag,
+				opts = {"marginalize":"ranking-stat-pdf"},
+				output_files = {"output":margzerolagout[-1]},
+				input_cache_files = {"likelihood-cache":margin_zerolag[n:n+margnum]},
+				input_cache_file_name = os.path.basename(margzerolagout[-1]).replace('.xml.gz','.cache')
+			))
+
+
+	if options.marginalized_likelihood_file:
+		# injection-only run
+		parents = final_sqlite_nodes
+		parents_zerolag = final_sqlite_nodes
+		marginalized_likelihood_file = options.marginalized_likelihood_file
+		marginalized_likelihood_with_zerolag_file = options.marginalized_likelihood_with_zerolag_file
+
+	else:
+		margnode = dagparts.DAGNode(jobs['marginalize'], dag, parent_nodes = margnodes,
+			opts = {"marginalize":"ranking-stat-pdf"},
+			output_files = {"output":"marginalized_likelihood.xml.gz"},
+			input_cache_files = {"likelihood-cache":margout},
+			input_cache_file_name = "marginalized_likelihood.cache"
+		)
+		parents = [margnode] + final_sqlite_nodes
+		marginalized_likelihood_file = margnode.output_files["output"]
+
+		margnode = dagparts.DAGNode(jobs['marginalizeWithZerolag'], dag, parent_nodes = margzerolagnodes,
+			opts = {"marginalize":"ranking-stat-pdf"},
+			output_files = {"output":"marginalized_likelihood_with_zerolag.xml.gz"},
+			input_cache_files = {"likelihood-cache":margzerolagout},
+			input_cache_file_name = "marginalized_likelihood_with_zerolag.cache"
+		)
+		parents_zerolag = [margnode] + final_sqlite_nodes
+		marginalized_likelihood_with_zerolag_file = margnode.output_files["output"]
+
+
+	farnode = dagparts.DAGNode(jobs['ComputeFarFromSnrChisqHistograms'], dag, parent_nodes = parents,
+		opts = {"tmp-space":dagparts.condor_scratch_space()},
+		input_files = {"background-bins-file":marginalized_likelihood_file, "injection-db":injdbs, "non-injection-db":noninjdb}
 	)
 
-for margfile in margfiles_to_delete:
-	dagparts.DAGNode(rmJob, dag, parent_nodes = plotnodes,
-		input_files = {"": margfile}
+	dagparts.DAGNode(jobs['ComputeFarFromSnrChisqHistograms'], dag, parent_nodes = parents_zerolag,
+		opts = {"tmp-space":dagparts.condor_scratch_space()},
+		input_files = {
+			"background-bins-file":marginalized_likelihood_with_zerolag_file,
+			"injection-db":[injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL') for injdb in injdbs],
+			"non-injection-db":noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL')
+		}
 	)
 
-#
-# all done
-#
+	return farnode, margout + margzerolagout
 
-dag.write_sub_files()
-dag.write_dag()
-dag.write_script()
-dag.write_cache()
+def	horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir):
+	dagparts.DAGNode(jobs['horizon'], dag,
+		parent_nodes = psd_nodes.values(),
+		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
+		output_files = {"":dagparts.T050017_filename(instruments, "HORIZON", boundary_seg, '.png', path = output_dir)}
+	)
+
+def	summary_page_layer(dag, jobs, plotnodes, options, boundary_seg, injdbs):
+	output_user_tags = ["ALL_LLOID_COMBINED", "PRECESSION_LLOID_COMBINED"]
+	output_user_tags.extend([injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs])
+	output_user_tags.extend([injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID", "PRECESSION_LLOID") for injdb in injdbs])
+
+	dagparts.DAGNode(jobs['summaryPage'], dag, parent_nodes = plotnodes,
+		opts = {
+			"title":"gstlal-%d-%d-closed-box" % (int(boundary_seg[0]), int(boundary_seg[1])),
+			"webserver-dir":options.web_dir,
+			"glob-path":output_dir,
+			"output-user-tag":output_user_tags
+		}
+	)
+
+
+#----------------------------------------------------------
+### main
+
+if __name__ == '__main__':
+	options, filenames = parse_command_line()
+
+	if options.bank_cache:
+		# FIXME Add feature for multiple bank caches to online pipeline so that
+		# this functionality can return to inspiral_pipe
+		bank_cache = {}
+		for bank_cache_str in options.bank_cache:
+			for c in bank_cache_str.split(','):
+				ifo = c.split("=")[0]
+				cache = c.replace(ifo+"=","")
+				bank_cache.setdefault(ifo, []).append(cache)
+		detectors = datasource.GWDataSourceInfo(options)
+		channel_dict = detectors.channel_dict
+		if bank_cache:
+			instruments = "".join(sorted(bank_cache.keys()))
+			instrument_set = bank_cache.keys()
+		boundary_seg = detectors.seg
+
+	elif options.svd_bank_cache:
+		detectors = datasource.GWDataSourceInfo(options)
+		channel_dict = detectors.channel_dict
+		boundary_seg = detectors.seg
+
+	else:
+		with open(options.rank_pdf_cache) as f:
+			ce = CacheEntry(f.readline())
+		boundary_seg = ce.segment
+		instruments = ce.observatory
+
+	output_dir = "plots"
+	try:
+		os.mkdir("logs")
+	except:
+		pass
+
+	#
+	# Set up DAG architecture
+	#
+
+	dag = dagparts.DAG("trigger_pipe")
+	jobs = set_up_jobs(options)
+
+	if options.max_inspiral_jobs is not None:
+		dag.add_maxjobs_category("INSPIRAL", options.max_inspiral_jobs)
+
+	# generate xml integrity checker (if requested) and pre-script to back up data
+	set_up_scripts(options)
+
+	# Get mchirp boundaries of banks, maximum duration of templates, and analysis segments
+	if options.bank_cache:
+		max_time, template_mchirp_dict = get_bank_params(bank_cache, options)
+		segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
+
+	if options.psd_cache:
+		template_mchirp_dict, svd_nodes, max_time = inspiral_pipe.get_svd_bank_params(options.svd_bank_cache)
+
+		segsdict = analysis_segments(set(svd_nodes.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
+		instruments = "".join(sorted(svd_nodes.keys()))
+		instrument_set = svd_nodes.keys()
+
+		psd_nodes, ref_psd_parent_nodes = inj_psd_layer(segsdict, options)
+
+	elif options.lloid_cache:
+		# starting analysis at merger step, nothing to do here
+		pass
+
+	elif options.reference_psd is None:
+		# Compute the PSDs for each segment
+		psd_nodes = ref_psd_layer(dag, jobs, [], segsdict, channel_dict, options)
+
+		# Make the reference PSD cache
+		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
+		with open('reference_psd.cache', "w") as output_cache_file:
+			for node in psd_nodes.values():
+				output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(node.output_files["write-psd"])))
+
+		# plot the horizon distance
+		horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir)
+
+		# compute the median PSD
+		median_psd_node = median_psd_layer(dag, jobs, psd_nodes, options)
+		ref_psd = median_psd_node.output_files["output-name"]
+		ref_psd_parent_nodes = [median_psd_node]
+
+	else:
+		ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
+
+		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
+		with open('reference_psd.cache', "w") as output_cache_file:
+			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
+
+		ref_psd_parent_nodes = []
+
+	# Calculate Expected SNR jobs
+	if not options.lloid_cache and not options.disable_calc_inj_snr:
+		ligolw_add_nodes = expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_snr_jobs = 100)
+	else:
+		ligolw_add_nodes = []
+
+	if options.bank_cache:
+		# Compute SVD banks
+		svd_nodes, template_mchirp_dict = svd_layer(dag, jobs, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
+
+		# mass model
+		model_add_node, model_file_name = model_layer(dag, jobs, ref_psd_parent_nodes, instruments, options, boundary_seg, options.template_bank, ref_psd)
+
+	if not options.lloid_cache:
+		# Inspiral jobs by segment
+		# NOTE: Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
+		inspiral_nodes = inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
+		lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
+
+		# Setup likelihood jobs, clustering and/or merging
+		rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge_layer(dag, jobs, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_add_node, model_file_name)
+
+	else:
+		# Merge lloid files into 1 file per bin if not already 1 file per bin
+		rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = merge_in_bin_layer(dag, jobs, options)
+
+	# after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
+	injdbs, noninjdb, final_sqlite_nodes, dbs_to_delete = finalize_run_layer(dag, jobs, outnodes, ligolw_add_nodes, options, instruments)
+
+	# Compute FAP
+	farnode, margfiles_to_delete = compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, noninjdb, final_sqlite_nodes)
+
+	# make summary plots
+	plotnodes = summary_plot_layer(dag, jobs, farnode, options)
+
+	# make a web page
+	summary_page_layer(dag, jobs, plotnodes, options, boundary_seg, injdbs)
+
+	# rm intermediate merger products
+	clean_merger_products_layer(dag, jobs, plotnodes, dbs_to_delete, margfiles_to_delete)
+
+	#
+	# generate DAG files
+	#
+
+	dag.write_sub_files()
+	dag.write_dag()
+	dag.write_script()
+	dag.write_cache()
