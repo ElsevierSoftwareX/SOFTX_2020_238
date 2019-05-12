@@ -802,67 +802,46 @@ def expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_s
 def summary_plot_layer(dag, jobs, parent_nodes, options):
 	plotnodes = []
 
+	### common plot options
+	common_plot_opts = {
+		"segments-name": options.frame_segments_name,
+		"tmp-space": dagparts.condor_scratch_space(),
+		"output-dir": output_dir,
+		"likelihood-file":"post_marginalized_likelihood.xml.gz",
+		"shrink-data-segments": 32.0,
+		"extend-veto-segments": 8.,
+	}
+
 	### plot summary
+	opts = {"user-tag": "ALL_LLOID_COMBINED", "remove-precession": ""}
+	opts.update(common_plot_opts)
 	plotnodes.append(dagparts.DAGNode(jobs['plotSummary'], dag, parent_nodes=[farnode],
-		opts = {
-			"segments-name": options.frame_segments_name,
-			"tmp-space": dagparts.condor_scratch_space(),
-			"user-tag": "ALL_LLOID_COMBINED",
-			"output-dir": output_dir,
-			"likelihood-file":"post_marginalized_likelihood.xml.gz",
-			"shrink-data-segments": 32.0,
-			"extend-veto-segments": 8.,
-			"remove-precession": ""
-		},
-		input_files = {"":[noninjdb] + injdbs}
+		opts = opts,
+		input_files = {"": [noninjdb] + injdbs}
 	))
 
 	### isolated precession plot summary
+	opts = {"user-tag": "PRECESSION_LLOID_COMBINED", "isolate-precession": "", "plot-group": 1}
+	opts.update(common_plot_opts)
 	plotnodes.append(dagparts.DAGNode(jobs['plotSummaryIsolatePrecession'], dag, parent_nodes=[farnode],
-		opts = {
-			"segments-name": options.frame_segments_name,
-			"tmp-space": dagparts.condor_scratch_space(),
-			"user-tag": "PRECESSION_LLOID_COMBINED",
-			"plot-group":1,
-			"output-dir": output_dir,
-			"likelihood-file":"post_marginalized_likelihood.xml.gz",
-			"shrink-data-segments": 32.0,
-			"extend-veto-segments": 8.,
-			"isolate-precession": ""
-		},
+		opts = opts,
 		input_files = {"":[noninjdb] + injdbs}
 	))
 
 	for injdb in injdbs:
 		### individual injection plot summary
+		opts = {"user-tag": injdb.replace(".sqlite","").split("-")[1], "remove-precession": "", "plot-group": 1}
+		opts.update(common_plot_opts)
 		plotnodes.append(dagparts.DAGNode(jobs['plotSnglInjSummary'], dag, parent_nodes=[farnode],
-			opts = {
-				"segments-name": options.frame_segments_name,
-				"tmp-space": dagparts.condor_scratch_space(),
-				"user-tag": injdb.replace(".sqlite","").split("-")[1],
-				"plot-group": 1,
-				"output-dir":output_dir,
-				"likelihood-file":"post_marginalized_likelihood.xml.gz",
-				"shrink-data-segments": 32.0,
-				"extend-veto-segments": 8.,
-				"remove-precession": ""
-			},
+			opts = opts,
 			input_files = {"":[noninjdb] + [injdb]}
 		))
 
 		### isolated precession injection plot summary
+		opts = {"user-tag": injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID","PRECESSION_LLOID"), "isolate-precession": "", "plot-group": 1}
+		opts.update(common_plot_opts)
 		plotnodes.append(dagparts.DAGNode(jobs['plotSnglInjSummaryIsolatePrecession'], dag, parent_nodes=[farnode],
-			opts = {
-				"segments-name": options.frame_segments_name,
-				"tmp-space":dagparts.condor_scratch_space(),
-				"user-tag": injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID","PRECESSION_LLOID"),
-				"plot-group": 1,
-				"output-dir":output_dir,
-				"likelihood-file":"post_marginalized_likelihood.xml.gz",
-				"shrink-data-segments": 32.0,
-				"extend-veto-segments": 8.,
-				"isolate-precession": ""
-			},
+			opts = opts,
 			input_files = {"":[noninjdb] + [injdb]}
 		))
 
@@ -1279,7 +1258,6 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 			opts = {"sql-file":options.cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
 			input_files = {"":injdb}
 		)
-
 
 		clusternode = dagparts.DAGNode(jobs['toXML'], dag, parent_nodes = [clusternode],
 			opts = {"tmp-space":dagparts.condor_scratch_space()},
