@@ -42,15 +42,14 @@ __author__ = 'Chad Hanna <chad.hanna@ligo.org>, Patrick Godwin <patrick.godwin@l
 #----------------------------------------------------------
 ### imports
 
+import functools
 import itertools
 import os
 from optparse import OptionParser
-import sys
 import stat
 
 import numpy
 
-import lal
 import lal.series
 from lal.utils import CacheEntry
 
@@ -58,7 +57,6 @@ from ligo import segments
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 import ligo.lw.utils as ligolw_utils
-import ligo.lw.utils.segments as ligolw_segments
 
 from gstlal import inspiral
 from gstlal import inspiral_pipe
@@ -647,8 +645,8 @@ def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, templa
 					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
 					# setup output names
 					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
-					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i, s in enumerate(svd_bank_strings)]
-					dist_stat_names = [dagparts.T050017_filename(ifos, '%s_DIST_STATS' % (bgbin_indices[i],), seg, '.xml.gz', path = output_paths[i]) for i,s in enumerate(svd_bank_strings)]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID' % idx, seg, '.xml.gz', path = path) for idx, path in zip(bgbin_indices, output_paths)]
+					dist_stat_names = [dagparts.T050017_filename(ifos, '%s_DIST_STATS' % idx, seg, '.xml.gz', path = path) for idx, path in zip(bgbin_indices, output_paths)]
 
 					for bgbin in bgbin_indices:
 						bgbin_chunk_map.setdefault(bgbin, chunk_counter)
@@ -712,7 +710,7 @@ def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, templa
 				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
-					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), seg, '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (idx, sim_name), seg, '.xml.gz', path = path) for for idx, path in zip(bgbin_indices, output_paths)]
 					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
 					try:
 						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
@@ -922,12 +920,12 @@ def inj_psd_layer(segsdict, options):
 	ref_psd_parent_nodes = []
 	return psd_nodes, ref_psd_parent_nodes
 
-def model_layer(dag, jobs, parent_nodes, instruments, options, seg, template_bank, psd):
+def mass_model_layer(dag, jobs, parent_nodes, instruments, options, seg, psd):
 	if options.mass_model_file is None:
 		# choose, arbitrarily, the lowest instrument in alphabetical order
 		model_file_name = dagparts.T050017_filename(instruments, 'ALL_MASS_MODEL', seg, '.h5', path = jobs['model'].output_path)
 		model_node = dagparts.DAGNode(jobs['model'], dag,
-			input_files = {"template-bank": template_bank, "reference-psd": psd},
+			input_files = {"template-bank": options.template_bank, "reference-psd": psd},
 			opts = {"model":options.mass_model},
 			output_files = {"output": model_file_name},
 			parent_nodes = parent_nodes
@@ -951,7 +949,7 @@ def merge_cluster_layer(dag, jobs, parent_nodes, db, db_cache, options):
 		input_files = {"": db}
 	)
 
-def rank_and_merge_layer(dag, jobs, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, mass_model_add_node, mass_model_file):
+def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file):
 	likelihood_nodes = {}
 	rankpdf_nodes = []
 	rankpdf_zerolag_nodes = []
@@ -972,9 +970,9 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, inspiral_nodes, lloid_output, llo
 		# mass bin dependent prior, but it really doesn't matter for
 		# the time being.
 		priornode = dagparts.DAGNode(jobs['createPriorDistStats'], dag,
-			parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node,
-			opts = {"instrument":instrument_set, "background-prior":1, "min-instruments":options.min_instruments},
-			input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file},
+			parent_nodes = [one_ifo_svd_nodes[n]] + model_node,
+			opts = {"instrument": instrument_set, "background-prior": 1, "min-instruments": options.min_instruments},
+			input_files = {"svd-file": one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file": model_file},
 			output_files = {"write-likelihood": rankfile('CREATE_PRIOR_DIST_STATS', job=jobs['createPriorDistStats'])}
 		)
 		# Create a file that has the priors *and* all of the diststats
@@ -983,7 +981,7 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, inspiral_nodes, lloid_output, llo
 		diststats_per_bin_node = dagparts.DAGNode(jobs['marginalize'], dag,
 			parent_nodes = [priornode] + parents,
 			opts = {"marginalize":"ranking-stat"},
-			input_cache_files = {"likelihood-cache":diststats + [priornode.output_files["write-likelihood"]]},
+			input_cache_files = {"likelihood-cache": diststats + [priornode.output_files["write-likelihood"]]},
 			output_files = {"output": rankfile('MARG_DIST_STATS', job=jobs['marginalize'])},
 			input_cache_file_name = rankfile('MARG_DIST_STATS')
 		)
@@ -1161,10 +1159,8 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 	# Merge the final non injection database
 	outnodes = []
 	injdbs = []
-	if options.non_injection_db:
-		# injection-only run
+	if options.non_injection_db: #### injection-only run
 		noninjdb = options.non_injection_db
-
 	else:
 		final_nodes = []
 		for chunk, nodes in enumerate(chunks(innodes[None], 10)):
@@ -1480,16 +1476,17 @@ if __name__ == '__main__':
 		svd_nodes, template_mchirp_dict = svd_layer(dag, jobs, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
 
 		# mass model
-		model_add_node, model_file_name = model_layer(dag, jobs, ref_psd_parent_nodes, instruments, options, boundary_seg, options.template_bank, ref_psd)
+		model_add_node, model_file_name = mass_model_layer(dag, jobs, ref_psd_parent_nodes, instruments, options, boundary_seg, ref_psd)
 
 	if not options.lloid_cache:
 		# Inspiral jobs by segment
-		# NOTE: Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
 		inspiral_nodes = inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
+
+		# NOTE: Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
 		lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
 
 		# Setup likelihood jobs, clustering and/or merging
-		rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge_layer(dag, jobs, svd_nodes, inspiral_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_add_node, model_file_name)
+		rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file)
 
 	else:
 		# Merge lloid files into 1 file per bin if not already 1 file per bin
