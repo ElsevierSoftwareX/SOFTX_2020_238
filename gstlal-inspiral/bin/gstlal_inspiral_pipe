@@ -1289,88 +1289,66 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, noninjdb, final_sqlite_nodes):
 	"""compute FAPs and FARs
 	"""
-	try:
-		margin = [node.output_files["output"] for node in rankpdf_nodes]
-		parents = rankpdf_nodes
-		margin_zerolag =  [node.output_files["output"] for node in rankpdf_zerolag_nodes]
-		parents_zerolag = rankpdf_zerolag_nodes
-	except AttributeError: ### analysis started at merger step
-		margin = rankpdf_nodes
-		parents = []
-		margin_zerolag = rankpdf_zerolag_nodes
-		parents_zerolag = []
+	nodes = [rankpdf_nodes, rankpdf_zerolag_nodes]
+	margjobs = [jobs['marginalize'], jobs['marginalizeWithZerolag']]
+	margfiles = [options.marginalized_likelihood_file, options.marginalized_likelihood_file]
+	filesuffixs = ['', '_with_zerolag']
 
-	margout = []
-	margzerolagout = []
-	margnodes = []
-	margzerolagnodes = []
 	margnum = 16
+	outnode = None
+	margcache_all = []
+	for node, job, margfile, filesuffix in zip(nodes, margjobs, margfiles, filesuffixs):
+		try:
+			margin = [node.output_files["output"] for node in nodes]
+			parents = nodes
+		except AttributeError: ### analysis started at merger step
+			margin = nodes
+			parents = []
 
-	# split up the marginalization into groups of 10
-	# FIXME: is it actually groups of 10 or groups of 16?
-	for n in range(0, len(margin), margnum):
-		margfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin[n:n+margnum]]
-		margout.append(dagparts.group_T050017_filename_from_T050017_files(margfiles, '.xml.gz', path = jobs['marginalize'].output_path))
-		margnodes.append(dagparts.DAGNode(jobs['marginalize'], dag, parent_nodes = parents,
-			opts = {"marginalize":"ranking-stat-pdf"},
-			output_files = {"output":margout[-1]},
-			input_cache_files = {"likelihood-cache":margin[n:n+margnum]},
-			input_cache_file_name = os.path.basename(margout[-1]).replace('.xml.gz','.cache')
-		))
+		margnodes = []
+		margcache = []
 
-		if rankpdf_zerolag_nodes:
-			margzerolag_files = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margin_zerolag[n:n+margnum]]
-			margzerolagout.append(dagparts.group_T050017_filename_from_T050017_files(margzerolag_files, '.xml.gz', path = jobs['marginalizeWithZerolag'].output_path))
-			margzerolagnodes.append(dagparts.DAGNode(jobs['marginalizeWithZerolag'], dag, parent_nodes = parents_zerolag,
-				opts = {"marginalize":"ranking-stat-pdf"},
-				output_files = {"output":margzerolagout[-1]},
-				input_cache_files = {"likelihood-cache":margin_zerolag[n:n+margnum]},
-				input_cache_file_name = os.path.basename(margzerolagout[-1]).replace('.xml.gz','.cache')
-			))
+		# split up the marginalization into groups of 10
+		# FIXME: is it actually groups of 10 or groups of 16?
+		for margchunk in chunks(margin, margnum):
+			if node:
+				margfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margchunk]
+				margcache.append(dagparts.group_T050017_filename_from_T050017_files(margfiles, '.xml.gz', path = job.output_path))
+				margnodes.append(dagparts.DAGNode(job, dag, parent_nodes = parents,
+					opts = {"marginalize": "ranking-stat-pdf"},
+					output_files = {"output": margcache[-1]},
+					input_cache_files = {"likelihood-cache": margchunk},
+					input_cache_file_name = os.path.basename(margcache[-1]).replace('.xml.gz','.cache')
+				))
 
+		if options.marginalized_likelihood_file: ### injection-only run
+			parents = final_sqlite_nodes
+			marginalized_likelihood_file = margfile
 
-	if options.marginalized_likelihood_file:
-		# injection-only run
-		parents = final_sqlite_nodes
-		parents_zerolag = final_sqlite_nodes
-		marginalized_likelihood_file = options.marginalized_likelihood_file
-		marginalized_likelihood_with_zerolag_file = options.marginalized_likelihood_with_zerolag_file
+		else:
+			margnode = dagparts.DAGNode(job, dag, parent_nodes = margnodes,
+				opts = {"marginalize": "ranking-stat-pdf"},
+				output_files = {"output": "marginalized_likelihood.xml%s.gz"%filesuffix},
+				input_cache_files = {"likelihood-cache": margcache},
+				input_cache_file_name = "marginalized_likelihood%s.cache"%filesuffix
+			)
+			parents = [margnode] + final_sqlite_nodes
+			marginalized_likelihood_file = margnode.output_files["output"]
 
-	else:
-		margnode = dagparts.DAGNode(jobs['marginalize'], dag, parent_nodes = margnodes,
-			opts = {"marginalize":"ranking-stat-pdf"},
-			output_files = {"output":"marginalized_likelihood.xml.gz"},
-			input_cache_files = {"likelihood-cache":margout},
-			input_cache_file_name = "marginalized_likelihood.cache"
+		farnode = dagparts.DAGNode(jobs['ComputeFarFromSnrChisqHistograms'], dag, parent_nodes = parents,
+			opts = {"tmp-space":dagparts.condor_scratch_space()},
+			input_files = {
+				"background-bins-file": marginalized_likelihood_file,
+				"injection-db": [injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL') for injdb in injdbs] if 'zerolag' in filesuffix else injdbs,
+				"non-injection-db": noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL') if 'zerolag' in filesuffix else noninjdb
+			}
 		)
-		parents = [margnode] + final_sqlite_nodes
-		marginalized_likelihood_file = margnode.output_files["output"]
 
-		margnode = dagparts.DAGNode(jobs['marginalizeWithZerolag'], dag, parent_nodes = margzerolagnodes,
-			opts = {"marginalize":"ranking-stat-pdf"},
-			output_files = {"output":"marginalized_likelihood_with_zerolag.xml.gz"},
-			input_cache_files = {"likelihood-cache":margzerolagout},
-			input_cache_file_name = "marginalized_likelihood_with_zerolag.cache"
-		)
-		parents_zerolag = [margnode] + final_sqlite_nodes
-		marginalized_likelihood_with_zerolag_file = margnode.output_files["output"]
+		margcache_all.extend(margcache)
+		if 'zerolag' not in filesuffix:
+			outnode = farnode
 
-
-	farnode = dagparts.DAGNode(jobs['ComputeFarFromSnrChisqHistograms'], dag, parent_nodes = parents,
-		opts = {"tmp-space":dagparts.condor_scratch_space()},
-		input_files = {"background-bins-file":marginalized_likelihood_file, "injection-db":injdbs, "non-injection-db":noninjdb}
-	)
-
-	dagparts.DAGNode(jobs['ComputeFarFromSnrChisqHistograms'], dag, parent_nodes = parents_zerolag,
-		opts = {"tmp-space":dagparts.condor_scratch_space()},
-		input_files = {
-			"background-bins-file":marginalized_likelihood_with_zerolag_file,
-			"injection-db":[injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL') for injdb in injdbs],
-			"non-injection-db":noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL')
-		}
-	)
-
-	return farnode, margout + margzerolagout
+	return outnode, margcache_all
 
 def	horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir):
 	dagparts.DAGNode(jobs['horizon'], dag,
