@@ -115,7 +115,7 @@ DROP TABLE _idmap_;
 -- references to their IDs in other tables
 --
 
-CREATE INDEX tmpindex ON segment(segment_def_id, start_time, start_time_ns, end_time, end_time_ns);
+CREATE INDEX tmpindex ON segment(segment_def_id, start_time, start_time_ns, end_time, end_time_ns, segment_id);
 
 DELETE FROM
 	segment
