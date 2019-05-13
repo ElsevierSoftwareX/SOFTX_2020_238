@@ -366,7 +366,7 @@ def parse_command_line():
 #----------------------------------------------------------
 ### DAG utilities
 
-def get_threshold_values(bg_bin_indices, svd_bank_strings, options):
+def get_threshold_values(bgbin_indices, svd_bank_strings, options):
 	"""Calculate the appropriate ht-gate-threshold values according to the scale given
 	"""
 	if options.ht_gate_threshold_linear is not None:
@@ -375,11 +375,11 @@ def get_threshold_values(bg_bin_indices, svd_bank_strings, options):
 		# use max mchirp in a given svd bank to decide gate threshold
 		bank_mchirps = [template_mchirp_dict[bgbin_index][1] for bgbin_index in bgbin_indices]
 		gate_mchirp_ratio = (ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)
-		threshold_values = [gate_mchirp_ratio*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
+		return [gate_mchirp_ratio*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
 	elif options.ht_gate_threshold is not None:
-		threshold_values = [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
+		return [options.ht_gate_threshold]*len(svd_bank_strings) # Use the ht-gate-threshold value given
 	else:
-		threshold_values = None
+		return None
 
 def inputs_to_db(jobs, inputs):
 	dbfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in inputs]
@@ -710,7 +710,7 @@ def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, templa
 				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
-					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (idx, sim_name), seg, '.xml.gz', path = path) for for idx, path in zip(bgbin_indices, output_paths)]
+					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (idx, sim_name), seg, '.xml.gz', path = path) for idx, path in zip(bgbin_indices, output_paths)]
 					svd_names = [s for i, s in enumerate(svd_bank_cache_maker(svd_bank_strings, injection = True))]
 					try:
 						reference_psd = psd_nodes[(ifos, seg)].output_files["write-psd"]
@@ -871,14 +871,14 @@ def summary_plot_layer(dag, jobs, parent_nodes, options):
 
 	### sensitivity plots
 	opts = {"user-tag": "ALL_LLOID_COMBINED"}
-	opts.update(sensivity_opts)
+	opts.update(sensitivity_opts)
 	plotnodes.append(dagparts.DAGNode(jobs['plotSensitivity'], dag, parent_nodes=[farnode],
 		opts = opts,
 		input_files = {"zero-lag-database": noninjdb, "": injdbs}
 	))
 
 	opts = {"user-tag": injdb.replace(".sqlite","").split("-")[1]}
-	opts.update(sensivity_opts)
+	opts.update(sensitivity_opts)
 	for injdb in injdbs:
 		plotnodes.append(dagparts.DAGNode(jobs['plotSensitivity'], dag, parent_nodes=[farnode],
 			opts = opts,
@@ -934,18 +934,18 @@ def mass_model_layer(dag, jobs, parent_nodes, instruments, options, seg, psd):
 	else:
 		return [], options.mass_model_file
 
-def merge_cluster_layer(dag, jobs, parent_nodes, db, db_cache, options):
+def merge_cluster_layer(dag, jobs, parent_nodes, db, db_cache, sqlfile):
 	# Merge database into chunks
 	sqlitenode = dagparts.DAGNode(jobs['toSqlite'], dag, parent_nodes = parent_nodes,
 		opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
 		input_cache_files = {"input-cache": db_cache},
 		output_files = {"database":db},
-		input_cache_file_name = os.path.basename(noninjdb).replace('.sqlite','.cache')
+		input_cache_file_name = os.path.basename(db).replace('.sqlite','.cache')
 	)
 
 	# cluster database
 	return dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [sqlitenode],
-		opts = {"sql-file": options.cluster_sql_file, "tmp-space": dagparts.condor_scratch_space()},
+		opts = {"sql-file": sqlfile, "tmp-space": dagparts.condor_scratch_space()},
 		input_files = {"": db}
 	)
 
@@ -963,7 +963,9 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 	# first non-injections, which will get skipped if this is an injections-only run
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
 		inputs = [o[0] for o in outputs]
-		parents = flatten([o[1] for o in outputs])
+		#parents = flatten([o[1] for o in outputs])
+		parents = []
+		[parents.extend(o[1]) for o in outputs]
 		rankfile = functools.partial(get_rank_file, instruments, boundary_seg, n)
 
 		# FIXME we keep this here in case we someday want to have a
@@ -1020,7 +1022,9 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 		for outputs, diststats, bgbin_index in ((lloid_nodes[key], lloid_diststats[key], key) for key in sorted(lloid_nodes.keys())):
 			if outputs is not None:
 				inputs = [o[0] for o in outputs]
-				parents = flatten([o[1] for o in outputs])
+				#parents = flatten([o[1] for o in outputs])
+				parents = []
+				[parents.extend(o[1]) for o in outputs]
 				if margnodes:
 					parents.append(margnodes[bgbin_index])
 					likelihood_url = margnodes[bgbin_index].output_files["output"]
@@ -1041,6 +1045,13 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
 	files_to_group = 40
 	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
+		if inj is None:
+			outnode_key = None
+			sql_file = options.cluster_sql_file
+		else:
+			outnode_key = sim_tag_from_inj_file(inj)
+			sql_file = options.injection_sql_file
+
 		# Flatten the nodes for this sub bank
 		nodes = flatten(nodes)
 		merge_nodes = []
@@ -1050,7 +1061,7 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 		# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
 		for input_files in chunks(inputs, files_to_group):
 			merge_nodes.append(dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = nodes,
-				opts = {"sql-file": options.cluster_sql_file, "tmp-space": dagparts.condor_scratch_space()},
+				opts = {"sql-file": sql_file, "tmp-space": dagparts.condor_scratch_space()},
 				input_files = {"": input_files}
 				)
 			)
@@ -1059,10 +1070,9 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 				merge_nodes[-1].add_pre_script_arg(" ".join(input_files))
 
 		# Merging all the dbs from the same sub bank
-		outnode_key = sim_tag_from_inj_file(inj) if inj is not None else None
 		for subbank, inputs in enumerate([node.input_files["input-cache"] for node in nodes]):
 			db = inputs_to_db(jobs, inputs)
-			sqlitenode = merge_cluster_layer(dag, jobs, merge_nodes, db, inputs, options)
+			sqlitenode = merge_cluster_layer(dag, jobs, merge_nodes, db, inputs, sql_file)
 			outnodes.setdefault(outnode_key, []).append(sqlitenode)
 
 	# make sure outnodes has a None key, even if its value is an empty list
@@ -1090,7 +1100,7 @@ def merge_in_bin_layer(dag, jobs, options):
 		else:
 			for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
 				db = inputs_to_db(jobs, dbs)
-				sqlitenode = merge_cluster_layer(dag, jobs, [], db, inputs, options)
+				sqlitenode = merge_cluster_layer(dag, jobs, [], db, inputs, options.cluster_sql_file)
 				outnodes.setdefault(None, []).append(sqlitenode)
 
 			for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
@@ -1099,8 +1109,8 @@ def merge_in_bin_layer(dag, jobs, options):
 					bgbin_lloid_map.setdefault(ce.description.split('_')[0], []).append(ce.path)
 
 				for bgbin_index, dbs in sorted(bgbin_lloid_map.items(), key = lambda (k,v): int(k)):
-					db = inputs_to_db(jobs, dbs)
-					sqlitenode = merge_cluster_layer(dag, jobs, [], db, inputs, options)
+					injdb = inputs_to_db(jobs, dbs)
+					sqlitenode = merge_cluster_layer(dag, jobs, [], injdb, inputs, options.injection_sql_file)
 					outnodes.setdefault(sim_tag_from_inj_file(options.injections_for_merger[i]), []).append(sqlitenode)
 
 	else:
@@ -1152,7 +1162,7 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 		noninjdb = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite', path = jobs['toSqlite'].output_path)
 
 		# Merge and cluster the final non injection database
-		noninjsqlitenode = merge_cluster_layer(dag, jobs, parents, noninjdb, dbs, options)
+		noninjsqlitenode = merge_cluster_layer(dag, jobs, parents, noninjdb, dbs, options.cluster_sql_file)
 		chunk_nodes.append(noninjsqlitenode)
 		dbs_to_delete.append(noninjdb)
 
@@ -1167,7 +1177,7 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
 
 			# cluster the final non injection database
-			noninjsqlitenode = merge_cluster_layer(dag, jobs, nodes, noninjdb, [node.input_files[""] for node in nodes], options)
+			noninjsqlitenode = merge_cluster_layer(dag, jobs, nodes, noninjdb, [node.input_files[""] for node in nodes], options.cluster_sql_file)
 			final_nodes.append(noninjsqlitenode)
 
 		noninjdb = dagparts.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
@@ -1215,7 +1225,7 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 			injdb = dagparts.group_T050017_filename_from_T050017_files(dbfiles, '.sqlite', path = jobs['toSqlite'].output_path)
 
 			# merge and cluster
-			clusternode = merge_cluster_layer(dag, jobs, parents, injdb, dbs, options)
+			clusternode = merge_cluster_layer(dag, jobs, parents, injdb, dbs, options.cluster_sql_file)
 			chunk_nodes.append(clusternode)
 			dbs_to_delete.append(injdb)
 
@@ -1226,7 +1236,7 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 			injdb = dagparts.T050017_filename(instruments, 'PART_LLOID_%s_CHUNK_%04d' % (sim_tag_from_inj_file(injections), chunk), boundary_seg, '.sqlite')
 
 			# merge and cluster
-			clusternode = merge_cluster_layer(dag, jobs, injnodes, injdb, [node.input_files[""] for node in injnodes], options)
+			clusternode = merge_cluster_layer(dag, jobs, injnodes, injdb, [node.input_files[""] for node in injnodes], options.cluster_sql_file)
 			final_nodes.append(clusternode)
 
 		# Setup the final output names, etc.
@@ -1285,15 +1295,16 @@ def finalize_run_layer(dag, jobs, innodes, ligolw_add_nodes, options, instrument
 def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, noninjdb, final_sqlite_nodes):
 	"""compute FAPs and FARs
 	"""
-	nodes = [rankpdf_nodes, rankpdf_zerolag_nodes]
+	ranknodes = [rankpdf_nodes, rankpdf_zerolag_nodes]
 	margjobs = [jobs['marginalize'], jobs['marginalizeWithZerolag']]
 	margfiles = [options.marginalized_likelihood_file, options.marginalized_likelihood_file]
 	filesuffixs = ['', '_with_zerolag']
 
 	margnum = 16
 	outnode = None
-	margcache_all = []
-	for node, job, margfile, filesuffix in zip(nodes, margjobs, margfiles, filesuffixs):
+	all_margcache = []
+	all_margnodes = []
+	for nodes, job, margfile, filesuffix in zip(ranknodes, margjobs, margfiles, filesuffixs):
 		try:
 			margin = [node.output_files["output"] for node in nodes]
 			parents = nodes
@@ -1307,9 +1318,9 @@ def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, n
 		# split up the marginalization into groups of 10
 		# FIXME: is it actually groups of 10 or groups of 16?
 		for margchunk in chunks(margin, margnum):
-			if node:
-				margfiles = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margchunk]
-				margcache.append(dagparts.group_T050017_filename_from_T050017_files(margfiles, '.xml.gz', path = job.output_path))
+			if nodes:
+				marg_ce = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margchunk]
+				margcache.append(dagparts.group_T050017_filename_from_T050017_files(marg_ce, '.xml.gz', path = job.output_path))
 				margnodes.append(dagparts.DAGNode(job, dag, parent_nodes = parents,
 					opts = {"marginalize": "ranking-stat-pdf"},
 					output_files = {"output": margcache[-1]},
@@ -1317,6 +1328,10 @@ def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, n
 					input_cache_file_name = os.path.basename(margcache[-1]).replace('.xml.gz','.cache')
 				))
 
+		all_margcache.append(margcache)
+		all_margnodes.append(margnodes)
+
+	for nodes, job, margnodes, margcache, margfile, filesuffix in zip(ranknodes, margjobs, all_margnodes, all_margcache, margfiles, filesuffixs):
 		if options.marginalized_likelihood_file: ### injection-only run
 			parents = final_sqlite_nodes
 			marginalized_likelihood_file = margfile
@@ -1324,7 +1339,7 @@ def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, n
 		else:
 			margnode = dagparts.DAGNode(job, dag, parent_nodes = margnodes,
 				opts = {"marginalize": "ranking-stat-pdf"},
-				output_files = {"output": "marginalized_likelihood.xml%s.gz"%filesuffix},
+				output_files = {"output": "marginalized_likelihood%s.xml.gz"%filesuffix},
 				input_cache_files = {"likelihood-cache": margcache},
 				input_cache_file_name = "marginalized_likelihood%s.cache"%filesuffix
 			)
@@ -1340,11 +1355,10 @@ def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, n
 			}
 		)
 
-		margcache_all.extend(margcache)
 		if 'zerolag' not in filesuffix:
 			outnode = farnode
 
-	return outnode, margcache_all
+	return outnode, flatten(all_margcache)
 
 def	horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir):
 	dagparts.DAGNode(jobs['horizon'], dag,
@@ -1476,7 +1490,7 @@ if __name__ == '__main__':
 		svd_nodes, template_mchirp_dict = svd_layer(dag, jobs, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
 
 		# mass model
-		model_add_node, model_file_name = mass_model_layer(dag, jobs, ref_psd_parent_nodes, instruments, options, boundary_seg, ref_psd)
+		model_node, model_file = mass_model_layer(dag, jobs, ref_psd_parent_nodes, instruments, options, boundary_seg, ref_psd)
 
 	if not options.lloid_cache:
 		# Inspiral jobs by segment
