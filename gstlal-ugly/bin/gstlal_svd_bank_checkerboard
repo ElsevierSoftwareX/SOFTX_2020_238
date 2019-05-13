@@ -32,16 +32,12 @@ import numpy as np
 import itertools
 from optparse import OptionParser
 
-from lal.utils import CacheEntry
 from gstlal import svd_bank
-from gstlal import inspiral
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 from ligo.lw import array as ligolw_array
 from ligo.lw import param as ligolw_param
-from ligo.lw import utils as ligolw_utils
-from ligo.lw.utils import process as ligolw_process
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -59,16 +55,15 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 #
 
 parser = OptionParser(description = __doc__)
-parser.add_option("--svd-files", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information (require). Can give multiple files, seperated with a ','." )
+parser.add_option("--svd-files", metavar = "filename", action = "append", help = "A LIGO light-weight xml / xml.gz file containing svd bank information (require). Can be passed multiple times." )
 parser.add_option("--outdir", metavar = "directory", type = "str", default = ".", help = "Output directory for modified SVD files.")
-parser.add_option("--even", action = "store_true", help = "Output even rows pf reconstruction matrix. Default is odd.")
+parser.add_option("--even", action = "store_true", help = "Output even rows of reconstruction matrix. Default is odd.")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 options, filenames = parser.parse_args()
 
 if options.svd_files is None:
-	raise ValueError("SVD file must be selected with, seperated with a ','. --svd-files bank1.xml,bank2.xml,bank3.xml")
-svd_bank_files = options.svd_files.split(',')
+	raise ValueError("SVD file(s) must be selected. --svd-files bank1.xml --svd-files bank2.xml --svd-files bank3.xml")
 
 #
 #
@@ -80,7 +75,7 @@ svd_bank_files = options.svd_files.split(',')
 #
 
 # Loop over all SVD files given in command line
-for bank_file in svd_bank_files:
+for bank_file in options.svd_files:
 	# read in SVD bank file
 	banks = svd_bank.read_banks(bank_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)
 	# Loop over each bank within SVD file
