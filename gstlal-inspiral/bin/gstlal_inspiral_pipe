@@ -893,7 +893,7 @@ def summary_plot_layer(dag, jobs, parent_nodes, options):
 
 	return plotnodes
 
-def	clean_merger_products_layer(dag, jobs, plotnodes, dbs_to_delete, margfiles_to_delete):
+def clean_merger_products_layer(dag, jobs, plotnodes, dbs_to_delete, margfiles_to_delete):
 	for db in dbs_to_delete:
 		dagparts.DAGNode(jobs['rm'], dag, parent_nodes = plotnodes,
 			input_files = {"": db}
@@ -1360,14 +1360,14 @@ def compute_fap_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, injdbs, n
 
 	return outnode, flatten(all_margcache)
 
-def	horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir):
+def horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir):
 	dagparts.DAGNode(jobs['horizon'], dag,
 		parent_nodes = psd_nodes.values(),
 		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
 		output_files = {"":dagparts.T050017_filename(instruments, "HORIZON", boundary_seg, '.png', path = output_dir)}
 	)
 
-def	summary_page_layer(dag, jobs, plotnodes, options, boundary_seg, injdbs):
+def summary_page_layer(dag, jobs, plotnodes, options, boundary_seg, injdbs):
 	output_user_tags = ["ALL_LLOID_COMBINED", "PRECESSION_LLOID_COMBINED"]
 	output_user_tags.extend([injdb.replace(".sqlite","").split("-")[1] for injdb in injdbs])
 	output_user_tags.extend([injdb.replace(".sqlite","").split("-")[1].replace("ALL_LLOID", "PRECESSION_LLOID") for injdb in injdbs])
