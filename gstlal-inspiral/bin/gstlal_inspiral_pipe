@@ -80,7 +80,14 @@ def sim_tag_from_inj_file(injections):
 		return None
 	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
 
-def get_bank_params(bank_cache, options, verbose = False):
+def get_bank_params(options, verbose = False):
+	bank_cache = {}
+	for bank_cache_str in options.bank_cache:
+		for c in bank_cache_str.split(','):
+			ifo = c.split("=")[0]
+			cache = c.replace(ifo+"=","")
+			bank_cache.setdefault(ifo, []).append(cache)
+
 	max_time = 0
 	template_mchirp_dict = {}
 	for n, cache in enumerate(bank_cache.values()[0]):
@@ -93,7 +100,7 @@ def get_bank_params(bank_cache, options, verbose = False):
 				template_mchirp_dict[ce.path] = [min(snglinspiraltable.getColumnByName('mchirp')[idx:-idx]), max(snglinspiraltable.getColumnByName('mchirp')[idx:-idx])]
 				xmldoc.unlink()
 
-	return max_time, template_mchirp_dict
+	return template_mchirp_dict, bank_cache, max_time
 
 def chunks(l, n):
 	for i in range(0, len(l), n):
@@ -206,6 +213,15 @@ def set_up_scripts(options):
 		f.write("""#!/bin/bash
 		for f in $@;do mkdir -p $(dirname $f)/raw;cp $f $(dirname $f)/raw/$(basename $f);done""")
 	os.chmod("store_raw.sh", stat.S_IRUSR | stat.S_IXUSR | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH | stat.S_IWUSR)
+
+def load_reference_psd(options):
+	ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
+
+	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
+	with open('reference_psd.cache', "w") as output_cache_file:
+		output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
+
+	return ref_psd
 
 
 #----------------------------------------------------------
@@ -501,6 +517,12 @@ def ref_psd_layer(dag, jobs, parent_nodes, segsdict, channel_dict, options):
 				},
 			)
 
+	# Make the reference PSD cache
+	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
+	with open('reference_psd.cache', "w") as output_cache_file:
+		for node in psd_nodes.values():
+			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(node.output_files["write-psd"])))
+
 	return psd_nodes
 
 def median_psd_layer(dag, jobs, parent_nodes, *args):
@@ -773,7 +795,11 @@ def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, templa
 
 	# Replace mchirplo:mchirphi:inj.xml with inj.xml
 	options.injections = [inj.split(':')[-1] for inj in options.injections]
-	return inspiral_nodes
+
+	# NOTE: Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
+	lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
+
+	return inspiral_nodes, lloid_output, lloid_diststats
 
 def expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_snr_jobs):
 	ligolw_add_nodes = []
@@ -975,9 +1001,7 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 	# first non-injections, which will get skipped if this is an injections-only run
 	for n, (outputs, diststats) in enumerate((lloid_output[None][key], lloid_diststats[key]) for key in sorted(lloid_output[None].keys())):
 		inputs = [o[0] for o in outputs]
-		#parents = flatten([o[1] for o in outputs])
-		parents = []
-		[parents.extend(o[1]) for o in outputs]
+		parents = flatten([o[1] for o in outputs])
 		rankfile = functools.partial(get_rank_file, instruments, boundary_seg, n)
 
 		# FIXME we keep this here in case we someday want to have a
@@ -1034,9 +1058,7 @@ def rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, op
 		for outputs, diststats, bgbin_index in ((lloid_nodes[key], lloid_diststats[key], key) for key in sorted(lloid_nodes.keys())):
 			if outputs is not None:
 				inputs = [o[0] for o in outputs]
-				#parents = flatten([o[1] for o in outputs])
-				parents = []
-				[parents.extend(o[1]) for o in outputs]
+				parents = flatten([o[1] for o in outputs])
 				if margnodes:
 					parents.append(margnodes[bgbin_index])
 					likelihood_url = margnodes[bgbin_index].output_files["output"]
@@ -1385,33 +1407,17 @@ def summary_page_layer(dag, jobs, plotnodes, options, boundary_seg, injdbs):
 if __name__ == '__main__':
 	options, filenames = parse_command_line()
 
-	if options.bank_cache:
-		# FIXME Add feature for multiple bank caches to online pipeline so that
-		# this functionality can return to inspiral_pipe
-		bank_cache = {}
-		for bank_cache_str in options.bank_cache:
-			for c in bank_cache_str.split(','):
-				ifo = c.split("=")[0]
-				cache = c.replace(ifo+"=","")
-				bank_cache.setdefault(ifo, []).append(cache)
-		detectors = datasource.GWDataSourceInfo(options)
-		channel_dict = detectors.channel_dict
-		if bank_cache:
-			instruments = "".join(sorted(bank_cache.keys()))
-			instrument_set = bank_cache.keys()
-		boundary_seg = detectors.seg
-
-	elif options.svd_bank_cache:
+	if options.bank_cache or options.svd_bank_cache:
 		detectors = datasource.GWDataSourceInfo(options)
 		channel_dict = detectors.channel_dict
 		boundary_seg = detectors.seg
-
 	else:
 		with open(options.rank_pdf_cache) as f:
 			ce = CacheEntry(f.readline())
 		boundary_seg = ce.segment
 		instruments = ce.observatory
 
+	# output directories
 	output_dir = "plots"
 	try:
 		os.mkdir("logs")
@@ -1432,17 +1438,20 @@ if __name__ == '__main__':
 	set_up_scripts(options)
 
 	# Get mchirp boundaries of banks, maximum duration of templates, and analysis segments
-	if options.bank_cache:
-		max_time, template_mchirp_dict = get_bank_params(bank_cache, options)
-		segsdict = analysis_segments(set(bank_cache.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
+	if options.bank_cache or options.psd_cache:
+		if options.bank_cache:
+			template_mchirp_dict, bank_cache, max_time = get_bank_params(options)
+			instrument_set = bank_cache.keys()
+
+		elif options.psd_cache:
+			template_mchirp_dict, svd_nodes, max_time = inspiral_pipe.get_svd_bank_params(options.svd_bank_cache)
+			instrument_set = svd_nodes.keys()
+
+		segsdict = analysis_segments(set(instrument_set), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
+		instruments = "".join(sorted(instrument_set))
 
 	if options.psd_cache:
-		template_mchirp_dict, svd_nodes, max_time = inspiral_pipe.get_svd_bank_params(options.svd_bank_cache)
-
-		segsdict = analysis_segments(set(svd_nodes.keys()), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
-		instruments = "".join(sorted(svd_nodes.keys()))
-		instrument_set = svd_nodes.keys()
-
+		### reference psd jobs
 		psd_nodes, ref_psd_parent_nodes = inj_psd_layer(segsdict, options)
 
 	elif options.lloid_cache:
@@ -1453,12 +1462,6 @@ if __name__ == '__main__':
 		# Compute the PSDs for each segment
 		psd_nodes = ref_psd_layer(dag, jobs, [], segsdict, channel_dict, options)
 
-		# Make the reference PSD cache
-		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
-		with open('reference_psd.cache', "w") as output_cache_file:
-			for node in psd_nodes.values():
-				output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(node.output_files["write-psd"])))
-
 		# plot the horizon distance
 		horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir)
 
@@ -1468,12 +1471,8 @@ if __name__ == '__main__':
 		ref_psd_parent_nodes = [median_psd_node]
 
 	else:
-		ref_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
-
-		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
-		with open('reference_psd.cache', "w") as output_cache_file:
-			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
-
+		# load reference PSD
+		ref_psd = load_reference_psd(options)
 		ref_psd_parent_nodes = []
 
 	# Calculate Expected SNR jobs
@@ -1491,10 +1490,7 @@ if __name__ == '__main__':
 
 	if not options.lloid_cache:
 		# Inspiral jobs by segment
-		inspiral_nodes = inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
-
-		# NOTE: Adapt the output of the gstlal_inspiral jobs to be suitable for the remainder of this analysis
-		lloid_output, lloid_diststats = adapt_gstlal_inspiral_output(inspiral_nodes, options, segsdict)
+		inspiral_nodes, lloid_output, lloid_diststats = inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
 
 		# Setup likelihood jobs, clustering and/or merging
 		rankpdf_nodes, rankpdf_zerolag_nodes, outnodes = rank_and_merge_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file)
