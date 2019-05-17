@@ -63,59 +63,8 @@ from lal.utils import CacheEntry
 #	gstlal_llcbcsummary [URL="\ref gstlal_llcbcsummary"];
 #	gstlal_llcbcnode [URL="\ref gstlal_llcbcnode"];
 #	gstlal_inspiral_marginalize_likelihoods_online [URL="\ref gstlal_inspiral_marginalize_likelihoods_online"];
-#	lvalert_listen [style=filled, color=lightgrey, URL="https://www.lsc-group.phys.uwm.edu/daswg/docs/howto/lvalert-howto.html"];
 # }
 # @enddot
-
-class lvalert_listen_job(dagparts.DAGJob):
-	"""
-	A lvalert_listen_job
-	"""
-	def __init__(self, program, gracedb_service_url = "https://gracedb.ligo.org/api/", gracedb_group = "CBC", gracedb_search = "LowMass", gracedb_pipeline = "gstlal", progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), inj_progs = ("gstlal_inspiral_lvalert_psd_plotter", "gstlal_inspiral_followups_from_gracedb"), condor_commands = {}, inj_gracedb_group = "CBC", inj_gracedb_search = "LowMass", inj_gracedb_pipeline = "gstlal", inj_gracedb_service_url = "https://simdb.cgca.uwm.edu/api/", injections = False):
-		"""
-		"""
-		dagparts.DAGJob.__init__(self, program, universe = "local", condor_commands = condor_commands)
-
-		# produce the lvalert processor
-
-		f = open("lvalert.sh", "w")
-		f.write("#!/bin/bash \n")
-		f.write('cat <&0 | tee ')
-		for prog in progs:
-			f.write(">(%s --gracedb-service-url=%s) " % (dagparts.which(prog), gracedb_service_url))
-		f.close()
-		os.chmod('lvalert.sh', os.stat('lvalert.sh').st_mode | stat.S_IEXEC)
-
-		if injections:
-			f = open("lvalert_inj.sh", "w")
-			f.write("#!/bin/bash \n")
-			f.write('cat <&0 | tee ')
-			for prog in inj_progs:
-				f.write(">(%s --gracedb-service-url=%s) " % (dagparts.which(prog), inj_gracedb_service_url))
-			f.close()
-			os.chmod('lvalert_inj.sh', os.stat('lvalert_inj.sh').st_mode | stat.S_IEXEC)
-			
-		f = open("lvalert.ini", "w")
-		#FIXME gracedb server code sets up nodes based on this convention
-		f.write("[%s_%s_%s]\n" % (gracedb_group.lower(), gracedb_pipeline.lower(), gracedb_search.lower()))
-		f.write("executable=./lvalert.sh")
-		if injections:
-			f.write("\n[%s_%s_%s]\n" % (inj_gracedb_group.lower(), inj_gracedb_pipeline.lower(), inj_gracedb_search.lower()))
-			f.write("executable=./lvalert_inj.sh")
-		f.close()
-
-
-class lvalert_listen_node(pipeline.CondorDAGNode):
-	"""
-	lvalert_listen node
-	"""
-	def __init__(self, job, dag):
-		pipeline.CondorDAGNode.__init__(self,job)
-		self.add_var_opt("config-file", "lvalert.ini")
-		self.add_var_opt("resource", "%s:%s" % (socket.getfqdn(), os.getcwd()))
-		self.add_var_opt("dont-wait", "")
-		dag.add_node(self)
-
 
 class zookeeper_job(dagparts.DAGJob):
 	"""
@@ -222,6 +171,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
 	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "GraceDb service url, default https://gracedb.ligo.org/api/")
+	parser.add_option("--lvalert-server-url", default = "https://lvalert.cgca.uwm.edu", help = "lvalert server url, default https://lvalert.cgca.uwm.edu")
 	parser.add_option("--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
 	parser.add_option("--inj-gracedb-search", default = "LowMass", help = "gracedb type, default LowMass (for injection stream)")
 	parser.add_option("--inj-gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal (for injection stream)")
@@ -339,7 +289,7 @@ if inj_channel_dict:
 margJob = dagparts.DAGJob('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
 
 # an lvalert_listen job
-listenJob = lvalert_listen_job("lvalert_listen", gracedb_service_url = options.gracedb_service_url, gracedb_group = options.gracedb_group, gracedb_search = options.gracedb_search, gracedb_pipeline = options.gracedb_pipeline, progs = options.lvalert_listener_program, inj_progs = options.inj_lvalert_listener_program, condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command), inj_gracedb_service_url = options.inj_gracedb_service_url, inj_gracedb_group = options.inj_gracedb_group, inj_gracedb_search = options.inj_gracedb_search, inj_gracedb_pipeline = options.inj_gracedb_pipeline, injections = True if inj_channel_dict else False)
+listenJob = dagparts.DAGJob('gstlal_inspiral_lvalert_uberplotter', universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
 
 # Zookeeper and Kafka Jobs and Nodes which only get set if you specify the kafka server
 
@@ -367,7 +317,7 @@ if options.state_backup_destination:
 # Setup the Node classes
 #
 
-listenNode = lvalert_listen_node(listenJob, dag)
+listenNode = dagparts.DAGNode(listenJob, dag, [], opts = {"gracedb-service-url": options.gracedb_service_url, "lvalert-server-url": options.lvalert_server_url})
 
 # dq with default options
 for ifo in channel_dict:
