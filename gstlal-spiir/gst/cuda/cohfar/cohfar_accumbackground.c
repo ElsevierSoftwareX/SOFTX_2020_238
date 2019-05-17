@@ -106,18 +106,28 @@ static GstFlowReturn cohfar_accumbackground_chain (GstPad * pad, GstBuffer * inb
 static gboolean cohfar_accumbackground_sink_event (GstPad * pad, GstEvent * event);
 static void cohfar_accumbackground_dispose (GObject *object);
 
-static void update_stats_icombo_lr(PostcohInspiralTable *intable, int icombo, int this_nifo, int * this_write_map, TriggerStatsXML *cur_statsxml, TriggerStatsXML *margi_statsxml, float *sense_ratio)
+/* update lr in the current icombo, e.g. LV and also the last combo, e.g. HLV.
+ * all background in different detector combinations will be added into the last combo, e.g. HLV for FAR estimation
+ * The reason we don't split the background combos is that a particular combo may not have enough data points.
+ */
+static void update_stats_icombo_lr(PostcohInspiralTable *intable, int icombo, int last_combo, int this_nifo, int * this_write_map, TriggerStatsXML *cur_statsxml, TriggerStatsXML *margi_statsxml, float *sense_ratio)
 {
 	int isingle;
 	if (icombo > -1) {
+		/* update features: cohsnr and cmbchisq */
+		trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, cur_statsxml->multistats[last_combo]->feature, cur_statsxml->multistats[icombo]);
 		trigger_stats_feature_rate_update((double)(intable->cohsnr), (double)intable->cmbchisq, cur_statsxml->multistats[icombo]->feature, cur_statsxml->multistats[icombo]);
 
+	/* update features: single SNR and single chisq */
 	for (isingle=0; isingle< this_nifo; isingle++){
 		int write_isingle = this_write_map[isingle];
 		trigger_stats_feature_rate_update((double)(*(&(intable->snglsnr_H) + write_isingle)), (double)(*(&(intable->chisq_H) + write_isingle)), cur_statsxml->multistats[write_isingle]->feature, cur_statsxml->multistats[write_isingle]);
 	}
-	if (margi_statsxml->multistats[icombo]->feature_nevent > MIN_BACKGROUND_NEVENT) {
-		trigger_stats_rank_rate_update(intable, cur_statsxml->multistats[icombo], margi_statsxml, icombo, sense_ratio);
+	/* update rank: in last_combo and icombo */
+	if (margi_statsxml->multistats[last_combo]->feature_nevent > MIN_BACKGROUND_NEVENT) {
+		int ibin = get_rank_idx(intable, margi_statsxml, last_combo, sense_ratio);
+		trigger_stats_rank_rate_update(ibin, cur_statsxml->multistats[last_combo]);
+		trigger_stats_rank_rate_update(ibin, cur_statsxml->multistats[icombo]);
 		GST_DEBUG("updated rate of ranking statistic: likelihood");
 
 	}
@@ -228,11 +238,11 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		if (intable->is_background == FLAG_BACKGROUND) {
 			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
 			GST_DEBUG_OBJECT(element, "updating lr for background");
-			update_stats_icombo_lr(intable, element->ncombo-1, element->this_nifo, element->this_write_map, bgstats, element->margi_stats, element->sense_ratio); //update the last icombo and single IFO stats, update the last bin of lr
+			update_stats_icombo_lr(intable, icombo, element->ncombo-1, element->this_nifo, element->this_write_map, bgstats, element->margi_stats, element->sense_ratio); //update the last icombo and single IFO stats, update the last bin of lr
 		} else if (intable->is_background == FLAG_FOREGROUND){ /* coherent trigger entry */
 			GST_DEBUG_OBJECT(element, "updating lr for zerolag");
 			// update the icombo stats, update_stats_icombo(intable, icombo, bgstats);
-			update_stats_icombo_lr(intable, element->ncombo-1, element->this_nifo, element->this_write_map, zlstats, element->margi_stats, element->sense_ratio); //update the last icombo and single IFO stats, update the last bin of lr
+			update_stats_icombo_lr(intable, icombo, element->ncombo-1, element->this_nifo, element->this_write_map, zlstats, element->margi_stats, element->sense_ratio); //update the last icombo and single IFO stats, update the last bin of lr
 			memcpy(outtable, intable, sizeof(PostcohInspiralTable));
 			outtable++;
 		} else {
@@ -244,11 +254,15 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 					trigger_stats_feature_livetime_inc(zlstats->multistats, write_isingle);
 				}
 				trigger_stats_feature_livetime_inc(bgstats->multistats, element->ncombo-1);
+				trigger_stats_feature_livetime_inc(bgstats->multistats, icombo);
 				trigger_stats_feature_livetime_inc(zlstats->multistats, element->ncombo-1);
+				trigger_stats_feature_livetime_inc(zlstats->multistats, icombo);
 
 				if (element->margi_stats->multistats[element->ncombo-1]->feature_nevent > MIN_BACKGROUND_NEVENT) {
 					trigger_stats_rank_livetime_inc(bgstats->multistats, element->ncombo-1);
+					trigger_stats_rank_livetime_inc(bgstats->multistats, icombo);
 					trigger_stats_rank_livetime_inc(zlstats->multistats, element->ncombo-1);
+					trigger_stats_rank_livetime_inc(zlstats->multistats, icombo);
 				}
 
 			}
@@ -257,13 +271,6 @@ static GstFlowReturn cohfar_accumbackground_chain(GstPad *pad, GstBuffer *inbuf)
 		}
 	
 	}
-	/*
-	 * calculate immediate PDF using stats_prompt from stats_list
-	 */
-
-	/*
-	 * shuffle one step down in stats_list 
-	 */
 
 	/* snapshot background xml file when reaching the snapshot point*/
 	GstClockTime t_cur = GST_BUFFER_TIMESTAMP(inbuf);

@@ -79,10 +79,10 @@ void
 trigger_stats_xml_destroy(TriggerStatsXML * stats);
 
 float
-gen_fap_from_feature(double snr, double chisq, TriggerStats *stats);
+get_fap_from_feature(double snr, double chisq, TriggerStats *stats);
 
 double
-gen_cdf_from_feature(double snr, double chisq, TriggerStats *stats);
+get_cdf_from_feature(double snr, double chisq, TriggerStats *stats);
 
 double
 get_prob_noise (double cohsnr, double cmbchisq, TriggerStats *margi_stats);

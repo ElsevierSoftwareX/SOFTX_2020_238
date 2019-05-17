@@ -66,6 +66,7 @@ typedef struct {
 	Bins1D	*rank_fap;
 	Bins1D	*rank_rate;
 	Bins2D	*rank_map; // map of the lgsnr-lgchisq value to rank value
+	double mean_rankmap;
 } RankingStats;
 
 

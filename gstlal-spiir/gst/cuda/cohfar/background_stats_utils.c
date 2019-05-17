@@ -470,12 +470,16 @@ double
 get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml)
 {
 	double lgp_noise = 0;
+	int missing_ifo = -1;
+	double step_x = margi_statsxml->multistats[H_INDEX]->rank->rank_map->step_x, step_y = margi_statsxml->multistats[H_INDEX]->rank->rank_map->step_y;
+	double binsz = step_x * step_y;
+
 	if ((icombo == 6 || icombo == 3 || icombo == 4)) { // H1L1, H1V1 or H1L1V1
 		FeatureStats *feature = margi_statsxml->multistats[H_INDEX]->feature;	
 		int snr_idx = bins1D_get_idx(intable->snglsnr_H, feature->lgsnr_rate);
 		int chisq_idx = bins1D_get_idx(intable->chisq_H, feature->lgchisq_rate);
 		gsl_matrix *rankval_mat = margi_statsxml->multistats[H_INDEX]->rank->rank_map->data;
-		lgp_noise += log10(gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
+		lgp_noise += log10(binsz * gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
 	}
 
 	if ((icombo == 6 || icombo == 3 || icombo == 5)) { // H1L1, L1V1 or H1L1V1
@@ -483,7 +487,7 @@ get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *
 		int snr_idx = bins1D_get_idx(intable->snglsnr_L, feature->lgsnr_rate);
 		int chisq_idx = bins1D_get_idx(intable->chisq_L, feature->lgchisq_rate);
 		gsl_matrix *rankval_mat = margi_statsxml->multistats[L_INDEX]->rank->rank_map->data;
-		lgp_noise += log10(gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
+		lgp_noise += log10(binsz * gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
 	}
 
 
@@ -492,8 +496,23 @@ get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *
 		int snr_idx = bins1D_get_idx(intable->snglsnr_V, feature->lgsnr_rate);
 		int chisq_idx = bins1D_get_idx(intable->chisq_V, feature->lgchisq_rate);
 		gsl_matrix *rankval_mat = margi_statsxml->multistats[V_INDEX]->rank->rank_map->data;
-		lgp_noise += log10(gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
+		lgp_noise += log10(binsz * gsl_matrix_get(rankval_mat, snr_idx, chisq_idx));
 	}
+
+	// to normalize different combinations of detectors
+	// add the mean values of rank_maps of the non-participating IFOS
+	if (icombo == 3) // H1L1
+		missing_ifo = V_INDEX;
+
+	if (icombo == 4) // H1V1
+		missing_ifo = L_INDEX;
+
+	if (icombo == 5) // L1V1
+		missing_ifo = H_INDEX;
+
+	if (missing_ifo > -1)
+		lgp_noise += log10(binsz * margi_statsxml->multistats[missing_ifo]->rank->mean_rankmap);
+
 	return lgp_noise;
 }
 
@@ -516,14 +535,16 @@ get_prob_null(PostcohInspiralTable *intable)
 	if (dof > 0)
 		return log10(gsl_ran_chisq_pdf(intable->nullsnr * (intable->nullsnr), dof));
 	else
-		return 0;
+		// to normalize different combinations of detectors
+		// add mean nullsnr^2 for 3det LHV is 0.7, chisq pdf of 0.7 and dof 2 = 0.35 and log10(0.35) = -0.45
+		return -0.45; 
 }
 
 double
 get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 {
 	double lgp_snr = 0;
-	float this_mean, this_snr, mismatch = 0.5;
+	float this_mean, this_snr, mismatch = 1;
 	if (g_strcmp0(intable->pivotal_ifo, "H1") == 0) {
 		this_snr = intable->snglsnr_H;
 		if (icombo == 6 || icombo == 3) { // H1L1 or H1L1V1
@@ -561,7 +582,9 @@ get_prob_snrs(int icombo, PostcohInspiralTable *intable, float *sense_ratio)
 	}
 
 	if (icombo < 6)
-		return lgp_snr - 0.399; // If less than 3-ifos, assuming the ghost third SNR is right at the expected value. +log10(gaussian.pdf(0, 1))
+		// to normalize different combinations of detectors, e.g. 2det to 3det,
+		// assuming the ghost third SNR is right at the mean value. +log10(gaussian.pdf(0, 1))
+		return lgp_snr - 0.399; 
 	else
 		return lgp_snr;
 
@@ -576,7 +599,7 @@ calc_lr(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, float *s
 	double lgp_signal = 0;
 	lgp_signal += get_prob_snrs(icombo, intable, sense_ratio);
 	lgp_signal += get_prob_null(intable);
-	//	printf("background %d, end time %d, ifos %s, cohsnr %f, cmbchisq %f, nullsnr %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f, lgp_noise %f, lgp_signal %f, lgp_null %f\n", intable->is_background, intable->end_time.gpsSeconds, intable->ifos, intable->cohsnr, intable->cmbchisq, intable->nullsnr, intable->snglsnr_L, intable->snglsnr_H, intable->snglsnr_V, intable->chisq_L, intable->chisq_H, intable->chisq_V, lgp_noise, get_prob_snrs(icombo, intable, sense_ratio), get_prob_null(intable));
+	//printf("background %d, end time %d, ifos %s, cohsnr %f, cmbchisq %f, nullsnr %f, snr_l %f, snr_h %f, snr_v %f, chisq_l %f, chisq_h %f chisq_v %f, lgp_noise %f, lgp_signal %f, lgp_null %f\n", intable->is_background, intable->end_time.gpsSeconds, intable->ifos, intable->cohsnr, intable->cmbchisq, intable->nullsnr, intable->snglsnr_L, intable->snglsnr_H, intable->snglsnr_V, intable->chisq_L, intable->chisq_H, intable->chisq_V, lgp_noise, get_prob_snrs(icombo, intable, sense_ratio), get_prob_null(intable));
 	return lgp_signal-lgp_noise;
 }
 
@@ -593,10 +616,9 @@ get_rank_idx(PostcohInspiralTable *intable, TriggerStatsXML *margi_statsxml, int
 }
 
 void
-trigger_stats_rank_rate_update(PostcohInspiralTable *intable, TriggerStats *cur_stats, TriggerStatsXML *margi_statsxml, int icombo, float *sense_ratio)
+trigger_stats_rank_rate_update(int ibin, TriggerStats *cur_stats)
 {
 
-	int ibin = get_rank_idx(intable, margi_statsxml, icombo, sense_ratio);
 	/* update rank rate */
 	gsl_vector_long *rratedata = cur_stats->rank->rank_rate->data;
 	gsl_vector_long_set(rratedata, ibin, gsl_vector_long_get(rratedata, ibin) + 1);
@@ -1060,10 +1082,21 @@ trigger_stats_feature_to_cdf(FeatureStats *feature, RankingStats *rank)
 //	}
 	// normalize cdf
 	double step_x = cdf->step_x, step_y = cdf->step_y;
-	double pdf_sum;
+	double pdf_sum, binsz = step_x * step_y;
 	pdf_sum = step_x * step_y * gsl_matrix_sum(cdfdata);
 	gsl_matrix_scale(cdfdata, 1/pdf_sum);
 	//printf("pdf sum %f\n", gsl_matrix_sum(result) * step_x * step_y);
+	
+	// calculate the mean of cdf
+	tmp = 0;
+	for (ibin_x=nbin_x-1; ibin_x>=0; ibin_x--) {
+		for (ibin_y=0; ibin_y<=nbin_y-1; ibin_y++) {
+			cur_cdf = gsl_matrix_get(cdfdata, ibin_x, ibin_y);
+			tmp += binsz * gsl_matrix_get(fpdfdata, ibin_x, ibin_y) * cur_cdf;
+		}
+	}
+	rank->mean_rankmap = tmp;
+	
 }
 	
 /* convert collected rate into rank rate */
@@ -1239,7 +1272,7 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
     return FALSE;
   }
 
-  int nelem = 12; // 4 for feature, 4 for rank, 4 for nevent,livetime
+  int nelem = 13; // 4 for feature, 4 for rank, 5 for feature and rank nevent, feature and rank livetime, feature mean of rankmap
   int ncombo = stats->ncombo;
   int nnode = ncombo * nelem + 1, icombo; // 1 for hist_trials
   /* read rate */
@@ -1251,6 +1284,7 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
   XmlArray *array_lgsnr_lgchisq_pdf = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlArray *array_rank_map = (XmlArray *) malloc(sizeof(XmlArray) * ncombo);
   XmlParam *param_feature_nevent = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
+  XmlParam *param_mean_rankmap = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
   XmlParam *param_rank_nevent = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
   XmlParam *param_feature_livetime = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
   XmlParam *param_rank_livetime = (XmlParam *) malloc(sizeof(XmlParam) * ncombo);
@@ -1289,6 +1323,11 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
 	sprintf((char *)xns[pos_xns].tag, "%s:%s_nevent:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
 	xns[pos_xns].processPtr = readParam;
 	xns[pos_xns].data = &(param_feature_nevent[icombo]);
+
+	pos_xns += ncombo;
+	sprintf((char *)xns[pos_xns].tag, "%s:%s_mean_rankmap:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
+	xns[pos_xns].processPtr = readParam;
+	xns[pos_xns].data = &(param_mean_rankmap[icombo]);
 
 	pos_xns += ncombo;
 	sprintf((char *)xns[pos_xns].tag, "%s:%s_nevent:param",  stats->rank_xmlname->str, IFOComboMap[icombo].name);
@@ -1361,6 +1400,7 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
 	memcpy(((gsl_vector *)rank->rank_pdf->data)->data, (long *)array_rank_pdf[icombo].data, y_size);
 	memcpy(((gsl_vector *)rank->rank_fap->data)->data, (long *)array_rank_fap[icombo].data, y_size);
 	cur_stats->feature_nevent = *((long *)param_feature_nevent[icombo].data);
+	cur_stats->rank->mean_rankmap = *((double *)param_mean_rankmap[icombo].data);
 	cur_stats->rank_nevent = *((long *)param_rank_nevent[icombo].data);
 	cur_stats->feature_livetime = *((long *)param_feature_livetime[icombo].data);
 	cur_stats->rank_livetime = *((long *)param_rank_livetime[icombo].data);
@@ -1389,6 +1429,7 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
 	free(array_lgsnr_lgchisq_rate[icombo].data);
 	free(array_lgsnr_lgchisq_pdf[icombo].data);
 	free(param_feature_nevent[icombo].data);
+	free(param_mean_rankmap[icombo].data);
 	free(param_rank_nevent[icombo].data);
 	free(param_feature_livetime[icombo].data);
 	free(param_rank_livetime[icombo].data);
@@ -1402,6 +1443,7 @@ trigger_stats_xml_from_xml(TriggerStatsXML *stats, int *hist_trials, const char 
   free(array_lgsnr_lgchisq_rate);
   free(array_lgsnr_lgchisq_pdf);
   free(param_feature_nevent);
+  free(param_mean_rankmap);
   free(param_rank_nevent);
   free(param_feature_livetime);
   free(param_rank_livetime);
@@ -1572,7 +1614,7 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
 	array_rank_pdf[icombo].dim[0] = nbin_x;
 	array_rank_pdf[icombo].data = (double *) malloc(x_size);
 	memcpy(array_rank_pdf[icombo].data, ((gsl_vector *)rank->rank_pdf->data)->data, x_size);
-	// assemble rank_fap_
+	// assemble rank_fap
 	array_rank_fap[icombo].ndim = 1;
 	array_rank_fap[icombo].dim[0] = nbin_x;
 	array_rank_fap[icombo].data = (double *) malloc(x_size);
@@ -1608,6 +1650,9 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
   freeTable(rank_range_table);
   free(rank_range_table);
   /* end of memory free of the XmlTable */
+
+  XmlParam param_mean_rankmap;
+  param_mean_rankmap.data = (double *) malloc (sizeof(double));
 
   XmlParam param_feature_nevent;
   param_feature_nevent.data = (long *) malloc (sizeof(long));
@@ -1645,6 +1690,7 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
 	g_string_printf(array_name, "%s:%s_%s:array",  stats->rank_xmlname->str, IFOComboMap[icombo].name, RANK_FAP_SUFFIX);
 	ligoxml_write_Array(writer, &(array_rank_fap[icombo]), BAD_CAST "real_8", BAD_CAST " ", BAD_CAST array_name->str);
 
+	// write nevent
 	g_string_printf(param_name, "%s:%s_nevent:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
 	((long *)param_feature_nevent.data)[0] = multistats[icombo]->feature_nevent;
 	ligoxml_write_Param(writer, &param_feature_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
@@ -1652,6 +1698,12 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
 	((long *)param_rank_nevent.data)[0] = multistats[icombo]->rank_nevent;
 	ligoxml_write_Param(writer, &param_rank_nevent, BAD_CAST "int_8s", BAD_CAST param_name->str);
 
+	// write mean of rank_map
+	g_string_printf(param_name, "%s:%s_mean_rankmap:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
+	((long *)param_mean_rankmap.data)[0] = multistats[icombo]->rank->mean_rankmap;
+	ligoxml_write_Param(writer, &param_mean_rankmap, BAD_CAST "real_8", BAD_CAST param_name->str);
+
+	// write livetime
 	g_string_printf(param_name, "%s:%s_livetime:param",  stats->feature_xmlname->str, IFOComboMap[icombo].name);
 	((long *)param_feature_livetime.data)[0] = multistats[icombo]->feature_livetime;
 	ligoxml_write_Param(writer, &param_feature_livetime, BAD_CAST "int_8s", BAD_CAST param_name->str);
@@ -1687,6 +1739,7 @@ trigger_stats_xml_dump(TriggerStatsXML *stats, int hist_trials, const char *file
    * free all alocated memory
    */
   free(param_feature_nevent.data);
+  free(param_mean_rankmap.data);
   free(param_rank_nevent.data);
   free(param_feature_livetime.data);
   free(param_rank_livetime.data);
@@ -1790,7 +1843,7 @@ trigger_stats_pdf_from_data(gsl_vector *data_dim1, gsl_vector *data_dim2, Bins1D
 }
 
 double
-gen_cdf_from_feature(double snr, double chisq, TriggerStats *stats)
+get_cdf_from_feature(double snr, double chisq, TriggerStats *stats)
 {
 	RankingStats *rank = stats->rank;
 	double step_x = rank->rank_map->step_x, step_y = rank->rank_map->step_y;
@@ -1803,7 +1856,7 @@ gen_cdf_from_feature(double snr, double chisq, TriggerStats *stats)
 
 
 float
-gen_fap_from_feature(double snr, double chisq, TriggerStats *stats)
+get_fap_from_feature(double snr, double chisq, TriggerStats *stats)
 {
 	RankingStats *rank = stats->rank;
 	if (fabs(snr) < EPSILON || fabs(chisq) < EPSILON)

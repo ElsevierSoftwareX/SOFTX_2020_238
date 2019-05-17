@@ -54,13 +54,13 @@ int get_ifo_idx(char *ifo);
 #define LOGSNR_CMIN	0.54 // center of the first bin
 #define LOGSNR_CMAX	3.0 // center of the last bin
 #define LOGSNR_NBIN	300 // step is 0.01
-#define LOGCHISQ_CMIN	-0.4
+#define LOGCHISQ_CMIN	-0.15 // equals 0.7
 #define LOGCHISQ_CMAX	3.5
 #define LOGCHISQ_NBIN	300
 
-#define LOGRANK_CMIN	-10 // 10^-1, minimum cdf, extrapolating if less than this min
-#define LOGRANK_CMAX	20 //
-#define	LOGRANK_NBIN	300 // FIXME: enough for accuracy
+#define LOGRANK_CMIN	2 // 10^0, minimum cdf, extrapolating if less than this min
+#define LOGRANK_CMAX	32 //
+#define	LOGRANK_NBIN	300 // FIXME: enough for accuracy ?
 
 /* array names in xml files */
 #define	BACKGROUND_XML_FEATURE_NAME		"background_feature"

@@ -1,18 +1,18 @@
 # need to be consistent with pipe_macro.h
-# cohsnr
+# log10_cohsnr
 xmin = 0.54
 xmax = 3.0
 xstep = 0.0082
 xbin = 300
-# chisq
-ymin = -0.4
+# log10_chisq
+ymin = -0.15
 ymax = 3.5
-ystep = 0.013
+ystep = 0.0122
 ybin = 300
 
 # rank
-rankmin = -10
-rankmax = 20
+rankmin = 2
+rankmax = 32
 rankstep = 0.1 # 30/299
 rankbin = 300
 

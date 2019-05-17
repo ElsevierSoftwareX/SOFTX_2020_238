@@ -181,14 +181,15 @@ static int process_stats_full(gchar ** in_fnames, int nifo, gchar **pifos, gchar
 	cohfar_get_stats_from_file(in_fnames, bgstats_in, bgstats_out, &hist_trials);
 	if (*update_pdf == 1) {
 		for (icombo=0; icombo<ncombo; icombo++) {
+			// signal
 			trigger_stats_feature_rate_to_pdf_hist(sgstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_cdf(sgstats_out->multistats[icombo]->feature, sgstats_out->multistats[icombo]->rank);
 			trigger_stats_rank_to_fap(sgstats_out->multistats[icombo]->rank);
-	
+			// zerolag
 			trigger_stats_feature_rate_to_pdf_hist(zlstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_cdf(zlstats_out->multistats[icombo]->feature, zlstats_out->multistats[icombo]->rank);
 			trigger_stats_rank_to_fap(zlstats_out->multistats[icombo]->rank);
-	
+			// background
 			trigger_stats_feature_rate_to_pdf_hist(bgstats_out->multistats[icombo]->feature);
 			trigger_stats_feature_to_cdf(bgstats_out->multistats[icombo]->feature, bgstats_out->multistats[icombo]->rank);
 			trigger_stats_rank_to_fap(bgstats_out->multistats[icombo]->rank);
