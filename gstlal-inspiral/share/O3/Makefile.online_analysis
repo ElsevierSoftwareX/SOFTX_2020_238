@@ -1,53 +1,61 @@
 ACCOUNTING_GROUP=ligo.dev.o3.cbc.em.gstlalonline
-ACCOUNTING_USER=cody.messick
+ACCOUNTING_USER=patrick.godwin
+CONDOR_INSPIRAL_ALLOCATION=Online_CBC_gstlal_Skylake_inspiral
+CONDOR_OTHER_ALLOCATION=Online_CBC_gstlal_Skylake_other
 
 # bank settings
-H1_BANK_CACHE = ../svd/replay/hyper/H1_bank.cache
-L1_BANK_CACHE = ../svd/replay/hyper/L1_bank.cache
-V1_BANK_CACHE = ../svd/replay/hyper/V1_bank.cache
-BANK = ../bank/hyper/gstlal_hyperbank.xml.gz
+H1_BANK_CACHE = /home/gstlalcbc/observing/3/online/svd/psd1April2019/H1_bank.cache
+L1_BANK_CACHE = /home/gstlalcbc/observing/3/online/svd/psd1April2019/L1_bank.cache
+V1_BANK_CACHE = /home/gstlalcbc/observing/3/online/svd/psd1April2019/V1_bank.cache
+BANK = /home/gstlalcbc/observing/3/online/bank/hyper/gstlal_hyperbank.xml.gz
 
 # FIXME FIXME don't hardcode the H1 bank cache here
-RANKING_STATS := $(shell for n in $$(seq -f '%04.f' $$(wc -l ../svd/replay/hyper/H1_bank.cache | awk '{print $$1}')); do echo "$${n}_rankingstat.xml.gz"; done)
+RANKING_STATS := $(shell for n in $$(seq -f '%04.f' $$(wc -l /home/gstlalcbc/observing/3/online/svd/H1_bank.cache | awk '{print $$1}')); do echo "$${n}_rankingstat.xml.gz"; done)
 
-WEBDIR=$(HOME)/public_html/replay/last_2_wks_o2/hyper/
-GSTLALSHAREDIR=/home/gstlalcbc/engineering/14/code/master_icc_190212/git/gstlal/gstlal-inspiral/share
+# web settings
+ANALYSIS_TAG = o3
+WEBAPP_NAME=inspiral_$(ANALYSIS_TAG)
+GSTLALSHAREDIR=$(LAL_PATH)/../git/gstlal/gstlal-inspiral/share
 
 GSTLAL_FIR_WHITEN=0
 
 # kafka settings
-KAFKA_HOSTNAME=10.14.0.112
+KAFKA_HOSTNAME=cbc.ldas.cit:9182
 
 # aggregator settings
 DATA_BACKEND=influx
-#DATA_BACKEND=hdf5
 
-INFLUX_HOSTNAME=10.9.0.112
+INFLUX_HOSTNAME=10.14.0.100
 INFLUX_PORT=8086
-INFLUX_DATABASE_NAME=gstlal_inspiral
+INFLUX_DATABASE_NAME=gstlal_inspiral_$(ANALYSIS_TAG)
+
+# gracedb info
+GRACEDB=playground
+
+ifeq ($(GRACEDB),production)
+	GRACEDB_SERVICE_URL:=https://gracedb.ligo.org/api/
+	LVALERT_SERVER_URL:=lvalert.cgca.uwm.edu
+else
+	GRACEDB_SERVICE_URL:=https://gracedb-playground.ligo.org/api/
+	LVALERT_SERVER_URL:=lvalert-playground.cgca.uwm.edu
+endif
 
 # data settings
-H1CHANNEL=GDS-CALIB_STRAIN_O2Replay
-L1CHANNEL=GDS-CALIB_STRAIN_O2Replay
-V1CHANNEL=Hrec_hoft_16384Hz_O2Replay
+H1CHANNEL=GDS-CALIB_STRAIN
+L1CHANNEL=GDS-CALIB_STRAIN
+V1CHANNEL=Hrec_hoft_16384Hz
 
 H1STATECHANNEL=GDS-CALIB_STATE_VECTOR
 L1STATECHANNEL=GDS-CALIB_STATE_VECTOR
-V1STATECHANNEL=Hrec_STATE_VECTOR
-#H1INJSTATECHANNEL=GDS-CALIB_STATE_VECTOR
-#L1INJSTATECHANNEL=GDS-CALIB_STATE_VECTOR
-#V1INJSTATECHANNEL=Hrec_STATE_VECTOR
+V1STATECHANNEL=DQ_ANALYSIS_STATE_VECTOR
 
 H1DQCHANNEL=DMT-DQ_VECTOR
 L1DQCHANNEL=DMT-DQ_VECTOR
 V1DQCHANNEL=DQ_ANALYSIS_STATE_VECTOR
-#H1INJDQCHANNEL=DMT-DQ_VECTOR
-#L1INJDQCHANNEL=DMT-DQ_VECTOR
-#V1INJDQCHANNEL=DQ_ANALYSIS_STATE_VECTOR
 
-H1SHM=R1LHO_Data
-L1SHM=R1LLO_Data
-V1SHM=R1VIRGO_Data
+H1SHM=X1LHO_Data
+L1SHM=X1LLO_Data
+V1SHM=X1VIRGO_Data
 
 # FIXME currently bit 0 is not required due to an issue with misreported calib stat
 # set bits 1,5,6,7,8 for non-injections jobs (adds up to dec 482)
@@ -82,9 +90,9 @@ H1play :
 		--dq-channel-name=H1=$(H1DQCHANNEL) \
 		--state-channel-name=H1=$(H1STATECHANNEL) \
 		--shared-memory-partition=H1=$(H1SHM) \
-		--state-vector-on-bits=H1=482 \
+		--state-vector-on-bits=H1=3 \
 		--state-vector-off-bits=H1=0 \
-		--dq-vector-on-bits=H1=7 \
+		--dq-vector-on-bits=H1=0 \
 		--dq-vector-off-bits=H1=0 \
 		--data-source lvshm \
 		--output /dev/stderr \
@@ -97,9 +105,9 @@ L1play :
 		--dq-channel-name=L1=$(L1DQCHANNEL) \
 		--state-channel-name=L1=$(L1STATECHANNEL) \
 		--shared-memory-partition=L1=$(L1SHM) \
-		--state-vector-on-bits=L1=482 \
+		--state-vector-on-bits=L1=3 \
 		--state-vector-off-bits=L1=0 \
-		--dq-vector-on-bits=L1=7 \
+		--dq-vector-on-bits=L1=0 \
 		--dq-vector-off-bits=L1=0 \
 		--data-source lvshm \
 		--output /dev/stderr \
@@ -111,7 +119,7 @@ V1play :
 		--dq-channel-name=V1=$(V1DQCHANNEL) \
 		--state-channel-name=V1=$(V1STATECHANNEL) \
 		--shared-memory-partition=V1=$(V1SHM) \
-		--state-vector-on-bits=V1=4095 \
+		--state-vector-on-bits=V1=2 \
 		--state-vector-off-bits=V1=0 \
 		--dq-vector-on-bits=V1=0 \
 		--dq-vector-off-bits=V1=0 \
@@ -123,7 +131,6 @@ tisi.xml :
 	lalapps_gen_timeslides --instrument=H1=0:0:0 --instrument=L1=0:0:0 --instrument=V1=0:0:0 $@
 
 dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cache zerolag_rankingstat_pdf.cache online-web-deploy
-	# FIXME disable virgo for now!!!
 	gstlal_ll_inspiral_pipe \
 		--bank-cache H1=$(H1_BANK_CACHE),L1=$(L1_BANK_CACHE),V1=$(V1_BANK_CACHE) \
 		--max-jobs 1000 \
@@ -142,14 +149,14 @@ dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cac
 		--shared-memory-partition=L1=$(L1SHM) \
 		--shared-memory-partition=V1=$(V1SHM) \
 		--framexmit-iface=10.14.0.1 \
-		--state-vector-on-bits=H1=482 \
-		--state-vector-on-bits=L1=482 \
-		--state-vector-on-bits=V1=4095 \
+		--state-vector-on-bits=H1=3 \
+		--state-vector-on-bits=L1=3 \
+		--state-vector-on-bits=V1=2 \
 		--state-vector-off-bits=H1=0 \
 		--state-vector-off-bits=L1=0 \
 		--state-vector-off-bits=V1=0 \
-		--dq-vector-on-bits=H1=7 \
-		--dq-vector-on-bits=L1=7 \
+		--dq-vector-on-bits=H1=0 \
+		--dq-vector-on-bits=L1=0 \
 		--dq-vector-on-bits=V1=0 \
 		--dq-vector-off-bits=H1=0 \
 		--dq-vector-off-bits=L1=0 \
@@ -160,34 +167,32 @@ dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cac
 		--marginalized-likelihood-file rankingstat_pdf.xml.gz \
 		--gracedb-group CBC \
 		--gracedb-search AllSky \
-		--gracedb-service-url https://gracedb-playground.ligo.org/api/ \
+		--gracedb-service-url $(GRACEDB_SERVICE_URL) \
+		--lvalert-server-url $(LVALERT_SERVER_URL) \
 		--ht-gate-threshold 50 \
 		--data-source lvshm \
 		--shared-memory-assumed-duration 1 \
 		--likelihood-snapshot-interval 14400 \
-		--lvalert-listener-program gstlal_inspiral_lvalert_background_plotter \
-		--lvalert-listener-program gstlal_inspiral_lvalert_psd_plotter \
-		--inspiral-condor-command '+Online_CBC_gstlal_Skylake_inspiral=True' \
-		--inspiral-condor-command 'Requirements=(TARGET.Online_CBC_gstlal_Skylake_inspiral=?=True)' \
+		--inspiral-condor-command '+$(CONDOR_INSPIRAL_ALLOCATION)=True' \
+		--inspiral-condor-command 'Requirements=(TARGET.$(CONDOR_NODE_ALLOCATION)=?=True)' \
 		--inspiral-condor-command 'accounting_group = $(ACCOUNTING_GROUP)' \
 		--inspiral-condor-command 'accounting_group_user = $(ACCOUNTING_USER)' \
 		--inspiral-condor-command 'request_cpus = 2' \
 		--inspiral-condor-command 'request_memory = 7000' \
-		--non-inspiral-condor-command '+Online_CBC_gstlal_Skylake_other=True' \
-		--non-inspiral-condor-command 'Requirements=(TARGET.Online_CBC_gstlal_Skylake_other=?=True)' \
+		--non-inspiral-condor-command '+$(CONDOR_OTHER_ALLOCATION)=True' \
+		--non-inspiral-condor-command 'Requirements=(TARGET.$(CONDOR_OTHER_ALLOCATION)=?=True)' \
 		--non-inspiral-condor-command 'accounting_group = $(ACCOUNTING_GROUP)' \
 		--non-inspiral-condor-command 'accounting_group_user = $(ACCOUNTING_USER)' \
 		--non-inspiral-condor-command 'request_cpus = 2' \
 		--non-inspiral-condor-command 'request_memory = 7000' \
 		--local-condor-command 'accounting_group = $(ACCOUNTING_GROUP)' \
 		--local-condor-command 'accounting_group_user = $(ACCOUNTING_USER)' \
-		--web-dir $(WEBDIR) \
 		--min-instruments 1 \
-		--state-backup-destination gstlalcbc@pcdev3.phys.uwm.edu:/home/gstlalcbc/observing/3/uber_state_backup \
 		--time-slide-file tisi.xml \
-		--gracedb-far-threshold -1 \
-		--output-kafka-server $(KAFKA_HOSTNAME):9093 \
-		--zookeeper-port 2183 \
+		--gracedb-far-threshold 2.78e-4 \
+		--analysis-tag $(ANALYSIS_TAG) \
+		--output-kafka-server $(KAFKA_HOSTNAME)\
+		--zookeeper-port 2271 \
 		--agg-data-backend $(DATA_BACKEND) \
 		--influx-hostname $(INFLUX_HOSTNAME) \
 		--influx-port $(INFLUX_PORT) \
@@ -196,13 +201,11 @@ dag : plots ll_simplify_and_cluster.sql ll_simplify.sql tisi.xml rankingstat.cac
 	#python ~/trim_online_dag.py trigger_pipe.dag
 	#python ~/noretries.py trigger_pipe.dag
 
-	# submit: condor_submit_dag trigger_pipe.dag
-
 online-web-deploy : inspiral.yml
-	scald deploy -c inspiral.yml -o ~/public_html
+	scald deploy -c inspiral.yml -o ~/public_html -n $(WEBAPP_NAME) --add-egg-cache
 
 inspiral.yml:
-	ln -s $(GSTLALSHAREDIR)/O3/$@ .
+	cp $(GSTLALSHAREDIR)/O3/$@ .
 
 ll_simplify.sql :
 	ln -s $(GSTLALSHAREDIR)/$@ .
@@ -212,7 +215,6 @@ ll_simplify_and_cluster.sql :
 
 plots:
 	mkdir plots
-	mkdir -p $(WEBDIR)
 
 set-min-instruments:
 	gstlal_ll_inspiral_gracedb_min_instruments --min-instruments 2  0*registry.txt
@@ -222,8 +224,9 @@ set-min-instruments-2:
 
 set-far-thresh :
 	gstlal_ll_inspiral_gracedb_threshold \
-		--gracedb-far-threshold 1e-4 \
+		--gracedb-far-threshold 3e-4 \
 		0*registry.txt
+
 get-far-thresh :
 	gstlal_ll_inspiral_gracedb_threshold \
 		0*registry.txt
@@ -252,18 +255,15 @@ gstlal_mass_model.h5 : $(BANK)
 		--instrument V1 \
 		--min-instruments 1 \
 		--coincidence-threshold 0.005 \
-		--svd-file $(shell sed "$*q;d" ../svd/replay/hyper/H1_bank.cache | awk '{ print $$5 }' | sed 's@file://localhost@@g') \
+		--svd-file $(shell sed "$*q;d" /home/gstlalcbc/observing/3/online/svd/H1_bank.cache | awk '{ print $$5 }' | sed 's@file://localhost@@g') \
 		--write-likelihood $@ \
 		--mass-model-file $<
 
 rankingstat.cache zerolag_rankingstat_pdf.cache : $(RANKING_STATS)
-	-rm -vf $@
+	#echo "No-op"
+	#-rm -vf $@
 	ls $(RANKING_STATS) | lalapps_path2cache -a > rankingstat.cache
 	sed 's@rankingstat@zerolag_rankingstat@g' rankingstat.cache > zerolag_rankingstat_pdf.cache
-
-influxdb-1.7.0-1:
-	wget https://dl.influxdata.com/influxdb/releases/influxdb-1.7.0_linux_amd64.tar.gz
-	tar xvfz influxdb-1.7.0_linux_amd64.tar.gz
 
 clean :
 	rm -rf gstlal_ll_inspiral_aggregator gstlal_inspiral gstlal_inspiral_inj gracedb gstlal_inspiral_marginalize_likelihoods_online gstlal_ll_inspiral_get_urls lvalert_listen gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_save_state
