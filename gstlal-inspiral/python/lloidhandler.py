@@ -1260,7 +1260,7 @@ class Handler(simplehandler.Handler):
 		return outstr
 
 
-	def __get_rankingstat_xmldoc(self):
+	def __get_rankingstat_xmldoc(self, clipped = False):
 		# generate a ranking statistic output document.  NOTE:  if
 		# we are in possession of ranking statistic PDFs then those
 		# are included in the output.  this allows a single
@@ -1274,9 +1274,32 @@ class Handler(simplehandler.Handler):
 		xmldoc = ligolw.Document()
 		xmldoc.appendChild(ligolw.LIGO_LW())
 		process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral", paramdict = {}, ifos = self.rankingstat.instruments)
-		far.gen_likelihood_control_doc(xmldoc, self.rankingstat, self.rankingstatpdf)
+		# FIXME:  don't do this.  find a way to reduce the storage
+		# requirements of the horizon distance history and then go
+		# back to uploading the full file to gracedb
+		if clipped:
+			rankingstat = self.rankingstat.copy()
+			try:
+				endtime = rankingstat.numerator.horizon_history.maxkey()
+			except ValueError:
+				# empty horizon history
+				pass
+			else:
+				# keep the last week of history
+				endtime -= 86400. * 7
+				for history in rankingstat.numerator.horizon_history.values():
+					del history[:endtime]
+		else:
+			rankingstat = self.rankingstat
+		far.gen_likelihood_control_doc(xmldoc, rankingstat, self.rankingstatpdf)
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
+
+
+	def __get_rankingstat_xmldoc_for_gracedb(self):
+		# FIXME:  remove this wrapper when the horizon history
+		# encoding is replaced with something that uses less space
+		return self.__get_rankingstat_xmldoc(clipped = True)
 
 
 	def web_get_rankingstat(self):
@@ -1338,7 +1361,7 @@ class Handler(simplehandler.Handler):
 		assert self.fapfar is not None
 
 		# do alerts
-		self.gracedbwrapper.do_alerts(last_coincs, self.psds, self.__get_rankingstat_xmldoc, self.segmentstracker.seglistdicts)
+		self.gracedbwrapper.do_alerts(last_coincs, self.psds, self.__get_rankingstat_xmldoc_for_gracedb, self.segmentstracker.seglistdicts)
 
 
 	def web_get_sngls_snr_threshold(self):
