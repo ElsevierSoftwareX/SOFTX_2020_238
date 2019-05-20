@@ -276,6 +276,7 @@ rank_stats_create()
   rank->rank_rate = bins1D_long_create(LOGRANK_CMIN, LOGRANK_CMAX, LOGRANK_NBIN);
   rank->rank_pdf = bins1D_create(LOGRANK_CMIN, LOGRANK_CMAX, LOGRANK_NBIN);
   rank->rank_fap = bins1D_create(LOGRANK_CMIN, LOGRANK_CMAX, LOGRANK_NBIN);
+  rank->mean_rankmap = 0;
   return rank;
 }
 void
@@ -510,7 +511,7 @@ get_prob_noise_sngl(int icombo, PostcohInspiralTable *intable, TriggerStatsXML *
 	if (icombo == 5) // L1V1
 		missing_ifo = H_INDEX;
 
-	if (missing_ifo > -1)
+	if (missing_ifo > -1 && margi_statsxml->multistats[missing_ifo]->rank->mean_rankmap > 0)
 		lgp_noise += log10(binsz * margi_statsxml->multistats[missing_ifo]->rank->mean_rankmap);
 
 	return lgp_noise;
