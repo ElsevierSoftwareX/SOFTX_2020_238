@@ -166,8 +166,9 @@ for gid in gid_list:
 
 		ax = fig.add_subplot(len(timeseries_ligolw_dict.items()),1,i+1)
 		ax.fill_between(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]-snrsigma, snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]+snrsigma, color="0.75")
+		#FIXME : This could potentially create an asymmetric plot. Since the peakoffset may not be the "center" of snr timeseries but could be off by one index from the "center".
 		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], "k", label = r"$\mathrm{Measured}\,\rho(t)$")
-		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], auto.real*maxsnr, "b--", label = r"$\mathrm{Scaled\,Autocorrelation}$")
+		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], auto.real[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2]*maxsnr, "b--", label = r"$\mathrm{Scaled\,Autocorrelation}$")
 		ax.set_ylabel(r"$\mathrm{%s}\,\rho(t)$" % ifo)
 		ax.set_xlabel(r"$\mathrm{Time\,from\,%f}$" % peaktime)
 		ax.legend(loc="best")
