@@ -177,11 +177,8 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 		# full ln L ranking stat.  we define the ranking statistic
 		# to be the largest ln L from all allowed subsets of
-		# triggers
-		# FIXME:  temporarily disabled due to performance concerns.
-		# just chain to parent class
-		return lnP + super(RankingStat, self).__call__(**kwargs)
-		#return max(super(RankingStat, self).__call__(**kwargs) for kwargs in kwarggen(min_instruments = self.min_instruments, **kwargs))
+		# triggers. Maximizes over higher than double IFO combos.
+		return lnP + super(RankingStat, self).__call__(**kwargs) if len(kwargs["snrs"])==1 else max(super(RankingStat, self).__call__(**kwargs) for kwargs in kwarggen(min_instruments = max(2, self.min_instruments), **kwargs))
 
 	@property
 	def template_ids(self):
