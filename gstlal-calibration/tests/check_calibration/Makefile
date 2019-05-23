@@ -8,11 +8,11 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1239840000 - 364 | bc)
+START = $(shell echo 1241208018 | bc)
 #1229094912
 #1225967424
 #1185763328
-END = $(shell echo 1239926400 + 364 | bc)
+END = $(shell echo 1241209018 | bc)
 #1229099008
 #1225968448
 #1185771520
@@ -21,7 +21,7 @@ SHMRUNTIME = 36000
 PLOT_WARMUP_TIME = 364
 PLOT_COOLDOWN_TIME = 364
 
-GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1239476409_test.ini
+GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1240326116_test.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_test.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
@@ -33,7 +33,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: noise_subtraction_ASD_C00
+all: $(IFO)1_hoft_GDS_frames.cache
 
 ###############################################
 ### These commands should change less often ###
@@ -75,7 +75,7 @@ $(IFO)1_clean_C02_frames.cache:
 	gw_data_find -o $(IFO) -t $(IFO)1_CLEANED_HOFT_C02 -s $(START) -e $(END) -l --url-type file > $@
 
 $(IFO)1_hoft_GDS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
-	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
+	#GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS-*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
@@ -162,17 +162,22 @@ DCS_over_C02: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C02_frames.cache
 kappastimeseries_GDS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	python timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_GDS_frames.cache --channel-list 'GDS-CALIB_KAPPA_TST_REAL_NOGATE','GDS-CALIB_KAPPA_TST_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_PUM_REAL_NOGATE','GDS-CALIB_KAPPA_PUM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_UIM_REAL_NOGATE','GDS-CALIB_KAPPA_UIM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_C_NOGATE','GDS-CALIB_F_CC_NOGATE' --raw-channel-list 'CAL-CS_TDEP_KAPPA_TST_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_TST_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_C_OUTPUT','CAL-CS_TDEP_F_C_OUTPUT' --raw-frame-cache $(IFO)1_easy_raw_frames.cache
 
+SRC_detuning_C00: 
+	#$(IFO)1_C00_frames.cache
+	python timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_C00_frames.cache --channel-list 'GDS-CALIB_F_S_SQUARED,GDS-CALIB_SRC_Q_INVERSE'
+
 noise_subtraction_ASD_DCS: $(IFO)1_hoft_DCS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-fmin 0.3
 
 noise_subtraction_ASD_DCS_LINES: $(IFO)1_hoft_DCS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-fmin 0.3
 
-noise_subtraction_ASD_GDS: $(IFO)1_hoft_GDS_frames.cache
-	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_hoft_GDS_frames.cache --calcs-channel-name GDS-CALIB_STRAIN --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache --hoft-channel-name GDS-CALIB_STRAIN_CLEAN
+noise_subtraction_ASD_GDS: 
+	#$(IFO)1_hoft_GDS_frames.cache
+	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_GDS_frames.cache,$(IFO)1_hoft_GDS_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN' --ASD-fmin 1.0
 
 noise_subtraction_ASD_C00: $(IFO)1_C00_frames.cache
-	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_C00_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
+	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_C00_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN' --ASD-fmin 1.0
 
 highpass_filter_ASD_GDS:
 	#$(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache $(IFO)1_hoft_GDS_BEST_frames.cache

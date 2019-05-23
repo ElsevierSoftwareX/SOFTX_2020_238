@@ -55,6 +55,10 @@ for n, channel in enumerate(channels):
 	#title = item
 	#title = title.replace('_', '\_')
 	ax.set_title(channel.replace('_', '\_'))
+	if 'F_S_SQUARED' in channel:
+		ax.set_ylim(-100,100)
+	elif 'SRC_Q_INVERSE' in channel:
+		ax.set_ylim(-2,2)
 	#plot.add_state_segments(segs, plotargs=dict(label='Calibrated'))
-	plot.legend([r'GDS value', r'front-end value'])
+	#plot.legend([r'GDS value', r'front-end value'])
 	plot.savefig('%s_%s_%s_plot_%s.png' % (ifo, options.gps_start_time, options.gps_end_time, channel))

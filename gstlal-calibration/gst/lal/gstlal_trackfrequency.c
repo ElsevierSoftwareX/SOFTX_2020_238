@@ -93,13 +93,21 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 	if(*sign == 0) { \
 		if(*src < 0) \
 			*sign = -1; \
-		else \
+		else if(*src > 0) \
 			*sign = 1; \
 	} \
  \
 	gint64 i = 0; \
 	gint64 j = 0; \
 	double fractional_sample; \
+ \
+	/* Check if input is zeros.  If so, clear element's history except for the current frequency. */ \
+	if(*src == 0.0) { \
+		*check_step = 1; \
+		*sign = 0; \
+		*num_stored = 0; \
+	} \
+ \
 	while(i < size - 1) { \
  \
 		gboolean shift = FALSE; \
@@ -178,13 +186,21 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 	if(*sign == 0) { \
 		if(creal ## F_OR_BLANK(*src) < 0) \
 			*sign = -1; \
-		else \
+		else if(creal ## F_OR_BLANK(*src) > 0) \
 			*sign = 1; \
 	} \
  \
 	gint64 i = 0; \
 	gint64 j = 0; \
 	double fractional_sample; \
+ \
+	/* Check if input is zeros.  If so, clear element's history except for the current frequency. */ \
+	if(*src == 0.0) { \
+		*check_step = 1; \
+		*sign = 0; \
+		*num_stored = 0; \
+	} \
+ \
 	while(i < size - 1) { \
  \
 		gboolean shift = FALSE; \

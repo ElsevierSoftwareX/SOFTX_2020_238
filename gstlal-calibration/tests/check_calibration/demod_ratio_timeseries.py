@@ -66,6 +66,8 @@ from ligo import segments
 parser = OptionParser()
 parser.add_option("--gps-start-time", metavar = "seconds", type = int, help = "GPS time at which to start processing data")
 parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS time at which to stop processing data")
+parser.add_option("--stride-time", metavar = "seconds", type = int, help = "Time in seconds between the start times of consecutive chunks of data to measure")
+parser.add_option("--chunk-time", metavar = "seconds", type = int, help = "Duration in seconds of continuous chunks of data to be measured")
 parser.add_option("--ifo", metavar = "name", type = str, help = "Name of the interferometer (IFO), e.g., H1, L1")
 parser.add_option("--denominator-frame-cache", metavar = "name", type = str, help = "Frame cache file that contains denominator")
 parser.add_option("--numerator-frame-cache", metavar = "name", type = str, help = "Frame cache file that contains numerator")
@@ -98,6 +100,10 @@ for i in range(0, len(freq_list)):
 filter_time = options.filter_time
 average_time = options.average_time
 rate_out = 1
+chunk_time = options.chunk_time
+stride_time = options.stride_time
+num_chunks = numpy.floor((options.gps_end_time - options.gps_start_time - chunk_time) / stride_time) if chunk_time < stride_time else 0
+
 
 #
 # =============================================================================
