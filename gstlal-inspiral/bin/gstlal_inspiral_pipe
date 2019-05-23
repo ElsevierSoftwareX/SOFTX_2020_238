@@ -51,7 +51,6 @@ from optparse import OptionParser
 import lal
 import lal.series
 from lal.utils import CacheEntry
-from glue import pipeline
 from ligo import segments
 from ligo.lw import ligolw
 from ligo.lw import lsctables

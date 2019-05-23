@@ -42,9 +42,10 @@ import subprocess
 import tempfile
 
 from ligo import segments
-from glue import pipeline
 
 from lal.utils import CacheEntry
+
+from gstlal import pipeline
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>"
 __date__ = "$Date$" #FIXME

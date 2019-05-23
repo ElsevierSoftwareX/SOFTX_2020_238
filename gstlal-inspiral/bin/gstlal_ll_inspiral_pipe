@@ -39,7 +39,6 @@ from optparse import OptionParser
 # import the modules we need to build the pipeline
 #
 
-from glue import pipeline
 from gstlal import inspiral
 from gstlal import inspiral_pipe
 from gstlal import dagparts
