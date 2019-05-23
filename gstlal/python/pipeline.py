@@ -1431,8 +1431,8 @@ class CondorDAGNode(object):
     Write the parent/child relations for this job to the DAG file descriptor.
     @param fh: descriptor of open DAG file.
     """
-    for parent in self.__parents:
-      fh.write( 'PARENT ' + str(parent) + ' CHILD ' + str(self) + '\n' )
+    if len(self.__parents) > 0:
+      fh.write( 'PARENT ' + " ".join((str(p) for p in self.__parents)) + ' CHILD ' + str(self) + '\n' )
 
   def write_pre_script(self,fh):
     """
