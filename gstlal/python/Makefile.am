@@ -21,6 +21,7 @@ pkgpython_PYTHON = \
 	misc.py \
 	multirate_datasource.py \
 	pipeio.py \
+	pipeline.py \
 	pipeutil.py \
 	plotpsd.py \
 	plotutil.py \
