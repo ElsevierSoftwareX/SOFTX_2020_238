@@ -72,6 +72,11 @@ from gstlal import chirptime
 from gstlal import reference_psd
 from gstlal import templates
 
+try: ### optional dependency for movingmedian
+	import pandas
+except ImportError:
+	pandas = None
+
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>, Chad Hanna <chad.hanna@ligo.org>, Drew Keppel <drew.keppel@ligo.org>"
 __version__ = "FIXME"
@@ -254,26 +259,33 @@ def compute_autocorrelation_mask( autocorrelation ):
 
 
 def movingmedian(interval, window_size):
-	interval = list(interval)
-	tmp = numpy.copy(interval)
-	A = None
-	As = None
-	prev = None
-	for i in range(window_size, len(interval)-window_size):
-		if A is None:
-			A = interval[i-window_size:i+window_size]
-			ix = numpy.argsort(A)
-			As = list(numpy.array(A)[ix])
+	if pandas: ### use pandas implementation if available
+		tmp = numpy.copy(interval)
+		if pandas.__version__ >= '0.18.1':
+			tmp[window_size : len(interval) - window_size] = numpy.array(pandas.Series(tmp).rolling(2 * window_size).median()[2 * window_size - 1 : -1])
 		else:
-			newdata = interval[i+window_size-1]
-			A = A + [newdata]
-			bisect.insort(As, newdata)
-		if len(As) % 2:
-			tmp[i] = As[len(As)/2]
-		else:
-			tmp[i] = (As[len(As)/2-1] + As[len(As)/2]) / 2.
-		prev = A.pop(0)
-		del As[bisect.bisect_left(As, prev)]
+			tmp[window_size : len(interval) - window_size] = pandas.rolling_median(tmp, 2 * window_size)[2 * window_size - 1 : -1]
+	else:
+		interval = list(interval)
+		tmp = numpy.copy(interval)
+		A = None
+		As = None
+		prev = None
+		for i in range(window_size, len(interval)-window_size):
+			if A is None:
+				A = interval[i-window_size:i+window_size]
+				ix = numpy.argsort(A)
+				As = list(numpy.array(A)[ix])
+			else:
+				newdata = interval[i+window_size-1]
+				A = A + [newdata]
+				bisect.insort(As, newdata)
+			if len(As) % 2:
+				tmp[i] = As[len(As)/2]
+			else:
+				tmp[i] = (As[len(As)/2-1] + As[len(As)/2]) / 2.
+			prev = A.pop(0)
+			del As[bisect.bisect_left(As, prev)]
 	return tmp
 
 
