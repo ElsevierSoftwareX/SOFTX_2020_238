@@ -60,6 +60,8 @@ def parse_command_line():
 	parser.add_argument("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
 	parser.add_argument("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
 	parser.add_argument("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
+	parser.add_argument("--enable-auth", action = "store_true", help = "If set, enables authentication for the influx aggregator.")
+	parser.add_argument("--enable-https", action = "store_true", help = "If set, enables HTTPS connections for the influx aggregator.")
 
 	args = parser.parse_args()
 
@@ -100,7 +102,7 @@ if __name__ == '__main__':
 
 	# set up aggregator sink
 	if options.data_backend == 'influx':
-		agg_sink = io.influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name)
+		agg_sink = io.influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name, auth=options.enable_auth, https=options.enable_https)
 	else: ### hdf5 data backend
 		agg_sink = io.hdf5.Aggregator(rootdir=options.base_dir, num_processes=options.num_threads)
 
