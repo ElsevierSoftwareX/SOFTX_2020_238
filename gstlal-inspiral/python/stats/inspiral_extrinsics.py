@@ -1391,8 +1391,6 @@ class TimePhaseSNR(object):
 			dtdphivec = numpy.array([dt, dphi])
 			coordtransmat = numpy.array([[self.transtt[frozenset((ifo1, ifo2))], self.transtp[frozenset((ifo1, ifo2))]],[self.transpt[frozenset((ifo1, ifo2))], self.transpp[frozenset((ifo1, ifo2))]]])
 			out[:,slc[0]], out[:,slc[1]] = numpy.dot(coordtransmat, dtdphivec)
-			#out[:,slc[0]] = self.transtt[frozenset((ifo1, ifo2))] * dt + dphi * self.transpt[frozenset((ifo1, ifo2))]
-			#out[:,slc[1]] = self.transpp[frozenset((ifo1, ifo2))] * dt + self.transtp[frozenset((ifo1, ifo2))] * dphi
 			# FIXME should this be the ratio - 1 or without the -1 ???
 			out[:,slc[2]] = (deff[ifo1] / deff[ifo2] - 1) * self.transdd[frozenset((ifo1, ifo2))]
 
