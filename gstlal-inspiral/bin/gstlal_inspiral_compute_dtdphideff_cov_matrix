@@ -58,14 +58,36 @@ for ifo in rho:
 	sigsqpp[ifo] = moment(10, 1024, 1, ifo)**2 / (rho[ifo]**2 * sigsqf)
 	sigsqtp[ifo] = moment(10, 1024, 1, ifo) / (2 * 3.14 * rho[ifo]**2 * sigsqf)
 
+transtt = {}
+transpp = {}
+transtp = {}
+transpt = {}
+# FIXME do an actual calculation
+transdd = {frozenset(("H1", "L1")): 5.0 , frozenset(("H1", "V1")): 5.0, frozenset(("L1", "V1")): 5.0}
+
 for combo in itertools.combinations(("H1", "L1", "V1"), 2):
 	a,b = combo
 	m11 = sigsqtt[a] + sigsqtt[b]
 	m22 = sigsqpp[a] + sigsqpp[b]
 	m12 = m21 = sigsqtp[a] + sigsqtp[b]
 	mat = numpy.array([[m11, m12], [m21, m22]])
-	print combo
-	print "cholesky on "
+	#print combo
+	#print "cholesky on "
 	matinv = numpy.linalg.inv(mat)
 	cholesky_transpose = numpy.linalg.cholesky(matinv).T
-	print cholesky_transpose
+	#print cholesky_transpose
+	transtt[frozenset(combo)] = cholesky_transpose[0,0]
+	transtp[frozenset(combo)] = cholesky_transpose[0,1]
+	transpt[frozenset(combo)] = cholesky_transpose[1,0]
+	transpp[frozenset(combo)] = cholesky_transpose[1,1]
+
+print "transtt =", transtt
+print "transtp =", transtp
+print "transpt =", transpt
+print "transpp =", transpp
+print "transdd =", transdd
+
+#transtt = {frozenset(("H1", "L1")): 5.19313416e+04, frozenset(("H1", "V1")): 1.39663777e+04, frozenset(("L1", "V1")): 3.98320074e+04}
+#transpp = {frozenset(("H1", "L1")): 3.50152221e+00, frozenset(("H1", "V1")): 1.56080114e+00, frozenset(("L1", "V1")): 1.63248925e+00}
+#transtp = {frozenset(("H1", "L1")): -6.51410977e+01, frozenset(("H1", "V1")): -2.07581116e+01, frozenset(("L1", "V1")): -6.05964763e+01}
+#transpt = {frozenset(("H1", "L1")): 0.0, frozenset(("H1", "V1")): 0.0, frozenset(("L1", "V1")): 0.0}
