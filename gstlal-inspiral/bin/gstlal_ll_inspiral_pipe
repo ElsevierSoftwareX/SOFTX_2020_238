@@ -249,6 +249,8 @@ def parse_command_line():
 	parser.add_option("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
 	parser.add_option("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
 	parser.add_option("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
+	parser.add_option("--enable-auth", action = "store_true", default=False, help = "If set, enables authentication for the influx aggregator.")
+	parser.add_option("--enable-https", action = "store_true", default=False, help = "If set, enables HTTPS connections for the influx aggregator.")
 
 	options, filenames = parser.parse_args()
 
@@ -401,7 +403,13 @@ for ifo in channel_dict:
 			"influx-database-name": options.influx_database_name,
 			"influx-hostname": options.influx_hostname,
 			"influx-port": options.influx_port,
+			"enable-auth": options.enable_auth,
+			"enable-https": options.enable_https,
 		})
+		if options.enable_auth:
+			common_opts.update({"enable-auth": ""})
+		if options.enable_https:
+			common_opts.update({"enable-https": ""})
 
 	dagparts.DAGNode(dqJob, dag, [], opts = common_opts)
 
@@ -582,6 +590,10 @@ if options.agg_data_backend == 'influx':
 		"influx-hostname": options.influx_hostname,
 		"influx-port": options.influx_port,
 	})
+	if options.enable_auth:
+		agg_options.update({"enable-auth": ""})
+	if options.enable_https:
+		agg_options.update({"enable-https": ""})
 
 # define routes used for aggregation jobs
 snr_routes = ["%s_snr_history" % ifo for ifo in channel_dict]
