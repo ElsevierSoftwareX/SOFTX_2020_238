@@ -65,22 +65,7 @@ for combo in itertools.combinations(("H1", "L1", "V1"), 2):
 	m12 = m21 = sigsqtp[a] + sigsqtp[b]
 	mat = numpy.array([[m11, m12], [m21, m22]])
 	print combo
-
-	#print "cov mat"
-	#print mat
-	#print "cov mat inv"
-	#print matinv
-
 	print "cholesky on "
 	matinv = numpy.linalg.inv(mat)
 	cholesky_transpose = numpy.linalg.cholesky(matinv).T
 	print cholesky_transpose
-
-	#val, vec = scipy.linalg.eigh(mat)
-	#print "sanity check"
-	#print mat
-	#print numpy.dot(vec.T, numpy.dot(numpy.diag(val), vec))
-	#answer = numpy.dot(vec, numpy.diag(val)**.5)
-	#print answer
-	#print "sanity check"
-	#print numpy.dot(answer, answer.T)
