@@ -63,6 +63,30 @@ gstlal_IMR_approximants = set((
     'SEOBNRv2_ROM_DoubleSpin'
 ))
 
+def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
+	assert -len(data) / sample_rate_max <= epoch_time < 0.0, "Epoch returned follows a different convention"
+	# find the index for the peak sample using the epoch returned by
+	# the waveform generator
+	epoch_index = -int(epoch_time*sample_rate_max) - 1
+	# align the peaks according to an overestimate of max rinddown
+	# time for a given split bank
+	print "max_ringtime", max_ringtime
+	print "data time", len(data)/ float(sample_rate_max)
+	print "epoch time", epoch_time
+	target_index = len(data)-1 - int(sample_rate_max * max_ringtime)
+	# rotate phase so that sample with peak amplitude is real
+	phase = numpy.arctan2(data[epoch_index].imag, data[epoch_index].real)
+	data *= numpy.exp(-1.j * phase)
+	data = numpy.roll(data, target_index-epoch_index)
+	# re-taper the ends of the waveform that got cyclically permuted
+	# around the ring
+	tukey_beta = 2. * abs(target_index - epoch_index) / float(len(data))
+	assert 0. <= tukey_beta <= 1., "waveform got rolled WAY too much"
+	data *= lal.CreateTukeyREAL8Window(len(data), tukey_beta).data.data
+	# done
+	return data, target_index
+
+
 def normalized_autocorrelation(fseries, revplan):
     data = fseries.data.data
     fseries = lal.CreateCOMPLEX16FrequencySeries(
@@ -245,8 +269,21 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     The unit of template is s^-1/2. the data is generated from gstlal_whiten where the unit is dimensionless.
     It needs to be normalized so the unit is s^-1/2, same as the template for unit consistency.
     '''
+    # padding data if strain has gaps
+    last_time = strain[0, 0]
+    dt = strain[1, 0] - last_time
+    for i in range(1, len(strain)):
+        this_time = strain[i, 0]
+	if this_time - last_time > 2*dt:
+	    ninsert = int((this_time - last_time)/dt - 1)
+	    new_arr = numpy.array([[last_time + dt * x, 0] for x in range(1, ninsert)])
+	    padded_strain = numpy.insert(strain, i, new_arr, axis = 0)
+	    strain = padded_strain
+        last_time = this_time
+		
     # the data is generated from gstlal_play --whiten where the unit is dimensionless.
     # needs to be normalized so the unit is s^-1/2, i.e., *1/sqrt(dt).
+
     time = strain[:, 0]
     data = strain[:, 1]
     data /= numpy.sqrt(2.0/sampleRate)
@@ -382,7 +419,7 @@ def lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower):
     return data
 
 # a modification from the cbc_template_fir.generate_templates
-def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, time_slices, autocorrelation_length = 201, sampleRate = 4096., verbose = False):
+def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, time_slices, autocorrelation_length = 201, sampleRate = 4096., negative_latency = 0, verbose = False):
 
     """!
     Generate a bank of templates, which are
@@ -502,6 +539,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     # waveforms by peak amplitude)
     #
 
+    # Use our own condition_IMR_templates to ajust the end time to be the merger time
     if approximant in gstlal_IMR_approximants:
         data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
         # record the new end times for the waveforms (since we performed the shifts)
@@ -511,6 +549,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
 
     data = data[-length_max:]
 
+    data = data[:-int(1+negative_latency*sampleRate)]
     # This is to normalize whitened template so it = h_{whitened at 1MPC}(t)
     # NOTE: because
     # XLALWhitenCOMPLEX16FrequencySeries() computed
@@ -530,7 +569,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     return data, autocorrelation_bank
 
 
-def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, approximant, irow, psd, sampleRate = 4096, waveform_domain = "FD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, verbose = False):
+def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, approximant, irow, psd, sampleRate = 4096, waveform_domain = "FD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, negative_latency = 0, verbose = False):
 
     working_state = gen_template_working_state(sngl_inspiral_table, flower, sampleRate = sampleRate)
     # Smooth the PSD and interpolate to required resolution
@@ -565,7 +604,7 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     if verbose:
         logging.info("working_duration %f, chirp time %f" % (working_state["working_duration"], this_tchirp))
 
-    amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, verbose = verbose)
+    amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, negative_latency = negative_latency, verbose = verbose)
 
     # This is to normalize whitened template so it = h_{whitened at 1MPC}(t)
     # NOTE: because
