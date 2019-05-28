@@ -414,6 +414,30 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 		raise ValueError
 
 
+#
+# =============================================================================
+#
+# Misc utilities
+#
+# =============================================================================
+#
+
+
+def groups(l, n):
+	"""!
+	Given a list, returns back sublists with a maximum size n.
+	"""
+	for i in range(0, len(l), n):
+		yield l[i:i+n]
+
+
+def flatten(lst):
+	"""!
+	Flatten a list by one level of nesting.
+	"""
+	return list(itertools.chain.from_iterable(lst))
+
+
 if __name__ == "__main__":
 	import doctest
 	doctest.testmod()

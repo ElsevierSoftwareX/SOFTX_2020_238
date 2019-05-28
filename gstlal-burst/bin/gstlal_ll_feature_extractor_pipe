@@ -327,10 +327,6 @@ if options.save_format == 'kafka':
 # set up jobs
 #
 
-def groups(l, n):
-    for i in xrange(0, len(l), n):
-        yield l[i:i+n]
-
 if options.save_format == 'kafka':
 	synchronizer_options.update({"num-topics": len(feature_extractor_nodes)})
 	synchronizer_node = dagparts.DAGNode(synchronizer_job, dag, [], opts = synchronizer_options, output_files = {"rootdir": os.path.join(options.out_path, "synchronizer")})
@@ -340,7 +336,7 @@ if options.save_format == 'kafka':
 	### aggregator jobs
 	if not options.disable_agg_jobs:
 		all_fx_jobs = [(str(ii).zfill(4), channel_subset) for ii, channel_subset in enumerate(data_source_info.channel_subsets)]
-		for job_subset in groups(all_fx_jobs, options.num_agg_jobs):
+		for job_subset in dagparts.groups(all_fx_jobs, options.num_agg_jobs):
 			jobs, channels = zip(*job_subset)
 			job_channel_options = {"jobs": jobs}
 			job_channel_options.update(aggregator_options)

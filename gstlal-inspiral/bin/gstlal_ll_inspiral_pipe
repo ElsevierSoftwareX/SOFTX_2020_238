@@ -510,10 +510,6 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			}
 		)
 
-def groups(l, n):
-	for i in xrange(0, len(l), n):
-		yield l[i:i+n]
-
 margNode = dagparts.DAGNode(margJob, dag, [], opts = {}, input_files = {"":[options.marginalized_likelihood_file] + ["%s_registry.txt" % r for r in jobTags]}, output_files = {})
 
 #
@@ -596,7 +592,7 @@ if options.agg_data_backend == 'influx':
 aggNode = dagparts.DAGNode(trigaggJob, dag, [], opts = trigagg_options)
 
 # state-based aggregation jobs
-for routes in groups(state_routes, 2):
+for routes in dagparts.groups(state_routes, 2):
 	agg_options["route"] = routes
 	agg_options["data-type"] = "max"
 	aggNode = dagparts.DAGNode(aggJob, dag, [], opts = agg_options)

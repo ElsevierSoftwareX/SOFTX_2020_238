@@ -89,14 +89,6 @@ def get_bank_params(bank_cache, options, verbose = False):
 
 	return max_time, template_mchirp_dict
 
-def chunks(l, n):
-	for i in xrange(0, len(l), n):
-		yield l[i:i+n]
-
-def flatten(lst):
-    "Flatten one level of nesting"
-    return list(itertools.chain.from_iterable(lst))
-
 def subdir_path(dirlist):
 	output_path = '/'.join(dirlist)
 	try:
@@ -318,7 +310,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 			else:
 				output_seg_path = subdir_path([gstlalInspiralJob.output_path, str(int(seg[0]))[:5]])
-				for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
+				for chunk_counter, svd_bank_strings in enumerate(dagparts.groups(svd_bank_strings_full, numchunks)):
 					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
 					# setup output names
 					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
@@ -388,7 +380,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 
 				bgbin_svd_bank_strings = [index_bank_string_tuple for i, index_bank_string_tuple in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
 
-				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
+				for chunk_counter, bgbin_list in enumerate(dagparts.groups(bgbin_svd_bank_strings, numchunks)):
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
 					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (bgbin_index, sim_name), seg, '.xml.gz', path = output_paths[i]) for i, bgbin_index in enumerate(bgbin_indices)]
@@ -558,7 +550,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				opts = {"tmp-space":dagparts.condor_scratch_space()},
 				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
 				input_cache_files = {"input-cache":chunked_inputs}
-				) for chunked_inputs in chunks(inputs, 16)]
+				) for chunked_inputs in dagparts.groups(inputs, 16)]
 			)
 
 	# then injections
@@ -581,7 +573,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 					opts = {"tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"likelihood-url":likelihood_url},
 					input_cache_files = {"input-cache":chunked_inputs}
-					) for chunked_inputs in chunks(inputs, 16)]
+					) for chunked_inputs in dagparts.groups(inputs, 16)]
 				)
 
 	
@@ -589,10 +581,10 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 	files_to_group = 40
 	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
 		# Flatten the nodes for this sub bank
-		nodes = flatten(nodes)
+		nodes = dagparts.flatten(nodes)
 		merge_nodes = []
 		# Flatten the input/output files from calc_likelihood
-		inputs = flatten([node.input_files["input-cache"] for node in nodes])
+		inputs = dagparts.flatten([node.input_files["input-cache"] for node in nodes])
 		if inj is None:
 			# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
 			for n in range(0, len(inputs), files_to_group):
@@ -716,7 +708,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 		# numbered by iterating through segments in a given bin first
 		# (e.g. files 0000 to 0009 may all belong to bin 0000, then
 		# files 0010 to 0019 would all belong to bin 0001, etc)
-		for ce_list in chunks(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
+		for ce_list in dagparts.groups(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
 			hi_index = ce_list[-1].description.split('_')[0]
 			noninjdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
 
@@ -736,7 +728,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 			outnodes.setdefault(None, []).append(sqlitenode)
 
 		for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-			for ce_list in chunks(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
+			for ce_list in dagparts.groups(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
 				hi_index = ce_list[-1].description.split('_')[0]
 				injdb = os.path.join(toSqliteJob.output_path, os.path.basename(ce_list[-1].path)).replace(hi_index, '%04d' % ((int(hi_index) + 1) / options.num_files_per_background_bin - 1,))
 
@@ -769,7 +761,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 	chunk_nodes = []
 	dbs_to_delete = []
 	# Process the chirp mass bins in chunks to paralellize the merging process
-	for chunk, nodes in enumerate(chunks(innodes[None], num_chunks)):
+	for chunk, nodes in enumerate(dagparts.groups(innodes[None], num_chunks)):
 		try:
 			dbs = [node.input_files[""] for node in nodes]
 			parents = nodes
@@ -807,7 +799,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 	else:
 		final_nodes = []
-		for chunk, nodes in enumerate(chunks(innodes[None], 10)):
+		for chunk, nodes in enumerate(dagparts.groups(innodes[None], 10)):
 			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
 			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = nodes,
 				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
@@ -855,7 +847,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 		# extract only the nodes that were used for injections
 		chunk_nodes = []
 
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
+		for chunk, injnodes in enumerate(dagparts.groups(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
 			try:
 				dbs = [injnode.input_files[""] for injnode in injnodes]
 				parents = injnodes
@@ -886,7 +878,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 
 		final_nodes = []
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
+		for chunk, injnodes in enumerate(dagparts.groups(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
 			# Setup the final output names, etc.
 			injdb = dagparts.T050017_filename(instruments, 'PART_LLOID_%s_CHUNK_%04d' % (sim_tag_from_inj_file(injections), chunk), boundary_seg, '.sqlite')
 
@@ -1375,7 +1367,7 @@ elif options.reference_psd is None:
 
 	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_nodes = []
-	for chunk, nodes in enumerate(chunks(psd_nodes.values(), 50)):
+	for chunk, nodes in enumerate(dagparts.groups(psd_nodes.values(), 50)):
 		median_psd_node = \
 			dagparts.DAGNode(medianPSDJob, dag,
 				parent_nodes = psd_nodes.values(),

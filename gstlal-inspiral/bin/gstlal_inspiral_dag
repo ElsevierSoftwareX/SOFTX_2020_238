@@ -102,14 +102,6 @@ def get_bank_params(options, verbose = False):
 
 	return template_mchirp_dict, bank_cache, max_time
 
-def chunks(l, n):
-	for i in range(0, len(l), n):
-		yield l[i:i+n]
-
-def flatten(lst):
-    "Flatten one level of nesting"
-    return list(itertools.chain.from_iterable(lst))
-
 def subdir_path(dirlist):
 	output_path = '/'.join(dirlist)
 	try:
@@ -531,7 +523,7 @@ def median_psd_layer(dag, jobs, parent_nodes, *args):
 
 	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_nodes = []
-	for chunk, nodes in enumerate(chunks(parent_nodes.values(), 50)):
+	for chunk, nodes in enumerate(dagparts.groups(parent_nodes.values(), 50)):
 		median_psd_node = \
 			dagparts.DAGNode(jobs['medianPSD'], dag,
 				parent_nodes = parent_nodes.values(),
@@ -663,7 +655,7 @@ def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, templa
 
 			else:
 				output_seg_path = subdir_path([jobs['gstlalInspiral'].output_path, str(int(seg[0]))[:5]])
-				for chunk_counter, svd_bank_strings in enumerate(chunks(svd_bank_strings_full, numchunks)):
+				for chunk_counter, svd_bank_strings in enumerate(dagparts.groups(svd_bank_strings_full, numchunks)):
 					bgbin_indices = ['%04d' % (i + numchunks * chunk_counter,) for i,s in enumerate(svd_bank_strings)]
 					# setup output names
 					output_paths = [subdir_path([output_seg_path, bgbin_indices[i]]) for i, s in enumerate(svd_bank_strings)]
@@ -729,7 +721,7 @@ def inspiral_layer(dag, jobs, svd_nodes, segsdict, options, channel_dict, templa
 
 				bgbin_svd_bank_strings = [bgbin_svdbank for i, bgbin_svdbank in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
 
-				for chunk_counter, bgbin_list in enumerate(chunks(bgbin_svd_bank_strings, numchunks)):
+				for chunk_counter, bgbin_list in enumerate(dagparts.groups(bgbin_svd_bank_strings, numchunks)):
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
 					output_paths = [subdir_path([output_seg_inj_path, bgbin_index]) for bgbin_index in bgbin_indices]
 					output_names = [dagparts.T050017_filename(ifos, '%s_LLOID_%s' % (idx, sim_name), seg, '.xml.gz', path = path) for idx, path in zip(bgbin_indices, output_paths)]
@@ -998,7 +990,7 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 	bgbin_indices = sorted(lloid_output[None].keys())
 	for n, (outputs, diststats, bgbin_index) in enumerate((lloid_output[None][key], lloid_diststats[key], key) for key in bgbin_indices):
 		inputs = [o[0] for o in outputs]
-		parents = flatten([o[1] for o in outputs])
+		parents = dagparts.flatten([o[1] for o in outputs])
 		rankfile = functools.partial(get_rank_file, instruments, boundary_seg, '%04d'%n)
 
 		# FIXME we keep this here in case we someday want to have a
@@ -1070,7 +1062,7 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 				opts = {"tmp-space": dagparts.condor_scratch_space()},
 				input_files = {"likelihood-url": marg_nodes[bgbin_index].output_files["output"]},
 				input_cache_files = {"input-cache": chunked_inputs}
-				) for chunked_inputs in chunks(inputs, chunk_size)]
+				) for chunked_inputs in dagparts.groups(inputs, chunk_size)]
 			)
 
 	# then injections
@@ -1080,7 +1072,7 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 		for n, (outputs, diststats, bgbin_index) in enumerate((lloid_nodes[key], lloid_diststats[key], key) for key in bgbin_indices):
 			if outputs is not None:
 				inputs = [o[0] for o in outputs]
-				parents = flatten([o[1] for o in outputs])
+				parents = dagparts.flatten([o[1] for o in outputs])
 				if marg_nodes[bgbin_index]:
 					parents.append(marg_nodes[bgbin_index])
 					likelihood_url = marg_nodes[bgbin_index].output_files["output"]
@@ -1094,7 +1086,7 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 						opts = {"tmp-space": dagparts.condor_scratch_space()},
 						input_files = {"likelihood-url": likelihood_url},
 						input_cache_files = {"input-cache": chunked_inputs}
-						) for chunked_inputs in chunks(inputs, chunk_size)]
+						) for chunked_inputs in dagparts.groups(inputs, chunk_size)]
 					)
 
 	return likelihood_nodes
@@ -1139,14 +1131,14 @@ def merge_in_bin_layer(dag, jobs, options):
 		# numbered by iterating through segments in a given bin first
 		# (e.g. files 0000 to 0009 may all belong to bin 0000, then
 		# files 0010 to 0019 would all belong to bin 0001, etc)
-		for ce_list in chunks(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
+		for ce_list in dagparts.groups(map(CacheEntry, open(options.lloid_cache)), options.num_files_per_background_bin):
 			noninjdb = cache_to_db(ce_list, jobs)
 			# merge all of the dbs from the same subbank
 			sqlitenode = merge_cluster_layer(dag, jobs, [], noninjdb, [ce.path for ce in ce_list], options)
 			outnodes.setdefault(None, []).append(sqlitenode)
 
 		for i, inj_lloid_cache in enumerate(options.inj_lloid_cache):
-			for ce_list in chunks(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
+			for ce_list in dagparts.groups(map(CacheEntry, open(inj_lloid_cache)), options.num_files_per_background_bin):
 				injdb = cache_to_db(ce_list, jobs)
 				# merge all of the dbs from the same subbank
 				sqlitenode = merge_cluster_layer(dag, jobs, [], injdb, [ce.path for ce in ce_list], options)
@@ -1168,13 +1160,13 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 			sql_file = options.injection_sql_file
 
 		# Flatten the nodes for this sub bank
-		nodes = flatten(nodes)
+		nodes = dagparts.flatten(nodes)
 		merge_nodes = []
 		# Flatten the input/output files from calc_likelihood
-		inputs = flatten([node.input_files["input-cache"] for node in nodes])
+		inputs = dagparts.flatten([node.input_files["input-cache"] for node in nodes])
 
 		# files_to_group at a time irrespective of the sub bank they came from so the jobs take a bit longer to run
-		for input_files in chunks(inputs, files_to_group):
+		for input_files in dagparts.groups(inputs, files_to_group):
 			merge_nodes.append(dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = nodes,
 				opts = {"sql-file": sql_file, "tmp-space": dagparts.condor_scratch_space()},
 				input_files = {"": input_files}
@@ -1203,7 +1195,7 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 	chunk_nodes = []
 	dbs_to_delete = []
 	# Process the chirp mass bins in chunks to paralellize the merging process
-	for chunk, nodes in enumerate(chunks(innodes[None], num_chunks)):
+	for chunk, nodes in enumerate(dagparts.groups(innodes[None], num_chunks)):
 		try:
 			dbs = [node.input_files[""] for node in nodes]
 			parents = nodes
@@ -1230,7 +1222,7 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 		noninjdb = options.non_injection_db
 	else:
 		final_nodes = []
-		for chunk, nodes in enumerate(chunks(innodes[None], 10)):
+		for chunk, nodes in enumerate(dagparts.groups(innodes[None], 10)):
 			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
 
 			# cluster the final non injection database
@@ -1259,7 +1251,7 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 		# extract only the nodes that were used for injections
 		chunk_nodes = []
 
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
+		for chunk, injnodes in enumerate(dagparts.groups(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
 			try:
 				dbs = [injnode.input_files[""] for injnode in injnodes]
 				parents = injnodes
@@ -1278,7 +1270,7 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 
 
 		final_nodes = []
-		for chunk, injnodes in enumerate(chunks(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
+		for chunk, injnodes in enumerate(dagparts.groups(innodes[sim_tag_from_inj_file(injections)], num_chunks)):
 			# Setup the final output names, etc.
 			injdb = dagparts.T050017_filename(instruments, 'PART_LLOID_%s_CHUNK_%04d' % (sim_tag_from_inj_file(injections), chunk), boundary_seg, '.sqlite')
 
@@ -1353,7 +1345,7 @@ def final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes):
 
 		# split up the marginalization into groups of 10
 		# FIXME: is it actually groups of 10 or groups of 16?
-		for margchunk in chunks(margin, margnum):
+		for margchunk in dagparts.groups(margin, margnum):
 			if nodes:
 				marg_ce = [CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(filename)) for filename in margchunk]
 				margcache.append(dagparts.group_T050017_filename_from_T050017_files(marg_ce, '.xml.gz', path = job.output_path))
@@ -1376,7 +1368,7 @@ def final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes):
 				input_cache_file_name = "marginalized_likelihood%s.cache"%filesuffix
 			))
 
-	return final_margnodes, flatten(all_margcache)
+	return final_margnodes, dagparts.flatten(all_margcache)
 
 def compute_far_layer(dag, jobs, margnodes, injdbs, noninjdb, final_sqlite_nodes):
 	"""compute FAPs and FARs
