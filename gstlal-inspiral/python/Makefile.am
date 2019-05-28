@@ -35,7 +35,8 @@ pkgpython_PYTHON = \
 	svd_bank.py \
 	svd_bank_snr.py \
 	templates.py \
-	webpage.py
+	webpage.py \
+	p_astro_gstlal.py
 
 pkgpyexec_LTLIBRARIES = _rate_estimation.la _snglinspiraltable.la _spawaveform.la
 
