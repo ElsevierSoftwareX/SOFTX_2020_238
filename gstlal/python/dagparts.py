@@ -351,6 +351,17 @@ def breakupseglists(seglists, maxextent, overlap):
 #
 
 
+def cache_to_instruments(cache):
+	"""!
+	Given a cache, returns back a string containing all the IFOs that are
+	contained in each of its cache entries, sorted by IFO name.
+	"""
+	observatories = set()
+	for cache_entry in cache:
+		observatories.update(groups(cache_entry.observatory, 2))
+	return ''.join(sorted(list(observatories)))
+
+
 def T050017_filename(instruments, description, seg, extension, path = None):
 	"""!
 	A function to generate a T050017 filename.
@@ -383,7 +394,7 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 	files from H1 and template bank files from L1.
 	"""
 	# Check that every file has same observatory.
-	observatories = ''.join(sorted(list(set([cache_entry.observatory for cache_entry in cache_entries]))))
+	observatories = cache_to_instruments(cache_entries)
 	split_description = cache_entries[0].description.split('_')
 	min_bin = [x for x in split_description[:2] if x.isdigit()]
 	max_bin = [x for x in cache_entries[-1].description.split('_')[:2] if x.isdigit()]
