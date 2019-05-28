@@ -1656,7 +1656,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->rate));
 			//fprintf(stderr, "itacac->next_output_timestamp = %lu, itacacpad->initial_timestamp = %lu, %u num_samples_behind, gapsamps = %u, available_samps = %u, %s\n", (guint64) itacac->next_output_timestamp, (guint64) itacacpad->initial_timestamp, num_samples_behind, gst_audioadapter_head_gap_length(itacacpad->adapter), gst_audioadapter_available_samples(itacacpad->adapter), itacacpad->instrument);
 			if(num_samples_behind > itacacpad->maxdata->pad) {
-				gst_audioadapter_flush_samples(itacacpad->adapter, num_samples_behind - itacacpad->maxdata->pad);
+				gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
 			} else if(num_samples_behind < itacacpad->maxdata->pad)
 				itacacpad->adjust_window = num_samples_behind;
 
