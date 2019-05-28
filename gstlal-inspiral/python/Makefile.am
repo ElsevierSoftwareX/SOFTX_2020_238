@@ -33,7 +33,8 @@ pkgpython_PYTHON = \
 	streamthinca.py \
 	svd_bank.py \
 	templates.py \
-	webpage.py
+	webpage.py \
+	p_astro_gstlal.py
 
 pkgpyexec_LTLIBRARIES = _rate_estimation.la _snglinspiraltable.la _spawaveform.la
 
