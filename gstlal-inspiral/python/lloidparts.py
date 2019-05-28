@@ -695,7 +695,8 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 			# NOTE the snr min set in the diststats file is 3.5,
 			# but 4 is about the lowest we can do stably for
 			# coincidence online...
-			nsamps_window = max(max(bank.get_rates()) / 4, 256) # FIXME stupid hack
+			#nsamps_window = max(max(bank.get_rates()) / 4, 256) # FIXME stupid hack
+			nsamps_window = 1 * max(bank.get_rates())
 			if bank.bank_id not in itacac_dict:
 				itacac_dict[bank.bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
 
