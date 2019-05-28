@@ -236,7 +236,7 @@ static double get_average(double new_element, double *fifo_array, gint array_siz
 
 
 #define DEFINE_SMOOTH_BUFFER(DTYPE) \
-static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, guint64 src_size, DTYPE *dst, guint64 dst_size, double *fifo_array, double *avg_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, int *num_bad_in_avg_re, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa, int waste_samples, int *samples_in_filter) { \
+static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, guint64 src_size, DTYPE *dst, guint64 dst_size, double *fifo_array, double *avg_array, double default_kappa, double *current_median, double maximum_offset, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, int *num_bad_in_avg_re, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa, int *samples_in_filter) { \
 	guint64 i; \
 	double new_element; \
 	DTYPE new_avg; \
@@ -281,7 +281,7 @@ static GstFlowReturn smooth_buffer_ ## DTYPE(const DTYPE *src, guint64 src_size,
 
 
 #define DEFINE_SMOOTH_COMPLEX_BUFFER(DTYPE) \
-static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, guint64 src_size, DTYPE complex *dst, guint64 dst_size, double *fifo_array_re, double *fifo_array_im, double *avg_array_re, double *avg_array_im, double default_kappa_re, double default_kappa_im, double *current_median_re, double *current_median_im, double maximum_offset_re, double maximum_offset_im, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, int *num_bad_in_avg_re, int *num_bad_in_avg_im, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa, int waste_samples, int *samples_in_filter) { \
+static GstFlowReturn smooth_complex_buffer_ ## DTYPE(const DTYPE complex *src, guint64 src_size, DTYPE complex *dst, guint64 dst_size, double *fifo_array_re, double *fifo_array_im, double *avg_array_re, double *avg_array_im, double default_kappa_re, double default_kappa_im, double *current_median_re, double *current_median_im, double maximum_offset_re, double maximum_offset_im, gint array_size, gint avg_array_size, int *index_re, int *index_im, int *avg_index_re, int *avg_index_im, int *num_bad_in_avg_re, int *num_bad_in_avg_im, gboolean gap, gboolean default_to_median, gboolean track_bad_kappa, int *samples_in_filter) { \
 	guint64 i; \
 	double new_element_re, new_element_im; \
 	DTYPE complex new_avg; \
@@ -468,6 +468,59 @@ static gboolean start(GstBaseTransform *trans)
 
 
 /*
+ * sink_event()
+ */
+
+
+static gboolean sink_event(GstBaseTransform *trans, GstEvent *event) {
+	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(trans);
+	gboolean success = TRUE;
+	GST_DEBUG_OBJECT(element, "Got %s event on sink pad", GST_EVENT_TYPE_NAME(event));
+
+	guint64 waste_samples = (guint64) (element->filter_latency * (element->array_size + element->avg_array_size - 2));
+	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS && waste_samples > 0) {
+		/* Trick the function by passing it fake input data */
+		void *fake = g_malloc(waste_samples * element->unit_size);
+		void *data = g_malloc(waste_samples * element->unit_size);
+		GstFlowReturn result;
+		if(element->data_type == GSTLAL_SMOOTHKAPPAS_F32) {
+			result = smooth_buffer_float((float *) fake, waste_samples, (float *) data, waste_samples, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, TRUE, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
+		} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_F64) {
+			result = smooth_buffer_double((double *) fake, waste_samples, (double *) data, waste_samples, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, TRUE, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
+		} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z64) {
+			result = smooth_complex_buffer_float((float complex *) fake, waste_samples, (float complex *) data, waste_samples, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, TRUE, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
+		} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z128) {
+			result = smooth_complex_buffer_double((double complex *) fake, waste_samples, (double complex *) data, waste_samples, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, TRUE, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
+		} else {
+			result = GST_FLOW_ERROR;
+			success = FALSE;
+		}
+		g_free(fake);
+		fake = NULL;
+
+		if(result == GST_FLOW_OK) {
+			GstBuffer *buf;
+			buf = gst_buffer_new_wrapped(data, waste_samples * element->unit_size);
+
+			set_metadata(element, buf, waste_samples);
+
+			/* push buffer downstream */
+			GST_DEBUG_OBJECT(element, "pushing final buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buf));
+			result = gst_pad_push(element->srcpad, buf);
+		}
+		if(G_UNLIKELY(result != GST_FLOW_OK)) {
+			GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result));
+			success = FALSE;
+		}
+	}
+
+	success &= GST_BASE_TRANSFORM_CLASS(gstlal_smoothkappas_parent_class)->sink_event(trans, event);
+
+	return success;
+}
+
+
+/*
  * transform_size()
  */
 
@@ -569,13 +622,13 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 	/* Process data in buffer */
 	if(element->data_type == GSTLAL_SMOOTHKAPPAS_F32) {
-		result = smooth_buffer_float((const float *) inmap.data, inmap.size / element->unit_size, (float *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, gap, element->default_to_median, element->track_bad_kappa, waste_samples, &element->samples_in_filter);
+		result = smooth_buffer_float((const float *) inmap.data, inmap.size / element->unit_size, (float *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, gap, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
 	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_F64) {
-		result = smooth_buffer_double((const double *) inmap.data, inmap.size / element->unit_size, (double *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, gap, element->default_to_median, element->track_bad_kappa, waste_samples, &element->samples_in_filter);
+		result = smooth_buffer_double((const double *) inmap.data, inmap.size / element->unit_size, (double *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->avg_array_re, element->default_kappa_re, &element->current_median_re, element->maximum_offset_re, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, gap, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
 	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z64) {
-		result = smooth_complex_buffer_float((const float complex *) inmap.data, inmap.size / element->unit_size, (float complex *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, gap, element->default_to_median, element->track_bad_kappa, waste_samples, &element->samples_in_filter);
+		result = smooth_complex_buffer_float((const float complex *) inmap.data, inmap.size / element->unit_size, (float complex *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, gap, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
 	} else if(element->data_type == GSTLAL_SMOOTHKAPPAS_Z128) {
-		result = smooth_complex_buffer_double((const double complex *) inmap.data, inmap.size / element->unit_size, (double complex *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, gap, element->default_to_median, element->track_bad_kappa, waste_samples, &element->samples_in_filter);
+		result = smooth_complex_buffer_double((const double complex *) inmap.data, inmap.size / element->unit_size, (double complex *) outmap.data, outmap.size / element->unit_size, element->fifo_array_re, element->fifo_array_im, element->avg_array_re, element->avg_array_im, element->default_kappa_re, element->default_kappa_im, &element->current_median_re, &element->current_median_im, element->maximum_offset_re, element->maximum_offset_im, element->array_size, element->avg_array_size, &element->index_re, &element->index_im, &element->avg_index_re, &element->avg_index_im, &element->num_bad_in_avg_re, &element->num_bad_in_avg_im, gap, element->default_to_median, element->track_bad_kappa, &element->samples_in_filter);
 	} else {
 		g_assert_not_reached();
 	}
@@ -715,6 +768,8 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 static void finalize(GObject *object)
 {
 	GSTLALSmoothKappas *element = GSTLAL_SMOOTHKAPPAS(object);
+	gst_object_unref(element->srcpad);
+	element->srcpad = NULL;
 	g_free(element->fifo_array_re);
 	element->fifo_array_re = NULL;
 	g_free(element->fifo_array_im);
@@ -753,6 +808,7 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
 	transform_class->start = GST_DEBUG_FUNCPTR(start);
+	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
 	transform_class->transform = GST_DEBUG_FUNCPTR(transform);
 
@@ -883,8 +939,15 @@ static void gstlal_smoothkappas_class_init(GSTLALSmoothKappasClass *klass)
  */
 
 
-static void gstlal_smoothkappas_init(GSTLALSmoothKappas *element)
-{
+static void gstlal_smoothkappas_init(GSTLALSmoothKappas *element) {
+
+	/* retrieve (and ref) src pad */
+	GstPad *pad = gst_element_get_static_pad(GST_ELEMENT(element), "src");
+	GST_PAD_SET_PROXY_CAPS(pad);
+	GST_PAD_SET_PROXY_ALLOCATION(pad);
+	GST_PAD_SET_PROXY_SCHEDULING(pad);
+	element->srcpad = pad;
+
 	element->unit_size = 0;
 	element->rate = 0;
 	element->array_size = 0;

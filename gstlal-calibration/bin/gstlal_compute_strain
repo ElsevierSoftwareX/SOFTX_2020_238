@@ -2857,7 +2857,7 @@ if compute_srcq:
 
 mux = pipeparts.mkframecppchannelmux(pipeline, channelmux_input_dict, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file, compression_scheme = int(OutputConfigs["compressionscheme"]), compression_level = int(OutputConfigs["compressionlevel"]))
 
-# Check that all frames are long enough, that they have all of the channels by requring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
+# Check that all frames are long enough, that they have all of the channels by requiring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
 def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):
 	if verbose:
 		print("Checking if frames are complete")

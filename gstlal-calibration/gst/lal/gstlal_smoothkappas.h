@@ -60,6 +60,9 @@ typedef struct _GSTLALSmoothKappasClass GSTLALSmoothKappasClass;
 struct _GSTLALSmoothKappas {
 	GstBaseTransform element;
 
+	/* Pads */
+	GstPad *srcpad;
+
 	/* stream information */
 	gint unit_size;
 	gint rate;
