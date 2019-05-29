@@ -1,0 +1,44 @@
+#!/usr/bin/python
+import sys
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw import lsctables
+import numpy
+import argparse
+import h5py
+from gstlal import pipeline
+from gstlal import dagparts
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--psd-xml-file", help = "provide a psd xml file")
+parser.add_argument("--bank-file", help = "provide the bank file for which overlaps will be calculated")
+args = parser.parse_args()
+
+xmldoc = ligolw_utils.load_filename(args.bank_file, verbose = True, contenthandler = LIGOLWContentHandler)
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+try:
+	os.mkdir("logs")
+except:
+	pass
+dag = dagparts.DAG("metric_overlap")
+
+overlapJob = dagparts.DAGJob("gstlal_inspiral_metric_overlap", condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
+addJob = dagparts.DAGJob("gstlal_inspiral_add_metric_overlaps", condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
+
+num = 1000
+overlapnodes = []
+# FIXME dont hardcode 3345408, it comes from number of tiles in TimePhaseSNR
+for start in range(0, len(sngl_inspiral_table), num):
+        stop = start + num
+        overlapnodes.append(dagparts.DAGNode(overlapJob, dag, parent_nodes = [], opts = {"start-row":str(start), "num-rows":str(num)}, output_files = {"out-h5-file":"%s/metric_overlaps_%d_%d.h5" % (overlapJob.output_path, start, num)}, input_files = {"psd-xml-file": args.psd_xml_file, "bank-file": args.bank_file}))
+
+addnode = dagparts.DAGNode(addJob, dag, parent_nodes = overlapnodes, input_files = {"": [n.output_files["out-h5-file"] for n in overlapnodes]})
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
