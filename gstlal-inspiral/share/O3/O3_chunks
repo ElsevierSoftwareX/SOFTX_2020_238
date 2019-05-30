@@ -1,0 +1,109 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2018 Ryan Magee 2019 Ryan Magee, Duncan Meacher and Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+'''
+A program to define analysis chunks
+'''
+
+import subprocess
+
+from ligo import segments
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import segments as ligolw_segments
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+def extract_segs(fname, segname):
+	llwsegments = ligolw_segments.LigolwSegments(ligolw_utils.load_filename(fname, verbose = True, contenthandler = LIGOLWContentHandler))
+	return llwsegments.get_by_name(segname).coalesce()
+
+present = int(subprocess.Popen('lalapps_tconvert', stdout = subprocess.PIPE).communicate()[0])
+
+
+# Get segments for each channel
+intermediate_files = []
+for channel in ['H1:DMT-ANALYSIS_READY:1','L1:DMT-ANALYSIS_READY:1','V1:ITF_SCIENCE']:
+	segcommand = "ligolw_segment_query_dqsegdb --segment-url=https://segments.ligo.org -q --gps-start-time %f --gps-end-time %f --include-segments %s --result-name=datasegments -o %s.intermediate" % (1238166018, present, channel, channel.split(':')[0])
+	intermediate_files.append("%s.intermediate" % channel.split(':')[0])
+	segs = subprocess.Popen(segcommand.split(), stdout = subprocess.PIPE)
+	segs.wait()
+
+# Combine segments into a single file
+combined = ['ligolw_add','--ilwd','-o','segments.xml.gz']
+combined.extend(["%s" % x for x in intermediate_files])
+combine = subprocess.Popen(combined, stdout = subprocess.PIPE)
+combine.wait()
+
+# Character formatting/compatibility
+ligolw_no_ilwdchar = "ligolw_no_ilwdchar segments.xml.gz"
+ilwd = subprocess.Popen(ligolw_no_ilwdchar.split(), stdout = subprocess.PIPE)
+ilwd.wait()
+seglistfname = "segments.xml.gz"
+
+seglistdicts = extract_segs(seglistfname, "datasegments")
+rm_intermediates = subprocess.Popen(['rm']+["%s" % x for x in intermediate_files] + ['segments.xml.gz'], stdout = subprocess.PIPE)
+rm_intermediates.wait()
+
+# Code to define offline analysis chunks
+# Here are the rules
+# 1) We only define chunk boundaries when *no* ifos are on
+# 2) We require every ifo to have at least 5 days of coincident time with any
+# other ifo in a chunk
+
+
+ifos = set(seglistdicts)
+
+# This is the set of segments for each ifo where it was in coincidence with at least one other ifo
+doublesegs = segments.segmentlistdict()
+for ifo1 in ifos:
+	for ifo2 in ifos - set([ifo1]):
+		try:
+			doublesegs[ifo1] |= seglistdicts.intersection((ifo1, ifo2))
+		except KeyError:
+			doublesegs[ifo1] = seglistdicts.intersection((ifo1, ifo2))
+
+# This is the set of segments when at least one ifo was on
+segs = seglistdicts.union(seglistdicts.keys())
+
+# we define "enough time" to be 5 days
+def enoughtime(seglist, start, end):
+	return abs(seglist & segments.segmentlist([segments.segment(start, end)])) > 86400 * 5
+
+# iterate through all the segment where at least one ifo was on and extract
+# chunks where each ifo satisfies our coincidence requirement. A consequence is
+# that we only define boundaries when *no* ifos are on
+# 2000000000 is a placeholder to define a segment end.  
+chunks = segments.segmentlist([segments.segment(segs[0][0], 2000000000)])
+for seg in segs:
+	start = seg[0]
+	end = seg[1]
+	if all([enoughtime(s, chunks[-1][0], end) for s in doublesegs.values()]):
+		chunks[-1] = segments.segment(chunks[-1][0], end)
+		chunks.append(segments.segment(end, 2000000000))
+
+print "NOTE! WARNING! The last chunk is a moving target if any ifo is currently locked - best to ignore it until you are sure"
+print "%6s%12s%12s%12s" % ("chunk", "start", "end", "livetime")
+# Skip the last because it won't be complete yet, this is in addition to the
+# warning above. The warning above still applies
+for n, (chunk) in enumerate(chunks[:-1]):
+	print "%6s%12s%12s%12s" % (n+1, chunk[0], chunk[1], abs(chunk))
+
