@@ -1,5 +1,5 @@
 #!/usr/bin/python
-import sys
+import sys, os
 from ligo.lw import ligolw
 from ligo.lw import utils as ligolw_utils
 from ligo.lw import lsctables
