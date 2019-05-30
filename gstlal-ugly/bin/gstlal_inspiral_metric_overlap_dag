@@ -37,7 +37,7 @@ for start in range(0, len(sngl_inspiral_table), num):
         stop = start + num
         overlapnodes.append(dagparts.DAGNode(overlapJob, dag, parent_nodes = [], opts = {"start-row":str(start), "num-rows":str(num)}, output_files = {"out-h5-file":"%s/metric_overlaps_%d_%d.h5" % (overlapJob.output_path, start, num)}, input_files = {"psd-xml-file": args.psd_xml_file, "bank-file": args.bank_file}))
 
-addnode = dagparts.DAGNode(addJob, dag, parent_nodes = overlapnodes, input_files = {"": [n.output_files["out-h5-file"] for n in overlapnodes]})
+addnode = dagparts.DAGNode(addJob, dag, parent_nodes = overlapnodes, output_files = {"out-h5-file": "overlaps.h5"}, input_files = {"": [n.output_files["out-h5-file"] for n in overlapnodes]})
 
 dag.write_sub_files()
 dag.write_dag()
