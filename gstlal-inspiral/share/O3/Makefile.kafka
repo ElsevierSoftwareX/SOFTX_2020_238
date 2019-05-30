@@ -1,0 +1,47 @@
+SHELL := /bin/bash # Use bash syntax
+
+########################
+# User/Accounting Tags #
+########################
+
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_GROUP=ligo.dev.o3.cbc.em.gstlalonline
+ACCOUNTING_USER=patrick.godwin
+
+ANALYSIS_TAG = er14
+
+CONDOR_UNIVERSE=local
+
+##################
+# Kafka Settings #
+##################
+
+# kafka options
+KAFKA_NODE = cbc.ldas.cit
+KAFKA_HOSTNAME := $(shell host $(KAFKA_NODE) | awk 'NF>1{print $$NF}')
+
+KAFKA_PORT = 9182
+ZOOKEEPER_PORT = 2271
+
+############
+# Workflow #
+############
+
+all : kafka_broker_$(ANALYSIS_TAG).dag
+	@echo "launch kafka dag: condor_submit_dag kafka_broker_$(ANALYSIS_TAG).dag"
+
+kafka_broker_$(ANALYSIS_TAG).dag :
+	gstlal_kafka_dag \
+		--analysis-tag $(ANALYSIS_TAG) \
+		--kafka-hostname $(KAFKA_HOSTNAME) \
+		--kafka-port $(KAFKA_PORT) \
+		--zookeeper-port $(ZOOKEEPER_PORT) \
+		--condor-universe $(CONDOR_UNIVERSE) \
+		--condor-command=accounting_group=$(ACCOUNTING_GROUP) \
+		--condor-command=accounting_group_user=$(ACCOUNTING_USER) \
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt
+
+clean-all :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt kafka* zookeeper*
