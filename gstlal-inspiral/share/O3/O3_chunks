@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2018 Ryan Magee 2019 Ryan Magee, Duncan Meacher and Chad Hanna
+# Copyright (C) 2018 Ryan Magee
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -105,5 +105,5 @@ print "%6s%12s%12s%12s" % ("chunk", "start", "end", "livetime")
 # Skip the last because it won't be complete yet, this is in addition to the
 # warning above. The warning above still applies
 for n, (chunk) in enumerate(chunks[:-1]):
-	print "%6s%12s%12s%12s" % (n+1, chunk[0], chunk[1], abs(chunk))
+	print "%6s%12s%12s%12s" % (n+1, chunk[0], chunk[1], abs(segments.segmentlist([chunk]) & segs))
 
