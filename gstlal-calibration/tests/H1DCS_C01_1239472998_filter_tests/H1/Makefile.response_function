@@ -1,0 +1,11 @@
+all: DCS_response_function_bode_plot
+
+FILTERS_FILE = Filters/O3/GDSFilters/H1DCS_C01_1239472998.npz
+
+DCS_response_function_bode_plot: 
+	python ../../check_calibration/response_function.py --gps-start-time $(SHORT_PLOT_START) --gps-end-time $(SHORT_PLOT_END) --dt 6.103515625e-05 --ifo $(IFO)1 --hoft-frames-cache $(IFO)1_hoft_DCS_no_kappas_frames.cache --raw-frames-cache $(IFO)1_raw_frames.cache --response-file $(FILTERS_FILE) --analyze-calcs-hoft --hoft-channel-name DCS-CALIB_STRAIN
+
+
+clean: 
+	rm *.pdf
+

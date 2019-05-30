@@ -1,0 +1,9 @@
+all: calib_state_vector_plot
+
+calib_state_vector_plot: 
+	python ../../check_calibration/statevector_plot.py --gps-start-time $(SHORT_PLOT_START) --gps-end-time $(SHORT_PLOT_END) --ifo $(IFO)1 --hoft-frames-cache $(IFO)1_hoft_DCS_frames.cache --calib-state-vector-channel-name DCS-CALIB_STATE_VECTOR
+
+
+clean: 
+	rm *.pdf
+
