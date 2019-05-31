@@ -1,3 +1,14 @@
+gstlal-calibration (1.2.10-1) unstable; urgency=low
+
+  * In the actuation path, separate the correction filter from the model
+    filter to retain better high-pass filtering with shorter filters.
+  * Bug fix so that raw data dropouts don't corrupt the tracking of the power
+    mains frequency and the subtraction of the power mains lines.
+  * Bug fix so that we can save a few minutes at the beginning of each lock
+    stretch when calibrating offline without a segmentation fault at the end of jobs.
+ 
+ -- Madeline Wade <madeline.wade@ligo.org>  Fri, 31 May 2019 09:28:10 -0200
+
 gstlal-calibration (1.2.9-1) unstable; urgency=low
 
   * Bug fixes to EPICS match checks in CALIB_STATE_VECTOR
