@@ -23,7 +23,7 @@ Build-Depends:
  libgsl-dev (>= 1.9),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
- pkg-config,
+ pkg-config (>= 0.18.0),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  python-glue-ligolw-tools,
