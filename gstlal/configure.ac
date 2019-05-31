@@ -379,10 +379,7 @@ AC_SUBST([ORC_LIBS])
 #
 
 
-AX_CHECK_ZLIB()
-if test x$HAVE_LIBZ = "xno" ; then
-	AC_MSG_FAILURE([zlib is required])
-fi
+AX_CHECK_ZLIB([],AC_MSG_FAILURE([zlib is required]))
 
 
 #
