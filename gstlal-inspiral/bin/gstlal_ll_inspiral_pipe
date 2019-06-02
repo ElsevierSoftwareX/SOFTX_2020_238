@@ -303,6 +303,7 @@ if options.output_kafka_server is not None and options.run_output_kafka:
 
 # aggregator job
 aggJob = dagparts.DAGJob("gstlal_ll_inspiral_aggregator",  condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+trigaggJob = dagparts.DAGJob("gstlal_ll_inspiral_trigger_aggregator",  condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
 # Summary page job
 #pageJob = dagparts.DAGJob("gstlal_ll_inspiral_daily_page_online",  universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
@@ -576,6 +577,25 @@ for route in agg_routes:
 		agg_options["job-start"] = aggstart
 		agg_options["num-jobs"] = aggend - aggstart
 		aggNode = dagparts.DAGNode(aggJob, dag, [], opts = agg_options)
+
+# Trigger aggregation
+trigagg_options = {
+	"dump-period": 0,
+	"base-dir": "aggregator",
+	"job-tag": os.getcwd(),
+	"num-jobs": len(jobTags),
+	"num-threads": 2,
+	"job-start": 0,
+	"kafka-server": options.output_kafka_server,
+	"data-backend": options.agg_data_backend,
+}
+if options.agg_data_backend == 'influx':
+	trigagg_options.update({
+		"influx-database-name": options.influx_database_name,
+		"influx-hostname": options.influx_hostname,
+		"influx-port": options.influx_port,
+	})
+aggNode = dagparts.DAGNode(trigaggJob, dag, [], opts = trigagg_options)
 
 # state-based aggregation jobs
 for routes in groups(state_routes, 2):
