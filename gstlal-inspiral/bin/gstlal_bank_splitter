@@ -88,7 +88,7 @@ def group_templates(templates, n, overlap = 0):
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
-	parser.add_option("--output-full-bank-file", metavar = "path", default = "gstlal_bank.xml.gz", help = "Set the path to output the bank.  Default is gstlal_bank.xml.gz")
+	parser.add_option("--output-full-bank-file", metavar = "path", help = "Set the path to output the bank.")
 	parser.add_option("--output-cache", metavar = "file", help = "Set the file name for the output cache.")
 	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
 	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
@@ -146,7 +146,8 @@ sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
-ligolw_utils.write_filename(xmldoc, options.output_full_bank_file, gz = options.output_full_bank_file.endswith('gz'), verbose = options.verbose)
+if options.output_full_bank_file is not None:
+	ligolw_utils.write_filename(xmldoc, options.output_full_bank_file, gz = options.output_full_bank_file.endswith('gz'), verbose = options.verbose)
 
 # Bin by Chi
 sngl_inspiral_table.sort(key = lambda row: spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z))
