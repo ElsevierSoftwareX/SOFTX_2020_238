@@ -797,10 +797,24 @@ WHERE
 
 
 	@classmethod
+	def get_xml_root(cls, xml, name):
+		"""
+		Sub-classes can use this in their overrides of the
+		.from_xml() method to find the root element of the XML
+		serialization.
+		"""
+		name = u"%s:%s" % (name, cls.ligo_lw_name_suffix)
+		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == name]
+		if len(xml) != 1:
+			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
+		return xml[0]
+
+
+	@classmethod
 	def from_xml(cls, xml, name):
 		# find the root of the XML tree containing the
 		# serialization of this object
-		xml, = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:%s" % (name, cls.ligo_lw_name_suffix)]
+		xml = cls.get_xml_root(xml, name)
 		# create a mostly uninitialized instance
 		self = cls(None)
 		# populate from XML
