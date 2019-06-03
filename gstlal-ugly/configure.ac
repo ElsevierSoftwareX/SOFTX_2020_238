@@ -22,7 +22,6 @@ AC_CONFIG_FILES([ \
 	python/Makefile \
 	share/Makefile \
 	share/vis/Makefile \
-	share/dataserver/Makefile \
 	gst/Makefile \
 	gst/nds/Makefile \
 	gst/lal/Makefile \
@@ -469,30 +468,6 @@ AS_IF([test "x$with_webdir" != "xno"], [
 ])
 AC_DEFINE([HAVE_WEBDIR], [test "x{HAVE_WEBDIR}" == "xyes"], [Defined if you are enabling web visualiation])
 AM_CONDITIONAL([COND_WEBDIR], [test "x${HAVE_WEBDIR}" == "xyes"])
-
-
-#
-# Check for dataserver, this enables installation of data server for web
-# visualization
-#
-
-
-AC_ARG_WITH(
-	[dataserver],
-	[AS_HELP_STRING([--with-dataserver], [specify location of directory for data server tools [$HOME/public_html/cgi-bin]])],
-	[],
-	[with_dataserver=no]
-)
-AS_IF([test "x$with_dataserver" != "xno"], [
-	AC_MSG_WARN([copying data server tools to $with_dataserver])
-	AC_SUBST([DATASRVDEST],["$with_dataserver"])
-	HAVE_DATASERVER="yes"
-],[
-	AC_MSG_WARN([disabling installation of data server tools])
-	HAVE_DATASERVER="no"
-])
-AC_DEFINE([HAVE_DATASERVER], [test "x{HAVE_DATASERVER}" == "xyes"], [Defined if you are enabling web data server])
-AM_CONDITIONAL([COND_DATASERVER], [test "x${HAVE_DATASERVER}" == "xyes"])
 
 
 #

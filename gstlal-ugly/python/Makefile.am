@@ -10,7 +10,6 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	aggregator.py \
-	gviz_api.py \
 	metric.py \
 	tree.py
 
