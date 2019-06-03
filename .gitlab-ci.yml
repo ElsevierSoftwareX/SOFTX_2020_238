@@ -297,7 +297,7 @@ test:gstlal-inspiral:
   script:
     - export GSTLAL_FIR_WHITEN=0
     - cd gstlal-inspiral
-    - python -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/webpage.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py --ignore python/inspiral_pipe.py --ignore python/plotsnr.py
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py --ignore python/inspiral_pipe.py --ignore python/plotsnr.py
   only:
     - pushes
     - schedules
