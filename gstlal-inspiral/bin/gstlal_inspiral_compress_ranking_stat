@@ -1,0 +1,157 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2019  Kipp Cannon
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+import math
+from optparse import OptionParser
+import sys
+
+
+from ligo.lw import utils as ligolw_utils
+from gstlal import far
+
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-t", "--threshold", type = "float", default = 0.01, help = "Only keep horizon distance values that differ by this much, fractionally, from their neighbours (default = 0.01).")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, filenames = parser.parse_args()
+
+	process_params = dict(options.__dict__)
+
+	return options, process_params, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, process_params, filenames = parse_command_line()
+
+
+#
+# loop over ranking statistic files
+#
+
+
+for filename in filenames:
+	#
+	# load file
+	#
+
+	xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler)
+
+	#
+	# extract ranking statistic object, and erase from XML tree
+	#
+
+	rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(xmldoc)
+	if rankingstatpdf is not None and options.verbose:
+		print >>sys.stderr, "WARNING: \"%s\" contains a RankingStatPDF object, it is not a pure ranking statistic file, you might be using this program on the wrong files." % filename
+	# FIXME:  don't hard-code object name
+	name = u"gstlal_inspiral_likelihood"
+	elem = rankingstat.get_xml_root(xmldoc, name)
+	elem.parentNode.removeChild(elem)
+	elem.unlink()
+	elem = rankingstatpdf.get_xml_root(xmldoc, name)
+	elem.parentNode.removeChild(elem)
+	elem.unlink()
+
+	#
+	# compress horizon distance history.  the outer loop makes a list
+	# to ensure no problems modifying the object being iterated over
+	#
+
+	abs_ln_thresh = math.log1p(options.threshold)
+	for instrument, horizon_history in list(rankingstat.numerator.horizon_history.items()):
+		# GPS times
+		keys = horizon_history.keys()
+		# distances
+		values = horizon_history.values()
+
+		# indexes of distances that are non-zero and differ
+		# fractionally from both neighbours by less than the
+		# selected threshold.  always keep the first and last
+		# values
+		removals = [i for i in range(2, len(values) - 1) if values[i - 1] > 0. and values[i] > 0. and values[i + 1] > 0. and abs(math.log(values[i] / values[i - 1])) < abs_ln_thresh and abs(math.log(values[i] / values[i + 1])) < abs_ln_thresh]
+
+		# compress arrays
+		j = k = 0
+		for i in range(len(keys)):
+			if k < len(removals) and i == removals[k]:
+				k += 1
+			else:
+				keys[j] = keys[i]
+				values[j] = values[i]
+				j += 1
+		assert (i + 1) - j == len(removals), "%d %d %d" % (i, j, len(removals))
+		del keys[j:]
+		del values[j:]
+		if options.verbose:
+			print >>sys.stderr, "\"%s\":  %s horizon history reduced to %.3g%% of original size" % (filename, instrument, 100. * j / (i + 1.))
+
+		# replace
+		rankingstat.numerator.horizon_history[instrument] = type(horizon_history)(zip(keys, values))
+
+	#
+	# re-insert into XML tree
+	#
+
+	far.gen_likelihood_control_doc(xmldoc, rankingstat, rankingstatpdf)
+
+	#
+	# write to disk
+	#
+
+	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith(".gz"), verbose = options.verbose)
