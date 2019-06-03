@@ -1,9 +1,64 @@
-#!/usr/bin/python
+#!/usr/bin/env python
+#
+# Copyright (C) 2011 Chad Hanna
+# Copyright (C) 2019 Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+## @file
+# This program makes a summary web page of a gstlal inspiral analysis.
 
 import sys, os, glob, shutil, time
+import re
 import subprocess
-from gstlal import webpage
+import json
+
 from optparse import OptionParser
+from ligo.scald import report
+
+ABOUT_URL = 'https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true'
+SCHEDULE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false'
+IMAGE_URL = 'https://results.ligo.uwm.edu/~gstlalcbc/share/vis/gstlal.png'
+
+
+def sanitizetext(item):
+	# FIXME: hack to clean up formatted columns downstream,
+	#        should really be handling this at the source
+	item = item.replace('&#x2299;', '')
+	htmlr = re.compile('<.*?>')
+	alphanumr = re.compile('[\W_]+')
+	item = re.sub(htmlr, '', item)
+	return re.sub(alphanumr, '', item)
+
+def read_format_json(path):
+	"""
+	formats tabular summaries into a format readable by ligo-scald
+	FIXME: remove once formatting is changed upstream
+	"""
+	table = ''
+	with open(path, 'r') as f:
+		table = json.loads(f.read())
+
+	### format data
+	# FIXME: hack to clean up formatted columns downstream,
+	#        should really be handling this at the source
+	fields = [{'key': sanitizetext(col['id']), 'label': sanitizetext(col['label']), 'sortable': True} for col in table['cols']]
+	colnames = [field['key'] for field in fields]
+	items = [{col: val['v'] for col, val in zip(colnames, row['c'])} for row in table['rows']]
+
+	return {'fields': fields, 'items': items}
 
 def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
@@ -21,444 +76,379 @@ def parse_command_line():
 # Setup
 #
 
-
 opts, files = parse_command_line()
-# Setup an page and navigation bar
-thispage = webpage.page()
-nav = webpage.tabs()
 
-
-#
-# Add the page tabs first
-#
-
-
-summary = webpage.tab("summary", "Summary information", "Summary information", ["segments_div_wrapper"])
-injparams = webpage.tab("injection_params","Injection Parameters", "Injection Parameters")
-#injacc = webpage.tab("injection_params_acc","Injection Parameters Accuracy", "Injection Accuracy")
-#missed_found = webpage.tab("missed_found","Missed Found", "Missed Found")
-injrecovery = webpage.tab("injection_recovery","Injection Recovery", "Injection Recovery")
-sens = webpage.tab("search_sensitivity","Search Sensitivity", "Search Sensitivity")
-back = webpage.tab("background","Background", "Background")
-#chisq = webpage.tab("chisq","Chi-squared", "Chi-squared")
-money = webpage.tab("money","Money Plots", "Money Plots")
-about_doc = webpage.tab("about", "About", "About")
-sched_doc = webpage.tab("schedule", "Schedule", "Schedule")
-
-#
-# add the sections to the nav bar and the nav bar to the page
-#
-
-nav+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.png" """)])]
-nav+=[summary, injparams, injrecovery, sens, back, money, about_doc, sched_doc]
-nav+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
-thispage+=nav
-thispage+=webpage.elem("br",[])
-
-#
-# Add summary page content to the summary page tab
-#
-
-
-summary_about = webpage.elem("p", ["This page was generated on %s by %s in the working directory <code>%s</code>." % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"])])
-
-
-
-summary_lt = webpage.section("Search Summary")
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]), "lt_summary_div"))
-summary_lt += [webpage.elem("div", [], "id=lt_summary_div width=100% height=500")]
-
-#FIXME assumes the zero lag database is the first tag
-summary_seg = webpage.section("Segments")
-thispage.header_content.append(webpage.googleTimelineFromJson(os.path.join(opts.glob_path, '%s_segments.json' % opts.output_user_tag[0]), "segments_div"))
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]), "segment_table_div", gpscolumns = [2,3,4]))
-summary_seg += [webpage.elem("div", [], "id=segments_div width=100% height=500")]
-summary_seg += [webpage.elem("div", [], "id=segment_table_div width=100% height=500")]
-
-summary_env = webpage.section("Environment")
-#makefile = [f for f in glob.glob("Makefile*") if "Makefile.offline_analysis_rules" not in f][0]
-tmpcontent = ["\n".join(["%s=%s" % (k, os.environ[k]) for k in ("PATH", "PYTHONPATH", "PKG_CONFIG_PATH", "GST_PLUGIN_PATH")])]
-summary_env += [webpage.elem("pre", tmpcontent)]
-
-summary_make = webpage.section("Analysis Makefile")
-#summary_make += [webpage.elem("pre", [webpage.elem("code", [open(makefile).read()])])]
-
-summary_commands = webpage.section("Commands run")
-#summary_commands += [webpage.elem("pre", [webpage.elem("samp", ["\n".join(["\t %s" % x for x in  subprocess.check_output(["make", "-B", "-n", "-f", makefile]).split("\n") ])])])]
-
-
-summary_div = summary([summary_about, summary_lt, summary_seg, summary_env, summary_make, summary_commands])
-
-
-#
-# Add injection parameter content
-#
-
-
-inj_params_about = webpage.elem("p", ["Injections are the addition of simulated signals into the gravitational wave strain data.  They are useful for diagnosing the pipeline and measuring the sensitivity.  Care is taken to ensure that the input distribution is sensible.  The remaining sections describe the input distributions for the injections.  They are not necessarily what is analyzed since the analyzed segments are not used for determining the injection sets (i.e. injections may be scheduled for times when a detector is not even functioning).  <br><br>The following plots are typically produced by injection waveform type.  Several injection runs of the same waveform (with different random seeds) are often done.  Here all runs of the same waveform type are shown together."])
-
-inj_params_m1m2 = webpage.section("Injected Parameters (m1 and m2)")
-inj_params_m1m2 += webpage.image_glob('%s/*6_sim_dist_m1_m2*.png' % opts.glob_path, "Above are the injected mass parameters for the simulations done.  Typically injections are done uniformally in component mass unless the waveform approximant cannot support certain mass ratios.")
-
-inj_params_time_dist = webpage.section("Injected Parameters time and distance")
-inj_params_time_dist += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_time_distance*.png'), "Unless doing a directed search injections are uniform in time.  Although the correct distance distribution would be uniform in volume typically logarithmic injections are done")
-
-inj_params_ra_dec = webpage.section("Injected Parameters RA and DEC")
-inj_params_ra_dec += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_ra_dec*.png'), "Unless doing a directed search injections are uniform on the sky.")
-
-inj_params_inc_pol = webpage.section("Injected Parameters inclination and polarization")
-inj_params_inc_pol += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_inc_pol*.png'), "Unless doing a directed search injections are uniform in sin(inclination) and polarizations.")
-
-inj_params_spin1z_spin2z = webpage.section("Injected Parameters Z component spin")
-inj_params_spin1z_spin2z += webpage.image_glob(os.path.join(opts.glob_path, '*6_sim_dist_spin1z_spin2z*.png'), "The Z component spins of the injection set.  Often injections are done without spin, so don't be surprised if these are zero.")
-
-inj_params_div = injparams([inj_params_about, inj_params_m1m2, inj_params_time_dist, inj_params_ra_dec, inj_params_inc_pol, inj_params_spin1z_spin2z])
-
-
-#
-# Add injection accuracy content
-#
-
-
-inj_acc_about = webpage.elem("p", ["The accuracy of recovered parameters aids at diagnosing the performance of the pipeline as well as hinting at the possibility of measuring certain parameters.  Mass parameters for the low mass search are often recovered better than mass parameters for the high mass search."])
-
-inj_acc_mchirp = webpage.section("Mchirp Parameter Accuracy")
-inj_acc_mchirp += webpage.image_glob(os.path.join(opts.glob_path, '*2_mchirp_acc_frac_*.png'), "Accuracy of chirp mass.")
-
-inj_acc_eta = webpage.section("Eta Parameter Accuracy")
-inj_acc_eta += webpage.image_glob(os.path.join(opts.glob_path, '*2_eta_acc_frac_*.png'), "Accuracy of eta")
-
-inj_acc_mtotal = webpage.section("Total Mass Parameter Accuracy")
-inj_acc_mtotal += webpage.image_glob(os.path.join(opts.glob_path, '*2_mtotal_acc_frac_*.png'), "Accuracy of total mass")
-
-inj_acc_time = webpage.section("Time Parameter Accuracy")
-inj_acc_time += webpage.image_glob(os.path.join(opts.glob_path, '*2_t_acc_*.png'), "Accuracy of time")
-
-inj_acc_spin = webpage.section("Effective Spin Accuracy")
-inj_acc_spin += webpage.image_glob(os.path.join(opts.glob_path, '*2_chi_acc_scatter*.png'), "Accuracy of mass-weighted spin")
-
-inj_acc_snr = webpage.section("SNR Recovery")
-inj_acc_snr += webpage.image_glob(os.path.join(opts.glob_path, '*2_snr_*.png'), "Injected expected SNR vs recovered SNR")
-
-
-
-#
-# Add injection missed / found content
-#
-
-
-missed_found_about = webpage.elem("p", ["""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections as a for the various IFO times for coincident triggers. We allow double coincident events so some categories can have multiple types of found injections (for  example H1L1 and H1H2L1 triggers in H1H2L1 time).  Because of ambiguity concerning the time of an injection and the injection window it is occasionally possible to find an injection in more detectors than what the "time" refers to.  For example, an injection's geocentric end time might be in H1L1 time but that might occur near a boundary where H2 was also on.  Thus one could find an H1L1 injection in H1H2L1 time."""])
-
-horizon = webpage.section("Horizon distance")
-fm_tab = webpage.section("Found / Missed Summary Table")
-fm_mc = webpage.section("Found / Missed Chirp Mass")
-fm_mt = webpage.section("Found / Missed Total Mass")
-fm_eta = webpage.section("Found / Missed Eta")
-fm_time = webpage.section("Found / Missed Time")
-fm_spin = webpage.section("Found / Missed Spin")
-fm_snr = webpage.section("Found / Missed Expected SNR")
-fm_mtab = webpage.section("Missed Table")
-
-horizon += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
-
-for tag in opts.output_user_tag:
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_injection_summary.json' % tag), "%sinjection_summary" % tag))
-	fm_tab += [webpage.elem("p", ["Summary of missed and found injections broken up by detector time for %s" % tag])]
-	fm_tab += [webpage.elem("div", [], "id=%sinjection_summary" % tag)]
-
-	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_d_vs_mchirp_*.png' % tag), "Distance of found and missed injections as a function of chirp mass: %s" % tag)
-	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mchirp_*.png' % tag), "Effective distance of found and missed injections as a function of chirp mass: %s" % tag)
-	fm_mc += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_mchirp_*.png' % tag), "Chirp distance of found and missed injections as a function of chirp mass.  For low mass systems the chirp mass scales out of the expected amplitude.  The chirp distance utilizes this and rescales the distance to be appropriate for a NS-NS binary.  At low total mass the missed/found barrier should be flat on this plot: %s" % tag)
-
-	fm_mt += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_mtotal_*.png' % tag), "Effective distance of found and missed injections as a function of total mass: %s" % tag)
-
-	fm_eta += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_eta_*.png' % tag), "Effective distance of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
-
-	fm_time += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_t_*.png' % tag), "Effective distance of found and missed injections as a function of time: %s" % tag)
-
-	fm_spin += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_deff_vs_chi_*.png' % tag), "Effective distance of found and missed injections as a function of mass-weighted spin: %s" % tag)
-
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % tag), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % tag)
-
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mtotal_*.png' % tag), "Expected SNR of found and missed injections as a function of total mass: %s" % tag)
-
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_eta_*.png' % tag), "Expected SNR of found and missed injections as a function of symmetric mass ratio eta: %s" % tag)
-
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_chi_*.png' % tag), "Expected SNR of found and missed injections as a function of mass-weighted spin: %s" % tag)
-
-	fm_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag), "Expected SNR of found and missed injections as a function of time")
-
-	# FIXME stupid convention to rely on the first tag being all of them. Note, previously we just used opts.output_user_tag[0] here.
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag), "%smissed_summary" % tag, gpscolumns = [2,3]))
-	fm_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % tag])]
-	fm_mtab += [webpage.elem("div", [], "id=%smissed_summary" % tag)]
-
-inj_recovery_div = injrecovery([inj_acc_about, inj_acc_mchirp, inj_acc_eta, inj_acc_mtotal, inj_acc_time, inj_acc_spin, inj_acc_snr, horizon, missed_found_about, fm_tab, fm_mc, fm_mt, fm_eta, fm_time, fm_spin, fm_snr, fm_mtab])
-
-
-#
-# Add sensitivity content
-#
-
-sens_about = webpage.elem("p", ["""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
-
-sens_div_list = [sens_about]
-for tag in opts.output_user_tag:
-	images = webpage.image_glob(os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % tag), "Sensitive volume (V*T) and mean sensitive distance: %s" % tag)
-	if len(images.content) > 0:
-		sens_section = webpage.section("Binned by SOURCE_TYPE")
-		sens_section += images
-		sens_div_list.append(sens_section)
-
-sens_div = sens(sens_div_list)
-
-
-#
-# Add sensitivity content
-#
-
-
-back_about = webpage.elem("p", ["This page shows the ingredients that go into ranking events and determining the False alarm probability."])
-
-back_snrchi = webpage.section("SNR and chi-squared")
-back_trigs = webpage.section("Background Triggers")
-#back_ratio = webpage.section("SNR ratios")
-back_rate = webpage.section("Rates")
-
-back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
-back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
-back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'), "Single Detector Likelihood Ratios")
-
-back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_eta_vs_snr_*.png'), "Single detector triggers coincident in time-shifted analyses.")
-back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_mchirp_vs_chieff_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
-back_trigs += webpage.image_glob(os.path.join(opts.glob_path, '*3_bgparams_tau0_vs_tau3_vs_snr*.png'), "Single detector triggers coincident in time-shifted analyses.")
-
-#back_ratio += webpage.image_glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'), "")
-
-back_rate +=  webpage.image_glob(os.path.join(opts.glob_path, '*RATES*.png'), "")
-
-
-
-#
-# Add chisq content
-#
-
-
-chisq_about = webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])
-
-chisq_dist = webpage.section("Chi-squared Distributions")
-chisq_snr = webpage.section("Signal-to-Noise Ratio")
-chisq_deff = webpage.section("Effective Distance")
-
-chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
-chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_mc_vs_rho_*closedbox*.png'), "Chi-squared vs chirp mass for single detectors after coincidence.")
-
-#chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'), "Comparison of SNR in pairs of detectors.")
-
-chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'), "Comparison of effective distance in pairs of detectors.")
-
-#back_div = back([back_about, back_snrchi, back_trigs, back_ratio, back_rate, chisq_about, chisq_dist, chisq_deff])
-back_div = back([back_about, back_snrchi, back_trigs, back_rate, chisq_about, chisq_dist, chisq_deff])
-
-
-#
-# Add results content
-#
-
-
-money_about = webpage.elem("p", ["This section provides the detection statistic plots and a summary of the loudest event."])
-money_ifar = webpage.section("Rate vs. Threshold")
-money_table = webpage.section("Loudest Table")
-
-money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
-thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "%sbgsummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
-money_table += [webpage.elem("p", ["Closed Box Summary Table"])]
-money_table += [webpage.elem("div", [], "id=%sbgsummary_table" % opts.output_user_tag[0])]
-
-money_div = money([money_about, money_ifar, money_table])
-
-
-#
-# Open Box plots
-#
-
-
-if opts.open_box:
-
-	back_snrchi += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
-
-	chisq_dist += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
-
-	chisq_snr += webpage.image_glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'), "Comparison of SNR in pairs of detectors.")
-
-	chisq_deff += webpage.image_glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'), "Comparison of effective distance in pairs of detectors.")
-
-	money_ifar += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "%ssummary_table" % opts.output_user_tag[0], gpscolumns = [5], scinotationcolumns = [1,2]))
-	money_table += [webpage.elem("p", ["Open Box Summary Table"])]
-	money_table += [webpage.elem("div", [], "id=%ssummary_table" % opts.output_user_tag[0])]
-
-#
-# Add search documentation
-#
-
-about_search = webpage.section("Search Plan Documentation")
-about_search += [webpage.elem("iframe", [], """src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true" width=100%% height=100%% id=search_doc_div""")]
-
-about_div = about_doc([about_search])
-
-#
-# Add search documentation
-#
-
-about_shifts = webpage.section("Search Run Schedule")
-about_shifts += [webpage.elem("iframe", [], """width=100% height=100% src="https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false" id=shift_doc_div""")]
-
-shift_div = sched_doc([about_shifts])
-
-#
-# add all the content from each tab to the pages
-#
-
-
-thispage += [summary_div, inj_params_div, inj_recovery_div, sens_div, back_div, money_div, about_div, shift_div]
-
-
-#
-# write the result
-#
-
+thisreport = report.Report('gstlal analysis', image=IMAGE_URL)
 
 try:
 	os.makedirs(opts.webserver_dir)
 except OSError:
 	pass
+try:
+	os.makedirs(opts.webserver_dir+'_lite')
+except OSError:
+	pass
 
-f = open("%s/index.html" % opts.webserver_dir, "w")
-thispage.write(f)
-f.close()
-
-shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir, os.path.split(opts.glob_path)[1]))
-
-##############################################################################
-# FIXME the following code to write a lite version of the page can probably be
-# simplified and parallelized with writing of the full version of the page
-
-# Set up a lite version of the summary page
-thispage_lite = webpage.page()
-nav_lite = webpage.tabs()
-
-summary_lite = webpage.tab("summary_lite", "Summary information", "Summary information")
-about_doc_lite = webpage.tab("about", "About", "About")
-sched_doc_lite = webpage.tab("schedule", "Schedule", "Schedule")
-
-# Summary lite setup
-nav_lite+=[webpage.elem("li", [webpage.elem("img", [], """ style="margin-left:-40px; margin-top:5px; width:100" src="https://ldas-jobs.cgca.uwm.edu/~gstlalcbc/share/vis/gstlal.png" """)])]
-nav_lite+=[summary_lite, about_doc_lite, sched_doc_lite]
-nav_lite+=[webpage.elem("li", [webpage.elem("div", [time.strftime("%Y-%m-%d %H:%M")], "")])]
-thispage_lite+=nav_lite
-thispage_lite+=webpage.elem("br",[])
-
-summary_lite_about = webpage.elem("p", ["This page was generated on %s by %s in the working directory <code>%s</code>." % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"])])
-
-summary_lite_lt = webpage.section("Search Summary")
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]), "lt_summary_lite_div"))
-summary_lite_lt += [webpage.elem("div", [], "id=lt_summary_lite_div width=100% height=500")]
-
-# Include horizon distance plots
-horizon_lite = webpage.section("Horizon distance")
-horizon_lite += webpage.image_glob('%s/*HORIZON*.png' % opts.glob_path, "This is the distance at which you should see a (1.4, 1.4) Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form.")
-
-# Include found/missed as function of decisive characteristic SNR
-fm_lite_snr = webpage.section("Found / Missed Expected SNR")
-fm_lite_snr += webpage.elem("p", ["""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections for the various IFO times for coincident triggers."""])
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_injection_summary.json' % opts.output_user_tag[0]), "inj_summary_lite_div"))
-fm_lite_snr += [webpage.elem("div", [], "id=inj_summary_lite_div width=100% height=500")]
-fm_lite_snr += webpage.image_glob(os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % opts.output_user_tag[0]), "Expected SNR of found and missed injections as a function of chirp mass.: %s" % opts.output_user_tag[0])
-
-# Include missed injection table
-fm_lite_mtab = webpage.section("Missed Table")
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]), "missed_summary_lite_div", gpscolumns = [2,3]))
-fm_lite_mtab += [webpage.elem("p", ["Missed Injection Table for %s" % opts.output_user_tag[0]])]
-fm_lite_mtab += [webpage.elem("div", [], "id=missed_summary_lite_div")]
-
-# Include search sensitivity binned by source type
-sens_lite = webpage.section("Search Sensitivity")
-sens_lite += webpage.elem("p", ["""These plots characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0"""])
-sens_lite += webpage.image_glob(os.path.join(opts.glob_path, '*%s*_FAR_BINNED_BY_SOURCE_TYPE*.png' % opts.output_user_tag[0]), "Sensitive volume (V*T) and mean sensitive distance: %s" % opts.output_user_tag[0])
-
-# Include FAP estimation plots
-back_snrchi_lite = webpage.section("SNR and chi-squared")
-back_snrchi_lite += [webpage.elem("p", ["This page shows the ingredients that go into ranking events and determining the False alarm probability."])]
-back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'), "Single Detector Background SNR-chisq Distributions")
-back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions")
-
-# Include Chi-square distribution plots
-chisq_dist_lite = webpage.section("Chi-squared Distributions")
-chisq_dist_lite += [webpage.elem("p", ["The chi-squared test checks that the snr accumulated matches expectation."])]
-chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
-
-# Include IFAR and lnL plots
-money_ifar_lite = webpage.section("Rate vs. Threshold")
-money_ifar_lite += [webpage.elem("p", ["This section provides the detection statistic plots and a summary of the loudest event."])]
-money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'), "Comparison of single time slide event rate to event rate expected from background as a function of threshold.")
-
-# Include loudest table
-thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]), "bgsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
-money_ifar_lite += [webpage.elem("p", ["Closed Box Summary Table"])]
-money_ifar_lite += [webpage.elem("div", [], "id=bgsummary_table_lite_div")]
 
 #
-# OPEN BOX Lite
+# Add the page tabs
 #
+
+
+summary = report.Tab('Summary')
+injparams = report.Tab('Injection Parameters')
+injrecovery = report.Tab('Injection Recovery')
+sens = report.Tab('Search Sensitivity')
+back = report.Tab('Background')
+money = report.Tab('Money Plots')
+about_doc = report.Tab('About', url=ABOUT_URL)
+sched_doc = report.Tab('Schedule', url=SCHEDULE_URL)
+
+
+#
+# Add summary page content to the summary page tab
+#
+
+summary += report.Header('Summary')
+
+tabledata = read_format_json(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]))
+summary += report.Table('Search Summary').save(tabledata, opts.webserver_dir)
+
+tabledata = read_format_json(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]))
+summary += report.Table('Segments').save(tabledata, opts.webserver_dir)
+
+summary += report.Description("This page was generated on %s by %s in the working directory: %s" % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"]))
+
+thisreport += summary
+
+#
+# Add injection parameter content
+#
+
+injparams += report.Header('Injection Parameters')
+injparams += report.Description("Injections are the addition of simulated signals into the gravitational wave strain data.  They are useful for diagnosing the pipeline and measuring the sensitivity.  Care is taken to ensure that the input distribution is sensible.  The remaining sections describe the input distributions for the injections.  They are not necessarily what is analyzed since the analyzed segments are not used for determining the injection sets (i.e. injections may be scheduled for times when a detector is not even functioning).")
+injparams += report.Description("The following plots are typically produced by injection waveform type.  Several injection runs of the same waveform (with different random seeds) are often done.  Here all runs of the same waveform type are shown together.")
+
+imgfooter = "Above are the injected mass parameters for the simulations done.  Typically injections are done uniformally in component mass unless the waveform approximant cannot support certain mass ratios."
+injparams += report.ImageGrid("Injected Parameters (m1 and m2)", grid_size=2, footer=imgfooter).glob(os.path.join(opts.glob_path, '*6_sim_dist_m1_m2*.png'))
+
+imgfooter = "Unless doing a directed search injections are uniform in time.  Although the correct distance distribution would be uniform in volume typically logarithmic injections are done"
+injparams += report.ImageGrid("Injected Parameters time and distance", grid_size=2, footer=imgfooter).glob(os.path.join(opts.glob_path, '*6_sim_dist_time_distance*.png'))
+
+imgfooter = "Unless doing a directed search injections are uniform on the sky."
+injparams += report.ImageGrid("Injected Parameters RA and DEC", grid_size=2, footer=imgfooter).glob(os.path.join(opts.glob_path, '*6_sim_dist_ra_dec*.png'))
+
+imgfooter = "Unless doing a directed search injections are uniform in sin(inclination) and polarizations."
+injparams += report.ImageGrid("Injected Parameters inclination and polarization", grid_size=2, footer=imgfooter).glob(os.path.join(opts.glob_path, '*6_sim_dist_inc_pol*.png'))
+
+imgfooter = "The Z component spins of the injection set.  Often injections are done without spin, so don't be surprised if these are zero."
+injparams += report.ImageGrid("Injected Parameters Z component spin", grid_size=2, footer=imgfooter).glob(os.path.join(opts.glob_path, '*6_sim_dist_spin1z_spin2z*.png'))
+
+thisreport += injparams
+
+#
+# Add injection accuracy content
+#
+
+injrecovery += report.Header("Injection Accuracy")
+injrecovery += report.Description("The accuracy of recovered parameters aids at diagnosing the performance of the pipeline as well as hinting at the possibility of measuring certain parameters.  Mass parameters for the low mass search are often recovered better than mass parameters for the high mass search.")
+
+injrecovery += report.ImageGrid("Mchirp Parameter Accuracy", grid_size=3, footer="Accuracy of chirp mass").glob(os.path.join(opts.glob_path, '*2_mchirp_acc_frac_*.png'))
+
+injrecovery += report.ImageGrid("Eta Parameter Accuracy", grid_size=3, footer="Accuracy of eta").glob(os.path.join(opts.glob_path, '*2_eta_acc_frac_*.png'))
+
+injrecovery += report.ImageGrid("Total Mass Parameter Accuracy", grid_size=3, footer="Accuracy of total mass").glob(os.path.join(opts.glob_path, '*2_mtotal_acc_frac_*.png'))
+
+injrecovery += report.ImageGrid("Time Parameter Accuracy", grid_size=3, footer="Accuracy of time").glob(os.path.join(opts.glob_path, '*2_t_acc_*.png'))
+
+injrecovery += report.ImageGrid("Effective Spin Accuracy", grid_size=3, footer="Accuracy of mass-weighted spin").glob(os.path.join(opts.glob_path, '*2_chi_acc_scatter*.png'))
+
+injrecovery += report.ImageGrid("SNR Recovery", grid_size=3, footer="Injected expected SNR vs recovered SNR").glob(os.path.join(opts.glob_path, '*2_snr_*.png'))
+
+imgfooter = "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form."
+injrecovery += report.ImageGrid("Horizon distance", grid_size=1, footer=imgfooter).glob(os.path.join(opts.glob_path, '*HORIZON*.png'))
+
+#
+# Add injection missed / found content
+#
+
+injrecovery += report.Header("Injection Missed/Found")
+injrecovery += report.Description("""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections as a for the various IFO times for coincident triggers. We allow double coincident events so some categories can have multiple types of found injections (for  example H1L1 and H1H2L1 triggers in H1H2L1 time).  Because of ambiguity concerning the time of an injection and the injection window it is occasionally possible to find an injection in more detectors than what the "time" refers to.  For example, an injection's geocentric end time might be in H1L1 time but that might occur near a boundary where H2 was also on.  Thus one could find an H1L1 injection in H1H2L1 time.""")
+
+injrecovery += report.Header("Found / Missed Summary Table")
+for tag in opts.output_user_tag:
+	tabledata = read_format_json(os.path.join(opts.glob_path, '%s_injection_summary.json' % tag))
+	injrecovery += report.Description("Summary of missed and found injections broken up by detector time for %s" % tag)
+	injrecovery += report.Table('Injection Summary Table for %s' % tag).save(tabledata, opts.webserver_dir)
+
+injrecovery += report.Header('Found / Missed Plots')
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+
+	plots = os.path.join(opts.glob_path, '*%s*1_d_vs_mchirp_*.png' % tag)
+	imgfooter = "Distance of found and missed injections as a function of chirp mass: %s" % tag
+	injrecovery += report.ImageGrid("Distance vs. chirp mass: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+	plots = os.path.join(opts.glob_path, '*%s*1_deff_vs_mchirp_*.png' % tag)
+	imgfooter = "Effective distance of found and missed injections as a function of chirp mass: %s" % tag
+	injrecovery += report.ImageGrid("Effective distance vs. chirp mass: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+	plots = os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_mchirp_*.png' % tag)
+	imgfooter = "Chirp distance of found and missed injections as a function of chirp mass.  For low mass systems the chirp mass scales out of the expected amplitude.  The chirp distance utilizes this and rescales the distance to be appropriate for a NS-NS binary.  At low total mass the missed/found barrier should be flat on this plot: %s" % tag
+	injrecovery += report.ImageGrid("Chirp distance vs. chirp mass: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+injrecovery += report.Header("Found / Missed Total Mass")
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+	plots = os.path.join(opts.glob_path, '%s*1_deff_vs_mtotal_*.png' % tag)
+	imgfooter = "Effective distance of found and missed injections as a function of total mass: %s" % tag
+	injrecovery += report.ImageGrid("Effective distance vs. total mass: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+injrecovery += report.Header("Found / Missed Eta")
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+	plots = os.path.join(opts.glob_path, '*%s*1_chirpdist_vs_eta_*.png' % tag)
+	imgfooter = "Effective distance of found and missed injections as a function of symmetric mass ratio eta: %s" % tag
+	injrecovery += report.ImageGrid("Effective distance vs. eta: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+injrecovery += report.Header("Found / Missed Time")
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+	plots = os.path.join(opts.glob_path, '*%s*1_deff_vs_t_*.png' % tag)
+	imgfooter = "Effective distance of found and missed injections as a function of time: %s" % tag
+	injrecovery += report.ImageGrid("Effective distance vs. time: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+injrecovery += report.Header("Found / Missed Spin")
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+	plots = os.path.join(opts.glob_path, '*%s*1_deff_vs_chi_*.png' % tag)
+	imgfooter = "Effective distance of found and missed injections as a function of mass-weighted spin: %s" % tag
+	injrecovery += report.ImageGrid("Effective distance vs. mass-weighted spin: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+injrecovery += report.Header("Found / Missed Expected SNR")
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+
+	plots = os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % tag)
+	imgfooter = "Expected SNR of found and missed injections as a function of chirp mass: %s" % tag
+	injrecovery += report.ImageGrid("Expected SNR vs. chirp mass: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+	plots = os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mtotal_*.png' % tag)
+	imgfooter = "Expected SNR of found and missed injections as a function of total mass: %s" % tag
+	injrecovery += report.ImageGrid("Expected SNR vs. total mass: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+	plots = os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_eta_*.png' % tag)
+	imgfooter = "Expected SNR of found and missed injections as a function of symmetric mass ratio eta: %s" % tag
+	injrecovery += report.ImageGrid("Expected SNR vs. eta: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+	plots = os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_cgi_*.png' % tag)
+	imgfooter = "Expected SNR of found and missed injections as a function of mass-weighted spin: %s" % tag
+	injrecovery += report.ImageGrid("Expected SNR vs. mass-weighted spin: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+	plots = os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_t_*.png' % tag)
+	imgfooter = "Expected SNR of found and missed injections as a function of time: %s" % tag
+	injrecovery += report.ImageGrid("Expected SNR vs. time: %s" % tag, grid_size=2, footer=imgfooter, visible=visible).glob(plots)
+
+injrecovery += report.Header("Missed Table")
+for tag in opts.output_user_tag:
+	tabledata = read_format_json(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag))
+	injrecovery += report.Table('Missed Injection Table for %s' % tag).save(tabledata, opts.webserver_dir)
+
+thisreport += injrecovery
+
+#
+# Add sensitivity content
+#
+
+sens += report.Header('Sensitivity')
+
+sens += report.Description("""This page shows plots that characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Since the search sensitivity is a strong function of the intrinsic parameters of the target source, we break down the sensitive into bins of these parameters. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0""")
+
+for tag in opts.output_user_tag:
+	visible = 'ALL_LLOID_COMBINED' in tag
+	plots = os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % tag)
+	imgfooter = "Binned by source type"
+	sens += report.ImageGrid("Sensitive volume (V*T) and mean sensitive distance: %s" % tag, grid_size=3, footer=imgfooter, visible=visible).glob(plots)
+
+thisreport += sens
+
+#
+# Add background content
+#
+
+back += report.Header('Background')
+back += report.Description("This page shows the ingredients that go into ranking events and determining the False alarm probability.")
+
+imgfooter = "Single detector triggers coincident in time-shifted analyses."
+back += report.ImageGrid("Background Triggers", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_bgparams_*_vs_snr*.png'))
+back += report.ImageGrid("SNR Ratios", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*SNR_PDF*.png'))
+back += report.ImageGrid("Rates", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*RATES*.png'))
+
+back += report.Header("SNR and chi-squared")
+back += report.ImageGrid("Single Detector Background SNR-chisq Distributions", grid_size=3).glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'))
+back += report.ImageGrid("Single Detector Signal Chisq (Conditional) Distributions", grid_size=3).glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'))
+back += report.ImageGrid("Single Detector Likelihood Ratios", grid_size=3).glob(os.path.join(opts.glob_path, '*LR_SNRCHI2*.png'))
+if opts.open_box:
+	back += report.ImageGrid("Single Detector Signal Chisq (Conditional) Distributions: Zero lag", grid_size=3).glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'))
+
+#
+# Add chisq content
+#
+
+back += report.Description("The chi-squared test checks that the snr accumulated matches expectation.")
+
+imgfooter = "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
+back += report.ImageGrid("Chi-squared Distributions", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'))
+
+imgfooter = "Comparison of SNR in pairs of detectors."
+back += report.ImageGrid("Signal-to-Noise Ratio", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'))
+
+imgfooter = "Comparison of effective distance in pairs of detectors."
+back += report.ImageGrid("Effective Distance", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*closedbox*.png'))
 
 if opts.open_box:
-	back_snrchi_lite += webpage.image_glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'), "Single Detector Signal Chisq (Conditional) Distributions for zero lag")
+	back += report.Header('Open Box Results')
 
-	chisq_dist_lite += webpage.image_glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'), "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides.")
+	imgfooter = "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
+	back += report.ImageGrid("Chi-squared Distributions: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'))
 
-	money_ifar_lite += webpage.image_glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'), "Comparison of observed event rate to event rate expected from background as a function of threshold.")
-	thispage_lite.header_content.append(webpage.googleTableFromJson(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]), "zlsummary_table_lite_div", gpscolumns = [5], scinotationcolumns = [1,2]))
-	money_ifar_lite += [webpage.elem("p", ["Open Box Summary Table"])]
-	money_ifar_lite += [webpage.elem("div", [], "id=zlsummary_table_lite_div")]
+	imgfooter = "Comparison of SNR in pairs of detectors."
+	back += report.ImageGrid("Signal-to-Noise Ratio: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'))
 
-summary_lite_div = summary_lite([summary_lite_about, summary_lite_lt, horizon_lite, fm_lite_snr, fm_lite_mtab, sens_lite, back_snrchi_lite, chisq_dist_lite, money_ifar_lite])
+	imgfooter = "Comparison of effective distance in pairs of detectors."
+	back += report.ImageGrid("Effective Distance", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*4_deff_*_vs_*openbox*.png'))
 
-#
-# Add search documentation to lite section
-#
-
-about_search_lite = webpage.section("Search Plan Documentation")
-about_search_lite += [webpage.elem("iframe", [], """src="https://docs.google.com/document/d/12wJjCz8L1UczqRm86q3-EFnpnIZ2FHPSwKR_kym2L5g/pub?embedded=true" width=100%% height=100%% id=search_doc_div""")]
-
-about_lite_div = about_doc_lite([about_search_lite])
+thisreport += back
 
 #
-# Add shift documentation to lite section
+# Add results content
 #
 
-about_shifts_lite = webpage.section("Search Run Schedule")
-about_shifts_lite += [webpage.elem("iframe", [], """width=100% height=100% src="https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXFZCq_s2rlzyNwcF0xC4kyhnKrCeXFSWte-2jRodL590RU3PsoX4OVypYyAZ7Nl_8/pubhtml?widget=true&amp;headers=false" id=shift_doc_div""")]
+money += report.Header('Money Plots')
+money += report.Description("This section provides the detection statistic plots and a summary of the loudest event.")
 
-shift_lite_div = sched_doc_lite([about_shifts_lite])
+money += report.Header('Closed Box Results')
+imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
+money += report.ImageGrid("Rate vs. Threshold", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'))
+
+tabledata = read_format_json(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]))
+money += report.Table('Closed Box Summary Table').save(tabledata, opts.webserver_dir)
+
+if opts.open_box:
+	money += report.Header('Open Box Results')
+	imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
+	money += report.ImageGrid("Rate vs. Threshold", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'))
+	
+	tabledata = read_format_json(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]))
+	money += report.Table('Open Box Summary Table').save(tabledata, opts.webserver_dir)
+
+thisreport += money
 
 #
-# Add all the content from each tab to the lite pages
+# Add search documentation
 #
 
-thispage_lite += [summary_lite_div, about_lite_div, shift_lite_div]
+thisreport += about_doc
+thisreport += sched_doc
 
 #
 # write the result
 #
 
-try:
-	os.makedirs(opts.webserver_dir + "_lite")
-except OSError:
-	pass
+thisreport.save(opts.webserver_dir)
 
-flite = open("%s/index.html" % (opts.webserver_dir + "_lite", ), "w")
-thispage_lite.write(flite)
-flite.close()
+#
+# set up a lite version of the summary page
+#
 
-shutil.copytree(opts.glob_path, os.path.join(opts.webserver_dir + "_lite", os.path.split(opts.glob_path)[1]))
+reportlite = report.Report('gstlal analysis', image=IMAGE_URL)
+
+summary = report.Tab('Summary')
+about_doc = report.Tab('About', url=ABOUT_URL)
+sched_doc = report.Tab('Schedule', url=SCHEDULE_URL)
+
+#
+# Summary lite setup
+#
+
+summary += report.Header('Summary')
+
+tabledata = read_format_json(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]))
+summary += report.Table('Search Summary').save(tabledata, opts.webserver_dir+'_lite')
+
+## Include horizon distance plots
+imgfooter = "This is the distance at which you should see a 1.4 1.4 Msun binary at SNR 8. The first panel shows the time evolution of the horizon distance and the second panel shows the same information in histogram form."
+summary += report.ImageGrid("Horizon distance", grid_size=1, footer=imgfooter).glob(os.path.join(opts.glob_path, '*HORIZON*.png'))
+
+## Include found/missed as function of decisive characteristic SNR
+summary += report.Header("Found / Missed Expected SNR")
+summary += report.Description("""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections for the various IFO times for coincident triggers.""")
+
+tabledata = read_format_json(os.path.join(opts.glob_path, '%s_injection_summary.json' % opts.output_user_tag[0]))
+footer = "Summary of missed and found injections broken up by detector time for %s" % opts.output_user_tag[0]
+summary += report.Table('Injection Summary Table', footer=footer).save(tabledata, opts.webserver_dir+'_lite')
+
+plots = os.path.join(opts.glob_path, '*%s*1_dec_expsnr_vs_mchirp_*.png' % opts.output_user_tag[0])
+imgfooter = "Expected SNR of found and missed injections as a function of chirp mass: %s" % opts.output_user_tag[0]
+summary += report.ImageGrid("Expected SNR vs. chirp mass", grid_size=4, footer=imgfooter).glob(plots)
+
+## Include missed injection table
+summary += report.Header("Missed Table")
+tabledata = read_format_json(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]))
+summary += report.Table('Missed Injection Table for %s' % opts.output_user_tag[0]).save(tabledata, opts.webserver_dir+'_lite')
+
+## Include search sensitivity binned by source type
+summary += report.Header('Search Sensitivity')
+summary += report.Description("""These plots characterize the overall sensitivity of the search. The detection rate is directly proportional to the observed sensitive volume, which is a function of the significance threshold used to identify candidates. These plots are useful for determining how sensitive the search was to the input injection population. Here we show the sensitivity as a function of source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0""")
+
+plots = os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % opts.output_user_tag[0])
+imgfooter = "Binned by source type"
+summary += report.ImageGrid("Sensitive volume (V*T) and mean sensitive distance: %s" % opts.output_user_tag[0], grid_size=4, footer=imgfooter, visible=False).glob(plots)
+
+## Include FAP estimation plots
+summary += report.Header("SNR and chi-squared")
+summary += report.ImageGrid("Single Detector Background SNR-chisq Distributions", grid_size=4).glob(os.path.join(opts.glob_path, '*BACKGROUND_PDF_SNRCHI2*.png'))
+summary += report.ImageGrid("Single Detector Signal Chisq (Conditional) Distributions", grid_size=4).glob(os.path.join(opts.glob_path, '*INJECTION_PDF_SNRCHI2*.png'))
+if opts.open_box:
+	summary += report.ImageGrid("Single Detector Signal Chisq (Conditional) Distributions: Zero lag", grid_size=4).glob(os.path.join(opts.glob_path, '*ZERO_LAG_PDF_SNRCHI2*.png'))
+
+## Include Chi-square distribution plots
+summary += report.Header("Chi-squared Distributions")
+summary += report.Description("The chi-squared test checks that the snr accumulated matches expectation.")
+
+imgfooter = "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
+summary += report.ImageGrid("Chi-squared Distributions", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'))
+if opts.open_box:
+	summary += report.ImageGrid("Chi-squared Distributions: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'))
+
+## Include IFAR, lnL plots + summary table
+summary += report.Header('Money Plots')
+summary += report.Description("This section provides the detection statistic plots and a summary of the loudest event.")
+
+imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
+summary += report.ImageGrid("Rate vs. Threshold", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'))
+
+tabledata = read_format_json(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]))
+summary += report.Table('Closed Box Summary Table').save(tabledata, opts.webserver_dir+'_lite')
+
+if opts.open_box:
+	imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
+	summary += report.ImageGrid("Rate vs. Threshold: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'))
+	
+	tabledata = read_format_json(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]))
+	summary += report.Table('Open Box Summary Table').save(tabledata, opts.webserver_dir+'_lite')
+
+reportlite += summary
+
+#
+# Add search documentation
+#
+
+reportlite += about_doc
+reportlite += sched_doc
+
+#
+# write the result
+#
+
+reportlite.save(opts.webserver_dir + "_lite", config_name='report_lite')
