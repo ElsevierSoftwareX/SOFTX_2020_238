@@ -360,8 +360,6 @@ for ifo in channel_dict:
 			"influx-database-name": options.influx_database_name,
 			"influx-hostname": options.influx_hostname,
 			"influx-port": options.influx_port,
-			"enable-auth": options.enable_auth,
-			"enable-https": options.enable_https,
 		})
 		if options.enable_auth:
 			common_opts.update({"enable-auth": ""})
