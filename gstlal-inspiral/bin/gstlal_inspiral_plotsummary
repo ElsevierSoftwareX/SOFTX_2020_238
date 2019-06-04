@@ -29,6 +29,7 @@
 
 import bisect
 import itertools
+import json
 import math
 import matplotlib
 import matplotlib.figure
@@ -64,16 +65,22 @@ from ligo.lw import lsctables
 from ligo.lw.utils import segments as ligolw_segments
 from gstlal import far
 from gstlal import dagparts
-from gstlal import gviz_api
 from gstlal.plotutil import golden_ratio
 
 
-def to_google_json(fname, description, data):
-	json = open(fname,"w")
-	data_table = gviz_api.DataTable(description)
-	data_table.LoadData(data)
-	print >> json, data_table.ToJSon()
-	json.close()
+def format_column(column):
+	return column.lower().replace(' ', '_').replace(':', '').replace(';', '')
+
+
+def save_table(fname, fields, rows):
+	### format data
+	fields = [{'key': format_column(col), 'label': col, 'sortable': True} for col in fields]
+	colnames = [field['key'] for field in fields]
+	items = [{col: val for col, val in zip(colnames, row)} for row in rows]
+
+	### write to disk
+	with open(fname, 'w') as f:
+		f.write(json.dumps({'fields': fields, 'items': items}))
 
 
 class SimInspiral(lsctables.SimInspiral):
@@ -311,7 +318,7 @@ class CoincDatabase(object):
 				for description, n in cursor.execute("SELECT description, COUNT(*) FROM coinc_definer NATURAL JOIN coinc_event GROUP BY coinc_def_id"):
 					data.append([description, str(n)])
 			if self.sim_inspiral_table is None:
-				to_google_json("%s_%s" % (self.base, "plotsummary.json"), [('Summary of database:', 'string'), (plotsummary_json, 'string')], data)
+				save_table("%s_plot_summary.json" % self.base, ['Summary of database:', plotsummary_json], data)
 
 #
 # =============================================================================
@@ -585,35 +592,35 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 	def write_candidate_json(self, candidates, fname):
 		data = []
 		# FIXME generalize for virgo
-		description = [
-			("Rank", "number"),
-			("FAR (Hz)", "number"),
-			("FAP", "number"),
-			("ln &Lambda;", "number"),
-			("&rho;", "number"),
-			("<i>t</i>", "number"),
-			("<i>M</i><sub>total</sub> / M<sub>&#x2299;</sub>", "number"),
-			("<i>M</i><sub>chirp</sub> / M<sub>&#x2299;</sub>", "number"),
-			("Participating<br>Instruments", "string"),
-			("On<br>Instruments", "string"),
-			("H1 &rho;", "string"),
-			("H1 &chi;<sup>2</sup>", "number"),
-			("H1 m<sub>1</sub>", "number"),
-			("H1 m<sub>2</sub>", "number"),
-			("H1 s<sub>1z</sub>", "number"),
-			("H1 s<sub>2z</sub>", "number"),
-			("L1 &rho;", "string"),
-			("L1 &chi;<sup>2</sup>", "number"),
-			("L1 m<sub>1</sub>", "number"),
-			("L1 m<sub>2</sub>", "number"),
-			("L1 s<sub>1z</sub>", "number"),
-			("L1 s<sub>2z</sub>", "number"),
-			("V1 &rho;", "string"),
-			("V1 &chi;<sup>2</sup>", "number"),
-			("V1 m<sub>1</sub>", "number"),
-			("V1 m<sub>2</sub>", "number"),
-			("V1 s<sub>1z</sub>", "number"),
-			("V1 s<sub>2z</sub>", "number")
+		fields = [
+			"rank",
+			"FAR (Hz)",
+			"FAP",
+			"ln L",
+			"SNR",
+			"time",
+			"M total",
+			"M chirp",
+			"Participating IFOs",
+			"On IFOs",
+			"H1 SNR",
+			"H1 chisq",
+			"H1 m1",
+			"H1 m2",
+			"H1 S_1z",
+			"H1 S_2z",
+			"L1 SNR",
+			"L1 chisq",
+			"L1 m1",
+			"L1 m2",
+			"L1 S_1z",
+			"L1 S_2z",
+			"V1 SNR",
+			"V1 chisq",
+			"V1 m1",
+			"V1 m2",
+			"V1 S_1z",
+			"V1 S_2z"
 		]
 		for rank, values in enumerate(candidates, 1):
 			if values[0] is None:
@@ -646,7 +653,7 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 			row.extend(ifodict["L1"])
 			row.extend(ifodict["V1"])
 			data.append(row)
-		to_google_json(fname, description, data)
+		save_table(fname, fields, data)
 
 	def finish(self):
 		self.candidates.sort()
@@ -889,8 +896,8 @@ FROM
 			for fig, filename_fragment, is_open_box in plot.finish():
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
 
-		to_google_json(self.base + "_injection_summary.json", [("Found||Missed", "string"), ("On Instruments", "string"), ("Participating Instruments", "string"), ("count", "number")], self.injection_summary_data)
-		to_google_json(self.base + "_missed_summary.json", [("On Instruments", "string"), ("Waveform", "string"), ("H1 <i>t</i>", "number"), ("L1 <i>t</i>", "number"), ("V1 <i>t</i>", "number"), ("<i>m</i><sub>1</sub>", "number"), ("<i>m</i><sub>2</sub>", "number"), ("<i>s</i><sub>1x</sub>", "number"), ("<i>s</i><sub>1y</sub>", "number"), ("<i>s</i><sub>1z</sub>", "number"), ("<i>s</i><sub>2x</sub>", "number"), ("<i>s</i><sub>2y</sub>", "number"), ("<i>s</i><sub>2z</sub>", "number"), ("D (Mpc)", "number"), ("Decisive D<sub>chirp,eff</sub> (Mpc)" , "number"), ("Inclination", "number"), ("H1 &rho;", "number"), ("L1 &rho;", "number"), ("V1 &rho;", "number"), ("Decisive &rho;", "number")], self.missed_summary_data)
+		save_table(self.base + "_injection_summary.json", ["Found || Missed", "On Instruments", "Participating IFOs", "count"], self.injection_summary_data)
+		save_table(self.base + "_missed_summary.json", ["On Instruments", "Waveform", "H1 time", "L1 time", "V1 time", "m1", "m2", "S_1x", "S_1y", "S_1z", "S_2x", "S_2y", "S_2z", "D (Mpc)", "Decisive D chirp,eff (Mpc)" , "Inclination", "H1 SNR", "L1 SNR", "V1 SNR", "Decisive SNR"], self.missed_summary_data)
 
 
 #
@@ -1709,7 +1716,7 @@ class Segments(object):
 			f = open("%s_segments.json" % self.base, "w")
 			f.write(repr(self.data))
 			f.close()
-			to_google_json("%s_segment_table.json" % self.base, [("name","string"), ("ifos", "string"), ("start","number"), ("end", "number"), ("extent", "number")], self.table)
+			save_table("%s_segment_table.json" % self.base, ["name", "ifos", "start", "end", "extent"], self.table)
 
 			
 #

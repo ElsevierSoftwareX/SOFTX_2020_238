@@ -33,32 +33,10 @@ SCHEDULE_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vR1XwazhZYoVbMXF
 IMAGE_URL = 'https://results.ligo.uwm.edu/~gstlalcbc/share/vis/gstlal.png'
 
 
-def sanitizetext(item):
-	# FIXME: hack to clean up formatted columns downstream,
-	#        should really be handling this at the source
-	item = item.replace('&#x2299;', '')
-	htmlr = re.compile('<.*?>')
-	alphanumr = re.compile('[\W_]+')
-	item = re.sub(htmlr, '', item)
-	return re.sub(alphanumr, '', item)
-
-def read_format_json(path):
-	"""
-	formats tabular summaries into a format readable by ligo-scald
-	FIXME: remove once formatting is changed upstream
-	"""
-	table = ''
+def load_json(path):
 	with open(path, 'r') as f:
-		table = json.loads(f.read())
+		return json.loads(f.read())
 
-	### format data
-	# FIXME: hack to clean up formatted columns downstream,
-	#        should really be handling this at the source
-	fields = [{'key': sanitizetext(col['id']), 'label': sanitizetext(col['label']), 'sortable': True} for col in table['cols']]
-	colnames = [field['key'] for field in fields]
-	items = [{col: val['v'] for col, val in zip(colnames, row['c'])} for row in table['rows']]
-
-	return {'fields': fields, 'items': items}
 
 def parse_command_line():
 	parser = OptionParser(usage = "%prog [options] [file ...]", description = "%prog summary web page")
@@ -111,10 +89,10 @@ sched_doc = report.Tab('Schedule', url=SCHEDULE_URL)
 
 summary += report.Header('Summary')
 
-tabledata = read_format_json(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%s_plot_summary.json' % opts.output_user_tag[0]))
 summary += report.Table('Search Summary').save(tabledata, opts.webserver_dir)
 
-tabledata = read_format_json(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%s_segment_table.json' % opts.output_user_tag[0]))
 summary += report.Table('Segments').save(tabledata, opts.webserver_dir)
 
 summary += report.Description("This page was generated on %s by %s in the working directory: %s" % (time.strftime("%Y-%m-%d %H:%M"), os.environ["USER"], os.environ["PWD"]))
@@ -177,7 +155,7 @@ injrecovery += report.Description("""Measuring the found and missed injections a
 
 injrecovery += report.Header("Found / Missed Summary Table")
 for tag in opts.output_user_tag:
-	tabledata = read_format_json(os.path.join(opts.glob_path, '%s_injection_summary.json' % tag))
+	tabledata = load_json(os.path.join(opts.glob_path, '%s_injection_summary.json' % tag))
 	injrecovery += report.Description("Summary of missed and found injections broken up by detector time for %s" % tag)
 	injrecovery += report.Table('Injection Summary Table for %s' % tag).save(tabledata, opts.webserver_dir)
 
@@ -251,7 +229,7 @@ for tag in opts.output_user_tag:
 
 injrecovery += report.Header("Missed Table")
 for tag in opts.output_user_tag:
-	tabledata = read_format_json(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag))
+	tabledata = load_json(os.path.join(opts.glob_path, '%s_missed_summary.json' % tag))
 	injrecovery += report.Table('Missed Injection Table for %s' % tag).save(tabledata, opts.webserver_dir)
 
 thisreport += injrecovery
@@ -331,7 +309,7 @@ money += report.Header('Closed Box Results')
 imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
 money += report.ImageGrid("Rate vs. Threshold", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'))
 
-tabledata = read_format_json(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]))
 money += report.Table('Closed Box Summary Table').save(tabledata, opts.webserver_dir)
 
 if opts.open_box:
@@ -339,7 +317,7 @@ if opts.open_box:
 	imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
 	money += report.ImageGrid("Rate vs. Threshold", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'))
 	
-	tabledata = read_format_json(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]))
+	tabledata = load_json(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]))
 	money += report.Table('Open Box Summary Table').save(tabledata, opts.webserver_dir)
 
 thisreport += money
@@ -373,7 +351,7 @@ sched_doc = report.Tab('Schedule', url=SCHEDULE_URL)
 
 summary += report.Header('Summary')
 
-tabledata = read_format_json(os.path.join(opts.glob_path, '%s_plotsummary.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%s_plot_summary.json' % opts.output_user_tag[0]))
 summary += report.Table('Search Summary').save(tabledata, opts.webserver_dir+'_lite')
 
 ## Include horizon distance plots
@@ -384,7 +362,7 @@ summary += report.ImageGrid("Horizon distance", grid_size=1, footer=imgfooter).g
 summary += report.Header("Found / Missed Expected SNR")
 summary += report.Description("""Measuring the found and missed injections as a function of various parameters aids in diagnosing the pipeline as well as providing the expected sensitivity of the pipeline to real signals.  The plots in this section show the missed and found injections for the various IFO times for coincident triggers.""")
 
-tabledata = read_format_json(os.path.join(opts.glob_path, '%s_injection_summary.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%s_injection_summary.json' % opts.output_user_tag[0]))
 footer = "Summary of missed and found injections broken up by detector time for %s" % opts.output_user_tag[0]
 summary += report.Table('Injection Summary Table', footer=footer).save(tabledata, opts.webserver_dir+'_lite')
 
@@ -394,7 +372,7 @@ summary += report.ImageGrid("Expected SNR vs. chirp mass", grid_size=4, footer=i
 
 ## Include missed injection table
 summary += report.Header("Missed Table")
-tabledata = read_format_json(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%s_missed_summary.json' % opts.output_user_tag[0]))
 summary += report.Table('Missed Injection Table for %s' % opts.output_user_tag[0]).save(tabledata, opts.webserver_dir+'_lite')
 
 ## Include search sensitivity binned by source type
@@ -428,14 +406,14 @@ summary += report.Description("This section provides the detection statistic plo
 imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
 summary += report.ImageGrid("Rate vs. Threshold", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_closedbox*.png'))
 
-tabledata = read_format_json(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]))
+tabledata = load_json(os.path.join(opts.glob_path, '%sbgsummary_table.json' % opts.output_user_tag[0]))
 summary += report.Table('Closed Box Summary Table').save(tabledata, opts.webserver_dir+'_lite')
 
 if opts.open_box:
 	imgfooter = "Comparison of single time slide event rate to event rate expected from background as a function of threshold."
 	summary += report.ImageGrid("Rate vs. Threshold: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*5_count_vs_*_openbox*.png'))
 	
-	tabledata = read_format_json(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]))
+	tabledata = load_json(os.path.join(opts.glob_path, '%ssummary_table.json' % opts.output_user_tag[0]))
 	summary += report.Table('Open Box Summary Table').save(tabledata, opts.webserver_dir+'_lite')
 
 reportlite += summary
