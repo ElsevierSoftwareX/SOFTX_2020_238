@@ -55,7 +55,7 @@ sigsqtp = {}
 for ifo in rho:
 	sigsqf = moment(10, 1024, 2, ifo) - moment(10, 1024, 1, ifo)**2
 	sigsqtt[ifo] = (1. / (2 * 3.14 * rho[ifo] * sigsqf**.5)**2)
-	sigsqpp[ifo] = moment(10, 1024, 1, ifo)**2 / (rho[ifo]**2 * sigsqf)
+	sigsqpp[ifo] = moment(10, 1024, 2, ifo) / (rho[ifo]**2 * sigsqf)
 	sigsqtp[ifo] = moment(10, 1024, 1, ifo) / (2 * 3.14 * rho[ifo]**2 * sigsqf)
 
 transtt = {}
