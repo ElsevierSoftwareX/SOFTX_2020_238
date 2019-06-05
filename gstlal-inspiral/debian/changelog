@@ -1,3 +1,14 @@
+gstlal-inspiral (1.6.5-1) unstable; urgency=low
+
+  * gstlal_ll_inspiral_pipe: fix repeated option in gstlal_ll_dq jobs causing
+    issues when auth/https is disabled
+  * gstlal_inspiral_compress_ranking_stat
+  * Added p_astro module
+  * lloidhandler:  reduce size of ranking stat to gracedb
+  * gstlal_ll_inspiral_pipe fixes
+
+ -- Alexander Pace <alexander.pace@ligo.org> Wed, 05 Jun 2019 09:53:10 -0700
+
 gstlal-inspiral (1.6.4-1) unstable; urgency=low
 
   * lvalert_plots: reduce pressure on gracedb file server
