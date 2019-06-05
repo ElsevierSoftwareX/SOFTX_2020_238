@@ -53,7 +53,7 @@ from matplotlib import pyplot
 
 from lal.series import read_psd_xmldoc
 from gstlal import templates
-from gstlal import cbc_template_iir
+from gstlal.spiirbank import cbc_template_iir
 
 class DefaultContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -79,12 +79,13 @@ parser.add_option("--output-item", type = "string", help = "Set the output item:
 parser.add_option("--output-prefix", type = "string", help = "Set the output prefix: all|fir|spiir (required).")
 parser.add_option("--flow", metavar = "Hz", type = "float", default = 30.0, help = "Set the template low-frequency cut-off (default = 30.0).")
 parser.add_option("--sampleRate", metavar = "Hz", type = "float", default = 4096.0, help = "Set the sample rate of the IIR template bank (optional).")
-parser.add_option("--autocorrelation-length", metavar = "len", type = "float", default = 201, help = "Autocorrelation length for chisq.")
+parser.add_option("--autocorrelation-length", metavar = "len", type = "int", default = 201, help = "Autocorrelation length for chisq.")
 parser.add_option("--epsilon", metavar = "pad", type = "float", default = 0.02, help = "Second order correction factor.")
 parser.add_option("--epsilon-min", metavar = "pad", type = "float", default = 0.0, help = "Second order correction factor.")
 parser.add_option("--req-min-match", metavar = "match", type = "float", default = 0.99, help = "Set the SPIIR approximation minimal match (default = 0.99).")
 parser.add_option("--padding", metavar = "pad", type = "float", default = 1.3, help = "Fractional amount to pad time slices.")
 parser.add_option("--reference-psd", metavar = "filename", help = "load the spectrum from this LIGO light-weight XML file (required).")
+parser.add_option("--negative-latency", metavar = "seconds", type = "float", default = 0, help = "Set the number of seconds of negative latency.")
 #FIXME figure out how to encode instrument info
 parser.add_option("--instrument", metavar = "ifo", help = "Set the instrument")
 parser.add_option("--approximant", metavar = "waveform approximant", default = "IMRPhenomB", help = "Set the svd approximant")
@@ -140,7 +141,7 @@ if options.output_item == "all" or options.output_item == "fir":
 		samples_max = options.samples_max,
 		verbose = options.verbose)
 
-	fir_template, fir_autocorrelation = cbc_template_iir.gen_whitened_fir_template(
+	fir_template, fir_template_full, fir_autocorr, fir_autocorr_full = cbc_template_iir.gen_whitened_fir_template(
 		bank_table,
 		options.approximant,
 		int(options.template_id),
@@ -149,6 +150,7 @@ if options.output_item == "all" or options.output_item == "fir":
 		time_freq_bounds,
 		sampleRate = options.sampleRate, 
 		autocorrelation_length = options.autocorrelation_length,
+		negative_latency = options.negative_latency,
 		verbose = options.verbose)
 	fir_template_len = len(fir_template)
 
@@ -161,6 +163,20 @@ if options.output_item == "all" or options.output_item == "fir":
 	pyplot.savefig("%s_whitened_fir_template.svg" % options.output_prefix, format = "svg", dpi = 1200)
 	if options.dump_txt is not None:
 		numpy.savetxt("%s_whitened_fir_template.txt" % options.output_prefix, fir_template.view(float))
+
+	# plot autocorrelation
+	idx_start_shade = options.autocorrelation_length/2 - 5
+	idx_end_shade = options.autocorrelation_length/2 + 5
+	pyplot.figure()
+	p1, = pyplot.plot(abs(fir_autocorr_full), label = 'autocorrelation of ori and ori')
+	p2, = pyplot.plot(abs(fir_autocorr), label = 'autocorrelation of cut and ori')
+	pyplot.axvspan(idx_start_shade, idx_end_shade, facecolor = '0.5', alpha = 0.5, label = "+_5 samples")
+	pyplot.xlabel('samples')	
+	pyplot.ylabel('normalized autocorrelation')	
+	pyplot.legend(loc='best')
+	pyplot.savefig("%s_autocorrelation.svg" % options.output_prefix, format = "svg", dpi = 1200)
+	if options.dump_txt is not None:
+		numpy.savetxt("%s_whitened_autocorrelation.txt" % options.output_prefix, fir_autocorr.view(float))
 
 if options.output_item == "all" or options.output_item == "spiir":
 	# generate the normalized spiir-reconstructed waveform and original whitened waveform for spiir reconstruction
@@ -177,6 +193,7 @@ if options.output_item == "all" or options.output_item == "spiir":
 		epsilon_min = options.epsilon_min, 
 		autocorrelation_length = options.autocorrelation_length, 
 		req_min_match = options.req_min_match,
+		negative_latency = options.negative_latency,
 		verbose = options.verbose)
 
 	u_len = len(u_rev_pad)
