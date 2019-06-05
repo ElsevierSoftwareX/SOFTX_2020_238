@@ -90,8 +90,9 @@ def parse_command_line():
 	)
 	parser.add_option("--gracedb-service-url", metavar = "URL", default="%s" % DEFAULT_GRACEDB_URL, help = "GraceDb service url to upload to (default: %s)" % DEFAULT_GRACEDB_URL)
 	parser.add_option("--lvalert-server-url", metavar = "LVURL", default=DEFAULT_LVALERT_URL, help = "LVAlert Sever to listen to (default: %s)" % DEFAULT_LVALERT_URL)
+	parser.add_option("--search", metavar = "gdbsearch", default="allsky", help = "Search specification of GraceDB uploads (default: %s)" % "allsky")
 	parser.add_option("--max-snr", metavar = "SNR", type = "float", default = 200., help = "Set the upper bound of the SNR ranges in plots (default = 200).")
-        parser.add_option("--format", default = "png", help = "Set file format by selecting the extention (default = \"png\").")
+	parser.add_option("--format", default = "png", help = "Set file format by selecting the extention (default = \"png\").")
 	parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = don't).")
 	parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
 	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
@@ -189,10 +190,9 @@ def main(client=None):
 	gracedb_client = GraceDb(options.gracedb_service_url)
 
 	if options.testenv:
-		lvnodes = ['test_gstlal_allsky']
+		lvnodes = ['test_gstlal_' + options.search]
 	else:
-		lvnodes = ['cbc_gstlal_allsky']
-
+		lvnodes = ['cbc_gstlal_' + options.search]
 	#
 	# start LVAlert listener loop:
 	#
