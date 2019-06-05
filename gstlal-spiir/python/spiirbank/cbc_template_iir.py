@@ -70,14 +70,12 @@ def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_r
 	epoch_index = -int(epoch_time*sample_rate_max) - 1
 	# align the peaks according to an overestimate of max rinddown
 	# time for a given split bank
-	print "max_ringtime", max_ringtime
-	print "data time", len(data)/ float(sample_rate_max)
-	print "epoch time", epoch_time
 	target_index = len(data)-1 - int(sample_rate_max * max_ringtime)
 	# rotate phase so that sample with peak amplitude is real
 	phase = numpy.arctan2(data[epoch_index].imag, data[epoch_index].real)
 	data *= numpy.exp(-1.j * phase)
 	data = numpy.roll(data, target_index-epoch_index)
+	print "epoch_index %d, target_index %d, roll index %d" % (epoch_index, target_index, target_index - epoch_index)
 	# re-taper the ends of the waveform that got cyclically permuted
 	# around the ring
 	tukey_beta = 2. * abs(target_index - epoch_index) / float(len(data))
@@ -232,7 +230,14 @@ def normalized_crosscorr(a, b, autocorrelation_length = 201):
     if autocorrelation_length > n_temp:
         raise ValueError, "autocorrelation length (%d) cannot be larger than the template length (%d)" % (autocorrelation_length, n_temp)
     if n_temp != len(b):
-        raise ValueError, "len(a) should be the same as len(b)"
+	pad_length = max(n_temp, len(b))
+	b_pad = numpy.zeros(pad_length * 1, dtype=numpy.cdouble)
+	b_pad[-len(b):] = b
+	b = b_pad
+	a_pad = numpy.zeros(pad_length * 1, dtype=numpy.cdouble)
+	a_pad[-len(a):] = a
+	a = a_pad
+        #raise ValueError, "len(a) should be the same as len(b)"
 
     af = scipy.fft(a)
     bf = scipy.fft(b)
@@ -269,16 +274,13 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     The unit of template is s^-1/2. the data is generated from gstlal_whiten where the unit is dimensionless.
     It needs to be normalized so the unit is s^-1/2, same as the template for unit consistency.
     '''
-    # padding data if strain has gaps
+    # check if the strain is continous
     last_time = strain[0, 0]
     dt = strain[1, 0] - last_time
     for i in range(1, len(strain)):
         this_time = strain[i, 0]
 	if this_time - last_time > 2*dt:
-	    ninsert = int((this_time - last_time)/dt - 1)
-	    new_arr = numpy.array([[last_time + dt * x, 0] for x in range(1, ninsert)])
-	    padded_strain = numpy.insert(strain, i, new_arr, axis = 0)
-	    strain = padded_strain
+	    raise ValueError("strain data is not continous, needs padding. see function pad_gap in gstlal_matched_filter")
         last_time = this_time
 		
     # the data is generated from gstlal_play --whiten where the unit is dimensionless.
@@ -323,7 +325,7 @@ def matched_filt(template, strain, sampleRate = 4096.0):
     except:
         raise ValueError("max SNR is outside the data, need to collect more data for a more correct SNR estimation")
     f_ticks = numpy.linspace(1, working_length + 1, working_length) * df
-    return SNR, sigma, indmax, timemax, f_ticks, data_fft, template_fft
+    return snr_time, sigma, indmax, timemax, f_ticks, data_fft, template_fft
 
 def gen_template_working_state(sngl_inspiral_table, f_low = 30., sampleRate = 2048.):
     # Some input checking to avoid incomprehensible error messages
@@ -475,15 +477,6 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
         length = working_length // 2 + 1,
         sampleUnits = lal.Unit("strain s")
     )
-
-    # Check parity of autocorrelation length
-    if autocorrelation_length is not None:
-        if not (autocorrelation_length % 2):
-            raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
-        autocorrelation_bank = numpy.zeros(autocorrelation_length, dtype = "cdouble")
-    else:
-        autocorrelation_bank = None
-
     # Multiply by 2 * length of the number of sngl_inspiral rows to get the sine/cosine phases.
     template_bank = [numpy.zeros((2 * len(template_table), int(round(rate*(end-begin)))), dtype = "double") for rate,begin,end in time_slices]
 
@@ -516,10 +509,15 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     #
     # compute time-domain autocorrelation function
     #
+    # Check parity of autocorrelation length
+    if autocorrelation_length is not None:
+	if not (autocorrelation_length % 2):
+		raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
+	autocorrelation_bank_full = numpy.zeros(autocorrelation_length, dtype = "cdouble")
 
-    if autocorrelation_bank is not None:
-        autocorrelation = normalized_autocorrelation(fseries, revplan).data.data
-        autocorrelation_bank[::-1] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
+
+    autocorrelation = normalized_autocorrelation(fseries, revplan).data.data
+    autocorrelation_bank_full[::-1] = numpy.concatenate((autocorrelation[-(autocorrelation_length // 2):], autocorrelation[:(autocorrelation_length // 2  + 1)]))
 
     #
     # transform template to time domain
@@ -527,7 +525,7 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
 
     lal.COMPLEX16FreqTimeFFT(tseries, fseries, revplan)
 
-    data = tseries.data.data
+    data_full = tseries.data.data
     epoch_time = fseries.epoch.gpsSeconds + fseries.epoch.gpsNanoSeconds*1.e-9
     #
     # extract the portion to be used for filtering
@@ -541,15 +539,14 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
 
     # Use our own condition_IMR_templates to ajust the end time to be the merger time
     if approximant in gstlal_IMR_approximants:
-        data, target_index = condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime)
+        data_full, target_index = condition_imr_template(approximant, data_full, epoch_time, sample_rate_max, max_ringtime)
         # record the new end times for the waveforms (since we performed the shifts)
-        row.end = lal.LIGOTimeGPS(float(target_index-(len(data) - 1.))/sample_rate_max)
+        row.end = lal.LIGOTimeGPS(float(target_index-(len(data_full) - 1.))/sample_rate_max)
     else:
-        data *= tukeywindow(data, samps = 32)
+        data_full *= tukeywindow(data_full, samps = 32)
 
-    data = data[-length_max:]
+    data = data_full[-length_max:-int(1+negative_latency*sampleRate)]
 
-    data = data[:-int(1+negative_latency*sampleRate)]
     # This is to normalize whitened template so it = h_{whitened at 1MPC}(t)
     # NOTE: because
     # XLALWhitenCOMPLEX16FrequencySeries() computed
@@ -566,7 +563,9 @@ def gen_whitened_fir_template(template_table, approximant, irow, psd, f_low, tim
     #norm = abs(numpy.dot(data, numpy.conj(data)))
     #data *= cmath.sqrt(2 / norm)
     print "template length %d" % len(data)
-    return data, autocorrelation_bank
+
+    autocorrelation_bank = normalized_crosscorr(data_full, data, autocorrelation_length)
+    return data, data_full, autocorrelation_bank, autocorrelation_bank_full
 
 
 def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, approximant, irow, psd, sampleRate = 4096, waveform_domain = "FD", epsilon = 0.02, epsilon_min = 0.0, alpha = .99, beta = 0.25, flower = 30, autocorrelation_length = 201, req_min_match = 0.99, negative_latency = 0, verbose = False):
@@ -604,7 +603,17 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     if verbose:
         logging.info("working_duration %f, chirp time %f" % (working_state["working_duration"], this_tchirp))
 
-    amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, negative_latency = negative_latency, verbose = verbose)
+    # data = the cutted template. 
+    # cut at the beginning to avoid long low SNR accumulation
+    # cut at the end for negative latency template
+    # data_full = original uncut template
+    amp, phase, data, data_full, epoch_index = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = 0.998, negative_latency = negative_latency, verbose = verbose)
+
+    # get the padded length, so SPIIR approximated waveform u_rev_pad
+    # the original cut template h_pad, and the original one will be
+    # padded to the same length
+    pad_length = ceil_pow_2(len(data_full) + autocorrelation_length)
+ 
 
     # This is to normalize whitened template so it = h_{whitened at 1MPC}(t)
     # NOTE: because
@@ -619,7 +628,10 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
     nround = 1
 
     while(spiir_match < req_min_match and epsilon > epsilon_min and n_filters < 2000):
-        a1, b0, delay, u_rev_pad, h_pad = gen_spiir_coeffs(amp, phase, data_full, epsilon = epsilon)
+        a1, b0, delay, u_rev_pad = gen_spiir_coeffs(amp, phase, pad_length, epsilon = epsilon)
+        # get the cut waveform
+        h_pad = numpy.zeros(pad_length * 1, dtype=numpy.cdouble)
+        h_pad[-len(data):] = data
 
         # compute the SNR
         # deprecated: spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad_real)))
@@ -630,7 +642,7 @@ def gen_whitened_spiir_template_and_reconstructed_waveform(sngl_inspiral_table, 
 
         # overlap of spiir reconstructed waveform with template (spiir_template)
         spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad))/numpy.sqrt(norm_u * norm_h))
-        # normalize so that the SNR would match the expected SNR
+        # FIXME:normalize so that the SNR would match the expected SNR, using norm_h instead of norm_data_full ?
         b0 *= numpy.sqrt(norm_data_full / norm_u) * spiir_match
         n_filters = len(delay)
 
@@ -751,9 +763,11 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
         # waveform is generated for a canonical distance of 1 Mpc.
         #
         fseries = cbc_template_fir.generate_template(row, approximant, sampleRate, working_state["working_duration"], flower, sampleRate / 2., fwdplan = fwdplan, fworkspace = fworkspace)
-
+        epoch_time = fseries.epoch.gpsSeconds + fseries.epoch.gpsNanoSeconds*1.e-9
+	
         # whiten the FD waveform and transform it back to TD
         data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
+	epoch_index = - int(epoch_time*sampleRate) - len(data_full)
         if verbose:
             logging.info("waveform chose from FD")
 
@@ -788,7 +802,7 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
             length = len(tmpfseries)
         )
         fseries.data.data = tmpfseries
-
+	# FIXME: epoch_index not supported
         # whiten the FD waveform and transform it back to TD
         data_full = lalwhitenFD_and_convert2TD(psd, fseries, sampleRate, working_state, flower)
         if verbose:
@@ -808,11 +822,12 @@ def gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower
 
     data = data_full[filter_start:-int(1+negative_latency*sampleRate)]
     amp_lalwhiten, phase_lalwhiten = calc_amp_phase(numpy.imag(data), numpy.real(data))
+    epoch_index += int(1+negative_latency*sampleRate)
 
     if verbose:
-        logging.info("original template length %d, cut to construct spiir coeffs %d" % (len(data_full), len(data)))
+        logging.info("original template length %d, cut to construct spiir coeffs %d, epoch_index %d" % (len(data_full), len(data), epoch_index))
 
-    return amp_lalwhiten, phase_lalwhiten, data, data_full[:-int(1+negative_latency*sampleRate)]
+    return amp_lalwhiten, phase_lalwhiten, data, data_full, epoch_index
 
 def gen_spiir_response(length, a1, b0, delay):
         u = spawaveform.iirresponse(length, a1, b0, delay)
@@ -827,30 +842,27 @@ def gen_spiir_response(length, a1, b0, delay):
         return u_rev_pad
 
 
-def gen_spiir_coeffs(amp, phase, data_full, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201):
+def pad_data(data, length):
+
+        # get the original waveform
+        h = data
+        h_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
+        h_pad[-len(h):] = h
+	return h_pad
+
+def gen_spiir_coeffs(amp, phase, length, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201):
         # make the iir filter coeffs
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
-
-        # get the chirptime (nearest power of two)
-        length = ceil_pow_2(len(data_full) + autocorrelation_length)
 
         # get the IIR response
         u_rev_pad = gen_spiir_response(length, a1, b0, delay)
 
-        # get the original waveform
-        h = data_full
-        h_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
-        h_pad[-len(h):] = h
-
-        return a1, b0, delay, u_rev_pad, h_pad
+        return a1, b0, delay, u_rev_pad
 
 
-def gen_norm_spiir_coeffs(amp, phase, data_full, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25, autocorrelation_length = 201):
+def gen_norm_spiir_coeffs(amp, phase, length, padding = 1.3, epsilon = 0.02, alpha = .99, beta = 0.25):
         # make the iir filter coeffs
         a1, b0, delay = spawaveform.iir(amp, phase, epsilon, alpha, beta, padding)
-
-        # pad the iir response to be nearest power of 2 of:
-        length = ceil_pow_2(len(data_full) + autocorrelation_length)
 
         # get the IIR response
         u_rev_pad = gen_spiir_response(length, a1, b0, delay)
@@ -862,16 +874,7 @@ def gen_norm_spiir_coeffs(amp, phase, data_full, padding = 1.3, epsilon = 0.02, 
         # normalize the iir coefficients
         b0 *= cmath.sqrt(2 / norm_u)
 
-        # get the original waveform
-        h = data_full
-        h_pad = numpy.zeros(length * 1, dtype=numpy.cdouble)
-        h_pad[-len(h):] = h
-
-        # normalize the original waveform so its inner-product is 2
-        norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
-        h_pad *= cmath.sqrt(2 / norm_h)
-        #pdb.set_trace()
-        return a1, b0, delay, u_rev_pad, h_pad
+        return a1, b0, delay, u_rev_pad
 
 
 
@@ -905,8 +908,8 @@ class Bank(object):
 
         # Open template bank file
         self.template_bank_filename = filename
-        tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
-        sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
+        self.tmpltbank_xmldoc = utils.load_filename(filename, contenthandler = contenthandler, verbose = verbose)
+        self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(self.tmpltbank_xmldoc)
         self.flower = flower
         self.epsilon = epsilon_start
         self.alpha = alpha
@@ -926,7 +929,7 @@ class Bank(object):
         if autocorrelation_length is not None:
             if not (autocorrelation_length % 2):
                 raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
-            self.autocorrelation_bank = numpy.zeros((len(sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
+            self.autocorrelation_bank = numpy.zeros((len(self.sngl_inspiral_table), autocorrelation_length), dtype = "cdouble")
             self.autocorrelation_mask = compute_autocorrelation_mask( self.autocorrelation_bank )
         else:
             self.autocorrelation_bank = None
@@ -934,9 +937,9 @@ class Bank(object):
 
         #This occasionally breaks with certain template banks
         #Can just specify a certain instrument as a hack fix
-        psd = all_psd[sngl_inspiral_table[0].ifo]
+        psd = all_psd[self.sngl_inspiral_table[0].ifo]
 
-        working_state = gen_template_working_state(sngl_inspiral_table, flower, sampleRate = sampleRate)
+        working_state = gen_template_working_state(self.sngl_inspiral_table, flower, sampleRate = sampleRate)
         # Smooth the PSD and interpolate to required resolution
         if psd is not None:
             psd = cbc_template_fir.condition_psd(
@@ -962,15 +965,24 @@ class Bank(object):
         Bmat = {}
         Dmat = {}
  
-        for tmp, row in enumerate(sngl_inspiral_table):
+        for tmp, row in enumerate(self.sngl_inspiral_table):
             spiir_match = -1
             epsilon = epsilon_start
             epsilon_a = None
             epsilon_b = None
             n_filters = 0
 
-            amp, phase, data, data_full = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = snr_cut, negative_latency = negative_latency, verbose = verbose)
+            # data = the cutted template. 
+            # cut at the beginning to avoid long low SNR accumulation
+            # cut at the end for negative latency template
+            # data_full = original uncut template
+            amp, phase, data, data_full, epoch_index = gen_whitened_amp_phase(psd, approximant, waveform_domain, sampleRate, flower, working_state, row, is_frequency_whiten = 1, snr_cut = snr_cut, negative_latency = negative_latency, verbose = verbose)
 
+            row.end = lal.LIGOTimeGPS(float(epoch_index)/sampleRate)
+            # get the padded length, so SPIIR approximated waveform u_rev_pad
+            # the original cut template h_pad, and the original one will be
+            # padded to the same length
+            pad_length = ceil_pow_2(len(data_full) + autocorrelation_length)
             nround = 1
 
             # Collate various requirements
@@ -988,7 +1000,13 @@ class Bank(object):
 
             # Iterate to get the filter delays matching our requirements
             while(True):
-                a1, b0, delay, u_rev_pad, h_pad = gen_norm_spiir_coeffs(amp, phase, data_full, epsilon = epsilon, alpha = alpha, beta = beta, padding = padding, autocorrelation_length = autocorrelation_length)
+                a1, b0, delay, u_rev_pad = gen_norm_spiir_coeffs(amp, phase, pad_length, epsilon = epsilon, alpha = alpha, beta = beta, padding = padding)
+
+		# h_pad is just the padded cut template
+		h_pad = pad_data(data, pad_length)
+        	# normalize the cut waveform so its inner-product is 2
+        	norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
+        	h_pad *= cmath.sqrt(2 / norm_h)
 
                 # compute the SNR
                 spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0
@@ -1072,7 +1090,8 @@ class Bank(object):
                     a1,b0,spiir_match = optimize_a1(a1, delay, h_pad/numpy.sqrt(2), state=optimizer_state, **optimizer_options)
                     b0 *= numpy.sqrt(2)
 
-            u_rev_pad = gen_spiir_response(len(h_pad), a1, b0, delay)
+            # get the final SPIIR approximated waveform 
+            u_rev_pad = gen_spiir_response(pad_length, a1, b0, delay)
 
             #
             # sigmasq = 2 \sum_{k=0}^{N-1} |\tilde{h}_{k}|^2 / S_{k} \Delta f
@@ -1102,18 +1121,26 @@ class Bank(object):
             # sigmasq = norm * N * (\Delta t)^2
             #
 
+            # sigmasq is based on cut template
             norm_data = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
             self.sigmasq.append(norm_data * spiir_match * spiir_match * working_state["working_length"] / sampleRate**2. )
 
 
             # This is actually the cross correlation between the original waveform and this approximation
-            self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_pad, u_rev_pad, autocorrelation_length)
 
-            # save the overlap of spiir reconstructed waveform with the template
+	    # h_full_pad is just the padded original template
+	    h_full_pad = pad_data(data_full, pad_length)
+            # normalize the cut waveform so its inner-product is 2
+            norm_h_full = abs(numpy.dot(h_full_pad, numpy.conj(h_full_pad)))
+       	    h_full_pad *= cmath.sqrt(2 / norm_h)
+
+            self.autocorrelation_bank[tmp,:] = normalized_crosscorr(h_full_pad, u_rev_pad, autocorrelation_length)
+
+            # save the overlap of spiir reconstructed waveform with the cut template
             self.matches.append(spiir_match)
 
             if verbose:
-                logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(sngl_inspiral_table), row.mass1,row.mass2, epsilon, n_filters, spiir_match, epsilon_start, original_filters, original_match))
+                logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(self.sngl_inspiral_table), row.mass1,row.mass2, epsilon, n_filters, spiir_match, epsilon_start, original_filters, original_match))
 
             # get the filter frequencies
             fs = -1. * numpy.angle(a1) / 2 / numpy.pi # Normalised freqeuncy
@@ -1245,15 +1272,15 @@ class Bank(object):
         lw.appendChild(root)
 
         # Open template bank file
-        tmpltbank_xmldoc = utils.load_filename(self.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
+        # tmpltbank_xmldoc = utils.load_filename(self.template_bank_filename, contenthandler = contenthandler, verbose = verbose)
         # sngl_inspiral_columns = ("process_id", "ifo", "search", "channel", "end_time", "end_time_ns", "end_time_gmst", "impulse_time", "impulse_time_ns", "template_duration", "event_duration", "amplitude", "eff_distance", "coa_phase", "mass1", "mass2", "mchirp", "mtotal", "eta", "kappa", "chi", "tau0", "tau2", "tau3", "tau4", "tau5", "ttotal", "psi0", "psi3", "alpha", "alpha1", "alpha2", "alpha3", "alpha4", "alpha5", "alpha6", "beta", "f_final", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "cont_chisq", "cont_chisq_dof", "sigmasq", "rsqveto_duration", "Gamma0", "Gamma1", "Gamma2", "Gamma3", "Gamma4", "Gamma5", "Gamma6", "Gamma7", "Gamma8", "Gamma9", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "event_id")
 
         # Get sngl inspiral table
-        sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
+        # sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(tmpltbank_xmldoc)
 
         # put the bank table into the output document
         new_sngl_table = lsctables.New(lsctables.SnglInspiralTable)
-        for row in sngl_inspiral_table:
+        for row in self.sngl_inspiral_table:
             new_sngl_table.append(row)
 
         root.appendChild(new_sngl_table)
