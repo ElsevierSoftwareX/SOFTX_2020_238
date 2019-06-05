@@ -26,8 +26,20 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot
 
-
-
+def pad_gap(data):
+    # padding data if strain has gaps
+    last_time = data[0, 0]
+    dt = data[1, 0] - last_time
+    for i in range(1, len(data)):
+        this_time = data[i, 0]
+	if this_time - last_time > 2*dt:
+	    ninsert = int((this_time - last_time)/dt - 1)
+	    new_arr = numpy.array([[last_time + dt * x, 0] for x in range(1, ninsert)])
+	    padded_data = numpy.insert(data, i, new_arr, axis = 0)
+	    data = padded_data
+        last_time = this_time
+    return data
+	
 
 parser = OptionParser(description = __doc__)
 
@@ -41,22 +53,39 @@ options, filenames = parser.parse_args()
 
 template = numpy.loadtxt(options.template_fname).view(complex)
 data = numpy.loadtxt(options.data_fname, usecols = (0,1)) # gps_time, value
+data = pad_gap(data)
 snr, sigma, indmax, timemax, f_ticks, data_fft, template_fft = matched_filt(template, data, sampleRate = options.sampleRate)
 if options.verbose:
 	print "max snr is %f, sigma %f, indmax %f, timemax %.9f" % (max(abs(snr)), sigma, indmax, timemax)
 
 if options.snr_prefix:
 	pyplot.figure()
+	fig, axs = pyplot.subplots(2, 1)
+	fig.subplots_adjust(hspace = .5)
 	time = data[:,0] - timemax
 	idx_start = min(numpy.where((abs(snr)) >0)[0])
 	idx_end = min(max(numpy.where((abs(snr)) >0)[0]), len(time))
 	time = time[idx_start:idx_end]
 	snr = snr[idx_start:idx_end]
+
+	idx_start2 = indmax - 50 - idx_start
+	idx_end2 = indmax + 50 - idx_start
+	time_cut = time[idx_start2:idx_end2]
+	snr_cut = snr[idx_start2:idx_end2]
 	
-	p1 = pyplot.plot(time, snr)
-	pyplot.xlabel("Time since {0:.9f}".format(timemax))
+	idx_start_shade = indmax - 5 - idx_start
+	idx_end_shade = indmax + 5 - idx_start
+	axs[0].plot(time_cut, abs(snr_cut))
+	axs[0].set_ylabel("SNR")
+	axs[0].axvspan(time[idx_start_shade], time[idx_end_shade], facecolor = '0.5', alpha = 0.5, label = "+_ 5 samples")
+	axs[0].legend()
+	axs[1].plot(time_cut, numpy.arctan2(snr_cut.imag, snr_cut.real))
+	axs[1].axvspan(time[idx_start_shade], time[idx_end_shade], facecolor = '0.5', alpha = 0.5, label = "+_ 5 samples")
+	axs[1].legend()
+	axs[1].set_xlabel("Time since {0:.9f}".format(timemax))
+	axs[1].set_ylabel("coa_phase (radians)")
 	pyplot.savefig("%s.svg" % options.snr_prefix, format = "svg", dpi = 1200)
-	numpy.savetxt("%s.txt" % options.snr_prefix, snr.view(float))
+	numpy.savetxt("%s.txt" % options.snr_prefix, snr_cut.view(float))
 
 	pyplot.figure()
 	fig, axs = pyplot.subplots(2, 1)
