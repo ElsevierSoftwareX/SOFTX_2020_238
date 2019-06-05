@@ -1,3 +1,11 @@
+gstlal-ugly (1.6.4-1) unstable; urgency=low
+  
+  * add options to enable auth, https for inspiral aggregators
+  * add gstlal_ll_inspiral_trigger_aggregator to gstlal-ugly, add job to
+    gstlal_ll_inspiral_pipe
+
+ -- Alexander Pace <alexander.pace@ligo.org> Wed, 05 Jun 2019 12:24:02 -0700
+
 gstlal-ugly (1.6.3-1) unstable; urgency=low
 
   * gstlal_kafka_dag: add condor universe option into kafka/zookeeper jobs
