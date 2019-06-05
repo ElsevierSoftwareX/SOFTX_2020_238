@@ -104,6 +104,16 @@ setrlimit(resource.RLIMIT_STACK, 1024*1024)
 def now():
 	return lal.LIGOTimeGPS(lal.UTCToGPS(time.gmtime()), 0)
 	
+#
+# Function definition to check a string to see if it is a number
+#
+
+def is_number(s):
+	try:
+		float(s)
+		return True
+	except ValueError:
+		return False
 
 #
 # Function to update FIR matrix property
@@ -956,6 +966,27 @@ if (ChannelNames["linewitnesschannellist"] != "None") if "linewitnesschannellist
 			line_witness_freqs[i][j] = float(line_witness_freqs[i][j])
 	for i in range(0, len(line_witness_freq_vars)):
 		line_witness_freq_vars[i] = float(line_witness_freq_vars[i])
+	# Channels that contain frequencies of lines to be removed
+	if "linewitnessfrequencychannellist" in ChannelNames:
+		line_witness_frequency_channel_list = ChannelNames["linewitnessfrequencychannellist"].split(';')
+		for i in range(0, len(line_witness_frequency_channel_list)):
+			line_witness_frequency_channel_list[i] = line_witness_frequency_channel_list[i].split(',')
+			for j in range(0, len(line_witness_frequency_channel_list[i])):
+				if line_witness_frequency_channel_list[i][j] == "None":
+					line_witness_frequency_channel_list[i][j] = None
+				elif is_number(line_witness_frequency_channel_list[i][j]):
+					line_witness_frequency_channel_list[i][j] = float(line_witness_frequency_channel_list[i][j])
+				elif (instrument, line_witness_frequency_channel_list[i][j]) not in channel_list:
+					channel_list.append((instrument, line_witness_frequency_channel_list[i][j]))
+					headkeys.append(line_witness_frequency_channel_list[i][j])
+				else:
+					line_witness_frequency_channel_list[i][j] = headkeys[channel_list.index((instrument, line_witness_frequency_channel_list[i][j]))]
+	else:
+		line_witness_frequency_channel_list = []
+		for i in range(0, len(line_witness_freqs)):
+			line_witness_frequency_channel_list.append([])
+			for j in range(0, len(line_witness_freqs[i])):
+				line_witness_frequency_channel_list[i].append(None)
 
 if (ChannelNames["powerlineschannel"] not in headkeys) if remove_power_lines else False:
 	channel_list.append((instrument, ChannelNames["powerlineschannel"]))
@@ -1071,9 +1102,13 @@ D_epics_dict = {}
 C_epics_dict = {}
 misc_epics_dict = {}
 for key in headkeys:
-	if key.endswith("linefreq"):
+	if key.endswith("linefreq") or key in [item for sublist in line_witness_frequency_channel_list for item in sublist]:
 		head_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		head_dict[key] = pipeparts.mkgeneric(pipeline, head_dict[key], "lal_property", update_when_change = True)
+		for i in range(0, len(line_witness_frequency_channel_list)):
+			if key in line_witness_frequency_channel_list[i]:
+				j = line_witness_frequency_channel_list[i].index(key)
+				line_witness_frequency_channel_list[i][j] = head_dict[key]
 	elif key.endswith("line_corr_real") or key.endswith("line_corr_imag"):
 		head_dict[key] = calibration_parts.caps_and_progress(pipeline, head_dict[key], ref_factors_caps, key)
 		head_dict[key] = pipeparts.mkaudioamplify(pipeline, head_dict[key], pcal_sign)
@@ -1577,15 +1612,15 @@ if compute_fs or compute_srcq:
 		smooth_fs_squared_almost_nogate = pipeparts.mkaudioamplify(pipeline, smooth_XiR_nogate, src_pcal_line_freq)
 		smooth_fs_squared_nogate = pipeparts.mkaudioamplify(pipeline, smooth_fs_squared_almost_nogate, src_pcal_line_freq)
 		if src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification")
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification")
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification")
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification")
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification", 1)
 		elif src_pcal_line_freq != act_pcal_line_freq and "pcal4_linefreq" in head_dict:
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification")
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification")
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification")
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification")
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification", 1)
 
 		smooth_fs_squared = pipeparts.mktee(pipeline, smooth_fs_squared)
 
@@ -2036,7 +2071,7 @@ if apply_fcc or apply_fs or apply_srcq:
 		res = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, res), "lal_tdwhiten", kernel = reschainfilt[::-1], latency = reschaindelay, taper_length = sensing_filter_taper_length, kernel_endtime = 0, name = "RES_filter")
 		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
 		adaptive_invsens_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, res, "adaptive_filter", "kernel")
-		adaptive_invsens_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, res, "filter_endtime", "kernel_endtime")
+		adaptive_invsens_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, res, "filter_endtime", "kernel_endtime", 1)
 
 # # Correct for time-dependence of f_cc
 #if apply_fcc:
@@ -2585,7 +2620,7 @@ if any(line_witness_channel_list):
 			if remove_cal_lines and filter_latency_factor > 0:
 				line_witness_channel_list[i][j] = pipeparts.mkgeneric(pipeline, line_witness_channel_list[i][j], "lal_insertgap", chop_length = int(1000000000 * filter_latency_factor * demodulation_filter_time))
 
-	clean_strain = calibration_parts.remove_lines_with_witnesses(pipeline, clean_strain, line_witness_channel_list, line_witness_freqs, line_witness_freq_vars, filter_latency = filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_median = line_witness_tf_median_time * compute_factors_sr, num_avg = line_witness_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
+	clean_strain = calibration_parts.remove_lines_with_witnesses(pipeline, clean_strain, line_witness_channel_list, line_witness_freqs, line_witness_freq_vars, line_witness_frequency_channel_list, filter_latency = filter_latency_factor, compute_rate = compute_factors_sr, rate_out = hoft_sr, num_median = line_witness_tf_median_time * compute_factors_sr, num_avg = line_witness_tf_averaging_time * compute_factors_sr, noisesub_gate_bit = noisesubgatetee)
 
 # Remove excess noise using any provided witness channels
 if any(witness_channel_list):

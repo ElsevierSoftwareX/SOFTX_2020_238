@@ -252,11 +252,11 @@ def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, pref
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
 	if type(freq_update) is list:
-		freq_update[0].connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency")
-		freq_update[1].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_real")
-		freq_update[2].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_imag")
+		freq_update[0].connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency", 1)
+		freq_update[1].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_real", 1)
+		freq_update[2].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_imag", 1)
 	elif freq_update is not None:
-		freq_update.connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency")
+		freq_update.connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency", 1)
 	head = mkresample(pipeline, head, 5, filter_latency == 0.0, rate)
 	if filter_latency != 0:
 		# Remove the first several seconds of output, which depend on start time
@@ -284,7 +284,7 @@ def remove_harmonics(pipeline, signal, f0, num_harmonics, f0_var, filter_latency
 
 	return elem
 
-def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, filter_latency = 0, compute_rate = 16, rate_out = 16384, num_median = 2048, num_avg = 160, noisesub_gate_bit = None):
+def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, freq_channels, filter_latency = 0, compute_rate = 16, rate_out = 16384, num_median = 2048, num_avg = 160, noisesub_gate_bit = None):
 	# remove line(s) from a spectrum. filter length for demodulation (given in seconds) is adjustable
 	# function argument caps must be complex caps
 
@@ -343,14 +343,14 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 			f0_beat_frequency = pipeparts.mkgeneric(pipeline, f0_measured, "lal_add_constant", value = -freqs[m][0])
 			f0_beat_frequency = pipeparts.mktee(pipeline, f0_beat_frequency)
 
-		for freq in freqs[m]:
+		for n in range(len(freqs[m])):
 			# Length of low-pass filter
-			filter_length = filter_param / (max(freq_vars[m], 0.003) * freq / freqs[m][0])
+			filter_length = filter_param / (max(freq_vars[m], 0.003) * freqs[m][n] / freqs[m][0])
 			filter_samples = int(filter_length * compute_rate) + (1 - int(filter_length * compute_rate) % 2)
 			sample_shift = filter_samples / 2 - int((filter_samples - 1) * filter_latency + 0.5)
 			# shift of timestamp relative to data
 			time_shift = float(sample_shift) / compute_rate + zero_latency * resample_shift / compute_rate
-			two_n_pi_delta_t = 2 * freq / freqs[m][0] * numpy.pi * time_shift
+			two_n_pi_delta_t = 2 * freqs[m][n] / freqs[m][0] * numpy.pi * time_shift
 
 			# Only do this if we have to
 			if filter_latency != 0.5 and freq_vars[m]:
@@ -361,20 +361,36 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				phase_factor = pipeparts.mktee(pipeline, phase_factor)
 
 			# Find amplitude and phase of line in signal
-			line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = freq)
+			line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = freqs[m][n])
+			# Connect to line frequency updater if given
+			if freq_channels[m][n] is not None:
+				if type(freq_channels[m][n]) is float:
+					# It's a harmonic of the frequency in freq_channels[m][0]
+					freq_channels[m][0].connect("notify::current-average", update_property_simple, line_in_signal, "current_average", "line_frequency", freq_channels[m][n])
+				else:
+					# The channel carries the correct frequency
+					freq_channels[m][n].connect("notify::current-average", update_property_simple, line_in_signal, "current_average", "line_frequency", 1)
 			line_in_signal = mkresample(pipeline, line_in_signal, downsample_quality, zero_latency, compute_rate)
 			line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 			line_in_signal = pipeparts.mktee(pipeline, line_in_signal)
 
 			# Make ones for use in matrix equation
-			if freq == freqs[0][0]:
+			if m == 0 and n == 0:
 				ones = pipeparts.mktee(pipeline, mkpow(pipeline, line_in_signal, exponent = 0.0))
 
 			line_in_witnesses = []
 			tfs_at_f = [None] * len(witnesses[m]) * (len(witnesses[m]) + 1)
 			for i in range(0, len(witnesses[m])):
 				# Find amplitude and phase of each harmonic in each witness channel
-				line_in_witness = pipeparts.mkgeneric(pipeline, witnesses[m][i], "lal_demodulate", line_frequency = freq)
+				line_in_witness = pipeparts.mkgeneric(pipeline, witnesses[m][i], "lal_demodulate", line_frequency = freqs[m][n])
+				# Connect to line frequency updater if given
+				if freq_channels[m][n] is not None:
+					if type(freq_channels[m][n]) is float:
+						# It's a harmonic of the frequency in freq_channels[m][0]
+						freq_channels[m][0].connect("notify::current-average", update_property_simple, line_in_witness, "current_average", "line_frequency", freq_channels[m][n])
+					else:
+						# The channel carries the correct frequency
+						freq_channels[m][n].connect("notify::current-average", update_property_simple, line_in_witness, "current_average", "line_frequency", 1)
 				line_in_witness = mkresample(pipeline, line_in_witness, downsample_quality, zero_latency, compute_rate)
 				line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 				line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
@@ -385,7 +401,7 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 
 				# Remove worthless data from computation of transfer function if we can
 				if noisesub_gate_bit is not None:
-					tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%f_%d" % (m, freq, i))
+					tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d" % (m, n, i))
 				tfs_at_f[i] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0.0, default_kappa_im = 0.0, array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 				tfs_at_f[(i + 1) * len(witnesses[m]) + i] = ones
 
@@ -397,7 +413,7 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 
 						# Remove worthless data from computation of transfer function if we can
 						if noisesub_gate_bit is not None:
-							tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d_%d" % (int(freq), m, i, j))
+							tf_at_f = mkgate(pipeline, tf_at_f, noisesub_gate_bit, 1, attack_length = -((1.0 - filter_latency) * filter_samples), name = "powerlines_gate_%d_%d_%d_%d" % (m, n, i, j))
 						tfs_at_f[(i + 1) * len(witnesses[m]) + j] = pipeparts.mkgeneric(pipeline, tf_at_f, "lal_smoothkappas", default_kappa_re = 0.0, default_kappa_im = 0.0, array_size = num_median, avg_array_size = num_avg, default_to_median = True, filter_latency = filter_latency)
 
 			tfs_at_f = mkinterleave(pipeline, tfs_at_f, complex_data = True)
@@ -411,7 +427,15 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				else:
 					reconstructed_line_in_signal = mkmultiplier(pipeline, list_srcs(pipeline, tfs_at_f[i], line_in_witnesses[i], phase_factor))
 				reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
-				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * freq, prefactor_real = -2.0)
+				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * freqs[m][n], prefactor_real = -2.0)
+				# Connect to line frequency updater if given
+				if freq_channels[m][n] is not None:
+					if type(freq_channels[m][n]) is float:
+						# It's a harmonic of the frequency in freq_channels[m][0]
+						freq_channels[m][0].connect("notify::current-average", update_property_simple, reconstructed_line_in_signal, "current_average", "line_frequency", -1.0 * freq_channels[m][n])
+					else:
+						# The channel carries the correct frequency
+						freq_channels[m][n].connect("notify::current-average", update_property_simple, reconstructed_line_in_signal, "current_average", "line_frequency", -1.0)
 				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")
 
 				signal_minus_lines.append(reconstructed_line_in_signal)
@@ -553,7 +577,7 @@ def linear_phase_filter(pipeline, head, shift_samples, num_samples = 256, gain =
 			head = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, head), "lal_tdwhiten", kernel = sinc_filter[::-1], latency = filter_latency_samples, taper_length = taper_length, kernel_endtime = kernel_endtime)
 			filter_update = mkadaptivefirfilt(pipeline, filter_update, variable_filter_length = num_samples, adaptive_filter_length = num_samples, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency, filter_timeshift = filter_timeshift, tukey_param = 0.5)
 			filter_update.connect("notify::adaptive-filter", update_filter, head, "adaptive_filter", "kernel")
-			filter_update.connect("notify::filter-endtime", update_property_simple, head, "filter_endtime", "kernel_endtime")
+			filter_update.connect("notify::filter-endtime", update_property_simple, head, "filter_endtime", "kernel_endtime", 1)
 	return head
 
 def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
@@ -1026,7 +1050,7 @@ def compute_fcc(pipeline, SR, SI, fpcal2, freq_update = None):
 	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), mkpow(pipeline, SI, exponent=-1.0)))
 	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal2)
 	if freq_update is not None:
-		freq_update.connect("notify::current-average", update_property_simple, fcc, "current_average", "amplification")
+		freq_update.connect("notify::current-average", update_property_simple, fcc, "current_average", "amplification", 1)
 	return fcc
 
 def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc):
@@ -1119,9 +1143,9 @@ def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, E
 
 	return Xi
 
-def update_property_simple(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name):
+def update_property_simple(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name, prefactor):
 	prop = prop_maker.get_property(maker_prop_name)
-	prop_taker.set_property(taker_prop_name, prop)
+	prop_taker.set_property(taker_prop_name, prefactor * prop)
 
 def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name):
 	firfilter = filter_maker.get_property(maker_prop_name)[::-1]
@@ -1156,7 +1180,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 		if parallel_mode:
 			minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass)), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length, kernel_endtime = 0)
 			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
-			transfer_functions.connect("notify::fir-endtime", update_property_simple, minus_noise, "fir_endtime", "kernel_endtime")
+			transfer_functions.connect("notify::fir-endtime", update_property_simple, minus_noise, "fir_endtime", "kernel_endtime", 1)
 		else:
 			minus_noise = pipeparts.mkgeneric(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length)
 			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
