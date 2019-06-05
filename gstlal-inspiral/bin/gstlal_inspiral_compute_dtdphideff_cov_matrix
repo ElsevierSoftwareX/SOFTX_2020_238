@@ -51,19 +51,21 @@ def moment(fmin, fmax, n, ifo, psddict = psddict):
 sigsqtt = {}
 sigsqpp = {}
 sigsqtp = {}
+sigsqdd = {}
 
 for ifo in rho:
 	sigsqf = moment(10, 1024, 2, ifo) - moment(10, 1024, 1, ifo)**2
 	sigsqtt[ifo] = (1. / (2 * 3.14 * rho[ifo] * sigsqf**.5)**2)
 	sigsqpp[ifo] = moment(10, 1024, 2, ifo) / (rho[ifo]**2 * sigsqf)
 	sigsqtp[ifo] = moment(10, 1024, 1, ifo) / (2 * 3.14 * rho[ifo]**2 * sigsqf)
+	sigsqdd[ifo] = 1. / rho[ifo]**2
 
 transtt = {}
 transpp = {}
 transtp = {}
 transpt = {}
 # FIXME do an actual calculation
-transdd = {frozenset(("H1", "L1")): 5.0 , frozenset(("H1", "V1")): 5.0, frozenset(("L1", "V1")): 5.0}
+transdd = {frozenset(("H1", "L1")): 1. / (sigsqdd["H1"] + sigsqdd["L1"])  , frozenset(("H1", "V1")): 1. / (sigsqdd["H1"] + sigsqdd["V1"]), frozenset(("L1", "V1")): 1. / (sigsqdd["L1"] + sigsqdd["V1"])}
 
 for combo in itertools.combinations(("H1", "L1", "V1"), 2):
 	a,b = combo
