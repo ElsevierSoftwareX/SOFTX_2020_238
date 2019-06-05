@@ -1152,7 +1152,7 @@ class TimePhaseSNR(object):
 	transtp = {frozenset(['V1', 'H1']): -1.6205914017601712, frozenset(['H1', 'L1']): -3.0734607125393643, frozenset(['V1', 'L1']): -1.7020167980031775}
 	transpt = {frozenset(['V1', 'H1']): -0, frozenset(['H1', 'L1']): -0, frozenset(['V1', 'L1']): -0}
 	transpp = {frozenset(['V1', 'H1']): 1.2422379329336195, frozenset(['H1', 'L1']): 2.6540061786001892, frozenset(['V1', 'L1']): 1.2984050700516516}
-	transdd = {frozenset(['V1', 'H1']): 5.0, frozenset(['H1', 'L1']): 5.0, frozenset(['V1', 'L1']): 5.0}
+	transdd = {frozenset(['V1', 'H1']): 4.20997920997921, frozenset(['H1', 'L1']): 16.554054054054053, frozenset(['V1', 'L1']): 4.5884393063583815}
 
 	def __init__(self, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
 		"""
@@ -1392,7 +1392,7 @@ class TimePhaseSNR(object):
 			coordtransmat = numpy.array([[self.transtt[frozenset((ifo1, ifo2))], self.transtp[frozenset((ifo1, ifo2))]],[self.transpt[frozenset((ifo1, ifo2))], self.transpp[frozenset((ifo1, ifo2))]]])
 			out[:,slc[0]], out[:,slc[1]] = numpy.dot(coordtransmat, dtdphivec)
 			# FIXME should this be the ratio - 1 or without the -1 ???
-			out[:,slc[2]] = (deff[ifo1] / deff[ifo2] - 1) * self.transdd[frozenset((ifo1, ifo2))]
+			out[:,slc[2]] = numpy.log(deff[ifo1] / deff[ifo2]) * self.transdd[frozenset((ifo1, ifo2))]
 
 		return out
 
