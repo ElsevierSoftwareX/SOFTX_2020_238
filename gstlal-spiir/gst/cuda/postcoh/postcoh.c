@@ -1230,8 +1230,11 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 		int *peak_pos = pklist->peak_pos;
 		for(ipeak=0; ipeak<npeak; ipeak++) {
 			output->next = NULL;
-			XLALINT8NSToGPS(&end_time, ts);
 			peak_cur = peak_pos[ipeak];
+			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
+			XLALINT8NSToGPS(&end_time, ts);
+			// NOTE: adjust for the merger/epoch time of the trigger
+			XLALGPSAddGPS(&end_time, &(sngl_table[cur_tmplt_idx].end));
 			len_cur = pklist->len_idx[peak_cur];
 			XLALGPSAdd(&(end_time), (double) len_cur/exe_len);
 			output->end_time = end_time;
@@ -1252,7 +1255,6 @@ static int cuda_postcoh_write_table_to_buf(CudaPostcoh *postcoh, GstBuffer *outb
 			output->chisq_H = pklist->chisq_H[peak_cur];
 			output->chisq_L = pklist->chisq_L[peak_cur];
 			output->chisq_V = pklist->chisq_V[peak_cur];
-			cur_tmplt_idx = pklist->tmplt_idx[peak_cur];
 
 			for(jifo=0; jifo<nifo; jifo++)
 			{

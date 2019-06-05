@@ -26,8 +26,8 @@
 #include <cuda_debug.h>
 #include <cuda_runtime.h>
 
-// #define __DEBUG__ 0
-#define NSNGL_TMPLT_COLS 12
+//#define __DEBUG__ 0
+#define NSNGL_TMPLT_COLS 14
 
 void cuda_device_print(int deviceCount)
 {  
@@ -292,20 +292,17 @@ void
 cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 {
 
-	int ntoken = 0;
-
-	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
-	strcpy(fname_cpy, fname);
-	char *token = strtok_r(fname_cpy, ",", &end_ifo);
-	int mem_alloc_size = 0, ntmplt = 0, match_ifo;
+	gchar ** isigma, **sigma_fnames = g_strsplit(fname, ",", -1);
+	int mem_alloc_size = 0, ntmplt = 0, match_ifo = 0, nifo = 0;
 
 	/* parsing for nifo */
-	while (token != NULL) {
-		token = strtok_r(NULL, ",", &end_ifo);
-		ntoken++;
-	}
+	for (isigma = sigma_fnames; *isigma; isigma++)
+		nifo++;
 
-	int nifo = ntoken;
+	#ifdef __DEBUG__
+	printf("sigma from %d ifo\n", nifo);
+	#endif
+
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct));
 	XmlArray *array_sigmasq = (XmlArray *)malloc(sizeof(XmlArray));
 
@@ -313,59 +310,33 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 	double **sigmasq = state->sigmasq;
 	sigmasq[0] = NULL;
 
-	end_ifo = NULL;
-	strcpy(fname_cpy, fname);
 	sprintf((char *)xns[0].tag, "sigmasq:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_sigmasq[0]);
-	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN+1);
-
-	token = strtok_r(fname_cpy, ",", &end_ifo);
-	/* parsing for all_ifos */
-	int iifo = 0;
-	while (token != NULL) {
-		#ifdef __DEBUG__
-		printf("token for all_ifos %s, copy size %d, sizeof char %d, sizeof char %d\n", token, sizeof(char)*IFO_LEN, sizeof(char), sizeof(char));
-		#endif
-		strncpy(all_ifos+iifo*IFO_LEN, token, sizeof(char)*IFO_LEN);
-		token = strtok_r(NULL, ",", &end_ifo);
-		iifo++;
-	}
-
-	all_ifos[IFO_LEN*nifo] = '\0';
-	//printf("all_ifos %s\n", all_ifos);
-	int ifo_combo_idx = get_icombo(all_ifos);
-	/* overwrite all_ifos to be the same with the combo in the IFOComboMap */
-	strncpy(all_ifos, IFOComboMap[ifo_combo_idx].name, sizeof(IFOComboMap[ifo_combo_idx].name));
-	//printf("all_ifos %s\n", all_ifos);
-
-	strcpy(fname_cpy, fname);
-	token = strtok_r(fname_cpy, ",", &end_ifo);
-
 	/* used for sanity check the lengths of sigmasq arrays should be equal */
 	int last_dimension = -1;
-	/* start parsing again */
-	while (token != NULL) {
-		char *end_token;
-		char *token_bankname = strtok_r(token, ":", &end_token);
-		token_bankname = strtok_r(NULL, ":", &end_token);
 
-		parseFile(token_bankname, xns, 1);
+	/* parsing for all_ifos */
+	for (isigma = sigma_fnames; *isigma; isigma++) {
+		gchar ** this_ifo_split = g_strsplit(*isigma, ":", -1);
 
-		// combos like HL, match_ifo will still be like 0:H,1:L
-		// combos like HV, match_ifo will still be like 0:H,1:V
 		for (int i=0; i<nifo; i++) {
-			if (strncmp(token, all_ifos + IFO_LEN*i, 2) == 0) {
+			if (strncmp(this_ifo_split[0], IFOMap[i].name ,IFO_LEN) == 0) {
 				match_ifo = i;
 				break;
 			}
 		
 		}
 
+		parseFile(this_ifo_split[1], xns, 1);
+
 		ntmplt = array_sigmasq[0].dim[0];
+		// combos like HL, match_ifo will still be like 0:H,1:L
+		// combos like HV, match_ifo will still be like 0:H,1:V
 		#ifdef __DEBUG__
-		printf("ntmplt %d\n", ntmplt);
+		printf("this sigma %s, this ifo %s, match ifo %d,ntmplt %d \n", *isigma, this_ifo_split[0], match_ifo, ntmplt);
 		#endif
+
 		/* check if the lengths of sigmasq arrays are equal for all detectors */
 		if (last_dimension == -1){
 			/* allocate memory for sigmasq for all detectors upon the first detector ntmplt */
@@ -391,7 +362,6 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		}
 
 		freeArraydata(array_sigmasq);
-		token = strtok_r(NULL, ",", &end_ifo);
 		/*
 		 * Cleanup function for the XML library.
 		 */
@@ -401,14 +371,12 @@ cuda_postcoh_sigmasq_from_xml(char *fname, PostcohState *state)
 		 */
 		xmlMemoryDump();
 
+		g_strfreev(this_ifo_split);
 
 	}
 	/* free memory */
-	#ifdef __DEBUG__
-	printf("free fnamecpy %s\n", fname_cpy);
-	#endif
-	free(fname_cpy);
-	free(all_ifos);
+	g_strfreev(sigma_fnames);
+	free(array_sigmasq);
 	free(xns);
 }
 
@@ -535,20 +503,17 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	printf("read in autocorr from xml %s\n", fname);
 	#endif
 
-	int ntoken = 0;
-
-	char *end_ifo, *fname_cpy = (char *)malloc(sizeof(char) * strlen(fname));
-	strcpy(fname_cpy, fname);
-	char *token = strtok_r(fname_cpy, ",", &end_ifo);
-	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo = 0;
+	gchar ** iauto, **auto_fnames = g_strsplit(fname, ",", -1);
+	int mem_alloc_size = 0, autochisq_len = 0, ntmplt = 0, match_ifo = 0, nifo = 0;
 
 	/* parsing for nifo */
-	while (token != NULL) {
-		token = strtok_r(NULL, ",", &end_ifo);
-		ntoken++;
-	}
+	for (iauto = auto_fnames; *iauto; iauto++)
+		nifo++;
 
-	int nifo = ntoken;
+	#ifdef __DEBUG__
+	printf("autocorr from %d ifo\n", nifo);
+	#endif
+
 	XmlNodeStruct *xns = (XmlNodeStruct *)malloc(sizeof(XmlNodeStruct) * 2);
 	XmlArray *array_autocorr = (XmlArray *)malloc(sizeof(XmlArray) * 2);
 
@@ -560,9 +525,6 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	CUDA_CHECK(cudaMalloc((void **)&(state->dd_autocorr_matrix), sizeof(COMPLEX_F *) * nifo));
 	CUDA_CHECK(cudaMalloc((void **)&(state->dd_autocorr_norm), sizeof(float *) * nifo));
 
-	end_ifo = NULL;
-	strcpy(fname_cpy, fname);
-
 	sprintf((char *)xns[0].tag, "autocorrelation_bank_real:array");
 	xns[0].processPtr = readArray;
 	xns[0].data = &(array_autocorr[0]);
@@ -571,49 +533,28 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 	xns[1].processPtr = readArray;
 	xns[1].data = &(array_autocorr[1]);
 
-	char *all_ifos = (char *)malloc(sizeof(char) * nifo * IFO_LEN+1);
-
-	token = strtok_r(fname_cpy, ",", &end_ifo);
+	
 	/* parsing for all_ifos */
-	int iifo = 0;
-	while (token != NULL) {
-		#ifdef __DEBUG__
-		printf("token for all_ifos %s, copy size %d, sizeof char %d, sizeof char %d\n", token, sizeof(char)*IFO_LEN, sizeof(char), sizeof(char));
-		#endif
-		strncpy(all_ifos+iifo*IFO_LEN, token, sizeof(char)*IFO_LEN);
-		token = strtok_r(NULL, ",", &end_ifo);
-		iifo++;
-	}
-	all_ifos[IFO_LEN*nifo] = '\0';
-	int ifo_combo_idx = get_icombo(all_ifos);
-	/* overwrite all_ifos to be the same with the combo in the IFOComboMap */
-	strncpy(all_ifos, IFOComboMap[ifo_combo_idx].name, sizeof(IFOComboMap[ifo_combo_idx].name));
-
-	strcpy(fname_cpy, fname);
-	token = strtok_r(fname_cpy, ",", &end_ifo);
-
-	/* start parsing again */
-	while (token != NULL) {
-		char *end_token;
-		char *token_bankname = strtok_r(token, ":", &end_token);
-		token_bankname = strtok_r(NULL, ":", &end_token);
-
-		parseFile(token_bankname, xns, 2);
+	for (iauto = auto_fnames; *iauto; iauto++) {
+		gchar ** this_ifo_split = g_strsplit(*iauto, ":", -1);
 
 		for (int i=0; i<nifo; i++) {
-			if (strncmp(token, all_ifos+IFO_LEN*i, 2) == 0) {
+			if (strncmp(this_ifo_split[0], IFOMap[i].name ,IFO_LEN) == 0) {
 				match_ifo = i;
 				break;
 			}
 		
 		}
 
+		parseFile(this_ifo_split[1], xns, 2);
 		ntmplt = array_autocorr[0].dim[1];
 		autochisq_len = array_autocorr[0].dim[0];
 
 		#ifdef __DEBUG__
-		printf("parse match ifo %d, %s, ntmplt %d, auto_len %d\n", match_ifo, token_bankname, ntmplt, autochisq_len);
+		printf("this auto %s, this ifo %s, match ifo %d,ntmplt %d,auto len %d \n", *iauto, this_ifo_split[0], match_ifo, ntmplt, autochisq_len);
 		#endif
+
+
 		mem_alloc_size = sizeof(COMPLEX_F) * ntmplt * autochisq_len;
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr[match_ifo]), mem_alloc_size));
 		CUDA_CHECK(cudaMalloc((void **)&(autocorr_norm[match_ifo]), sizeof(float) * ntmplt));
@@ -634,7 +575,9 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 				tmp_autocorr[j * autochisq_len + k].im = tmp_im;
 				tmp_norm[j] += 2 - (tmp_re * tmp_re + tmp_im * tmp_im);
 			}
-//			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
+			#ifdef __DEBUG__
+			printf("match ifo %d, norm %d: %f\n", match_ifo, j, tmp_norm[j]);
+			#endif
 		}
 		/* copy the autocorr array to GPU device;
 		 * copy the array address to GPU device */
@@ -645,7 +588,6 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 
 		freeArraydata(array_autocorr);
 		freeArraydata(array_autocorr+1);
-		token = strtok_r(NULL, ",", &end_ifo);
 		/*
 		 * Cleanup function for the XML library.
 		 */
@@ -654,15 +596,15 @@ cuda_postcoh_autocorr_from_xml(char *fname, PostcohState *state, cudaStream_t st
 		 * this is to debug memory for regression tests
 		 */
 		xmlMemoryDump();
-
-//		printf("next token %s \n", token);
+		g_strfreev(this_ifo_split);
 
 	}
 
 	state->autochisq_len = autochisq_len;
 
 	/* free memory */
-	free(fname_cpy);
+	g_strfreev(auto_fnames);
+	free(array_autocorr);
 	free(tmp_autocorr);
 	free(tmp_norm);
 	free(autocorr);
@@ -681,7 +623,9 @@ char * ColNames[] = {
 	"sngl_inspiral:spin2x",
 	"sngl_inspiral:spin2y",
 	"sngl_inspiral:spin2z",
-	"sngl_inspiral:eta"
+	"sngl_inspiral:eta",
+	"sngl_inspiral:end_time", 
+	"sngl_inspiral:end_time_ns"
 	};
 
 void
@@ -769,6 +713,17 @@ cuda_postcoh_sngl_tmplt_from_xml(char *fname, SnglInspiralTable **psngl_table)
 	for (jlen=0; jlen<val->data->len; jlen++) 
 		sngl_table[jlen].eta = g_array_index(val->data, float, jlen);
 
+	val = g_hash_table_lookup(hash, col_names[12]);
+	for (jlen=0; jlen<val->data->len; jlen++) 
+		sngl_table[jlen].end.gpsSeconds = g_array_index(val->data, int, jlen);
+
+	val = g_hash_table_lookup(hash, col_names[13]);
+	for (jlen=0; jlen<val->data->len; jlen++) {
+		sngl_table[jlen].end.gpsNanoSeconds = g_array_index(val->data, int, jlen);
+		#ifdef __DEBUG__
+		printf("read %d, end gps %d, end nano %d\n", jlen, sngl_table[jlen].end.gpsSeconds, sngl_table[jlen].end.gpsNanoSeconds);
+		#endif
+	}
 
 	/* free memory */
 	freeTable(xtable);
