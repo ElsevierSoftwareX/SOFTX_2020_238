@@ -835,6 +835,8 @@ class DAG(object):
 		# initialize proegress report wrapper
 		progress = progress_wrapper(f, progress)
 
+		counter = 0
+
 		# if needed, create a dummy object to allow .write() method
 		# calls
 		if f is None and rescue is not None:
@@ -898,7 +900,13 @@ class DAG(object):
 			parents_of.setdefault(frozenset(child.name for child in node.children) & names, set()).add(node.name)
 		for children, parents in parents_of.items():
 			if children:
-				f.write("PARENT %s CHILD %s\n" % (" ".join(sorted(parents)), " ".join(sorted(children))))
+				if len(parents) * len(children) > 25:
+					counter += 1
+					f.write("JOB NOOP_NODE%s noop.submit NOOP\n" % str(counter))
+					f.write("PARENT %s CHILD NOOP_NODE%s\n" % (" ".join(sorted(parents)), str(counter)))
+					f.write("PARENT NOOP_NODE%s CHILD %s\n" % (str(counter), " ".join(sorted(children))))
+				else:
+					f.write("PARENT %s CHILD %s\n" % (" ".join(sorted(parents)), " ".join(sorted(children))))
 				progress += 1
 
 		# progress
