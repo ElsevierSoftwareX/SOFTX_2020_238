@@ -1,0 +1,277 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010--2014  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+### A program to compute the likelhood ratios of inspiral triggers
+
+
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import sys
+
+
+from glue.ligolw import lsctables
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw.utils import process as ligolw_process
+from glue.ligolw.utils import segments as ligolw_segments
+from ligo import segments
+from lalburst import calc_likelihood
+from lalinspiral import thinca
+from gstlal import far
+from lal.utils import CacheEntry
+from multiprocessing import Pool
+	
+def process_dist_stats(url):
+	n = url.split("-")[1].split("_")[0]
+	rankingstat = far.marginalize_pdf_urls([url], "RankingStat", verbose = True)
+	rankingstat.finish()
+	return (int(n),rankingstat)
+
+process_name = u"gstlal_inspiral_calc_likelihood"
+
+__author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
+__version__ = "git id %s" % ""	# FIXME
+__date__ = ""	# FIXME
+
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+def parse_command_line():
+	parser = OptionParser(
+		version = "Name: %%prog\n%s" % "" # FIXME
+	)
+	parser.add_option("-c", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-l", "--likelihood-url", metavar = "URL", action = "append", help = "Set the name of the likelihood ratio data file to use.  Can be given more than once.  Filenames and URLs are accepted.")
+	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
+	parser.add_option("--add-zerolag-to-background", action = "store_true", help = "Add zerolag events to background before populating coincident parameter PDF histograms")
+	parser.add_option("-f", "--force", action = "store_true", help = "Force recomputation of likelihood values.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	options, urls = parser.parse_args()
+
+	paramdict = options.__dict__.copy()
+
+	options.likelihood_urls = []
+	if options.likelihood_url is not None:
+		options.likelihood_urls += options.likelihood_url
+	if options.likelihood_cache is not None:
+		options.likelihood_urls += [CacheEntry(line).url for line in open(options.likelihood_cache)]
+	if not options.likelihood_urls:
+		raise ValueError("no likelihood URLs specified")
+
+	if options.input_cache:
+		urls += [CacheEntry(line).path for line in open(options.input_cache)]
+
+	return options, paramdict, urls
+
+
+#
+# =============================================================================
+#
+#                   Support Funcs for Likelihood Ratio Code
+#
+# =============================================================================
+#
+
+
+def sngl_inspiral_veto_func(event, vetoseglists):
+	# return True if event should be *retained*
+	return event.ifo not in vetoseglists or event.end not in vetoseglists[event.ifo]
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+if __name__ == '__main__':
+
+	#
+	# command line
+	#
+
+
+	options, paramdict, urls = parse_command_line()
+
+
+	#
+	# load parameter distribution data
+	#
+
+	#p = Pool(32)
+	#rankingstats = dict(p.map(process_dist_stats, options.likelihood_urls))
+	rankingstats = dict(map(process_dist_stats, sorted(options.likelihood_urls)))
+
+	instruments = rankingstats.values()[0].instruments
+
+
+	def ln_lr_from_triggers(events, offsetvector, rankingstats = rankingstats):
+		reference = min(events, key = lambda event: event.end)
+		ref_end, ref_offset = reference.end, offsetvector[reference.ifo]
+		# FIXME:  use a proper ID column when one is available
+		template_id = reference.Gamma0
+		bin_id = reference.Gamma1
+		try:
+			self = rankingstats[bin_id]
+		except KeyError:
+			return float("-inf")
+		if template_id not in self.template_ids:
+			raise ValueError("event IDs %s are from the wrong template" % ", ".join(sorted(str(event.event_id) for event in events)))
+		print bin_id
+		# segment spanned by reference event
+		seg = segments.segment(ref_end - reference.template_duration, ref_end)
+		# initially populate segs dictionary shifting reference
+		# instrument's segment according to offset vectors
+		segs = dict((instrument, seg.shift(ref_offset - offsetvector[instrument])) for instrument in self.instruments)
+		# for any any real triggers we have, use their true
+		# intervals
+		segs.update((event.ifo, segments.segment(event.end - event.template_duration, event.end)) for event in events)
+
+		try:
+			return self(
+				segments = segs,
+				snrs = dict((event.ifo, event.snr) for event in events),
+				phase = dict((event.ifo, event.coa_phase) for event in events),
+				dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
+				template_id = template_id,
+				**dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2.)) for event in events)
+			)
+		except (ValueError, AssertionError) as e:
+			raise type(e)("%s: event IDs %s, offsets %s" % (str(e), ", ".join(sorted(str(event.event_id) for event in events)), str(offsetvector)))
+
+	#
+	# iterate over candidate files
+	#
+
+
+	failed = []
+	for n, url in enumerate(urls, 1):
+		#
+		# open the file.  be lazy and use the content handler for the
+		# distribution data files because it's fine for this, too.  if a
+		# file can't be loaded because of a filesystem failure or CRC
+		# failure, or whatever, try to do the rest of the files before
+		# exiting instead of crashing right away to reduce the time spent
+		# in rescue dags.
+		#
+
+		if options.verbose:
+			print >>sys.stderr, "%d/%d:" % (n, len(urls)),
+		try:
+			xmldoc = ligolw_utils.load_url(url, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose)
+		except Exception as e:
+			if options.verbose:
+				print >>sys.stderr, "failed to load '%s': %s.  trying to continue with remaining files" % (url, str(e))
+			failed.append(url)
+			continue
+
+		if not options.force and ligolw_process.doc_includes_process(xmldoc, process_name):
+			if options.verbose:
+				print >>sys.stderr, "already processed, skipping"
+			xmldoc.unlink()
+			continue
+
+		#
+		# summarize the database, and record our passage.
+		#
+
+		try:
+			coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
+		except KeyError:
+			if options.verbose:
+				print >>sys.stderr, "document does not contain inspiral coincidences.  skipping."
+			xmldoc.unlink()
+			continue
+
+		process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict, ifos = instruments)
+
+		if options.verbose:
+			print >>sys.stderr, "indexing document ...",
+		sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
+		coinc_event_map_index = dict((row.coinc_event_id, []) for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id)
+		for row in lsctables.CoincMapTable.get_table(xmldoc):
+			if row.coinc_event_id not in coinc_event_map_index:
+				continue
+			coinc_event_map_index[row.coinc_event_id].append(sngl_inspiral_table_index[row.event_id])
+		del sngl_inspiral_table_index
+		coinc_inspiral_index = dict((row.coinc_event_id, row) for row in lsctables.CoincInspiralTable.get_table(xmldoc))
+
+		offset_vectors = lsctables.TimeSlideTable.get_table(xmldoc).as_dict()
+
+		if options.vetoes_name is not None:
+			vetoseglists = ligolw_segments.segmenttable_get_by_name(xmldoc, options.vetoes_name).coalesce()
+		else:
+			vetoseglists = segments.segmentlistdict()
+		if options.verbose:
+			print >>sys.stderr, "done"
+
+		#
+		# run likelihood ratio calculation.
+		#
+
+		calc_likelihood.assign_likelihood_ratios_xml(
+			xmldoc = xmldoc,
+			coinc_def_id = coinc_def_id,
+			offset_vectors = offset_vectors,
+			vetoseglists = vetoseglists,
+			events_func = lambda _, coinc_event_id: coinc_event_map_index[coinc_event_id],
+			veto_func = sngl_inspiral_veto_func,
+			ln_likelihood_ratio_func = ln_lr_from_triggers,
+			verbose = options.verbose
+		)
+
+		#
+		# close out process metadata.
+		#
+
+		ligolw_process.set_process_end_time(process)
+
+		#
+		# clean up.
+		#
+
+		ligolw_utils.write_url(xmldoc, url, gz = (url or "stdout").endswith(".gz"), verbose = options.verbose)
+		xmldoc.unlink()
+
+
+	#
+	# crash if any input files were broken
+	#
+
+
+	if failed:
+		raise ValueError("%s could not be processed" % ", ".join("'%s'" % url for url in failed))
