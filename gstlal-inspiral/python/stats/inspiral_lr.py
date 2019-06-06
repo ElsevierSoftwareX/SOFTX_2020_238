@@ -813,8 +813,9 @@ class LnNoiseDensity(LnLRDensity):
 
 		prcoss = numpy.ones(len(rcoss))
 		psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
+		psnr = numpy.outer(psnr, numpy.ones(len(rcoss)))
 		psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .00015*2) * drcoss)
-		arr[snrindices, rcossindices] = psnrdcoss
+		arr[snrindices, rcossindices] = psnrdcoss + psnr
 
 		# normalize to the requested count.  give 99% of the
 		# requested events to this portion of the model
