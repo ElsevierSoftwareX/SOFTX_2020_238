@@ -289,7 +289,7 @@ def inspiral_node_gen(gstlalInspiralJob, gstlalInspiralInjJob, dag, svd_nodes, s
 					ignore[injections].append(int(bgbin_index))
 
 		# FIXME choose better splitting?
-		numchunks = 10
+		numchunks = 50
 
 		# only use a channel dict with the relevant channels
 		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
@@ -550,7 +550,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 				opts = {"tmp-space":dagparts.condor_scratch_space()},
 				input_files = {"likelihood-url":diststats_per_bin_node.output_files["output"]},
 				input_cache_files = {"input-cache":chunked_inputs}
-				) for chunked_inputs in dagparts.groups(inputs, 16)]
+				) for chunked_inputs in dagparts.groups(inputs, 100)]
 			)
 
 	# then injections
@@ -573,12 +573,12 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 					opts = {"tmp-space":dagparts.condor_scratch_space()},
 					input_files = {"likelihood-url":likelihood_url},
 					input_cache_files = {"input-cache":chunked_inputs}
-					) for chunked_inputs in dagparts.groups(inputs, 16)]
+					) for chunked_inputs in dagparts.groups(inputs, 100)]
 				)
 
 	
 	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
-	files_to_group = 40
+	files_to_group = 100
 	for subbank, (inj, nodes) in enumerate(likelihood_nodes.items()):
 		# Flatten the nodes for this sub bank
 		nodes = dagparts.flatten(nodes)
@@ -751,7 +751,7 @@ def merge_in_bin(dag, toSqliteJob, lalappsRunSqliteJob, options):
 
 def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSqliteJob, toSqliteNoCacheJob, cpJob, innodes, ligolw_add_nodes, options, instruments):
 
-	num_chunks = 50
+	num_chunks = 100
 
 	if options.vetoes is None:
 		vetoes = []
@@ -799,7 +799,7 @@ def finalize_runs(dag, lalappsRunSqliteJob, toXMLJob, ligolwInspinjFindJob, toSq
 
 	else:
 		final_nodes = []
-		for chunk, nodes in enumerate(dagparts.groups(innodes[None], 10)):
+		for chunk, nodes in enumerate(dagparts.groups(innodes[None], num_chunks)):
 			noninjdb = dagparts.T050017_filename(instruments, 'PART_LLOID_CHUNK_%04d' % chunk, boundary_seg, '.sqlite')
 			sqlitenode = dagparts.DAGNode(toSqliteJob, dag, parent_nodes = nodes,
 				opts = {"replace":"", "tmp-space":dagparts.condor_scratch_space()},
