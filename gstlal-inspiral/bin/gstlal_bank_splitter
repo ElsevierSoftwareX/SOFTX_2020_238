@@ -33,6 +33,9 @@ from gstlal import dagparts
 from gstlal import chirptime
 import lal
 from lal.utils import CacheEntry
+import numpy, scipy.interpolate
+import lalsimulation
+from lal import series
 
 ### This program splits template banks into sub banks suitable for singular value decomposition; see gstlal_bank_splitter for more information
 ###
@@ -67,6 +70,42 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 lsctables.use_in(LIGOLWContentHandler)
 
 
+def bandwidth(m1, m2, s1, s2, f_min, f_max, delta_f, psd):
+	def fn(farr, h, n, psd):
+		df = farr[1] - farr[0]
+		return 4 * numpy.sum(numpy.abs(h)**2 * farr**n * df / psd(farr))
+
+	def moment(farr, h, n, psd):
+		return fn(farr, h, n, psd) / fn(farr, h, 0, psd)
+
+	spin1 = [0., 0., 0.]; spin2 = [0., 0., 0.]
+	f_min = 10.
+	f_max = 1024.0
+	delta_f = 1.0
+	farr = numpy.linspace(0, f_max, f_max / delta_f + delta_f)
+	hp, hc = lalsimulation.SimInspiralFD(
+		m1 * lal.MSUN_SI, m2 * lal.MSUN_SI,
+		spin1[0], spin1[1], spin1[2],
+		spin2[0], spin2[1], spin2[2],
+		1.0,	# distance (m)
+		0.0,
+		0.0,	# reference orbital phase (rad)
+		0.0,	# longitude of ascending nodes (rad)
+		0.0,
+		0.0,	# mean anomaly of periastron
+		delta_f,
+		f_min,
+		f_max + delta_f,
+		100.,	# reference frequency (Hz)
+		None,	# LAL dictionary containing accessory parameters
+		lalsimulation.GetApproximantFromString("IMRPhenomD")
+	)
+	assert hp.data.length > 0, "huh!?  h+ has zero length!"
+
+	h = hp.data.data[:len(farr)]
+	return (moment(farr, h, 2, psd) - moment(farr, h, 1, psd)**2)**.5
+
+
 def group_templates(templates, n, overlap = 0):
 	"""
 	break up the template table into sub tables of length n with overlap
@@ -97,6 +136,7 @@ def parse_command_line():
 	parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over max, use max.")
 	parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+	parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required if sort-by is bandwidth")
 	parser.add_option("--approximant", type = "string", action = "append", help = "Must specify an approximant given as mchirp_min:mchirp_max:string")
 	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff. Required")
 	parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
@@ -118,6 +158,9 @@ def parse_command_line():
 	if len(filenames) !=1:
 		raise ValueError("Must give exactly one file name")
 
+	if options.sort_by == "bandwidth" and not options.psd_xml:
+		raise ValueError("must specify psd-xml if sort-by is bandwidth")
+
 	approximants = []
 	for appx in options.approximant:
 		mn, mx, appxstring = appx.split(":")
@@ -127,10 +170,16 @@ def parse_command_line():
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
+	# FIXME don't hard code L1
+	if options.psd_xml:
+		psd = series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler))["L1"]
+		f = numpy.arange(len(psd.data.data)) * psd.deltaF
+		psd = scipy.interpolate.interp1d(f, psd.data.data)
+	else:
+		psd = None
+	return options, filenames[0], psd
 
-	return options, filenames[0]
-
-options, filename = parse_command_line()
+options, filename, psd = parse_command_line()
 
 def assign_approximant(mchirp, approximants = options.approximant):
 	for lo, hi, appx in approximants:
@@ -143,7 +192,12 @@ outputrows = []
 
 xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-
+# Add a fake bandwidth column
+if options.sort_by == "bandwidth":
+	for count, row in enumerate(sngl_inspiral_table):
+		# FIXME don't hard code
+		row.bandwidth = bandwidth(row.mass1, row.mass1, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
+		print count, len(sngl_inspiral_table), row.bandwidth
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
 if options.output_full_bank_file is not None:
