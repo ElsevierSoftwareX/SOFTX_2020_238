@@ -10,6 +10,7 @@ dist_pkgdata_DATA = \
 	H1L1V1_p_of_instruments_given_H_d.h5 \
 	H1V1_p_of_instruments_given_H_d.h5 \
 	inj_simplify_and_cluster.sql \
+	inj_snr_simplify_and_cluster.sql \
 	inspiral_datalesslndensity.xml.gz \
 	inspiral_dtdphi_pdf.h5 \
 	inspiral_snr_pdf.xml.gz \
@@ -19,7 +20,8 @@ dist_pkgdata_DATA = \
 	Makefile.offline_analysis_rules \
 	O1_snr_chi_pdf_reference.xml.gz \
 	simplify_and_cluster.sql \
-	simplify_proc_table_in_inj_file.sql
+	simplify_proc_table_in_inj_file.sql \
+	snr_simplify_and_cluster.sql
 
 inspiral_snr_pdf.xml.gz :
 	gstlal_inspiral_make_snr_pdf --verbose --output $@ \
