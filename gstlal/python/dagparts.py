@@ -34,6 +34,7 @@ DAG construction tools.
 
 
 import doctest
+import itertools
 import math
 import os
 import sys
