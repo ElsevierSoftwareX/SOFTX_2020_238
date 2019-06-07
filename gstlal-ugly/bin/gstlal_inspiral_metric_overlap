@@ -23,7 +23,7 @@ args = parser.parse_args()
 
 g_ij = metric_module.Metric(
         args.psd_xml_file,
-        coord_func = metric_module.m1_m2_s1z_s2z_func,
+        coord_func = metric_module.x_y_z_zn_func,
         duration = 1.0, # FIXME!!!!!
         flow = 10,
         fhigh = 1024,
@@ -33,16 +33,24 @@ g_ij = metric_module.Metric(
 xmldoc = ligolw_utils.load_filename(args.bank_file, verbose = True, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 
-vec1s = numpy.array([[row.template_id, row.mass1, row.mass2, row.spin1z, row.spin2z] for row in sngl_inspiral_table[args.start_row:args.start_row+args.num_rows]])
-vec2s = numpy.array([[row.template_id, row.mass1, row.mass2, row.spin1z, row.spin2z] for row in sngl_inspiral_table])
+def id_x_y_z_zn_from_row(row):
+	return [row.template_id,
+		metric_module.x_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+		metric_module.y_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+		metric_module.z_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+		metric_module.zn_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z)
+		]
+
+vec1s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table[args.start_row:args.start_row+args.num_rows]])
+vec2s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table])
 
 output = []
 
-for n, vec1 in enumerate(vec1s):
+for n, vec1, in enumerate(vec1s):
 	g, det = g_ij(vec1[1:])
 	def match(vec2, vec1 = vec1, g = g):
 		return (vec1[0], vec2[0], g_ij.metric_match(g, vec1[1:], vec2[1:]))
-	thisoutput = [row for row in map(match, vec2s)	if row[2] > 0.9]
+	thisoutput = [row for row in map(match, vec2s) if row[2] > 0.0]
 	print n, len(thisoutput)
 	output += thisoutput
 
