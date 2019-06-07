@@ -141,6 +141,70 @@ def m1_from_mc_m2(mc, m2):
 def mc_from_m1_m2(m1, m2):
 	return (m1 * m2)**(.6) / (m1 + m2)**.2
 
+# inspired by arXiv:gr-qc/9808076v1 27 Aug 1998
+
+def x_y_z_zn_func(coords):
+	s1y = s2y = s1x = s2x = 0.
+	m1 = m1_from_x_y_z_zn(*coords)
+	m2 = m2_from_x_y_z_zn(*coords)
+	s1z = s1_from_x_y_z_zn(*coords)
+	s2z = s2_from_x_y_z_zn(*coords)
+	q = m1 / m2
+	if False:#q < 1.05 and q > 0.95:
+		M = m1 + m2
+		q = 1.05
+		m2 = (M / q) / 2.
+		m1 = m2 * q
+	return [m1, m2, s1x, s1y, s1z, s2x, s2y, s2z]
+
+def x_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	eta = m1*m2/(m1+m2)**2
+	return M**(-5/3.) / eta
+
+def y_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	eta = m1*m2/(m1+m2)**2
+	return M**(-2/3.) / eta
+
+def z_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	return (s1 * m1 + s2 * m2) / M
+
+def zn_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	return (s1 * m1 - s2 * m2) / M
+
+def m1_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y)
+	M = y / x
+	eta = min((x**2 / y**5)**(1./3), 0.25)
+	m1 = (M + (M**2 * (1 - 4 * eta))**.5) / 2.
+	return m1
+
+def m2_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y)
+	M = y / x
+	eta = min((x**2 / y**5)**(1./3), 0.25)
+	m2 = M - (M + (M**2 * (1 - 4 * eta))**.5) / 2.
+	return m2
+
+def s1_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y); z = float(z); zn = float(zn)
+	M = y / x
+	m1 = m1_from_x_y_z_zn(x, y, z, zn)
+	return (z + zn) * M / m1 / 2.
+
+def s2_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y); z = float(z); zn = float(zn)
+	M = y / x
+	m2 = m1_from_x_y_z_zn(x, y, z, zn)
+	return (z - zn) * M / m2 / 2.
+
 #
 # Metric object that numerically evaluates the waveform metric
 #
@@ -282,7 +346,7 @@ class Metric(object):
 		wm = {}
 		# FIXME assumes m1,m2,spins... as the coordinates
 		deltas = numpy.zeros(len(center))
-		deltas[0:2] = abs(center[0:2])**.5 * DELTA
+		deltas[0:2] = abs(center[0:2]) * DELTA
 		deltas[2:] += DELTA
 		#deltas = numpy.ones(len(center), dtype=float) * DELTA
 		#deltas = abs(center)**.5 * DELTA + DELTA
