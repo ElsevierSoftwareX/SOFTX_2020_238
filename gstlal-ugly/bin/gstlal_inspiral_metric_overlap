@@ -49,8 +49,8 @@ output = []
 for n, vec1, in enumerate(vec1s):
 	g, det = g_ij(vec1[1:])
 	def match(vec2, vec1 = vec1, g = g):
-		return (vec1[0], vec2[0], g_ij.metric_match(g, vec1[1:], vec2[1:]))
-	thisoutput = [row for row in map(match, vec2s) if row[2] > 0.0]
+		return (vec1[0], vec2[0], g_ij.pseudo_match(g, vec1[1:], vec2[1:]))
+	thisoutput = [row for row in map(match, vec2s) if row[2] > 0.01]
 	print n, len(thisoutput)
 	output += thisoutput
 
