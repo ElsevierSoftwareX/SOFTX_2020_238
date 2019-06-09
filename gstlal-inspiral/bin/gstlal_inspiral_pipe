@@ -198,7 +198,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 				svdnode = dagparts.DAGNode(svdJob, dag,
 					parent_nodes = parent_nodes,
 					opts = {"svd-tolerance":options.tolerance,
-						"flow":options.flow,
+						"flow":options.flow[j],
 						"sample-rate":options.sample_rate,
 						"clipleft":clipleft,
 						"clipright":clipright,
@@ -1054,7 +1054,7 @@ def parse_command_line():
 	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
 	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc.. (can be given multiple times)")
 	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
-	parser.add_option("--flow", metavar = "num", type = "float", default = 40, help = "set the low frequency cutoff, default 40 (Hz)")
+	parser.add_option("--flow", metavar = "num", type = "float", action = "append", help = "set the low frequency cutoff. Can be given multiple times.")
         parser.add_option("--fmax", metavar = "num", type = "float", default = 1600, help = "set the max frequency cutoff, default 1600 (Hz)")
 	parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Set the sample rate.  If not set, the sample rate will be based on the template frequency.  The sample rate must be at least twice the highest frequency in the templates. If provided it must be a power of two")
 	parser.add_option("--identity-transform", action = "store_true", help = "Use identity transform, i.e. no SVD")
@@ -1416,7 +1416,11 @@ if not options.lloid_cache and not options.disable_calc_inj_snr:
 		# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 		for i in xrange(num_split_inj_snr_jobs):
 			injSNRnode = dagparts.DAGNode(gstlalInjSnrJob, dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
-				opts = {"flow":options.flow,"fmax":options.fmax},
+				# FIXME somehow choose the actual flow based on mass?
+				# max(flow) is chosen for performance not
+				# correctness hopefully though it will be good
+				# enough
+				opts = {"flow":max(options.flow),"fmax":options.fmax},
 				input_files = {"injection-file": "%s/%s_INJ_SPLIT_%04d.xml" % (injSplitterJob.output_path, sim_tag_from_inj_file(inj.split(":")[-1]), i), "reference-psd-cache": "reference_psd.cache"
 				}
 			)
