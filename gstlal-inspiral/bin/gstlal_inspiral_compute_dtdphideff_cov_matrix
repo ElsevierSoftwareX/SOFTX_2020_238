@@ -65,7 +65,7 @@ transpp = {}
 transtp = {}
 transpt = {}
 # FIXME do an actual calculation
-transdd = {frozenset(("H1", "L1")): 1. / (sigsqdd["H1"] + sigsqdd["L1"])  , frozenset(("H1", "V1")): 1. / (sigsqdd["H1"] + sigsqdd["V1"]), frozenset(("L1", "V1")): 1. / (sigsqdd["L1"] + sigsqdd["V1"])}
+transdd = {frozenset(("H1", "L1")): 1. / numpy.sqrt(sigsqdd["H1"] + sigsqdd["L1"])  , frozenset(("H1", "V1")): 1. / numpy.sqrt(sigsqdd["H1"] + sigsqdd["V1"]), frozenset(("L1", "V1")): 1. / numpy.sqrt(sigsqdd["L1"] + sigsqdd["V1"])}
 
 for combo in itertools.combinations(("H1", "L1", "V1"), 2):
 	a,b = combo
