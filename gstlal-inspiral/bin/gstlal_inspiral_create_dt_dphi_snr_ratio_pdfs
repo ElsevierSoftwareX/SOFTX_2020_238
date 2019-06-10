@@ -21,6 +21,7 @@ from gstlal.stats import inspiral_extrinsics
 import argparse
 
 parser = argparse.ArgumentParser(description = "create dt dphi snr pdfs")
+parser.add_argument("--cov-mat-h5", help = "hdf5 file that contains the covariance matrix")
 parser.add_argument("--start", metavar='N', type=int, help='The first index to marginalize')
 parser.add_argument("--stop", metavar='N', type=int, help='The last index to marginalize')
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_dtdphi_pdf.h5")
@@ -29,8 +30,8 @@ options = parser.parse_args()
 if options.start is not None and options.stop is not None:
 	if options.start % inspiral_extrinsics.TimePhaseSNR.numchunks or options.stop % inspiral_extrinsics.TimePhaseSNR.numchunks:
 		raise ValueError("start and stop must be multiple of %d" % TimePhaseSNR.numchunks)
-	IE = inspiral_extrinsics.TimePhaseSNR(verbose = True, margstart = options.start, margstop = options.stop)
+	IE = inspiral_extrinsics.TimePhaseSNR.from_hdf5(fname = options.cov_mat_h5, verbose = True, margstart = options.start, margstop = options.stop)
 else:
-	IE = inspiral_extrinsics.TimePhaseSNR(verbose = True)
+	IE = inspiral_extrinsics.TimePhaseSNR.from_hdf5(fname = options.cov_mat_h5, verbose = True)
 
 IE.to_hdf5(options.output)
