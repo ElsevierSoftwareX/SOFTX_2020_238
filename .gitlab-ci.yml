@@ -34,7 +34,7 @@ before_script:
     
     # Define build and linking parameters:
     - export CFLAGS="-O3 -fPIC -DMKL_ILP64 -m64 -I${MKLROOT}/include -I${GSTLAL_DIR}/include"
-    - export LDFLAGS="-l:libfftw3.so -l:libfftw3f.so -l:libfftw3_threads.so -l:libfftw3f_threads.so -L${GSTLAL_DIR}/lib -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl -lz"
+    - export LDFLAGS="-l:libfftw3.so -l:libfftw3f.so -l:libfftw3_threads.so -l:libfftw3f_threads.so -L${GSTLAL_DIR}/lib -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl"
     
     - export TMPDIR=/tmp
     
