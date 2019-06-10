@@ -13,13 +13,15 @@ time, phase, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
 # snr, but the TimePhaseSNR code actually undoes this...
 h = {"H1":1., "L1":1., "V1":1.}
 
+# set the norm to 1
 combos = TPS.combos + (("H1",),("L1",),("V1",))
-
-norm = dict((frozenset(k), 0.) for k in combos)
+norm = dict((frozenset(k), 1.) for k in combos)
+TPS.norm = norm
 
 def extract_dict(DICT, keys):
 	return dict((k,v) for k,v in DICT.items() if k in keys)
 
+norm = dict((frozenset(k), 0.) for k in combos)
 for i in range(len(time["H1"])):
 	t = dict((k, v[i]) for k, v in time.items())
 	p = dict((k, v[i]) for k, v in phase.items())
