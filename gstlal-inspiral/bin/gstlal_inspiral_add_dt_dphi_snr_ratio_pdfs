@@ -1,6 +1,38 @@
 #!/usr/bin/python
 import sys
+import numpy
 from gstlal.stats.inspiral_extrinsics import TimePhaseSNR
+
+# Read in and combine all of the input files
 files = sys.argv[1:]
 TPS = TimePhaseSNR.from_hdf5(files[0], files[1:])
+
+# compute the normalization
+time, phase, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
+# This actually doesn't matter it is just needed to map from eff distance to
+# snr, but the TimePhaseSNR code actually undoes this...
+h = {"H1":1., "L1":1., "V1":1.}
+
+combos = TPS.combos + (("H1",),("L1",),("V1",))
+
+norm = dict((frozenset(k), 0.) for k in combos)
+
+def extract_dict(DICT, keys):
+	return dict((k,v) for k,v in DICT.items() if k in keys)
+
+for i in range(len(time["H1"])):
+	t = dict((k, v[i]) for k, v in time.items())
+	p = dict((k, v[i]) for k, v in phase.items())
+	s = dict((k, h[k] / v[i]) for k, v in deff.items())
+
+	for ifos in combos:
+		t2 = extract_dict(t, ifos)
+		p2 = extract_dict(p, ifos)
+		s2 = extract_dict(s, ifos)
+		h2 = extract_dict(h, ifos)
+		norm[frozenset(ifos)] += TPS(t2,p2,s2,h2) * (sum(x**2 for x in s2.values())**.5)**4 / len(time["H1"]) * 1. / (16. * numpy.pi**2)
+
+TPS.norm = norm
+
+# write the result to disk
 TPS.to_hdf5("inspiral_dtdphi_pdf.h5")
