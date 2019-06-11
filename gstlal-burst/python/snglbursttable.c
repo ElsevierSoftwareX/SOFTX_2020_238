@@ -31,9 +31,13 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
+#include <lal/Date.h>
 
 
 #include <snglburstrowtype.h>
+
+
+static PyObject *LIGOTimeGPSType = NULL;
 
 
 /*
@@ -200,6 +204,77 @@ static struct PyMethodDef methods[] = {
 
 
 /*
+ * comparison is defined specifically for the coincidence code, allowing a
+ * bisection search of a sorted trigger list to be used to identify the
+ * subset of triggers that fall within a time interval
+ */
+
+
+static PyObject *richcompare(PyObject *self, PyObject *other, int op_id)
+{
+	PyObject *converted = PyObject_CallFunctionObjArgs(LIGOTimeGPSType, other, NULL);
+	PyObject *attr;
+	PyObject *result;
+	LIGOTimeGPS t_other;
+	int cmp;
+
+	if(!converted)
+		return NULL;
+
+	attr = PyObject_GetAttrString(converted, "gpsSeconds");
+	if(!attr) {
+		Py_DECREF(converted);
+		return NULL;
+	}
+	t_other.gpsSeconds = PyInt_AsLong(attr);
+	Py_DECREF(attr);
+	attr = PyObject_GetAttrString(converted, "gpsNanoSeconds");
+	if(!attr) {
+		Py_DECREF(converted);
+		return NULL;
+	}
+	t_other.gpsNanoSeconds = PyInt_AsLong(attr);
+	Py_DECREF(attr);
+	Py_DECREF(converted);
+
+	cmp = XLALGPSCmp(&((gstlal_GSTLALSnglBurst *) self)->row.peak_time, &t_other);
+
+	switch(op_id) {
+	case Py_LT:
+		result = (cmp < 0) ? Py_True : Py_False;
+		break;
+
+	case Py_LE:
+		result = (cmp <= 0) ? Py_True : Py_False;
+		break;
+
+	case Py_EQ:
+		result = (cmp == 0) ? Py_True : Py_False;
+		break;
+
+	case Py_NE:
+		result = (cmp != 0) ? Py_True : Py_False;
+		break;
+
+	case Py_GE:
+		result = (cmp >= 0) ? Py_True : Py_False;
+		break;
+
+	case Py_GT:
+		result = (cmp > 0) ? Py_True : Py_False;
+		break;
+
+	default:
+		PyErr_BadInternalCall();
+		return NULL;
+	}
+
+	Py_INCREF(result);
+	return result;
+}
+
+
+/*
  * Type
  */
 
@@ -215,6 +290,7 @@ static PyTypeObject gstlal_GSTLALSnglBurst_Type = {
 	.tp_name = MODULE_NAME ".GSTLALSnglBurst",
 	.tp_new = __new__,
 	.tp_dealloc = __del__,
+	.tp_richcompare = richcompare,
 };
 
 
@@ -230,6 +306,21 @@ static PyTypeObject gstlal_GSTLALSnglBurst_Type = {
 PyMODINIT_FUNC init_snglbursttable(void)
 {
 	PyObject *module = Py_InitModule3(MODULE_NAME, NULL, "Low-level wrapper for GSTLALSnglBurst type.");
+
+	/* LIGOTimeGPS */
+
+	{
+	PyObject *lal = PyImport_ImportModule("lal");
+	if(!lal)
+		return;
+	LIGOTimeGPSType = PyDict_GetItemString(PyModule_GetDict(lal), "LIGOTimeGPS");
+	if(!LIGOTimeGPSType) {
+		Py_DECREF(lal);
+		return;
+	}
+	Py_INCREF(LIGOTimeGPSType);
+	Py_DECREF(lal);
+	}
 
 	/* SnglBurst */
 	if(PyType_Ready(&gstlal_GSTLALSnglBurst_Type) < 0)
