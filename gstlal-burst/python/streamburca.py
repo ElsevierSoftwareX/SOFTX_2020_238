@@ -81,16 +81,18 @@ class StreamBurca(object):
 		#
 
 		newly_reported = []
-		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, coinc_sieve = coinc_sieve, flush = flush):
-			# construct row objects for coinc tables
+		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, coinc_sieve = coinc_sieve, flush = flush, verbose = False):
+			# for exact template match
+			if not burca.StringCuspCoincTables.ntuple_comparefunc(events, node.offset_vector):
+				# construct row objects for coinc tables
 
-			coinc, coincmaps, multiburst = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, u"sngl_burst")
+				coinc, coincmaps = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, u"sngl_burst")
 
-			# finally, append coinc to tables
+				# finally, append coinc to tables
 
-			self.coinc_tables.append_coinc(coinc, coincmaps, multiburst)
+				self.coinc_tables.append_coinc(coinc, coincmaps)
 
 		# add any triggers that have been used in coincidences for
-		# the first time to the sngl_inspiral table
+		# the first time to the sngl_burst table
 
 		self.sngl_burst_table.extend(newly_reported)
