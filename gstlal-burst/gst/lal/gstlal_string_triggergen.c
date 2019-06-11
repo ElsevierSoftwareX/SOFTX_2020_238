@@ -211,6 +211,17 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 
 	length = get_available_samples(element); 
 	if(length < autocorrelation_length(element->autocorrelation_matrix)) {
+		/* FIXME:  PTS and duration are not necessarily correct.
+		 * they're correct for now because we know how this element
+		 * is used in the current pipeline, but in general this
+		 * behaviour is not correct.  right now, the adapter can
+		 * only not have enough data at the start of a stream, but
+		 * for general streams the adapter could get flushed in mid
+		 * stream and then we might need to worry about what the
+		 * last reported buffer's end time was.  maybe.  maybe not
+		 */
+		GST_BUFFER_PTS(outbuf) = element->t0;
+		GST_BUFFER_DURATION(outbuf) = 0;
 		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + ntriggers;
 		return GST_FLOW_OK;
 	}
@@ -225,11 +236,16 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 	/* compute the chisq norm if it doesn't exist */
 	if(!element->autocorrelation_norm)
 		element->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms_string(element->autocorrelation_matrix, NULL);
-	
+
 	/* check that autocorrelation vector has odd number of samples */
 	g_assert(autocorrelation_length(element->autocorrelation_matrix) & 1);
-	
-	/* find events */
+
+	/* find events.  earliest sample that can be a new trigger starts a
+	 * little bit in from the start of the adapter because we are
+	 * re-using data from the last iteration for \chi^2 calculation.
+	 * the last sample that can be a new trigger is not at the end of
+	 * the adapter's contents for the same reason */
+
 	snrsample += (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2 * element->num_templates;
 	for(sample = (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2; sample < length - (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2; sample++){
 		LIGOTimeGPS t;
@@ -289,6 +305,16 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 		gst_buffer_replace_all_memory(outbuf, gst_memory_new_wrapped(GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS, triggers, ntriggers * sizeof(*triggers), 0, ntriggers * sizeof(*triggers), triggers, g_free));
 	else
 		gst_buffer_remove_all_memory(outbuf);
+
+	/*
+	 * obtain PTS and DURATION of output buffer.
+	 */
+
+	GST_BUFFER_PTS(outbuf) = element->t0 + gst_util_uint64_scale_int_round(offset + (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2 - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+	for(channel = 0; channel < element->num_templates; channel++)
+		if(element->bank[channel].snr > 0.0 && (GstClockTime) XLALGPSToINT8NS(&element->bank[channel].peak_time) < GST_BUFFER_PTS(outbuf))
+			GST_BUFFER_PTS(outbuf) = XLALGPSToINT8NS(&element->bank[channel].peak_time);
+	GST_BUFFER_DURATION(outbuf) = element->t0 + gst_util_uint64_scale_int_round(offset + length - (autocorrelation_length(element->autocorrelation_matrix) - 1) / 2 - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info)) - GST_BUFFER_PTS(outbuf);
 
 	GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf) + ntriggers;
 
