@@ -45,9 +45,10 @@ from lalburst import burca
 
 
 class StreamBurca(object):
-	def __init__(self, xmldoc, process_id, delta_t, min_instruments = 2):
+	def __init__(self, xmldoc, process_id, delta_t, min_instruments = 2, verbose = False):
 		self.delta_t = delta_t
 		self.min_instruments = min_instruments
+		self.verbose = verbose
 		self.set_xmldoc(xmldoc, process_id)
 
 
@@ -59,7 +60,8 @@ class StreamBurca(object):
 			burca.string_coincgen_doubles,
 			lsctables.TimeSlideTable.get_table(xmldoc).as_dict(),
 			self.delta_t,
-			min_instruments = self.min_instruments
+			min_instruments = self.min_instruments,
+			verbose = self.verbose
 		)
 
 
