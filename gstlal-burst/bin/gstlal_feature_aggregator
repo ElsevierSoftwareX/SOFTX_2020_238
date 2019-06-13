@@ -170,7 +170,7 @@ class StreamAggregator(object):
             self.agg_sink.store_columns('latency', metric_data, aggregate=self.data_type)
 
             ### store and aggregate features
-            timeseries_data = {(channel, self._channel_to_subsystem(channel)): {'time': timeseries['trigger_time'], 'fields': {'data': timeseries['snr']}} for channel, timeseries in all_timeseries.items()}
+            timeseries_data = {(channel, self._channel_to_subsystem(channel)): {'time': timeseries['time'], 'fields': {'data': timeseries['snr']}} for channel, timeseries in all_timeseries.items()}
             self.agg_sink.store_columns('snr', timeseries_data, aggregate=self.data_type)
 
             try:
