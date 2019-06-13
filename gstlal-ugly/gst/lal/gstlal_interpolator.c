@@ -698,7 +698,7 @@ static guint get_output_length(GSTLALInterpolator *element, guint samps) {
 			pretend_samps = element->half_length * element->inrate / element->outrate;
 	}
 	guint numinsamps = get_available_samples(element) + samps + pretend_samps;
-	if (numinsamps < kernel_length(element) - 1)
+	if (numinsamps < element->blocksampsin)
 		return 0;
 	// Note this could be zero
 	guint numoutsamps = (numinsamps - kernel_length(element) - 1) * element->outrate / element->inrate;
