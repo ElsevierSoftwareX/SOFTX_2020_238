@@ -65,6 +65,8 @@ def parse_command_line():
     group.add_option("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
     group.add_option("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
     group.add_option("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
+    group.add_option("--enable-auth", default=False, action="store_true", help = "If set, enables authentication for the influx aggregator.")
+    group.add_option("--enable-https", default=False, action="store_true", help = "If set, enables HTTPS connections for the influx aggregator.")
     group.add_option("--data-type", metavar="string", help="Specify datatypes to aggregate from 'min', 'max', 'median'. Default = max")
     group.add_option("--num-processes", type = "int", default = 2, help = "Number of processes to use concurrently, default 2.")
     parser.add_option_group(group)
@@ -121,6 +123,8 @@ class StreamMonitor(object):
                 hostname=options.influx_hostname,
                 port=options.influx_port,
                 db=options.influx_database_name,
+                auth=options.enable_auth,
+                https=options.enable_https,
                 reduce_across_tags=False,
             )
         else: ### hdf5 data backend
