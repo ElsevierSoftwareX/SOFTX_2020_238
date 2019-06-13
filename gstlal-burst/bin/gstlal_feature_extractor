@@ -221,6 +221,7 @@ def parse_command_line():
 
 	# check if input sample rate is sensible
 	assert options.sample_rate == 1 or options.sample_rate % 2 == 0
+	assert options.min_downsample_rate % 2 == 0
 
 	# check if persist and save cadence times are sensible
 	assert options.persist_cadence >= options.cadence
@@ -418,24 +419,25 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			head[channel] = pipeparts.mklatency(pipeline, head[channel], name=utils.latency_name('beforewhitening', 2, channel))
 
 		# whiten auxiliary channel data
-		for rate, thishead in multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32, nxydump_segment=options.nxydump_segment, psd_fft_length=options.psd_fft_length).items():
+		for rate, thishead in multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32, nxydump_segment=options.nxydump_segment, psd_fft_length=options.psd_fft_length, min_rate=options.min_downsample_rate).items():
+			thisrate = max(options.min_downsample_rate, rate)
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterwhitening', 3, channel, rate))
 
 			# determine whether to do time-domain or frequency-domain convolution
-			time_domain = (waveforms[channel].sample_pts(rate)*rate) < (5*waveforms[channel].sample_pts(rate)*numpy.log2(rate))
+			time_domain = (waveforms[channel].sample_pts(thisrate)*thisrate) < (5*waveforms[channel].sample_pts(thisrate)*numpy.log2(thisrate))
 
 			# create FIR bank of half sine-gaussian templates
-			fir_matrix = numpy.array([waveform for waveform in waveforms[channel].generate_templates(rate)])
+			fir_matrix = numpy.array([waveform for waveform in waveforms[channel].generate_templates(rate, sampling_rate=thisrate)])
 			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(rate), latency = waveforms[channel].latency(rate))
+			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(thisrate), latency = waveforms[channel].latency(thisrate))
 
 			# add queues, change stream format, add tags
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterFIRbank', 4, channel, rate))
 			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
 			thishead = pipeparts.mktogglecomplex(pipeline, thishead)
-			thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % rate)
+			thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % thisrate)
 			thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
 
 			# dump segments to disk if specified
@@ -445,9 +447,9 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 
 			# extract features from time series
 			if options.feature_mode == 'timeseries':
-				thishead = pipeparts.mktrigger(pipeline, tee, int(rate // options.sample_rate), max_snr = True)
+				thishead = pipeparts.mktrigger(pipeline, tee, int(thisrate // options.sample_rate), max_snr = True)
 			elif options.feature_mode == 'etg':
-				thishead = pipeparts.mktrigger(pipeline, tee, rate, snr_thresh = options.snr_threshold)
+				thishead = pipeparts.mktrigger(pipeline, tee, thisrate, snr_thresh = options.snr_threshold)
 
 			if options.latency_output:
 				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('aftertrigger', 5, channel, rate))

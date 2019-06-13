@@ -57,7 +57,7 @@ NATIVE_RATE_CUTOFF = 128
 # =============================================================================
 #
 
-def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = PSD_FFT_LENGTH, veto_segments = None, nxydump_segment = None, track_psd = True, block_duration = int(1 * Gst.SECOND), width = 64, channel_name = "hoft"):
+def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd = None, psd_fft_length = PSD_FFT_LENGTH, veto_segments = None, nxydump_segment = None, track_psd = True, block_duration = 0.25 * Gst.SECOND, width = 64, channel_name = "hoft", min_rate = 128):
 	"""!
 	Build pipeline stage to whiten and downsample auxiliary channels.
 
@@ -157,7 +157,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	# high pass filter
 	#
 
-	block_stride = block_duration * max_rate // Gst.SECOND
+	block_stride = int(block_duration * max_rate // Gst.SECOND)
 	if native_rate >= NATIVE_RATE_CUTOFF:
 		kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff = 12)
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
@@ -266,7 +266,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	for rate in sorted(set(rates))[:-1]:
 		head[rate] = pipeparts.mkqueue(pipeline, tee, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 8)
 		head[rate] = pipeparts.mkaudioamplify(pipeline, head[rate], 1. / math.sqrt(pipeparts.audioresample_variance_gain(quality, max_rate, rate)))
-		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head[rate]), caps = "audio/x-raw, rate=%d" % rate)
+		head[rate] = pipeparts.mkcapsfilter(pipeline, pipeparts.mkinterpolator(pipeline, head[rate]), caps = "audio/x-raw, rate=%d" % max(min_rate, rate))
 
 	#
 	# return value is a dictionary of elements indexed by sample rate

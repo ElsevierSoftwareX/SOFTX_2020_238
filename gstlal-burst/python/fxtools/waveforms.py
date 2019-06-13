@@ -105,7 +105,7 @@ class TemplateGenerator(object):
 		"""
 		return NotImplementedError
 
-	def generate_templates(self, rate, quadrature = True):
+	def generate_templates(self, rate, quadrature = True, sampling_rate = None):
 		"""
 		Generate all templates corresponding to a parameter range for a given sampling rate.
 		If quadrature is set, yield two templates corresponding to in-phase and quadrature components of the waveform.
@@ -170,17 +170,20 @@ class HalfSineGaussianGenerator(TemplateGenerator):
 		"""
 		return 0.5 * (q/(2.*numpy.pi*f)) * numpy.log(1./self.tolerance)
 
-	def generate_templates(self, rate, quadrature = True):
+	def generate_templates(self, rate, quadrature = True, sampling_rate = None):
 		"""
 		generate all half sine gaussian templates corresponding to a parameter range and template duration
 		for a given sampling rate.
 		"""
+		if not sampling_rate:
+			sampling_rate = rate
+
 		for template in self.parameter_grid[rate]:
 			if quadrature:
 				for phase in self.phases:
-					yield self.waveform(rate, phase, template['frequency'], template['q'])
+					yield self.waveform(sampling_rate, phase, template['frequency'], template['q'])
 			else:
-				yield self.waveform(rate, self.phases[0], template['frequency'], template['q'])
+				yield self.waveform(sampling_rate, self.phases[0], template['frequency'], template['q'])
 
 	def waveform(self, rate, phase, f, q):
 		"""

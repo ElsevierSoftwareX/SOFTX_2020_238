@@ -534,6 +534,7 @@ def append_options(parser):
 
 	group = optparse.OptionGroup(parser, "Program Behavior")
 	group.add_option("--psd-fft-length", metavar = "seconds", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default is 32 s).")
+	group.add_option("--min-downsample-rate", metavar = "Hz", default = 128, type = "int", help = "The minimum sampling rate in which to downsample streams. Default = 128 Hz.")
 	group.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data and stores to local filespace.")
 	group.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
