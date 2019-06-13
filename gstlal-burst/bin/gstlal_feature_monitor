@@ -168,6 +168,9 @@ class StreamMonitor(object):
         if self.timestamp:
             if not self.last_save or utils.in_new_epoch(self.timestamp, self.last_save, 1):
 
+                ### check for missing channels
+                missing_channels = set()
+
                 metrics = defaultdict(list)
                 while len(self.feature_queue) > 0:
                     ### remove data with oldest timestamp and process
@@ -177,9 +180,6 @@ class StreamMonitor(object):
                     ### check for missing channels
                     these_channels = set(features.keys())
                     missing_channels = self.channels - these_channels
-                    if missing_channels:
-                        logger.info('channels missing @ timestamp=%.3f: %s' % (timestamp, repr(list(missing_channels))))
-
                     ### generate metrics
                     metrics['time'].append(timestamp)
                     metrics['synchronizer_latency'].append(latency)
@@ -199,6 +199,9 @@ class StreamMonitor(object):
 
                 self.last_save = timestamp
                 logger.info('processed features up to timestamp %.3f, max latency = %.3f s, percent missing channels = %.3f' % (timestamp, max(metrics['synchronizer_latency']), max(metrics['percent_missed'])))
+                if missing_channels:
+                    logger.info('channels missing @ timestamp=%.3f: %s' % (timestamp, repr(list(missing_channels))))
+
 
     def start(self):
         """
@@ -219,7 +222,6 @@ class StreamMonitor(object):
         shut down gracefully
         """
         logger.info('shutting down feature monitor...')
-        self.conn.close()
 
 class SignalHandler(object):
     """
