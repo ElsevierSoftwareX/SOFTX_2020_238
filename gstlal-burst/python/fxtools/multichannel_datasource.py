@@ -466,7 +466,7 @@ class DataSourceInfo(object):
 		# FIXME: this is ugly, but we have to protect against busted shared memory partitions
 		if self.data_source == "lvshm":
 			import subprocess
-			subprocess.call(["smrepair", "-bufmode", "5", self.shm_part_dict[self.instrument]])
+			subprocess.call(["smrepair", "--bufmode", "5", self.shm_part_dict[self.instrument]])
 
 def append_options(parser):
 	"""!
