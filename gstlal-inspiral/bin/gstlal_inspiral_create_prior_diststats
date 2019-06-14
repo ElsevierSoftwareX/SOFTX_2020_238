@@ -29,7 +29,10 @@
 
 
 from optparse import OptionParser
+import numpy
+import scipy
 
+from lal import series
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
@@ -41,6 +44,7 @@ from ligo.lw.utils import process as ligolw_process
 
 from gstlal import far
 from gstlal import svd_bank
+from gstlal import templates
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -75,9 +79,10 @@ def parse_command_line():
 	parser.add_option("--write-likelihood", metavar = "filename", help = "Write merged raw likelihood data to this file.")
 	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
-	parser.add_option("--df", metavar = "N", default = 40, type = "int", help = "set the degrees of freedom for the background chisq prior: default 40")
+	parser.add_option("--df", metavar = "N", default = 40, help = "set the degrees of freedom for the background chisq prior: default 40. You can also use template bandwidth to set this by setting it to 'bandwidth'")
 	parser.add_option("--svd-file", metavar = "filename", help = "The SVD file to read the template ids from")
 	parser.add_option("--mass-model-file", metavar = "filename", help = "The mass model file to read from (hdf5 format)")
+	parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required if df is bandwidth")
 	options, filenames = parser.parse_args()
 
 	process_params = dict(options.__dict__)
@@ -94,12 +99,30 @@ def parse_command_line():
 	if filenames:
 		raise ValueError("unrecognized arguments after options: %s" % " ".join(filenames))
 
+	if options.df == "bandwidth" and options.psd_xml is None:
+		raise ValueError("Must specify psd xml file if using bandwidth to set degrees of freedom")
+	psd = {}
+	if options.psd_xml:
+		for ifo, p in series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler)).items():
+			f = numpy.arange(len(p.data.data)) * p.deltaF
+			psd[ifo] = scipy.interpolate.interp1d(f, p.data.data)
+
+
 	template_ids = []
 	horizon_factors = {}
+	bandwidths = []
 	for n, bank in enumerate(svd_bank.read_banks(options.svd_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)):
 		template_ids += [row.template_id for row in bank.sngl_inspiral_table]
+		# FIXME don't hard code
+		if options.df == "bandwidth":
+			for ifo in psd:
+				bandwidths += [templates.bandwidth(row.mass1, row.mass1, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo])]
 		horizon_factors.update(bank.horizon_factors)
+	if options.df == "bandwidth":
+		# NOTE the 1500 is tuned by looking at real data distributions
+		options.df = int(2000. / min(bandwidths))
 
+	print options.df
 	return options, process_params, filenames, template_ids, horizon_factors
 
 
@@ -138,7 +161,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, population_model_file = options.mass_model_file, horizon_factors = horizon_factors)
 
 if options.background_prior > 0:
-	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior, df = options.df)
+	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior, df = int(options.df))
 
 if options.synthesize_numerator:
 	rankingstat.numerator.add_signal_model()
