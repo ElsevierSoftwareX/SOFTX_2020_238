@@ -373,10 +373,7 @@ def bandwidth(m1, m2, s1, s2, f_min, f_max, delta_f, psd):
 	def moment(farr, h, n, psd):
 		return fn(farr, h, n, psd) / fn(farr, h, 0, psd)
 
-	spin1 = [0., 0., 0.]; spin2 = [0., 0., 0.]
-	f_min = 10.
-	f_max = 1024.0
-	delta_f = 1.0
+	spin1 = [0., 0., s1]; spin2 = [0., 0., s2]
 	farr = numpy.linspace(0, f_max, f_max / delta_f + delta_f)
 	hp, hc = lalsim.SimInspiralFD(
 		m1 * lal.MSUN_SI, m2 * lal.MSUN_SI,
