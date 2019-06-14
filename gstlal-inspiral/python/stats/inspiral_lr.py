@@ -793,7 +793,7 @@ class LnNoiseDensity(LnLRDensity):
 			# added
 			self.interps = dict((key, (pdf + self.lnzerolagdensity.densities[key]).mkinterp()) for key, pdf in self.densities.items())
 
-	def add_noise_model(self, number_of_events = 10000, prefactors_range = (0.5, 20.), df = 40, inv_snr_pow = 2.):
+	def add_noise_model(self, number_of_events = 10000, prefactors_range = (2.0, 100.), df = 40, inv_snr_pow = 2.):
 		#
 		# populate snr,chi2 binnings with a slope to force
 		# higher-SNR events to be assesed to be more significant
@@ -812,9 +812,11 @@ class LnNoiseDensity(LnLRDensity):
 		rcoss, drcoss = lnpdf.bins[1].centres()[rcossindices], lnpdf.bins[1].upper()[rcossindices] - lnpdf.bins[1].lower()[rcossindices]
 
 		prcoss = numpy.ones(len(rcoss))
-		psnr = 1e-8 * snr**-6 #(1. + 10**6) / (1. + snr**6)
+		# This adds a faint power law that falls off just faster than GWs
+		psnr = 1e-12 * snr**-6 #(1. + 10**6) / (1. + snr**6)
 		psnr = numpy.outer(psnr, numpy.ones(len(rcoss)))
-		psnrdcoss = numpy.outer(numpy.exp(-(snr - 2**.5)**2/ 2.) * dsnr, numpy.exp(-(rcoss - .05)**2 / .00015*2) * drcoss)
+		# NOTE the magic numbers are just tuned from real data
+		psnrdcoss = numpy.outer(numpy.exp(-4. * (snr - 4.5)**2) * dsnr, numpy.exp(-(rcoss - .06)**2 / (1e-4)) * drcoss)
 		arr[snrindices, rcossindices] = psnrdcoss + psnr
 
 		# normalize to the requested count.  give 99% of the
