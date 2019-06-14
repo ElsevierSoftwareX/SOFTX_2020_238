@@ -998,15 +998,25 @@ class Bank(object):
             if verbose:
                 logging.info("spiir_match_min %s, n_filters_min %s, n_filters_max %s"%(spiir_match_min, n_filters_min, n_filters_max))
 
+            # h_pad is just the padded cut template
+            h_pad = pad_data(data, pad_length)
+            # sigmasq is based on cut template
+            fs = float(sampleRate)
+            df = 1.0/ (pad_length/ fs)
+            h_pad_comp = numpy.zeros(pad_length, dtype = "cdouble")
+            h_pad_comp[:len(h_pad)] = h_pad
+            h_pad_fft = numpy.fft.fft(h_pad_comp)/ fs
+ 
+            this_sigmasq = abs((h_pad_fft * h_pad_fft.conjugate()).sum() * df)
+
+            # normalize the cut waveform so its inner-product is 2
+            norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
+            h_pad *= cmath.sqrt(2 / norm_h)
+
+
             # Iterate to get the filter delays matching our requirements
             while(True):
                 a1, b0, delay, u_rev_pad = gen_norm_spiir_coeffs(amp, phase, pad_length, epsilon = epsilon, alpha = alpha, beta = beta, padding = padding)
-
-		# h_pad is just the padded cut template
-		h_pad = pad_data(data, pad_length)
-        	# normalize the cut waveform so its inner-product is 2
-        	norm_h = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
-        	h_pad *= cmath.sqrt(2 / norm_h)
 
                 # compute the SNR
                 spiir_match = abs(numpy.dot(u_rev_pad, numpy.conj(h_pad)))/2.0
@@ -1093,38 +1103,6 @@ class Bank(object):
             # get the final SPIIR approximated waveform 
             u_rev_pad = gen_spiir_response(pad_length, a1, b0, delay)
 
-            #
-            # sigmasq = 2 \sum_{k=0}^{N-1} |\tilde{h}_{k}|^2 / S_{k} \Delta f
-            #
-            # XLALWhitenCOMPLEX16FrequencySeries() computed
-            #
-            # \tilde{h}'_{k} = \sqrt{2 \Delta f} \tilde{h}_{k} / \sqrt{S_{k}}
-            #
-            # and XLALCOMPLEX16FreqTimeFFT() computed
-            #
-            # h'_{j} = \Delta f \sum_{k=0}^{N-1} exp(2\pi i j k / N) \tilde{h}'_{k}
-            #
-            # therefore, "norm" is
-            #
-            # \sum_{j} |h'_{j}|^{2} = (\Delta f)^{2} \sum_{j} \sum_{k=0}^{N-1} \sum_{k'=0}^{N-1} exp(2\pi i j (k-k') / N) \tilde{h}'_{k} \tilde{h}'^{*}_{k'}
-            #                       = (\Delta f)^{2} \sum_{k=0}^{N-1} \sum_{k'=0}^{N-1} \tilde{h}'_{k} \tilde{h}'^{*}_{k'} \sum_{j} exp(2\pi i j (k-k') / N)
-            #                       = (\Delta f)^{2} N \sum_{k=0}^{N-1} |\tilde{h}'_{k}|^{2}
-            #                       = (\Delta f)^{2} N 2 \Delta f \sum_{k=0}^{N-1} |\tilde{h}_{k}|^{2} / S_{k}
-            #                       = (\Delta f)^{2} N sigmasq
-            #
-            # and \Delta f = 1 / (N \Delta t), so "norm" is
-            #
-            # \sum_{j} |h'_{j}|^{2} = 1 / (N \Delta t^2) sigmasq
-            #
-            # therefore
-            #
-            # sigmasq = norm * N * (\Delta t)^2
-            #
-
-            # sigmasq is based on cut template
-            norm_data = abs(numpy.dot(h_pad, numpy.conj(h_pad)))
-            self.sigmasq.append(norm_data * spiir_match * spiir_match * working_state["working_length"] / sampleRate**2. )
-
 
             # This is actually the cross correlation between the original waveform and this approximation
 
@@ -1138,6 +1116,8 @@ class Bank(object):
 
             # save the overlap of spiir reconstructed waveform with the cut template
             self.matches.append(spiir_match)
+	    # also take into account that spiir approximant not matching 100% of the original waveform
+            self.sigmasq.append(this_sigmasq * spiir_match * spiir_match)
 
             if verbose:
                 logging.info("template %4.0d/%4.0d, m1 = %10.6f m2 = %10.6f, epsilon = %1.4f:  %4.0d filters, %10.8f match. original_eps = %1.4f: %4.0d filters, %10.8f match" % (tmp+1, len(self.sngl_inspiral_table), row.mass1,row.mass2, epsilon, n_filters, spiir_match, epsilon_start, original_filters, original_match))

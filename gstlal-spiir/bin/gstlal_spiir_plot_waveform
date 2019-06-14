@@ -218,7 +218,7 @@ if options.output_item == "all" or options.output_item == "spiir":
 		numpy.savetxt("%s_whitened_spiir_reconstructed.txt" % options.output_prefix, u_rev_pad.view(float))
 		
 if options.output_item == "all":
-	hp, hc = cbc_template_iir.gen_lalsim_waveform(bank_table[int(options.template_id)], options.flow, options.sampleRate)
+	hp, hc = cbc_template_iir.gen_lalsim_waveform(bank_table[int(options.template_id)], options.flow, options.sampleRate, options.approximant)
 	pyplot.figure()
 	p1, = pyplot.plot(hp.data.data, label = 'noncondition waveform hp')
 	pyplot.xlabel('samples')	
