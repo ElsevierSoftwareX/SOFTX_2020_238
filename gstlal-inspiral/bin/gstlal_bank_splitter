@@ -70,42 +70,6 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 lsctables.use_in(LIGOLWContentHandler)
 
 
-def bandwidth(m1, m2, s1, s2, f_min, f_max, delta_f, psd):
-	def fn(farr, h, n, psd):
-		df = farr[1] - farr[0]
-		return 4 * numpy.sum(numpy.abs(h)**2 * farr**n * df / psd(farr))
-
-	def moment(farr, h, n, psd):
-		return fn(farr, h, n, psd) / fn(farr, h, 0, psd)
-
-	spin1 = [0., 0., 0.]; spin2 = [0., 0., 0.]
-	f_min = 10.
-	f_max = 1024.0
-	delta_f = 1.0
-	farr = numpy.linspace(0, f_max, f_max / delta_f + delta_f)
-	hp, hc = lalsimulation.SimInspiralFD(
-		m1 * lal.MSUN_SI, m2 * lal.MSUN_SI,
-		spin1[0], spin1[1], spin1[2],
-		spin2[0], spin2[1], spin2[2],
-		1.0,	# distance (m)
-		0.0,
-		0.0,	# reference orbital phase (rad)
-		0.0,	# longitude of ascending nodes (rad)
-		0.0,
-		0.0,	# mean anomaly of periastron
-		delta_f,
-		f_min,
-		f_max + delta_f,
-		100.,	# reference frequency (Hz)
-		None,	# LAL dictionary containing accessory parameters
-		lalsimulation.GetApproximantFromString("IMRPhenomD")
-	)
-	assert hp.data.length > 0, "huh!?  h+ has zero length!"
-
-	h = hp.data.data[:len(farr)]
-	return (moment(farr, h, 2, psd) - moment(farr, h, 1, psd)**2)**.5
-
-
 def group_templates(templates, n, overlap = 0):
 	"""
 	break up the template table into sub tables of length n with overlap
@@ -196,7 +160,7 @@ sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 if options.sort_by == "bandwidth":
 	for count, row in enumerate(sngl_inspiral_table):
 		# FIXME don't hard code
-		row.bandwidth = bandwidth(row.mass1, row.mass1, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
+		row.bandwidth = templates.bandwidth(row.mass1, row.mass1, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
 		print count, len(sngl_inspiral_table), row.bandwidth
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
