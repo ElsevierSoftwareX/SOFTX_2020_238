@@ -20,7 +20,7 @@
 --
 
 CREATE INDEX tmpindex ON process (node, unix_procid, start_time);
-CREATE TEMPORARY TABLE _idmap_ AS
+CREATE TEMPORARY TABLE ___idmap___ AS
 	SELECT
 		old.process_id AS old,
 		MIN(new.process_id) AS new
@@ -34,28 +34,28 @@ CREATE TEMPORARY TABLE _idmap_ AS
 	GROUP BY
 		old.process_id;
 DROP INDEX tmpindex;
-CREATE INDEX tmpindex ON _idmap_ (old);
-CREATE INDEX tmpindex2 ON _idmap_ (new, old);
+CREATE INDEX tmpindex ON ___idmap___ (old);
+CREATE INDEX tmpindex2 ON ___idmap___ (new, old);
 
-UPDATE coinc_event SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
-UPDATE segment SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
-UPDATE segment_definer SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
-UPDATE segment_summary SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
-UPDATE sngl_inspiral SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
-UPDATE time_slide SET process_id = (SELECT new FROM _idmap_ WHERE old == process_id);
+UPDATE coinc_event SET process_id = (SELECT new FROM ___idmap___ WHERE old == process_id);
+UPDATE segment SET process_id = (SELECT new FROM ___idmap___ WHERE old == process_id);
+UPDATE segment_definer SET process_id = (SELECT new FROM ___idmap___ WHERE old == process_id);
+UPDATE segment_summary SET process_id = (SELECT new FROM ___idmap___ WHERE old == process_id);
+UPDATE sngl_inspiral SET process_id = (SELECT new FROM ___idmap___ WHERE old == process_id);
+UPDATE time_slide SET process_id = (SELECT new FROM ___idmap___ WHERE old == process_id);
 
-DELETE FROM process WHERE process_id IN (SELECT old FROM _idmap_ WHERE old != new);
+DELETE FROM process WHERE process_id IN (SELECT old FROM ___idmap___ WHERE old != new);
 DELETE FROM process_params WHERE process_id NOT IN (SELECT process_id FROM process);
 
 DROP INDEX tmpindex;
 DROP INDEX tmpindex2;
-DROP TABLE _idmap_;
+DROP TABLE ___idmap___;
 
 --
 -- coinc_definer clean up
 --
 
-CREATE TEMPORARY TABLE _idmap_ AS
+CREATE TEMPORARY TABLE ___idmap___ AS
 	SELECT
 		old.coinc_def_id AS old,
 		MIN(new.coinc_def_id) AS new
@@ -67,15 +67,15 @@ CREATE TEMPORARY TABLE _idmap_ AS
 		)
 	GROUP BY
 		old.coinc_def_id;
-CREATE INDEX tmpindex ON _idmap_ (old);
-CREATE INDEX tmpindex2 ON _idmap_ (new, old);
+CREATE INDEX tmpindex ON ___idmap___ (old);
+CREATE INDEX tmpindex2 ON ___idmap___ (new, old);
 
-UPDATE coinc_event SET coinc_def_id = (SELECT new FROM _idmap_ WHERE old == coinc_def_id);
-DELETE FROM coinc_definer WHERE coinc_def_id IN (SELECT old FROM _idmap_ WHERE old != new);
+UPDATE coinc_event SET coinc_def_id = (SELECT new FROM ___idmap___ WHERE old == coinc_def_id);
+DELETE FROM coinc_definer WHERE coinc_def_id IN (SELECT old FROM ___idmap___ WHERE old != new);
 
 DROP INDEX tmpindex;
 DROP INDEX tmpindex2;
-DROP TABLE _idmap_;
+DROP TABLE ___idmap___;
 
 --
 -- segment_definer clean up.  NOTE:  this assumes no meaningful information
@@ -85,7 +85,7 @@ DROP TABLE _idmap_;
 -- with the higher ID will be discarded.
 --
 
-CREATE TEMPORARY TABLE _idmap_ AS
+CREATE TEMPORARY TABLE ___idmap___ AS
 	SELECT
 		old.segment_def_id AS old,
 		MIN(new.segment_def_id) AS new
@@ -97,14 +97,14 @@ CREATE TEMPORARY TABLE _idmap_ AS
 		)
 	GROUP BY
 		old.segment_def_id;
-CREATE INDEX tmpindex ON _idmap_ (old);
+CREATE INDEX tmpindex ON ___idmap___ (old);
 
-UPDATE segment_summary SET segment_def_id = (SELECT new FROM _idmap_ WHERE old == segment_def_id);
-UPDATE segment SET segment_def_id = (SELECT new FROM _idmap_ WHERE old == segment_def_id);
-DELETE FROM segment_definer WHERE segment_def_id IN (SELECT old FROM _idmap_ WHERE old != new);
+UPDATE segment_summary SET segment_def_id = (SELECT new FROM ___idmap___ WHERE old == segment_def_id);
+UPDATE segment SET segment_def_id = (SELECT new FROM ___idmap___ WHERE old == segment_def_id);
+DELETE FROM segment_definer WHERE segment_def_id IN (SELECT old FROM ___idmap___ WHERE old != new);
 
 DROP INDEX tmpindex;
-DROP TABLE _idmap_;
+DROP TABLE ___idmap___;
 
 --
 -- segment clean up.  NOTE:  this assumes that nothing references segment
@@ -136,7 +136,7 @@ DROP INDEX tmpindex;
 -- time_slide clean up
 --
 
-CREATE TEMPORARY TABLE _idmap_ AS
+CREATE TEMPORARY TABLE ___idmap___ AS
 	SELECT
 		time_slide_id AS old,
 		(SELECT group_concat(instrument || "=" || offset) FROM time_slide AS time_slide_a WHERE time_slide_a.time_slide_id == time_slide.time_slide_id ORDER BY instrument) AS repr,
@@ -145,17 +145,17 @@ CREATE TEMPORARY TABLE _idmap_ AS
 		time_slide
 	GROUP BY
 		time_slide_id;
-CREATE INDEX tmpindex ON _idmap_ (repr, old);
+CREATE INDEX tmpindex ON ___idmap___ (repr, old);
 
-UPDATE _idmap_ SET new = (SELECT MIN(old) FROM _idmap_ AS a WHERE a.repr == _idmap_.repr);
+UPDATE ___idmap___ SET new = (SELECT MIN(old) FROM ___idmap___ AS a WHERE a.repr == ___idmap___.repr);
 DROP INDEX tmpindex;
-CREATE INDEX tmpindex ON _idmap_ (old);
+CREATE INDEX tmpindex ON ___idmap___ (old);
 
-UPDATE coinc_event SET time_slide_id = (SELECT _idmap_.new FROM _idmap_ WHERE _idmap_.old == time_slide_id);
-DELETE FROM time_slide WHERE time_slide_id IN (SELECT old FROM _idmap_ WHERE old != new);
+UPDATE coinc_event SET time_slide_id = (SELECT ___idmap___.new FROM ___idmap___ WHERE ___idmap___.old == time_slide_id);
+DELETE FROM time_slide WHERE time_slide_id IN (SELECT old FROM ___idmap___ WHERE old != new);
 
 DROP INDEX tmpindex;
-DROP TABLE _idmap_;
+DROP TABLE ___idmap___;
 
 
 --
