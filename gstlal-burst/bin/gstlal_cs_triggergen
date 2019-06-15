@@ -51,6 +51,8 @@ def parse_command_line():
 	parser.add_option("--frame-cache", metavar = "filename", help = "Frame cache file to load as input data.")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Reference psd files as input to obtain the template and SNR. Can be given for multiple detectors, but must be in one file. If None, the PSD will be measured on the fly, but there will be some burn-in time where the data will not be analyzed until the PSD converges.")
 	parser.add_option("--output", metavar = "filename", help = "Name of output xml file.")
+	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the LIGO Light-Weight XML file with segment lists that are science mode, for the trigger generator to know science-mode segments.  See also --segments-name.")
+	parser.add_option("--segments-name", metavar = "name", help = "Set the name of the segment lists to retrieve from the segments file.  See also --segments-file.")
 	parser.add_option("--injection-file", metavar = "filename", help = "Name of xml file with injections.")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Name of xml file with time slides for each detector.")
         parser.add_option("--channel", metavar = "channel", action = "append", type = "string", help = "Name of channel. Can be given multiple inputs, but must be one for each detector.")
@@ -71,6 +73,8 @@ def parse_command_line():
 		raise ValueError("missing required options %s" % ", ".join(sorted("--%s" % option.replace("_", "-") for option in missing_options)))
 	if len(options.template_bank) != len(options.channel):
 		raise ValueError("number of --template-bank options must equal number of --channel options")
+	if options.segments_file is not None and options.segments_name is None:
+		raise ValueError("segments name should be specified for the input segments file")
 
 	return options, filenames
 
@@ -87,12 +91,12 @@ options, filenames = parse_command_line()
 #
 
 class PipelineHandler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, xmldoc, template_banks, sngl_burst, seglistdict, reference_psds, firbanks, triggergens):
+	def __init__(self, mainloop, pipeline, xmldoc, template_banks, sngl_burst, analyzed_seglistdict, reference_psds, firbanks, triggergens):
 		simplehandler.Handler.__init__(self, mainloop, pipeline)
 		self.lock = threading.Lock()
 		self.template_bank = template_banks
 		self.sngl_burst = sngl_burst
-		self.seglistdict = seglistdict
+		self.analyzed_seglistdict = analyzed_seglistdict
 		self.firbank = firbanks
 		self.triggergen = triggergens
 		# template normalization. use central_freq to uniquely identify templates
@@ -124,7 +128,7 @@ class PipelineHandler(simplehandler.Handler):
 			if events:
 				buf_seg[instrument] |= segments.segmentlist([segments.segment(buf_timestamp, max(event.peak for event in events if event.ifo == instrument))])
 			# obtain union of this segment and the previously added segments
-			self.seglistdict |= buf_seg
+			self.analyzed_seglistdict |= buf_seg
 			# put info of each event in the sngl burst table
 			if options.verbose:
 				print >> sys.stderr, "at", buf_timestamp, "got", len(events), "in", set([event.ifo for event in events])
@@ -132,7 +136,6 @@ class PipelineHandler(simplehandler.Handler):
 				event.process_id = process.process_id
 				event.event_id = self.sngl_burst.get_next_id()
 				event.amplitude = event.snr / self.sigma[event.central_freq]
-				#self.sngl_burst.append(event)
 			# push the single detector triggers into the StreamBurca instance
 			# the push method returns True if the coincidence engine has new results. in that case, call the pull() method to run the coincidence engine.
 			if events:
@@ -143,7 +146,7 @@ class PipelineHandler(simplehandler.Handler):
 		with self.lock:
 			# dump segmentlistdict to segment table
 			with ligolw_segments.LigolwSegments(xmldoc, process) as llwsegment:
-				llwsegment.insert_from_segmentlistdict(self.seglistdict, name = u"StringSearch", comment="triggergen")
+				llwsegment.insert_from_segmentlistdict(self.analyzed_seglistdict, name = u"StringSearch", comment="triggergen")
 			# leftover triggers
 			self.streamburca.pull(flush = True)
 
@@ -300,6 +303,17 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 
 
 #
+# load the segment file with specific segment name (if there is one) for gating
+#
+
+if options.segments_file is not None:
+	seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segments_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
+	assert seglists.keys() == all_ifos, 'ifo masmatch between segments and channels'
+	for ifo in all_ifos:
+		seglists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
+
+
+#
 # load template bank file and find the template bank table
 # Mapping is done from instrument to sngl_burst table & xml file
 #
@@ -364,10 +378,11 @@ xmldoc.childNodes[-1].appendChild(sngl_burst_table)
 
 
 #
-# construct dictionary of segment lists
+# construct dictionary of segment lists that were analyzed
+# (i.e. which contributes to the live time)
 #
 
-seglistdict = segments.segmentlistdict()
+analyzed_seglistdict = segments.segmentlistdict()
 
 
 #
@@ -393,6 +408,10 @@ for ifo in all_ifos:
 	elem = pipeparts.mkaudioconvert(pipeline, None)
 	pipeparts.src_deferred_link(head, channel_dict[ifo], elem.get_static_pad("sink"))
 	head = elem
+	# put gate for the segments
+	# currently with leaky option on to avoid step function-like disconts in the data affect the PSD.
+	if options.segments_file is not None:
+		head = datasource.mksegmentsrcgate(pipeline, head, seglists[ifo], invert_output = False, leaky = True)
 	# limit the maximum buffer duration.  keeps RAM use under control
 	# in the even that we are loading gigantic frame files
 	# FIXME currently needs to be >= fft_length (= 32s) for mkwhiten to work. (I think)
@@ -444,7 +463,7 @@ for ifo in all_ifos:
 # handler
 #
 
-handler = PipelineHandler(mainloop, pipeline, xmldoc, template_bank_table, sngl_burst_table, seglistdict, psd, firbank, triggergen)
+handler = PipelineHandler(mainloop, pipeline, xmldoc, template_bank_table, sngl_burst_table, analyzed_seglistdict, psd, firbank, triggergen)
 
 
 #
