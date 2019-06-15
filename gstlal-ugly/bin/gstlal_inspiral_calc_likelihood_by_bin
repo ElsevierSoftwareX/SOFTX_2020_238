@@ -138,7 +138,6 @@ if __name__ == '__main__':
 
 	instruments = rankingstats.values()[0].instruments
 
-
 	def ln_lr_from_triggers(events, offsetvector, rankingstats = rankingstats):
 		reference = min(events, key = lambda event: event.end)
 		ref_end, ref_offset = reference.end, offsetvector[reference.ifo]
@@ -151,7 +150,6 @@ if __name__ == '__main__':
 			return float("-inf")
 		if template_id not in self.template_ids:
 			raise ValueError("event IDs %s are from the wrong template" % ", ".join(sorted(str(event.event_id) for event in events)))
-		print bin_id
 		# segment spanned by reference event
 		seg = segments.segment(ref_end - reference.template_duration, ref_end)
 		# initially populate segs dictionary shifting reference
@@ -161,17 +159,14 @@ if __name__ == '__main__':
 		# intervals
 		segs.update((event.ifo, segments.segment(event.end - event.template_duration, event.end)) for event in events)
 
-		try:
-			return self(
-				segments = segs,
-				snrs = dict((event.ifo, event.snr) for event in events),
-				phase = dict((event.ifo, event.coa_phase) for event in events),
-				dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
-				template_id = template_id,
-				**dict(("%s_snr_chi" % event.ifo, (event.snr, event.chisq / event.snr**2.)) for event in events)
-			)
-		except (ValueError, AssertionError) as e:
-			raise type(e)("%s: event IDs %s, offsets %s" % (str(e), ", ".join(sorted(str(event.event_id) for event in events)), str(offsetvector)))
+		return self(
+			segments = segs,
+			snrs = dict((event.ifo, event.snr) for event in events),
+			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.snr**2.) for event in events),
+			phase = dict((event.ifo, event.coa_phase) for event in events),
+			dt = dict((event.ifo, float(event.end - ref_end) + offsetvector[event.ifo] - ref_offset) for event in events),
+			template_id = template_id,
+		)
 
 	#
 	# iterate over candidate files
