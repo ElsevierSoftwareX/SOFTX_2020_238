@@ -495,12 +495,13 @@ if options.verbose:
 	print >>sys.stderr, "running pipeline ..."
 mainloop.run()
 
+handler.flush()
+
 
 #
-# write output to disk
-# FIXME vetoes table also needs to be dumped here
-# with ligolw_add
+# obtain nevents from the coinc event table, and write output to disk
+# FIXME vetoes table also needs to be dumped here with ligolw_add
+#
 
-handler.flush()
-# FIXME search_summary.nevents is still zero
+search_summary.nevents = len(lsctables.CoincTable.get_table(xmldoc))
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
