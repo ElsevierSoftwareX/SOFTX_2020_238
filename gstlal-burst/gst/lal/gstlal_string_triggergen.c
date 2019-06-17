@@ -505,10 +505,23 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
-	gst_buffer_ref(inbuf);
-	gst_audioadapter_push(element->adapter, inbuf);
+	/*
+	 * gap logic
+	 */
 
-	result = trigger_generator(element, outbuf);
+	if (!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
+		/* not gaps */
+		gst_buffer_ref(inbuf);
+		gst_audioadapter_push(element->adapter, inbuf);
+		result = trigger_generator(element, outbuf);
+	} else {
+		/* gaps */
+		GST_BUFFER_PTS(outbuf) = element->t0;
+		GST_BUFFER_DURATION(outbuf) = 0;
+		/* we get no triggers, so outbuf offset is unchanged */
+		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf);
+		result = GST_FLOW_OK;
+	}
 
 	/*
 	 * done
