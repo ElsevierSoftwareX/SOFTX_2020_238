@@ -35,9 +35,6 @@ import StringIO
 import threading
 import shutil
 
-import h5py
-import numpy
-
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst

@@ -273,7 +273,7 @@ class HDF5TimeseriesFeatureData(FeatureData):
 		self.sample_rate = kwargs['sample_rate']
 		self.waveform = kwargs['waveform']
 		self.metadata = dict(**kwargs)
-		self.dtype = [(column, '<f8') for column in self.columns]
+		self.dtype = [(column, numpy.float32) for column in self.columns]
 		self.feature_data = {key: numpy.empty((self.cadence * self.sample_rate,), dtype = self.dtype) for key in keys}
 		self.last_save_time = 0
 		self.clear()
@@ -322,7 +322,7 @@ class HDF5ETGFeatureData(FeatureData):
 		self.cadence = kwargs['cadence']
 		self.waveform = kwargs['waveform']
 		self.metadata = dict(**kwargs)
-		self.dtype = [(column, '<f8') for column in self.columns]
+		self.dtype = [(column, numpy.float32) for column in self.columns]
 		self.feature_data = {key: [] for key in keys}
 		self.clear()
 
