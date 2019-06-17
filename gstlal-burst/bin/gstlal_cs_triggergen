@@ -51,8 +51,10 @@ def parse_command_line():
 	parser.add_option("--frame-cache", metavar = "filename", help = "Frame cache file to load as input data.")
 	parser.add_option("--reference-psd", metavar = "filename", help = "Reference psd files as input to obtain the template and SNR. Can be given for multiple detectors, but must be in one file. If None, the PSD will be measured on the fly, but there will be some burn-in time where the data will not be analyzed until the PSD converges.")
 	parser.add_option("--output", metavar = "filename", help = "Name of output xml file.")
-	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the LIGO Light-Weight XML file with segment lists that are science mode, for the trigger generator to know science-mode segments.  See also --segments-name.")
+	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the LIGO Light-Weight XML file with segment lists that are science mode, for the trigger generator to enable gating.  See also --segments-name.")
 	parser.add_option("--segments-name", metavar = "name", help = "Set the name of the segment lists to retrieve from the segments file.  See also --segments-file.")
+	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the LIGO Light-Weight XML file with segment lists that are vetoed, for the trigger generator to enable gating.  See also --vetoes-name.")
+	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the veto segment lists to retrieve from the veto segments file.  See also --vetoes-file.")
 	parser.add_option("--injection-file", metavar = "filename", help = "Name of xml file with injections.")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Name of xml file with time slides for each detector.")
         parser.add_option("--channel", metavar = "channel", action = "append", type = "string", help = "Name of channel. Can be given multiple inputs, but must be one for each detector.")
@@ -75,6 +77,8 @@ def parse_command_line():
 		raise ValueError("number of --template-bank options must equal number of --channel options")
 	if options.segments_file is not None and options.segments_name is None:
 		raise ValueError("segments name should be specified for the input segments file")
+	if options.vetoes_file is not None and options.vetoes_name is None:
+		raise ValueError("vetoes name should be specified for the input vetoes file")
 
 	return options, filenames
 
@@ -314,6 +318,17 @@ if options.segments_file is not None:
 
 
 #
+# load the vetoes file too (if there is one)
+#
+
+if options.vetoes_file is not None:
+	vetolists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.vetoes_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.vetoes_name).coalesce()
+	assert vetolists.keys() == all_ifos, 'ifo masmatch between segments and channels'
+	for ifo in all_ifos:
+		vetolists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
+
+
+#
 # load template bank file and find the template bank table
 # Mapping is done from instrument to sngl_burst table & xml file
 #
@@ -408,10 +423,12 @@ for ifo in all_ifos:
 	elem = pipeparts.mkaudioconvert(pipeline, None)
 	pipeparts.src_deferred_link(head, channel_dict[ifo], elem.get_static_pad("sink"))
 	head = elem
-	# put gate for the segments
+	# put gate for the segments and vetoes
 	# currently with leaky option on to avoid step function-like disconts in the data affect the PSD.
 	if options.segments_file is not None:
 		head = datasource.mksegmentsrcgate(pipeline, head, seglists[ifo], invert_output = False, leaky = True)
+	if options.vetoes_file is not None:
+		head = datasource.mksegmentsrcgate(pipeline, head, vetolists[ifo], invert_output = True, leaky = True)
 	# limit the maximum buffer duration.  keeps RAM use under control
 	# in the even that we are loading gigantic frame files
 	# FIXME currently needs to be >= fft_length (= 32s) for mkwhiten to work. (I think)
