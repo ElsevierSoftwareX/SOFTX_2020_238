@@ -509,7 +509,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		# mass bin dependent prior, but it really doesn't matter for
 		# the time being.
 		priornode = dagparts.DAGNode(createPriorDistStatsJob, dag,
-				parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node,
+				parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node or [],
 				opts = {"instrument":instrument_set, "background-prior":10000, "min-instruments":options.min_instruments, "df": "bandwidth"},
 				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file, "psd-xml": ref_psd},
 				output_files = {"write-likelihood":dagparts.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
@@ -1445,6 +1445,10 @@ if options.bank_cache:
 	#svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, inspiral_pipe.build_bank_groups(bank_cache, options.num_banks), options, boundary_seg, template_mchirp_dict)
 	svd_nodes, template_mchirp_dict = svd_node_gen(svdJob, dag, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, template_mchirp_dict)
 	model_add_node, model_file_name = model_node_gen(modelJob, dag, ref_psd_parent_nodes, instruments, options, boundary_seg, options.template_bank, ref_psd)
+
+else:
+    model_add_node = None
+    model_file_name = options.mass_model_file
 
 if not options.lloid_cache:
 	#
