@@ -14,6 +14,7 @@ Gst.init(None)
 from gstlal import datasource
 from gstlal import pipeio
 from gstlal import pipeparts
+from gstlal import reference_psd
 from gstlal import simplehandler
 from gstlal import snglbursttable 
 from gstlal import streamburca
@@ -95,12 +96,13 @@ options, filenames = parse_command_line()
 #
 
 class PipelineHandler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, xmldoc, template_banks, sngl_burst, analyzed_seglistdict, reference_psds, firbanks, triggergens):
+	def __init__(self, mainloop, pipeline, xmldoc, template_banks, sngl_burst, analyzed_seglistdict, reference_psds, whitens, firbanks, triggergens):
 		simplehandler.Handler.__init__(self, mainloop, pipeline)
 		self.lock = threading.Lock()
 		self.template_bank = template_banks
 		self.sngl_burst = sngl_burst
 		self.analyzed_seglistdict = analyzed_seglistdict
+		self.whitens = whitens
 		self.firbank = firbanks
 		self.triggergen = triggergens
 		# template normalization. use central_freq to uniquely identify templates
@@ -234,6 +236,10 @@ class PipelineHandler(simplehandler.Handler):
 				timestamp = psd.epoch
 			else:
 				psd = self.reference_psd[instrument]
+				deltaf = self.whitens[instrument].get_property("delta-f")
+				psd_interp = reference_psd.interpolate_psd(psd, deltaf)
+				self.whitens[instrument].set_property("psd-mode", 1)
+				self.whitens[instrument].set_property("mean-psd", psd_interp.data.data)
 
 			stability = float(message.src.get_property("n-samples")) / message.src.get_property("average-samples")
 
@@ -412,6 +418,7 @@ analyzed_seglistdict = segments.segmentlistdict()
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(name="pipeline")
 
+whiten = dict.fromkeys(all_ifos, None)
 firbank = dict.fromkeys(all_ifos, None)
 triggergen = dict.fromkeys(all_ifos, None)
 
@@ -431,9 +438,7 @@ for ifo in all_ifos:
 		head = datasource.mksegmentsrcgate(pipeline, head, vetolists[ifo], invert_output = True, leaky = True)
 	# limit the maximum buffer duration.  keeps RAM use under control
 	# in the even that we are loading gigantic frame files
-	# FIXME currently needs to be >= fft_length (= 32s) for mkwhiten to work. (I think)
-	# when the reference_psd can be used for mkwhiten, change the block duration to shorter time.
-	head = pipeparts.mkreblock(pipeline, head, block_duration = 64 * 1000000000)
+	head = pipeparts.mkreblock(pipeline, head, block_duration = 8 * 1000000000)
 
 
 	#
@@ -448,13 +453,7 @@ for ifo in all_ifos:
 	# whitener, resampler and caps filter
 	#
 
-	# FIXME if reference psd is available use that for whitening data
-	# the below code doesn't work...
-	#if options.reference_psd is not None:
-		#head = pipeparts.mkwhiten(pipeline, head, fft_length = 32, name = "lal_whiten_%s" % ifo, psd_mode = 1, mean_psd = psd[ifo].data.data)
-	#else:
-		#head = pipeparts.mkwhiten(pipeline, head, fft_length = 32, name = "lal_whiten_%s" % ifo)
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = 32, name = "lal_whiten_%s" % ifo)
+	head = whiten[ifo] = pipeparts.mkwhiten(pipeline, head, fft_length = 8, name = "lal_whiten_%s" % ifo)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkresample(pipeline, head)
 	# FIXME NO hardcoding original sample rate!
@@ -480,7 +479,7 @@ for ifo in all_ifos:
 # handler
 #
 
-handler = PipelineHandler(mainloop, pipeline, xmldoc, template_bank_table, sngl_burst_table, analyzed_seglistdict, psd, firbank, triggergen)
+handler = PipelineHandler(mainloop, pipeline, xmldoc, template_bank_table, sngl_burst_table, analyzed_seglistdict, psd, whiten, firbank, triggergen)
 
 
 #
