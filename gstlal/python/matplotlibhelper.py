@@ -26,17 +26,18 @@ __all__ = ("padtemplate", "figure", "render", "BaseMatplotlibTransform")
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject
-from gi.repository import Gst
+gi.require_version('GstBase', '1.0')
+from gi.repository import GObject, Gst, GstBase
 GObject.threads_init()
 Gst.init(None)
+
 from gstlal.pipeutil import *
 from gstlal import pipeio
 
 
 """Pad template suitable for producing video frames using Matplotlib.
 The Agg backend supports rgba, argb, and bgra."""
-padtemplate = Gst.PadTemplate(
+padtemplate = Gst.PadTemplate.new(
 	"src",
 	Gst.PadDirection.SRC, Gst.PadPresence.ALWAYS,
 	Gst.caps_from_string("""
@@ -93,7 +94,7 @@ def render(fig, buf, (width, height), fmt):
 	buf.datasize = datasize
 
 
-class BaseMatplotlibTransform(Gst.BaseTransform):
+class BaseMatplotlibTransform(GstBase.BaseTransform):
 	"""Base class for transform elements that use Matplotlib to render video."""
 
 	__gsttemplates__ = padtemplate
