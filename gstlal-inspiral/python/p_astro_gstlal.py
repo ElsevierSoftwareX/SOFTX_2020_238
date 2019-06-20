@@ -331,6 +331,7 @@ def compute_p_astro(event_ln_likelihood_ratio,
 
     Example
     -------
+    >>> import json
     >>> p_astros = json.loads(compute_p_astro(files))
     >>> p_astros
     {'BNS': 0.999, 'BBH': 0.0, 'NSBH': 0.0, 'Terrestrial': 0.001}
@@ -394,6 +395,7 @@ def compute_p_astro_approx(snr, far, mass1, mass2, livetime, mean_values_dict):
 
     Example
     -------
+    >>> import json
     >>> p_astros = json.loads(compute_p_astro(files))
     >>> p_astros
     {'BNS': 0.999, 'BBH': 0.0, 'NSBH': 0.0, 'Terrestrial': 0.001}
