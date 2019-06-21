@@ -365,16 +365,9 @@ def time_slices(
 	return numpy.array(time_freq_boundaries,dtype=[('rate','int'),('begin','float'),('end','float')])
 
 
-def bandwidth(m1, m2, s1, s2, f_min, f_max, delta_f, psd):
-	def fn(farr, h, n, psd):
-		df = farr[1] - farr[0]
-		return 4 * numpy.sum(numpy.abs(h)**2 * farr**n * df / psd(farr))
-
-	def moment(farr, h, n, psd):
-		return fn(farr, h, n, psd) / fn(farr, h, 0, psd)
-
-	spin1 = [0., 0., s1]; spin2 = [0., 0., s2]
+def hplus_of_f(m1, m2, s1, s2, f_min, f_max, delta_f):
 	farr = numpy.linspace(0, f_max, f_max / delta_f + delta_f)
+	spin1 = [0., 0., s1]; spin2 = [0., 0., s2]
 	hp, hc = lalsim.SimInspiralFD(
 		m1 * lal.MSUN_SI, m2 * lal.MSUN_SI,
 		spin1[0], spin1[1], spin1[2],
@@ -394,5 +387,16 @@ def bandwidth(m1, m2, s1, s2, f_min, f_max, delta_f, psd):
 	)
 	assert hp.data.length > 0, "huh!?  h+ has zero length!"
 
-	h = hp.data.data[:len(farr)]
+	return hp.data.data[:len(farr)]
+
+def fn(farr, h, n, psd):
+	df = farr[1] - farr[0]
+	return 4 * numpy.sum(numpy.abs(h)**2 * farr**n * df / psd(farr))
+
+def moment(farr, h, n, psd):
+	return fn(farr, h, n, psd) / fn(farr, h, 0, psd)
+
+def bandwidth(m1, m2, s1, s2, f_min, f_max, delta_f, psd):
+	h = hplus_of_f(m1, m2, s1, s2, f_min, f_max, delta_f)
+	farr = numpy.linspace(0, f_max, f_max / delta_f + delta_f)
 	return (moment(farr, h, 2, psd) - moment(farr, h, 1, psd)**2)**.5
