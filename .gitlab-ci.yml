@@ -363,32 +363,12 @@ test:offline:
   allow_failure: true
   
 pages:
-  #image: aepace/gstlal-dev:el7-mkl-1.14
-  image: aepace/gstlal-dev:stretch-mkl
+  image: aepace/gstlal-dev:el7-mkl-1.14
   stage: nightly-pages
   script:
     - echo "Building Documentation"
-    # Download and install sphinx, texlive, etc. I'm installing these here
-    # since they don't need to be part of the dev container for running, only
-    # for building documentation. This shaves ~600MB off the size of the gstlal-dev
-    # container:
-    #- yum -y install texlive-base texlive-dvipng texlive-ucs texlive-scheme-full texlive-amsmath texlive-amscls texlive-amsfonts texlive-collection-latexrecommended texlive-collection-basic
-    #- yum -y install texlive-latex texlive-latex-base-doc texlive-latex-fonts texlive-latex-bin texlive-latex-bin-bin
-    #- yum -y install texlive-pictures texlive-pstricks texlive-pstricks-doc texlive-collection-xetex
-    
-    #- yum -y install texlive*
-    
-    # Download and install phython-sphinx. The version available for SL7 (1.1)
-    # is too old (see errors in previous piplines). But newer versions won't
-    # install on SL7 because setuptools is too old. I (Alex) recurred to find
-    # the newest version that would actually install.
-    #- mkdir -p ${GSTLAL_DIR}/lib/python2.7/site-packages
-    #- wget https://github.com/sphinx-doc/sphinx/archive/1.5.zip
-    #- unzip 1.5.zip
-    #- cd sphinx-1.5/
-    #- python setup.py install --prefix=${GSTLAL_DIR}
-    #- cd ..
-    
+    - yum -y install python2-pip
+    - pip install setuptools sphinx==1.7
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
     - cd doc; make html
