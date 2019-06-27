@@ -8,41 +8,41 @@ License: GPL
 Group: LSC Software/Data Analysis
 Requires: gstlal >= @MIN_GSTLAL_VERSION@
 Requires: gstlal-ugly >= @MIN_GSTLALUGLY_VERSION@
-Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
-Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
-Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-bad-free
+Requires: gsl
 Requires: h5py
-Requires: numpy >= @MIN_NUMPY_VERSION@
-Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
-Requires: lal-python >= @MIN_LAL_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
-Requires: lalinspiral-python >= @MIN_LALINSPIRAL_VERSION@
-Requires: gsl
 Requires: ligo-gracedb >= 1.11
+Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
-BuildRequires: pkgconfig >= 0.18.0
+Requires: python-lal >= @MIN_LAL_VERSION@
+Requires: python-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
+Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
+Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
+Requires: numpy >= @MIN_NUMPY_VERSION@
+Requires: scipy
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 BuildRequires: graphviz
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
-BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
-BuildRequires: lal-devel >= @MIN_LAL_VERSION@
-BuildRequires: lal-python >= @MIN_LAL_VERSION@
-BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
-BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
-BuildRequires: lalinspiral-python >= @MIN_LALINSPIRAL_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: gtk-doc >= @MIN_GTK_DOC_VERSION@
+BuildRequires: lal-devel >= @MIN_LAL_VERSION@
+BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
+BuildRequires: pkgconfig >= 0.18.0
+BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
+BuildRequires: python-lal >= @MIN_LAL_VERSION@
+BuildRequires: python-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://wiki.ligo.org/DASWG/GstLAL
 Packager: Kipp Cannon <kipp.cannon@ligo.org>
