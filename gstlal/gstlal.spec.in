@@ -32,7 +32,7 @@ Requires: orc >= @MIN_ORC_VERSION@
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
 Requires: python-gobject >= @MIN_PYGOBJECT_VERSION@
-Requires: python-lal >= @MIN_LAL_VERSION@
+Requires: python2-lal >= @MIN_LAL_VERSION@
 Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
 Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
 Requires: scipy
@@ -58,7 +58,7 @@ BuildRequires: pkgconfig >= 0.18.0
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
 BuildRequires: pygobject3-devel >= @MIN_PYGOBJECT_VERSION@
-BuildRequires: python-lal >= @MIN_LAL_VERSION@
+BuildRequires: python2-lal >= @MIN_LAL_VERSION@
 BuildRequires: zlib-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://wiki.ligo.org/DASWG/GstLAL

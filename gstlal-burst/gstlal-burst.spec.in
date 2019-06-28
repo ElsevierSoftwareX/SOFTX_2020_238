@@ -39,7 +39,7 @@ BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: pkgconfig >= 0.18.0
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
-BuildRequires: python-lal >= @MIN_LAL_VERSION@
+BuildRequires: python2-lal >= @MIN_LAL_VERSION@
 Conflicts: gstlal-ugly < 0.6.0
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
