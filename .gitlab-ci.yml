@@ -368,7 +368,7 @@ pages:
   script:
     - echo "Building Documentation"
     - yum -y install python2-pip
-    - pip install setuptools sphinx==1.7
+    - pip install setuptools sphinx==1.7 sphinx_rtd_theme
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
     - cd doc; make html
