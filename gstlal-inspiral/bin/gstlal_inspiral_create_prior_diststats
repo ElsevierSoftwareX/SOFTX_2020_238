@@ -116,7 +116,7 @@ def parse_command_line():
 		# FIXME don't hard code
 		if options.df == "bandwidth":
 			for ifo in psd:
-				bandwidths += [templates.bandwidth(row.mass1, row.mass1, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo])]
+				bandwidths += [templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo])]
 		horizon_factors.update(bank.horizon_factors)
 	if options.df == "bandwidth":
 		# NOTE the 1500 is tuned by looking at real data distributions
