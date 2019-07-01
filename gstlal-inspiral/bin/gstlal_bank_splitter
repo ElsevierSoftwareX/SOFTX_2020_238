@@ -160,7 +160,7 @@ sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 if options.sort_by == "bandwidth":
 	for count, row in enumerate(sngl_inspiral_table):
 		# FIXME don't hard code
-		row.bandwidth = templates.bandwidth(row.mass1, row.mass1, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
+		row.bandwidth = templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
 		print count, len(sngl_inspiral_table), row.bandwidth
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
