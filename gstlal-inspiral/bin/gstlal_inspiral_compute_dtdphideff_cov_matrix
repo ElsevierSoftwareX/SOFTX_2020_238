@@ -82,8 +82,8 @@ for combo in itertools.combinations(("H1", "L1", "V1"), 2):
 	m22 = sigsqpp[a] + sigsqpp[b]
 	m12 = m21 = sigsqtp[a] + sigsqtp[b]
 	mat = numpy.array([[m11, m12], [m21, m22]])
-	# matinv = numpy.linalg.inv(mat)
-	cholesky_transpose = numpy.linalg.cholesky(mat).T
+	matinv = numpy.linalg.inv(mat)
+	cholesky_transpose = numpy.linalg.cholesky(matinv).T
 	transtt[frozenset(combo)] = cholesky_transpose[0,0]
 	transtp[frozenset(combo)] = cholesky_transpose[0,1]
 	transpt[frozenset(combo)] = cholesky_transpose[1,0]
