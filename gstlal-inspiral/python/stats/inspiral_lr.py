@@ -728,10 +728,6 @@ class LnNoiseDensity(LnLRDensity):
 		if len(snrs) < self.min_instruments:
 			return NegInf
 
-		# FIXME for now the actual trigger rate estimation is disabled
-		# and assumed to be 0.5 until we understand some scaling issues
-		# The commented out code is left here to help put it back in
-		# place.
 		# FIXME:  the +/-3600 s window thing is a temporary hack to
 		# work around the problem of vetoes creating short segments
 		# that have no triggers in them but that can have
@@ -740,10 +736,9 @@ class LnNoiseDensity(LnLRDensity):
 		# around it.  you might might to make this bigger.
 		triggers_per_second_per_template = {}
 		for instrument, seg in segments.items():
-			triggers_per_second_per_template[instrument] = 0.5
-			#triggers_per_second_per_template[instrument] = (self.triggerrates[instrument] & trigger_rate.ratebinlist([trigger_rate.ratebin(seg[1] - 3600., seg[1] + 3600., count = 0)])).density / len(self.template_ids)
+			triggers_per_second_per_template[instrument] = (self.triggerrates[instrument] & trigger_rate.ratebinlist([trigger_rate.ratebin(seg[1] - 3600., seg[1] + 3600., count = 0)])).density / len(self.template_ids)
 		# sanity check rates
-		#assert all(triggers_per_second_per_template[instrument] for instrument in snrs), "impossible candidate in %s at %s when rates were %s triggers/s/template" % (", ".join(sorted(snrs)), ", ".join("%s s in %s" % (str(seg[1]), instrument) for instrument, seg in sorted(segments.items())), str(triggers_per_second_per_template))
+		assert all(triggers_per_second_per_template[instrument] for instrument in snrs), "impossible candidate in %s at %s when rates were %s triggers/s/template" % (", ".join(sorted(snrs)), ", ".join("%s s in %s" % (str(seg[1]), instrument) for instrument, seg in sorted(segments.items())), str(triggers_per_second_per_template))
 
 		# P(t | noise) = (candidates per unit time @ t) / total
 		# candidates.  by not normalizing by the total candidates
