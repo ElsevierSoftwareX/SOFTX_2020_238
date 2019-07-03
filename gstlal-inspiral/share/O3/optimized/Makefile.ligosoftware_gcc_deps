@@ -33,9 +33,9 @@ else
 endif
 
 # Set package release versions
-GDS=gds-2.18.10
-LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.6.2
-LDASTOOLSAL=ldas-tools-al-2.6.0
+GDS=gds-2.18.17
+LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.6.5
+LDASTOOLSAL=ldas-tools-al-2.6.2
 SWIG=swig-3.0.7
 METAIO=metaio-8.5.1
 LIBFRAME=libframe-8.30
@@ -43,7 +43,7 @@ GSTPYTHON=gst-python-1.14.3
 GSTPLUGINSGOOD=gst-plugins-good-1.14.3
 GSTPLUGINSBASE=gst-plugins-base-1.14.3
 GSTREAMER=gstreamer-1.14.3
-GSL=gsl-2.3
+GSL=gsl-1.16
 ORC=orc-0.4.26
 FFTW=fftw-3.3.8
 
@@ -170,7 +170,7 @@ tarball:
 
 # KAFKA
 tarball/kafka_2.11-2.0.0.tgz: tarball
-	wget -nc -P tarball http://mirror.reverse.net/pub/apache/kafka/2.0.0/kafka_2.11-2.0.0.tgz
+	wget -nc -P tarball https://archive.apache.org/dist/kafka/2.0.0/kafka_2.11-2.0.0.tgz
 
 src/kafka_2.11-2.0.0: tarball/kafka_2.11-2.0.0.tgz src opt/bin opt/config opt/libs
 	cd src && tar -xzf ../tarball/kafka_2.11-2.0.0.tgz && cd .. && cp -r src/kafka_2.11-2.0.0/bin/* opt/bin/. && cp src/kafka_2.11-2.0.0/libs/* opt/libs/. && cp src/kafka_2.11-2.0.0/config/* opt/config/.

@@ -54,24 +54,24 @@ LIGOSCALD_GIT_BRANCH="master"
 LALSUITE_GIT_BRANCH="master"
 
 # Set package release versions
-GSTLALINSPIRAL=gstlal-inspiral-1.6.4
-GSTLALCALIBRATION=gstlal-calibration-1.2.9
+GSTLALINSPIRAL=gstlal-inspiral-1.6.5
+GSTLALCALIBRATION=gstlal-calibration-1.2.10
 GSTLALBURST=gstlal-burst-0.1.1
-GSTLALUGLY=gstlal-ugly-1.6.3
+GSTLALUGLY=gstlal-ugly-1.6.4
 GSTLAL=gstlal-1.5.0
-LIGOSCALD=ligo-scald-0.4.0
+LIGOSCALD=ligo-scald-0.4.1
 KAFKA_PYTHON=0.11.5
 LIBRDKAFKA=0.11.5
-LALAPPS=lalapps-6.23.0
-LALINFERENCE=lalinference-1.10.2
-LALPULSAR=lalpulsar-1.17.1
-LALINSPIRAL=lalinspiral-1.8.1
-LALBURST=lalburst-1.5.1
-LALSIMULATION=lalsimulation-1.8.2
-LALMETAIO=lalmetaio-1.5.0
-LALFRAME=lalframe-1.4.4
-LAL=lal-6.19.2
-GDS=gds-2.18.14
+LALAPPS=lalapps-6.24.0
+LALINFERENCE=lalinference-1.11.0
+LALPULSAR=lalpulsar-1.18.0
+LALINSPIRAL=lalinspiral-1.9.0
+LALBURST=lalburst-1.5.2
+LALSIMULATION=lalsimulation-1.9.0
+LALMETAIO=lalmetaio-1.5.1
+LALFRAME=lalframe-1.4.5
+LAL=lal-6.20.1
+GDS=gds-2.18.17
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.6.5
 LDASTOOLSAL=ldas-tools-al-2.6.2
 SWIG=swig-3.0.7
@@ -340,7 +340,6 @@ $(GSTLAL_TARGET) : $(LIGOSCALD_TARGET)
 # ligo-scald
 ligo-scald : $(LOGS_DIR)/ligo-scald.txt
 
-#$(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/ligo-segments.txt $(LIGOSCALD_TARGET)
 $(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/kafka-python.txt $(LIGOSCALD_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
