@@ -129,8 +129,11 @@ class PipelineHandler(simplehandler.Handler):
 			instrument = elem.get_property("name")
 			# extract segment.  move the segment's upper
 			# boundary to include all triggers.
-			buf_timestamp = LIGOTimeGPS(0, buf.pts)
-			buf_seg = {instrument: segments.segmentlist([segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))])}
+			if buf.mini_object.flags & Gst.BufferFlags.GAP:
+				buf_seg = None
+			else:
+				buf_timestamp = LIGOTimeGPS(0, buf.pts)
+				buf_seg = {instrument: segments.segmentlist([segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))])}
 			if events:
 				buf_seg[instrument] |= segments.segmentlist([segments.segment(buf_timestamp, max(event.peak for event in events if event.ifo == instrument))])
 			# obtain union of this segment and the previously added segments
@@ -368,6 +371,8 @@ search_summary = lsctables.SearchSummary()
 search_summary.process_id = process.process_id
 if options.user_tag:
 	search_summary.comment = options.user_tag
+else:
+	search_summary.comment = "None"
 search_summary.ifos = ",".join(all_ifos)
 search_summary.out_start = search_summary.in_start = LIGOTimeGPS(options.gps_start_time)
 search_summary.out_end = search_summary.in_end = LIGOTimeGPS(options.gps_end_time)
