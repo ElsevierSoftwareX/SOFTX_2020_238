@@ -91,7 +91,7 @@ TYPICAL_HORIZON_DISTANCE = 150.
 
 class LnLRDensity(snglcoinc.LnLRDensity):
 	# range of SNRs covered by this object
-	snr_min = 3.5
+	snr_min = 4.0
 
 	# SNR, \chi^2 binning definition
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
