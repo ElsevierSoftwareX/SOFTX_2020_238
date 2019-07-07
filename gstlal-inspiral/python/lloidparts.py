@@ -82,6 +82,7 @@ from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import pipeio
+from gstlal.stats.inspiral_lr import LnLRDensity
 
 
 #
@@ -690,12 +691,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 		# needed
 		#snr = pipeparts.mktee(pipeline, snr)
 		if chisq_type == 'autochisq':
-			# FIXME don't hardcode
-			# peak finding window (n) in samples is 1/4 second at max rate, ie max(rates) / 4
-			# NOTE the snr min set in the diststats file is 3.5,
-			# but 4 is about the lowest we can do stably for
+			# 4 is about the lowest we can do stably for
 			# coincidence online...
-			#nsamps_window = max(max(bank.get_rates()) / 4, 256) # FIXME stupid hack
+			# FIXME get this to work some day
+			#nsamps_window = max(bank.get_rates()) / 4
 			nsamps_window = 1 * max(bank.get_rates())
 			if bank.bank_id not in itacac_dict:
 				itacac_dict[bank.bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
@@ -703,11 +702,11 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 			head = itacac_dict[bank.bank_id]
 			pad = head.get_request_pad("sink%d" % len(head.sinkpads))
 			if instrument == 'H1' or instrument == 'L1':
-				for prop, val in [("n", nsamps_window), ("snr-thresh", 4.0), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
 					pad.set_property(prop, val)
 				snr.srcpads[0].link(pad)
 			else:
-				for prop, val in [("n", nsamps_window), ("snr-thresh", 4.0), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
 					pad.set_property(prop, val)
 				snr.srcpads[0].link(pad)
 		else:
