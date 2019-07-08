@@ -865,7 +865,7 @@ class SNRPDF(object):
 	def load(cls, fileobj = None, verbose = False):
 		if fileobj is None:
 			fileobj = open(cls.DEFAULT_FILENAME)
-		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler)[0])
+		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler))
 
 
 #
