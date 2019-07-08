@@ -30,6 +30,7 @@ parser.add_argument('--psd-xml', help = 'XML containing HLV psd')
 parser.add_argument('--H-snr', type = float, help = 'H characteristic SNR')
 parser.add_argument('--L-snr', type = float, help = 'L characteristic SNR')
 parser.add_argument('--V-snr', type = float, help = 'V characteristic SNR')
+parser.add_argument('--K-snr', type = float, help = 'K characteristic SNR')
 parser.add_argument('--m1', type = float, default = 1.4, help = 'primary component mass')
 parser.add_argument('--m2', type = float, default = 1.4, help = 'secondary component mass')
 parser.add_argument('--s1', type = float, default = 0., help = 'primary (z) spin')
@@ -43,7 +44,7 @@ if args.flow >= args.fhigh:
 	raise ValueError("flow cannot be greater than fhigh")
 
 refpsd = args.psd_xml
-rho = {"L1": args.L_snr, "H1": args.H_snr, "V1": args.V_snr}
+rho = {"L1": args.L_snr, "H1": args.H_snr, "V1": args.V_snr, "K1": args.K_snr}
 
 
 psd = series.read_psd_xmldoc(ligolw_utils.load_filename(refpsd, verbose = True, contenthandler = series.PSDContentHandler))
@@ -73,21 +74,24 @@ transtt = {}
 transpp = {}
 transtp = {}
 transpt = {}
+transdd = {}
 # FIXME do an actual calculation
-transdd = {frozenset(("H1", "L1")): 1. / numpy.sqrt(sigsqdd["H1"] + sigsqdd["L1"])  , frozenset(("H1", "V1")): 1. / numpy.sqrt(sigsqdd["H1"] + sigsqdd["V1"]), frozenset(("L1", "V1")): 1. / numpy.sqrt(sigsqdd["L1"] + sigsqdd["V1"])}
+# transdd = {frozenset(("H1", "L1")): 1. / numpy.sqrt(sigsqdd["H1"] + sigsqdd["L1"])  , frozenset(("H1", "V1")): 1. / numpy.sqrt(sigsqdd["H1"] + sigsqdd["V1"]), frozenset(("L1", "V1")): 1. / numpy.sqrt(sigsqdd["L1"] + sigsqdd["V1"])}
+# transdd = {frozenset(instrument_pair) : 1. / numpy.sqrt(sigsqdd[instrument_pair[0]] + sigsqdd[instrument_pair[1]]) for instrument_pair in TimePhaseSNR.instument_pairs(("H1", "L1", "V1", "K1"))}
 
-for combo in itertools.combinations(("H1", "L1", "V1"), 2):
-	a,b = combo
+for pair in TimePhaseSNR.instument_pairs(("H1", "L1", "V1", "K1")):
+	a,b = pair
 	m11 = sigsqtt[a] + sigsqtt[b]
 	m22 = sigsqpp[a] + sigsqpp[b]
 	m12 = m21 = sigsqtp[a] + sigsqtp[b]
 	mat = numpy.array([[m11, m12], [m21, m22]])
 	matinv = numpy.linalg.inv(mat)
 	cholesky_transpose = numpy.linalg.cholesky(matinv).T
-	transtt[frozenset(combo)] = cholesky_transpose[0,0]
-	transtp[frozenset(combo)] = cholesky_transpose[0,1]
-	transpt[frozenset(combo)] = cholesky_transpose[1,0]
-	transpp[frozenset(combo)] = cholesky_transpose[1,1]
+	transtt[frozenset(pair)] = cholesky_transpose[0,0]
+	transtp[frozenset(pair)] = cholesky_transpose[0,1]
+	transpt[frozenset(pair)] = cholesky_transpose[1,0]
+	transpp[frozenset(pair)] = cholesky_transpose[1,1]
+	transdd[frozenset(pair)] = 1. / numpy.sqrt(sigsqdd[a] + sigsqdd[b])
 
 f = h5py.File(args.output, "w")
 h5_transtt = f.create_group("transtt")
@@ -99,7 +103,7 @@ for group, mat in zip((h5_transtt, h5_transtp, h5_transpt, h5_transpp, h5_transd
 	for k,v in mat.items():
 		group.create_dataset(",".join(sorted(k)), data = float(v))
 
-combos = TimePhaseSNR.instrument_combos(("H1","L1","V1")) + (("H1",),("L1",),("V1",))
+combos = TimePhaseSNR.instrument_combos(("H1","L1","V1", "K1")) + (("H1",),("L1",),("V1",), ("K1",))
 norm = dict((frozenset(k), 0.) for k in combos)
 norm = {}
 h5_norm = f.create_group("norm")
