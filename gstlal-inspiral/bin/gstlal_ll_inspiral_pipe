@@ -202,6 +202,7 @@ def parse_command_line():
 	parser.add_option("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
 	parser.add_option("--enable-auth", action = "store_true", default=False, help = "If set, enables authentication for the influx aggregator.")
 	parser.add_option("--enable-https", action = "store_true", default=False, help = "If set, enables HTTPS connections for the influx aggregator.")
+	parser.add_option("--FAR-trialsfactor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb")
 
 	options, filenames = parser.parse_args()
 
@@ -433,6 +434,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		"gracedb-service-url":options.gracedb_service_url,
 		"job-tag":jobTags[-1],
 		"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
+		"FAR-trialsfactor":options.FAR_trialsfactor,
 		"min-instruments":options.min_instruments,
 		"time-slide-file":options.time_slide_file,
 		"output-kafka-server": options.output_kafka_server
@@ -495,6 +497,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"gracedb-service-url":options.inj_gracedb_service_url,
 			"job-tag":inj_jobTags[-1],
 			"likelihood-snapshot-interval":options.likelihood_snapshot_interval,
+			"FAR-trialsfactor":options.FAR_trialsfactor,
 			"min-instruments":options.min_instruments,
 			"time-slide-file":options.time_slide_file
 			}
