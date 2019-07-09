@@ -255,7 +255,7 @@ class StreamThinca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = False):
+	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = False, FAR_trialsfactor = 1.0):
 		# NOTE:  rankingstat is not used to compute the ranking
 		# statistic, it supplies the detector livetime segment
 		# lists to determine which triggers are eligible for
@@ -334,8 +334,9 @@ class StreamThinca(object):
 						# FIXME:  add proper columns to
 						# store these values in
 						coinc_inspiral.combined_far = fapfar.far_from_rank(coinc.likelihood)
-						if len(events) == 1 and cap_singles and coinc_inspiral.combined_far < 1. / fapfar.livetime:
+						if len(events) == 1 and cap_singles and FAR_trialsfactor and coinc_inspiral.combined_far < 1. / fapfar.livetime:
 							coinc_inspiral.combined_far = 1. / fapfar.livetime
+							coinc_inspiral.combined_far = FAR_trialsfactor * coinc_inspiral.combined_far
 						coinc_inspiral.false_alarm_rate = fapfar.fap_from_rank(coinc.likelihood)
 				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
 					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
