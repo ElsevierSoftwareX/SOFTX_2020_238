@@ -115,8 +115,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	GSTLALLatency *element = GSTLAL_LATENCY(trans);
 	gboolean silent = element->silent;
 
-	GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
-
 	GstDateTime *current_gst_time = gst_date_time_new_now_utc();
 	gchar *current_utc_time = gst_date_time_to_iso8601_string(current_gst_time);
 
