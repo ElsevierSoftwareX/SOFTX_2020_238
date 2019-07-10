@@ -129,8 +129,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		pass
 
 	# network SNR threshold
-	# now clustering is enabled
-	network_snrsq_threshold = 0
+	network_snrsq_threshold = 49.0
 
 	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), population_model_file = None, min_instruments = 1, delta_t = 0.005, horizon_factors = None):
 		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, population_model_file = population_model_file, min_instruments = min_instruments, horizon_factors = horizon_factors)
