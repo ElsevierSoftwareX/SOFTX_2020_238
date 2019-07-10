@@ -335,10 +335,9 @@ class StreamThinca(object):
 					if fapfar is not None:
 						# FIXME:  add proper columns to
 						# store these values in
-						coinc_inspiral.combined_far = fapfar.far_from_rank(coinc.likelihood)
-						if len(events) == 1 and cap_singles and FAR_trialsfactor and coinc_inspiral.combined_far < 1. / fapfar.livetime:
-							coinc_inspiral.combined_far = 1. / fapfar.livetime
-							coinc_inspiral.combined_far = FAR_trialsfactor * coinc_inspiral.combined_far
+						coinc_inspiral.combined_far = fapfar.far_from_rank(coinc.likelihood) * FAR_trialsfactor
+						if len(events) == 1 and cap_singles and coinc_inspiral.combined_far < 1. / fapfar.livetime:
+							coinc_inspiral.combined_far = 1. / fapfar.livetime	
 						coinc_inspiral.false_alarm_rate = fapfar.fap_from_rank(coinc.likelihood)
 				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
 					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
