@@ -73,8 +73,8 @@ prob = {}
 mchirps = {}
 
 ligo_min = 3
-ligo_max = 40
-ligo_peak = 40
+ligo_max = 50
+ligo_peak = 50
 ligo_alpha = -1.5
 ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
@@ -138,7 +138,7 @@ for row in sngl_inspiral_table:
 		# Combined
 		#
 
-		# make intrinsic BNS rate 10 times higher (it is actually probably 20 times higher)
+		# make intrinsic BNS rate 7 times higher (it is actually probably 20 times higher)
 		bns_rate = 7.
 		bbh_rate = 1.
 		# FIXME if the noise is ever normalized over mass then we would need the following, but it isn't
