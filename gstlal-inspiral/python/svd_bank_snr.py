@@ -40,12 +40,15 @@ class SNRContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
 class SNR_Pipeline(object):
-	def __init__(self, name = "gstlal_inspiral_SNR", verbose = False):
+	def __init__(self, row_number, start, end, name = "gstlal_inspiral_SNR", verbose = False):
 		self.pipeline = Gst.Pipeline(name = name)
 		self.mainloop = GObject.MainLoop()
 		self.handler = simplehandler.Handler(self.mainloop, self.pipeline)
 		self.verbose = verbose
 		self.lock = threading.Lock()
+                self.row_number = row_number
+                self.start = start
+                self.end = end
 		self.snr_info = {
 			"epoch": None,
 			"instrument": None,
@@ -76,68 +79,43 @@ class SNR_Pipeline(object):
 			raise RuntimeError("pipeline could not be set to NULL.")
 
 	def make_series(self, data):
-		if data.dtype == numpy.float32:
-			tseries = lal.CreateREAL4TimeSeries(
-					name = self.snr_info["instrument"],
-					epoch = self.snr_info["epoch"],
-					deltaT = self.snr_info["deltaT"],
-					f0 = 0,
-					sampleUnits = lal.DimensionlessUnit,
-					length = len(data)
-					)
-			tseries.data.data = data
-		elif data.dtype == numpy.float64:
-			tseries = lal.CreateREAL8TimeSeries(
-					name = self.snr_info["instrument"],
-					epoch = self.snr_info["epoch"],
-					deltaT = self.snr_info["deltaT"],
-					f0 = 0,
-					sampleUnits = lal.DimensionlessUnit,
-					length = len(data)
-					)
-			tseries.data.data = data
-		elif data.dtype == numpy.complex64:
-			tseries = lal.CreateCOMPLEX8TimeSeries(
-					name = self.snr_info["instrument"],
-					epoch = self.snr_info["epoch"],
-					deltaT = self.snr_info["deltaT"],
-					f0 = 0,
-					sampleUnits = lal.DimensionlessUnit,
-					length = len(data)
-					)
-			tseries.data.data = data
-		elif data.dtype == numpy.complex128:
-			tseries = lal.CreateCOMPLEX16TimeSeries(
-					name = self.snr_info["instrument"],
-					epoch = self.snr_info["epoch"],
-					deltaT = self.snr_info["deltaT"],
-					f0 = 0,
-					sampleUnits = lal.DimensionlessUnit,
-					length = len(data)
-					)
-			tseries.data.data = data
+                para = {"name" : self.snr_info["instrument"],
+                        "epoch" : self.snr_info["epoch"],
+                        "deltaT" : self.snr_info["deltaT"],
+                        "f0": 0,
+                        "sampleUnits" : lal.DimensionlessUnit,
+                        "length" : len(data)}
 
+		if data.dtype == numpy.float32:
+			tseries = lal.CreateREAL4TimeSeries(**para)
+		elif data.dtype == numpy.float64:
+			tseries = lal.CreateREAL8TimeSeries(**para)
+		elif data.dtype == numpy.complex64:
+			tseries = lal.CreateCOMPLEX8TimeSeries(**para)
+		elif data.dtype == numpy.complex128:
+			tseries = lal.CreateCOMPLEX16TimeSeries(**para)
 		else:
 			raise ValueError("unsupported type : %s " % data.dtype)
 
+		tseries.data.data = data
 		return tseries
 
-	def get_snr_series(self, COMPLEX = False, row_number = None, start = None, end = None):
+	def get_snr_series(self, COMPLEX = False):
 		gps_start = self.snr_info["epoch"].gpsSeconds + self.snr_info["epoch"].gpsNanoSeconds * 10.**-9
 		gps = gps_start + numpy.arange(len(self.snr_info["data"])) * self.snr_info["deltaT"]
-		if start and end:
-			if start >= end:
+		if self.start and self.end:
+			if self.start >= self.end:
 				raise ValueError("Start time must be less than end time.")
 
-			if start - gps[0] >= 0 and start - gps[-1] <= 0:
-				s = abs(gps - start).argmin()
+			if self.start - gps[0] >= 0 and self.start - gps[-1] <= 0:
+				s = abs(gps - self.start).argmin()
 			else:
-				raise ValueError("Invalid choice of start time %f." % start)
+				raise ValueError("Invalid choice of start time %f." % self.start)
 
-			if end - gps[0] >= 0 and end - gps[-1] <= 0:
-				e = abs(gps - end).argmin()
+			if self.end - gps[0] >= 0 and self.end - gps[-1] <= 0:
+				e = abs(gps - self.end).argmin()
 			else:
-				raise ValueError("Invalid choice of end time %f." % end)
+				raise ValueError("Invalid choice of end time %f." % self.end)
 
 			self.snr_info["epoch"] = gps[s]
 			self.snr_info["data"] = self.snr_info["data"][s:e].T
@@ -145,7 +123,7 @@ class SNR_Pipeline(object):
 			self.snr_info["epoch"] = gps[0]
 			self.snr_info["data"] = self.snr_info["data"].T
 
-		if row_number is None:
+		if self.row_number is None:
 			temp = []
 			if COMPLEX:
 				for data in self.snr_info["data"]:
@@ -156,7 +134,7 @@ class SNR_Pipeline(object):
 					temp.append(self.make_series(numpy.abs(data)))
 				return temp
 		else:
-			self.snr_info["data"] = self.snr_info["data"][row_number]
+			self.snr_info["data"] = self.snr_info["data"][self.row_number]
 			if COMPLEX:
 				return [self.make_series(self.snr_info["data"])]
 			else:
@@ -184,22 +162,27 @@ class SNR_Pipeline(object):
 			else:
 				assert self.snr_info["deltaT"] == 1. / rate, "data have different sampling rate."
 
-			# record the first timestamp
-			if self.snr_info["epoch"] is None:
-				self.snr_info["epoch"] = LIGOTimeGPS(0, sample.get_buffer().pts)
+                        buf = sample.get_buffer()
+                        if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
+                                return Gst.FlowReturn.OK
+                        
+                        # drop snrs that are irrelevant
+                        cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts)
+                        if self.start >= cur_time_stamp and self.end > cur_time_stamp:
+                                # record the first timestamp closet to start time
+                                self.snr_info["epoch"] = cur_time_stamp
+                                # FIXME: check timestamps
+                                self.snr_info["data"] = [pipeio.array_from_audio_sample(sample)]
+                        elif self.start <= cur_time_stamp < self.end:
+				self.snr_info["data"].append(pipeio.array_from_audio_sample(sample))
+                        else:
+                                Gst.FlowReturn.OK
 
-			buf = sample.get_buffer()
-			if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
-				return Gst.FlowReturn.OK
-			# FIXME: check timestamps
-			data = pipeio.array_from_audio_sample(sample)
-			if data is not None:
-				self.snr_info["data"].append(data)
 			return Gst.FlowReturn.OK
 
 class LLOID_SNR(SNR_Pipeline):
-	def __init__(self, gw_data_source_info, bank, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, track_psd = False, width = 32, verbose = False):
-		SNR_Pipeline.__init__(self, name = "gstlal_inspiral_lloid_snr", verbose = verbose)
+	def __init__(self, gw_data_source_info, bank, instrument, row_number, start, end, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, track_psd = False, width = 32, verbose = False):
+		SNR_Pipeline.__init__(self, row_number, start, end, name = "gstlal_inspiral_lloid_snr", verbose = verbose)
 		self.snr_info["instrument"] = instrument
 
 		# sanity check
@@ -250,12 +233,12 @@ class LLOID_SNR(SNR_Pipeline):
 		self.run(gw_data_source_info.seg)
                 self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
 
-	def __call__(self, COMPLEX = False, row_number = 0, start = None, end = None):
-		return self.get_snr_series(COMPLEX, row_number, start, end)
+	def __call__(self, COMPLEX = False):
+		return self.get_snr_series(COMPLEX)
 
 class FIR_SNR(SNR_Pipeline):
-	def __init__(self, gw_data_source_info, template, instrument, rate, latency, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, width = 32, track_psd = False, verbose = False):
-		SNR_Pipeline.__init__(self, name = "gstlal_inspiral_fir_snr", verbose = verbose)
+	def __init__(self, gw_data_source_info, template, instrument, rate, latency, start, end,  psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, width = 32, track_psd = False, verbose = False):
+		SNR_Pipeline.__init__(self, 0, start, end, name = "gstlal_inspiral_fir_snr", verbose = verbose)
 		self.snr_info["instrument"] = instrument
 
 		# sanity check
@@ -317,8 +300,8 @@ class FIR_SNR(SNR_Pipeline):
 
 		return template, row[0].end
 
-	def __call__(self, COMPLEX = False, row_number = 0 , start = None, end = None):
-		return self.get_snr_series(COMPLEX, row_number, start, end)
+	def __call__(self, COMPLEX = False):
+		return self.get_snr_series(COMPLEX)
 
 #=============================================================================================
 #

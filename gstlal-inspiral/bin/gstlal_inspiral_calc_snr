@@ -134,11 +134,11 @@ def parse_command_line():
 	#parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
-	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (requires).")
+	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (require).")
 	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
 	group.add_option("--complex", action = "store_true", help = "Choose whether to output the complex snr or not.")
-	group.add_option("--start", metavar = "seconds", type = "int", help = "Start SNR time series at GPS time '--start'.")
-	group.add_option("--end", metavar = "seconds", type = "int", help = "End SNR time series at GPS time '--end'.")
+	group.add_option("--start", metavar = "seconds", type = "int", help = "Start SNR time series at GPS time '--start' (require).")
+	group.add_option("--end", metavar = "seconds", type = "int", help = "End SNR time series at GPS time '--end' (require).")
 	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
 	group.add_option("--instrument", metavar = "name", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
 	parser.add_option_group(group)
@@ -148,7 +148,9 @@ def parse_command_line():
 	options, args = parser.parse_args()
 
 	# Check SNR series output
-	if options.start and options.end:
+	if options.start is None or options.end is None:
+                raise ValueError("Must have --start and --end.")
+        else:
 		if options.start >= options.end:
 			raise ValueError("--start must less than --end.")
 
@@ -237,6 +239,9 @@ if options.mode == 0:
 		gw_data_source_info,
 		bank,
 		options.instrument,
+                options.row_number,
+                options.start,
+                options.end,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
 		track_psd = options.track_psd,
@@ -245,19 +250,19 @@ if options.mode == 0:
 	)
 
 	if options.row_number is None:
-		for index, snr in enumerate(lloid_snr(COMPLEX = options.complex, row_number = options.row_number, start = options.start, end = options.end)):
+		for index, snr in enumerate(lloid_snr(COMPLEX = options.complex)):
 			snr.epoch += bank.sngl_inspiral_table[index].end
 			snrdict = {options.instrument: [snr]}
 			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR_%d-%d-%d.xml.gz" % (options.instrument, index, int(snr.epoch), int(snr.data.length * snr.deltaT))), verbose = options.verbose)
 	else:
-		lloidsnr = lloid_snr(COMPLEX = options.complex, row_number = options.row_number, start = options.start, end = options.end)
+		lloidsnr = lloid_snr(COMPLEX = options.complex)
 		lloidsnr[0].epoch += bank.sngl_inspiral_table[options.row_number].end
 		snrdict = {options.instrument: lloidsnr}
 		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR_%d-%d-%d.xml.gz" % (options.instrument, options.row_number, int(lloidsnr[0].epoch), int(lloidsnr[0].data.length * lloidsnr[0].deltaT))), verbose = options.verbose)
 	#
 	# uncomment to save all snrs in one single XML
 	#
-	#snrdict = {options.instrument : lloid_snr(COMPLEX = options.complex, row_number = options.row_number, drop_first = options.drop_first, drop_last = options.drop_last)}
+	#snrdict = {options.instrument : lloid_snr(COMPLEX = options.complex)}
 	#svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR-%d-%d.xml.gz" % (options.instrument, int(snrdict.[options.instrument][0].epoch), int(snrdict[options.instrument][0].data.length * snrdict[options.instrument][0].deltaT))), verbose = options.verbose)
 
 elif options.mode == 1:
@@ -271,6 +276,8 @@ elif options.mode == 1:
 		options.instrument,
 		options.sample_rate,
 		0,
+                options.start,
+                options.end,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
 		width = options.output_width,
@@ -278,7 +285,7 @@ elif options.mode == 1:
 		verbose = options.verbose
 		)
 
-	firsnr = fir_snr(COMPLEX = options.complex, start = options.start, end = options.end)
+	firsnr = fir_snr(COMPLEX = options.complex)
 	firsnr[0].epoch += time_offset
 	snrdict = {options.instrument : firsnr}
 	svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "%s-SNR-%d-%d.xml.gz" % (options.instrument, int(snrdict[options.instrument][0].epoch), int(snrdict[options.instrument][0].data.length * snrdict[options.instrument][0].deltaT))), verbose = options.verbose)
