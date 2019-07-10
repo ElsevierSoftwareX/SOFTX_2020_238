@@ -47,14 +47,15 @@ parser = argparse.ArgumentParser(description = "Create analytic mass models for 
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, broad-bns, bbh, detected-logm. If you want another one, submit a patch.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, broad-bns, bbh, detected-logm, uniform-template. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
 # Read the template bank file
 xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-if options.model == "detected-logm":
+print options.model
+if options.model in ("detected-logm", "uniform-template"):
 	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.getColumnByName("mass1").asarray(), sngl_inspiral_table.getColumnByName("mass2").asarray())
@@ -104,6 +105,9 @@ for row in sngl_inspiral_table:
 		# FIXME should this be **3 or **2?  The term in LR is here: https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/python/stats/inspiral_lr.py#L354
 		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
 		prob[row.template_id] = numpy.log(mchirp) / hdist**3
+	elif options.model == "uniform-template":
+		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
+		prob[row.template_id] = 1.0 / hdist**3
 
 	elif options.model == "bbh":
 		#
