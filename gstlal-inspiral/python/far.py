@@ -718,9 +718,9 @@ WHERE
 		noise_counts = self.noise_lr_lnpdf.array.copy()
 
 		# get the zerolag counts.
-		# we model the tail of the distribution - top 1% - where
-		# clustering only effects the result at a 1% level.
-		onepercent = zl_counts.cumsum().searchsorted(zl_counts.sum() * 0.99)
+		# we model the tail of the distribution - top 0.1 - 1% - where
+		# clustering only effects the result at a < 1% level.
+		onepercent = zl_counts.cumsum().searchsorted(zl_counts.sum() - 1000)
 
 		# normalize the counts
 		noise_counts /= noise_counts.sum()
