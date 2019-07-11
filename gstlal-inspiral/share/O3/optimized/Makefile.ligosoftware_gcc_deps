@@ -108,9 +108,9 @@ deps_env.sh :
 	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
 	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
 	@echo 'DEPS_PATH=${PWD}/opt' >> $@
-	@echo 'export LDMKLFLAGS=" -L${MKLROOT}/lib/intel64 -lmkl_rt -lpthread -lm -ldl"' >> $@
-	@echo 'export GCCLDMKLFLAGS=" -L${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl"' >> $@
-	@echo 'export GCCFLAGS="-fPIC -O3 -m64 -I$${MKLROOT}/include -I$${DEPS_PATH}/include"' >> $@
+	@echo 'export LDMKLFLAGS=" -L$${MKLROOT}/lib/intel64 -lmkl_rt -lpthread -limf -ldl"' >> $@
+	@echo 'export GCCLDMKLFLAGS=" -L$${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -limf -ldl"' >> $@
+	@echo 'export GCCFLAGS="-fPIC -O3 -march=native -I$${MKLROOT}/include -I$${DEPS_PATH}/include"' >> $@
 	@echo 'export CFLAGS=$${GCCFLAGS}' >> $@
 	@if [[ ${CLUSTER} == *"ligo.caltech.edu" ]] ; then \
 		echo "source ${ICC_CIT} intel64" >> $@ ; \
@@ -136,7 +136,7 @@ deps_env.sh :
 	@echo 'export MKL_THREADING_LAYER=SEQUENTIAL' >> $@
 	@echo 'export MKL_INTERFACE_LAYER=LP64' >> $@
 	@echo '# Force explicit linking of optimized FFTW libraries:' >> $@
-	@echo 'LDFLAGS="-lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads $${LDFLAGS_INTEL} -L$${DEPS_PATH}/opt/lib "' >> $@
+	@echo 'LDFLAGS="-l:libfftw3.so -l:libfftw3f.so -l:libfftw3_threads.so -l:libfftw3f_threads.so $${LDFLAGS_INTEL} -L$${DEPS_PATH}/opt/lib "' >> $@
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${DEPS_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${DEPS_PATH}/lib/pkgconfig:$${DEPS_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
@@ -206,7 +206,7 @@ logs/ldas-tools-framecpp.txt : $(LOGS_DIR)/ldas-tools-al.txt $(LDASTOOLSFRAMECPP
 $(LDASTOOLSFRAMECPP_TARGET) : $(LDASTOOLSAL_TARGET)
 	@echo $(GREEN)ldas-tools-frmecpp$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen CC="gcc" CXX="g++" CFLAGS="$(GCCFLAGS)" LDFLAGS="$(GCCLDMKLFLAGS)"
+	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen
 	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && make && make install 
 
 # ldas-tools-al
@@ -218,7 +218,7 @@ logs/ldas-tools-al.txt : $(LOGS_DIR)/swig.txt $(LDASTOOLSAL_TARGET)
 $(LDASTOOLSAL_TARGET) : $(SWIG_TARGET)
 	@echo $(GREEN)ldas-tools-al$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(LDASTOOLSAL).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LDASTOOLSAL) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen CC="gcc" CXX="g++" CFLAGS="$(GCCFLAGS)" LDFLAGS="$(GCCLDMKLFLAGS)"
+	cd $(SRC_DIR)/$(LDASTOOLSAL) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen
 	cd $(SRC_DIR)/$(LDASTOOLSAL) && make -j$(CORES) && make install -j$(CORES)
 
 # swig
