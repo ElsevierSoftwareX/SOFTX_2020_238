@@ -33,14 +33,11 @@ GLUE_REPO:=${PWD}/git/glue
 LALSUITE_REPO:=${PWD}/git/lalsuite
 
 # Set the dependency directory:
-DEPS_DIR:=/path/to/deps/dir
+DEPS_DIR:=/ligo/home/ligo.org/alexander.pace/builds/O3/gcc_split_deps_190703/deps
 
 # Set to build from git (0 = tarball, 1 = git)
-GSTLAL_GIT=1
-LIGOSCALD_GIT=1
-LIGOSEGMENTS_GIT=0
-PYTHONLIGOLW_GIT=0
-GLUE_GIT=0
+GSTLAL_GIT=0
+LIGOSCALD_GIT=0
 LALSUITE_GIT=0
 
 # Define which branch from git to build. Defaults to 'master', but the user can
@@ -49,30 +46,26 @@ LALSUITE_GIT=0
 #
 GSTLAL_GIT_BRANCH="master"
 LIGOSCALD_GIT_BRANCH="master"
-LIGOSEGMENTS_GIT_BRANCH="master"
-PYTHONLIGOLW_GIT_BRANCH="master"
-GLUE_GIT_BRANCH="master"
 LALSUITE_GIT_BRANCH="master"
 
 # Set package release versions
-GSTLALINSPIRAL=gstlal-inspiral-1.5.1
-GSTLALCALIBRATION=gstlal-calibration-1.2.1
-GSTLALBURST=gstlal-burst-0.0.5
-GSTLALUGLY=gstlal-ugly-1.5.5
-GSTLAL=gstlal-1.4.1
-LIGOSCALD=ligo-scald-0.1.0
-LIGOSEGMENTS=ligo-segments-1.1.1
-PYTHONLIGOLW=python-ligo-lw-1.4.0
-GLUE=lscsoft-glue-1.60.0
-LALAPPS=lalapps-6.22.0
-LALINFERENCE=lalinference-1.10.0
-LALPULSAR=lalpulsar-1.17.0
-LALINSPIRAL=lalinspiral-1.8.0
-LALBURST=lalburst-1.5.0
-LALSIMULATION=lalsimulation-1.8.0
-LALMETAIO=lalmetaio-1.4.0
-LALFRAME=lalframe-1.4.4
-LAL=lal-6.19.0
+GSTLALINSPIRAL=gstlal-inspiral-1.6.5
+GSTLALCALIBRATION=gstlal-calibration-1.2.10
+GSTLALBURST=gstlal-burst-0.1.1
+GSTLALUGLY=gstlal-ugly-1.6.4
+GSTLAL=gstlal-1.5.0
+LIGOSCALD=ligo-scald-0.4.1
+KAFKA_PYTHON=0.11.5
+LIBRDKAFKA=0.11.5
+LALAPPS=lalapps-6.24.0
+LALINFERENCE=lalinference-1.11.0
+LALPULSAR=lalpulsar-1.18.0
+LALINSPIRAL=lalinspiral-1.9.0
+LALBURST=lalburst-1.5.2
+LALSIMULATION=lalsimulation-1.9.0
+LALMETAIO=lalmetaio-1.5.1
+LALFRAME=lalframe-1.4.5
+LAL=lal-6.20.1
 
 # Specify target/dependency files
 GSTINSPIRAL_TARGET=$(INSTALL_DIR)/lib/libgstlalinspiral.so
@@ -81,9 +74,8 @@ GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
 LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/ligo_scald-0.1.0-py2.7.egg
-LIGOSEGMENTS_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/ligo_segments-1.1.1-py2.7-linux-x86_64.egg
-PYTHONLIGOLW_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/python_ligo_lw-1.4.0-py2.7.egg-info
-GLUE_TARGET=$(INSTALL_DIR)/bin/dmtdq_seg_insert
+KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg
+LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
 LALINFER_TARGET=$(INSTALL_DIR)/lib/liblalinference.so
 LALPULSAR_TARGET=$(INSTALL_DIR)/lib/liblalpulsar.so
@@ -101,9 +93,8 @@ GSTLALBURST_TAR_TARGET=$(TAR_DIR)/$(GSTLALBURST).tar.gz
 GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
 GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
 LIGOSCALD_TAR_TARGET=$(TAR_DIR)/$(LIGOSCALD).tar.gz
-LIGOSEGMENTS_TAR_TARGET=$(TAR_DIR)/$(LIGOSEGMENTS).tar.gz
-PYTHONLIGOLW_TAR_TARGET=$(TAR_DIR)/$(PYTHONLIGOLW).tar.gz
-GLUE_TAR_TARGET=$(TAR_DIR)/$(GLUE).tar.gz
+KAFKA_PYTHON_TAR_TARGET=$(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz
+LIBRDKAFKA_TAR_TARGET=$(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz
 LALAPPS_TAR_TARGET=$(TAR_DIR)/$(LALAPPS).tar.xz
 LALINFER_TAR_TARGET=$(TAR_DIR)/$(LALINFERENCE).tar.xz
 LALPULSAR_TAR_TARGET=$(TAR_DIR)/$(LALPULSAR).tar.xz
@@ -117,9 +108,6 @@ LAL_TAR_TARGET=$(TAR_DIR)/$(LAL).tar.xz
 # git repos
 GSTLAL_GIT_TARGET=$(GSTLAL_REPO)/TODO.md
 LIGOSCALD_GIT_TARGET=$(LIGOSCALD_REPO)/README.md
-LIGOSEGMENTS_GIT_TARGET=$(LIGOSEGMENTS_REPO)/README.rst
-PYTHONLIGOLW_GIT_TARGET=$(PYTHONLIGOLW_REPO)/MANIFEST.in
-GLUE_GIT_TARGET=$(GLUE_REPO)/README
 LALSUITE_GIT_TARGET=$(LALSUITE_REPO)/lal/README
 
 # Specify how many processors to run on
@@ -195,11 +183,11 @@ $(GSTINSPIRAL_TARGET) : $(GSTLALCALIB_TARGET)
 	@echo $(GREEN)gstlal-inspiral$(WHITE) 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal-inspiral && echo | ./00init.sh ; \
-		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --disable-massmodel --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xzkf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --disable-massmodel --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -258,11 +246,12 @@ $(GSTLAL_TARGET) : $(LIGOSCALD_TARGET)
 # ligo-scald
 ligo-scald : $(LOGS_DIR)/ligo-scald.txt
 
-$(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/ligo-segments.txt $(LIGOSCALD_TARGET)
+$(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/kafka-python.txt $(LIGOSCALD_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(LIGOSCALD_TARGET) : $(LIGOSEGMENTS_TARGET)
+$(LIGOSCALD_TARGET) : $(KAFKA_PYTHON_TARGET)
 	@echo $(GREEN)ligo-scald$(WHITE) 1>&2
+	mkdir -p $(INSTALL_DIR)/lib/python2.7/site-packages
 	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
 		cd $(LIGOSCALD_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	else \
@@ -270,50 +259,28 @@ $(LIGOSCALD_TARGET) : $(LIGOSEGMENTS_TARGET)
 		cd $(SRC_DIR)/$(LIGOSCALD) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	fi ;
 
-# ligo-segments
-ligo-segments : $(LOGS_DIR)/ligo-segments.txt
+# confluent-kafka-python
+kafka-python : $(LOGS_DIR)/kafka-python.txt
 
-$(LOGS_DIR)/ligo-segments.txt : $(LOGS_DIR)/python-ligo-lw.txt $(LIGOSEGMENTS_TARGET)
+$(LOGS_DIR)/kafka-python.txt : $(LOGS_DIR)/librdkafka.txt $(KAFKA_PYTHON_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(LIGOSEGMENTS_TARGET) : $(PYTHONLIGOLW_TARGET)
-	@echo $(GREEN)ligo-segments$(WHITE) 1>&2
-	if [ "${LIGOSEGMENTS_GIT}" = "1" ]; then \
-		cd $(LIGOSEGMENTS_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
-	else \
-		tar -xzf $(TAR_DIR)/$(LIGOSEGMENTS).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(LIGOSEGMENTS) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
-	fi ;
+$(KAFKA_PYTHON_TARGET) : $(LIBRDKAFKA_TARGET)
+	@echo $(GREEN)kafka-python$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -C $(SRC_DIR) ; \
+	cd $(SRC_DIR)/confluent-kafka-python-$(KAFKA_PYTHON) &&  python setup.py install --prefix=$(INSTALL_DIR) ; \
 
-# python-ligo-lw
-python-ligo-lw : $(LOGS_DIR)/python-ligo-lw.txt
+# librdkafka
+librdkafka : $(LOGS_DIR)/librdkafka.txt
 
-$(LOGS_DIR)/python-ligo-lw.txt : $(LOGS_DIR)/glue.txt $(PYTHONLIGOLW_TARGET)
+$(LOGS_DIR)/librdkafka.txt : $(LOGS_DIR)/lalsuite.txt $(LIBRDKAFKA_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(PYTHONLIGOLW_TARGET) : $(GLUE_TARGET)
-	@echo $(GREEN)python-ligo-lw$(WHITE) 1>&2
-	if [ "${PYTHONLIGOLW_GIT}" = "1" ]; then \
-		cd $(PYTHONLIGOLW_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
-	else \
-		tar -xzf $(TAR_DIR)/$(PYTHONLIGOLW).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(PYTHONLIGOLW) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
-	fi ;
-
-# glue
-glue : $(LOGS_DIR)/glue.txt
-
-$(LOGS_DIR)/glue.txt : $(LOGS_DIR)/lalsuite.txt $(GLUE_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(GLUE_TARGET) : $(LALAPPS_TARGET)
-	@echo $(GREEN)glue$(WHITE) 1>&2
-	if [ "${GLUE_GIT}" = "1" ]; then \
-		cd $(GLUE_REPO) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
-	else \
-		tar -xzf $(TAR_DIR)/$(GLUE).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(GLUE) && CFLAGS="${GCCFLAGS}" python setup.py install --prefix=$(INSTALL_DIR) ; \
-	fi ;
+$(LIBRDKAFKA_TARGET) : $(LALAPPS_TARGET)
+	@echo $(GREEN)librdkafka$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -C $(SRC_DIR) ; \
+	cd $(SRC_DIR)/librdkafka-$(LIBRDKAFKA) && ./configure --prefix=$(INSTALL_DIR) ; \
+	cd $(SRC_DIR)/librdkafka-$(LIBRDKAFKA) && make -j$(CORES) && make install -j$(CORES) ; \
 
 # lalsuite
 lalsuite : $(LOGS_DIR)/lalsuite.txt
@@ -467,13 +434,17 @@ $(LAL_TARGET) : $(LOGS_DIR)/patch.txt
 # patches
 patch : $(LOGS_DIR)/patch.txt
 
-$(LOGS_DIR)/patch.txt : $(LOGS_DIR) $(PATCH_DIR)/gst1.14.patch
+$(LOGS_DIR)/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
-$(PATCH_DIR)/gst1.14.patch : $(LOGS_DIR)
-	@echo $(GREEN)patches$(WHITE) 1>&2
-	cp $(GSTLAL_REPO)/gstlal-inspiral/share/O3/optimized/gst1.14.patch $(PATCH_DIR)
-	cd $(GSTLAL_REPO) && patch -p1 < $(PATCH_DIR)/gst1.14.patch
+$(LOGS_DIR)/tar.txt : $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(KAFKA_PYTHON_TAR_TARGET) : $(LIBRDKAFKA_TAR_TARGET)
+	wget --no-check-certificate https://github.com/confluentinc/confluent-kafka-python/archive/v$(KAFKA_PYTHON).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -nc
+
+$(LIBRDKAFKA_TAR_TARGET) : $(LOGS_DIR)
+	wget --no-check-certificate https://github.com/edenhill/librdkafka/archive/v$(LIBRDKAFKA).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -nc
 
 # git repos
 $(LOGS_DIR) :
@@ -508,36 +479,6 @@ $(LOGS_DIR) :
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSTOCHASTIC).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 	fi ;
-	if [ "${GLUE_GIT}" = "1" ]; then \
-		if [ -f $@ ] ; then \
-			echo "Glue git repo exists" ; \
-		else \
-			mkdir -p $(GLUE_REPO) ; \
-			git clone -b $(GLUE_GIT_BRANCH) https://git.ligo.org/lscsoft/glue.git $(GLUE_REPO) ; \
-		fi ; \
-	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GLUE).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-	fi ;
-	if [ "${PYTHONLIGOLW_GIT}" = "1" ]; then \
-		if [ -f $@ ] ; then \
-			echo "Python-ligo-lw git repo exists" ; \
-		else \
-			mkdir -p $(PYTHONLIGOLW_REPO) ; \
-			git clone -b $(PYTHONLIGOLW_GIT_BRANCH) https://git.ligo.org/kipp.cannon/python-ligo-lw.git $(PYTHONLIGOLW_REPO) ; \
-		fi ; \
-	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(PYTHONLIGOLW).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-	fi ;
-	if [ "${LIGOSEGMENTS_GIT}" = "1" ]; then \
-		if [ -f $@ ] ; then \
-			echo "Ligo-segments git repo exists" ; \
-		else \
-			mkdir -p $(LIGOSEGMENTS_REPO) ; \
-			git clone -b $(LIGOSEGMENTS_GIT_BRANCH) https://git.ligo.org/lscsoft/ligo-segments.git $(LIGOSEGMENTS_REPO) ; \
-		fi ; \
-	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LIGOSEGMENTS).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-	fi ;
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
 			echo "Gstlal git repo exists" ; \
@@ -553,6 +494,7 @@ $(LOGS_DIR) :
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
 	fi ;
 	mkdir -p $(LOGS_DIR)
+
 
 ############
 # Clean up #
