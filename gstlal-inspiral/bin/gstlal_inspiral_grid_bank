@@ -17,8 +17,6 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
-### A program to create some prior likelihood data to seed an offline analysis
-
 #
 # =============================================================================
 #
@@ -34,6 +32,7 @@ import scipy
 from scipy.stats import logistic
 
 from lal import series
+from lal import MSUN_SI
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
@@ -41,7 +40,8 @@ from ligo.lw import array as ligolw_array
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
-
+from lalinspiral.sbank.waveforms import SnglInspiralTable
+from lalsimulation import SimIMRSEOBNRv4ROMTimeOfFrequency as lalsim_chirptime
 
 from gstlal import far
 from gstlal import svd_bank
@@ -65,6 +65,8 @@ __date__ = ""	# FIXME
 #
 # =============================================================================
 #
+
+
 
 def chispace(start, stop, numpoints):
 	x = numpy.linspace(0., 5.5, numpoints)
@@ -110,6 +112,7 @@ m1s = []
 m2s = []
 s1s = []
 s2s = []
+durs = []
 for m1 in numpy.logspace(numpy.log10(m1start), numpy.log10(m1stop), m1num):
 	for m2 in numpy.logspace(numpy.log10(m2start), numpy.log10(m2stop), m2num):
 		for chi in chispace(chistart, chistop, s1num):
@@ -125,18 +128,21 @@ for m1 in numpy.logspace(numpy.log10(m1start), numpy.log10(m1stop), m1num):
 				bw = templates.bandwidth(m1, m2, s1, s2, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd[ifo])
 				if bw < options.bandwidth_min:
 					continue
+			dur = lalsim_chirptime(10.0, MSUN_SI*m1, MSUN_SI*m2, s1, s2)
 			numtmps += 1
 			m1s.append(m1)
 			m2s.append(m2)
 			s1s.append(s1)
 			s2s.append(s2)
+			durs.append(dur)
 			print m1, m2, s1, s2, numtmps
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
 xmldoc.appendChild(ligolw.LIGO_LW())
-sngl_inspiral_columns = ("process:process_id", "mass1", "mass2", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "mchirp")
-tbl = lsctables.New(lsctables.SnglInspiralTable, columns = sngl_inspiral_columns)
+#sngl_inspiral_columns = ("process:process_id", "mass1", "mass2", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "mchirp")
+lsctables.SnglInspiralTable.RowType = SnglInspiralTable
+tbl = lsctables.New(lsctables.SnglInspiralTable)
 xmldoc.childNodes[-1].appendChild(tbl)
 # FIXME make a real process table
 process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
@@ -145,9 +151,9 @@ ligolw_process.set_process_end_time(process)
 if options.verbose:
 	print >> sys.stderr, "Writing output document"
 
-for n, (m1, m2, s1, s2) in enumerate(zip(m1s, m2s, s1s, s2s)):
-	row = lsctables.SnglInspiralTable.RowType()
-	row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z, row.mchirp = (m1, m2, 0., 0., s1, 0., 0., s2, mchirp(m1, m2))
+for n, (m1, m2, s1, s2, dur) in enumerate(zip(m1s, m2s, s1s, s2s, durs)):
+	row = SnglInspiralTable()
+	row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z, row.mchirp, row.template_duration = (m1, m2, 0., 0., s1, 0., 0., s2, mchirp(m1, m2), dur)
 	row.event_id = n
 	row.ifo = "H1" # FIXME
 	row.process_id = process.process_id
@@ -160,6 +166,4 @@ matplotlib.use('agg')
 from matplotlib import pyplot
 pyplot.loglog(m1s, m2s, '*')
 pyplot.savefig("bw.png")
-
-
 
