@@ -73,7 +73,9 @@ GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
-LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/ligo_scald-0.1.0-py2.7.egg
+LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/$(LIGOSCALD)-py2.7.egg
+KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg
+LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
 LALINFER_TARGET=$(INSTALL_DIR)/lib/liblalinference.so
 LALPULSAR_TARGET=$(INSTALL_DIR)/lib/liblalpulsar.so
@@ -91,6 +93,8 @@ GSTLALBURST_TAR_TARGET=$(TAR_DIR)/$(GSTLALBURST).tar.gz
 GSTLALUGLY_TAR_TARGET=$(TAR_DIR)/$(GSTLALUGLY).tar.gz
 GSTLAL_TAR_TARGET=$(TAR_DIR)/$(GSTLAL).tar.gz
 LIGOSCALD_TAR_TARGET=$(TAR_DIR)/$(LIGOSCALD).tar.gz
+KAFKA_PYTHON_TAR_TARGET=$(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz
+LIBRDKAFKA_TAR_TARGET=$(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz
 LALAPPS_TAR_TARGET=$(TAR_DIR)/$(LALAPPS).tar.xz
 LALINFER_TAR_TARGET=$(TAR_DIR)/$(LALINFERENCE).tar.xz
 LALPULSAR_TAR_TARGET=$(TAR_DIR)/$(LALPULSAR).tar.xz
@@ -179,11 +183,11 @@ $(GSTINSPIRAL_TARGET) : $(GSTLALCALIB_TARGET)
 	@echo $(GREEN)gstlal-inspiral$(WHITE) 1>&2
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		cd $(GSTLAL_REPO)/gstlal-inspiral && echo | ./00init.sh ; \
-		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(GSTLAL_REPO)/gstlal-inspiral && ./configure --disable-massmodel --prefix=$(INSTALL_DIR) ; \
 		cd $(GSTLAL_REPO)/gstlal-inspiral && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xzkf $(TAR_DIR)/$(GSTLALINSPIRAL).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && ./configure --disable-massmodel --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(GSTLALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -247,6 +251,7 @@ $(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/kafka-python.txt $(LIGOSCALD_TARGET)
 
 $(LIGOSCALD_TARGET) : $(KAFKA_PYTHON_TARGET)
 	@echo $(GREEN)ligo-scald$(WHITE) 1>&2
+	mkdir -p $(INSTALL_DIR)/lib/python2.7/site-packages
 	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
 		cd $(LIGOSCALD_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
 	else \
@@ -263,7 +268,7 @@ $(LOGS_DIR)/kafka-python.txt : $(LOGS_DIR)/librdkafka.txt $(KAFKA_PYTHON_TARGET)
 $(KAFKA_PYTHON_TARGET) : $(LIBRDKAFKA_TARGET)
 	@echo $(GREEN)kafka-python$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -C $(SRC_DIR) ; \
-	cd $(SRC_DIR)/confluent-kafka-python-$(KAFKA_PYTHON) && CFLAGS="$(CFLAGS)" C_INCLUDE_PATH=$(INSTALL_DIR)/include LIBRARY_PATH=$(INSTALL_DIR)/lib python setup.py install --prefix=$(INSTALL_DIR) ; \
+	cd $(SRC_DIR)/confluent-kafka-python-$(KAFKA_PYTHON) &&  python setup.py install --prefix=$(INSTALL_DIR) ; \
 
 # librdkafka
 librdkafka : $(LOGS_DIR)/librdkafka.txt
@@ -429,8 +434,17 @@ $(LAL_TARGET) : $(LOGS_DIR)/patch.txt
 # patches
 patch : $(LOGS_DIR)/patch.txt
 
-$(LOGS_DIR)/patch.txt : $(LOGS_DIR)
+$(LOGS_DIR)/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(LOGS_DIR)/tar.txt : $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(KAFKA_PYTHON_TAR_TARGET) : $(LIBRDKAFKA_TAR_TARGET)
+	wget --no-check-certificate https://github.com/confluentinc/confluent-kafka-python/archive/v$(KAFKA_PYTHON).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -nc
+
+$(LIBRDKAFKA_TAR_TARGET) : $(LOGS_DIR)
+	wget --no-check-certificate https://github.com/edenhill/librdkafka/archive/v$(LIBRDKAFKA).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -nc
 
 # git repos
 $(LOGS_DIR) :
@@ -480,6 +494,7 @@ $(LOGS_DIR) :
 		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
 	fi ;
 	mkdir -p $(LOGS_DIR)
+
 
 ############
 # Clean up #
