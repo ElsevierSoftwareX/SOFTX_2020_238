@@ -7,6 +7,8 @@ from ligo.lw import utils as ligolw_utils
 from ligo.lw import lsctables
 from ligo.segments import utils as segments_utils
 from lal import rate
+from gstlal.far import FAPFAR
+import json
 
 def p_astro_update(category, event_bayesfac_dict, mean_values_dict):
     """
@@ -293,7 +295,13 @@ def compute_p_astro(event_ln_likelihood_ratio,
                     snr,
                     far,
                     livetime,
-                    mean_values_dict):
+                    rankingstatpdf,
+                    mean_values_dict = {"counts_BNS": 2.11050326523,
+                            "counts_NSBH": 1.56679410666,
+                            "counts_BBH": 9.26042350393,
+                            "counts_MassGap": 2.40800240248,
+                            "counts_Terrestrial": 3923}
+                    ):
     """
     Task to compute `p_astro` by source category.
 
