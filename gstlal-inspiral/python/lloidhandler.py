@@ -1286,8 +1286,8 @@ class Handler(simplehandler.Handler):
 				# empty horizon history
 				pass
 			else:
-				# keep the last day of history
-				endtime -= 86400. * 1
+				# keep the last hour of history
+				endtime -= 3600. * 1
 				for history in rankingstat.numerator.horizon_history.values():
 					del history[:endtime]
 		else:
