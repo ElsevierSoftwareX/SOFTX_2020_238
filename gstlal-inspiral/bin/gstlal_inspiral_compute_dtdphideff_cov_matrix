@@ -49,9 +49,13 @@ rho = {"L1": args.L_snr, "H1": args.H_snr, "V1": args.V_snr, "K1": args.K_snr}
 
 psd = series.read_psd_xmldoc(ligolw_utils.load_filename(refpsd, verbose = True, contenthandler = series.PSDContentHandler))
 psddict = {}
-for ifo in psd:
+for ifo in rho:
+	ifo_psd = ifo
+	# FIXME use Virgo PSD for KAGRA temporarily. This has to be fixed once KAGRA PSD is measured.
+	if rho == "K1":
+		ifo = "V1"
 	f = numpy.arange(len(psd[ifo].data.data)) * psd[ifo].deltaF
-	psddict[ifo] = scipy.interpolate.interp1d(f, psd[ifo].data.data)
+	psddict[ifo_psd] = scipy.interpolate.interp1d(f, psd[ifo].data.data)
 
 def moment(fmin, fmax, n, m1, m2, s1, s2, ifo, psddict = psddict, delta_f = 0.25):
 	farr = numpy.linspace(0, fmax, fmax / delta_f + delta_f)
