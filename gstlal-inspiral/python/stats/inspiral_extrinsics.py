@@ -1140,8 +1140,8 @@ class TimePhaseSNR(object):
 	"""
 	# NOTE to save a couple hundred megs of ram we do not
 	# include kagra for now...
-	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
-	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
+	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
+	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 	numchunks = 20
 
 	def __init__(self, transtt = None, transtp = None, transpt = None, transpp = None, transdd = None, norm = None, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
