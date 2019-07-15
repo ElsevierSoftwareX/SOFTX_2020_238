@@ -55,6 +55,8 @@ class SNR_Pipeline(object):
 			"deltaT": None,
 			"data": [],
 		}
+                if self.start >= self.end:
+                        raise ValueError("Start time must be less than end time.")
 
 	def run(self, segments):
 		if self.verbose:
@@ -101,27 +103,18 @@ class SNR_Pipeline(object):
 		return tseries
 
 	def get_snr_series(self, COMPLEX = False):
+                assert snr_info["epoch"] is not None, "No SNRs are obtained, check your start time."
 		gps_start = self.snr_info["epoch"].gpsSeconds + self.snr_info["epoch"].gpsNanoSeconds * 10.**-9
 		gps = gps_start + numpy.arange(len(self.snr_info["data"])) * self.snr_info["deltaT"]
-		if self.start and self.end:
-			if self.start >= self.end:
-				raise ValueError("Start time must be less than end time.")
 
-			if self.start - gps[0] >= 0 and self.start - gps[-1] <= 0:
-				s = abs(gps - self.start).argmin()
-			else:
-				raise ValueError("Invalid choice of start time %f." % self.start)
+                if self.start - gps[0] < 0 or self.end - gps[-1] > 0:
+                        raise ValueError("Invalid choice of start time or end time. The data spans from %f to %f." % (gps[0], gps[-1]))
+                else:
+                        s = abs(gps - self.start).argmin()
+                        e = abs(gps - self.end).argmin()
 
-			if self.end - gps[0] >= 0 and self.end - gps[-1] <= 0:
-				e = abs(gps - self.end).argmin()
-			else:
-				raise ValueError("Invalid choice of end time %f." % self.end)
-
-			self.snr_info["epoch"] = gps[s]
-			self.snr_info["data"] = self.snr_info["data"][s:e].T
-		else:
-			self.snr_info["epoch"] = gps[0]
-			self.snr_info["data"] = self.snr_info["data"].T
+                self.snr_info["epoch"] = gps[s]
+                self.snr_info["data"] = self.snr_info["data"][s:e].T
 
 		if self.row_number is None:
 			temp = []
@@ -185,11 +178,6 @@ class LLOID_SNR(SNR_Pipeline):
 		SNR_Pipeline.__init__(self, row_number, start, end, name = "gstlal_inspiral_lloid_snr", verbose = verbose)
 		self.snr_info["instrument"] = instrument
 
-		# sanity check
-		if psd is not None:
-			if not (instrument in set(psd)):
-				raise ValueError("No psd for instrument %s." % instrument)
-
 		if self.verbose:
 			sys.stderr.write("Building pipeline to calculate SNR...\n")
 
@@ -240,11 +228,6 @@ class FIR_SNR(SNR_Pipeline):
 	def __init__(self, gw_data_source_info, template, instrument, rate, latency, start, end,  psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, width = 32, track_psd = False, verbose = False):
 		SNR_Pipeline.__init__(self, 0, start, end, name = "gstlal_inspiral_fir_snr", verbose = verbose)
 		self.snr_info["instrument"] = instrument
-
-		# sanity check
-		if psd is not None:
-			if not (instrument in set(psd)):
-				raise ValueError("No psd for instrument %s." % instrument)
 
 		if self.verbose:
 			sys.stderr.write("Building pipeline to calculate SNR\n")
