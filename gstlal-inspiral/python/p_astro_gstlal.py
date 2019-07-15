@@ -294,8 +294,8 @@ def compute_p_astro(event_ln_likelihood_ratio,
                     event_mass2,
                     snr,
                     far,
-                    livetime,
                     rankingstatpdf,
+                    livetime = 166.6 * 86400,
                     mean_values_dict = {"counts_BNS": 2.11050326523,
                             "counts_NSBH": 1.56679410666,
                             "counts_BBH": 9.26042350393,
@@ -350,6 +350,7 @@ def compute_p_astro(event_ln_likelihood_ratio,
                                       far,
                                       event_mass1,
                                       event_mass2,
+                                      livetime,
                                       mean_values_dict)
 
     # Read mean values from url file
@@ -400,11 +401,11 @@ def compute_p_astro_approx(snr, far, mass1, mass2, livetime, mean_values_dict):
 
     # Define constants to compute bayesfactors
     snr_star = 8.5
-    far_star = 1 / (30 * 86400)
+    far_star = 1. / (30 * 86400)
 
     # Compute astrophysical bayesfactor for
     # GraceDB event
-    fground = 3 * snr_star**3 / (snr_choice**4)
+    fground = 3 * snr_star**3 / (snr**4)
     bground = far / far_star
     astro_bayesfac = fground / bground
 
