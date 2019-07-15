@@ -82,6 +82,7 @@ from ligo.lw.utils import segments as ligolw_segments
 from gstlal import bottle
 from gstlal import far
 from gstlal import inspiral
+from gstlal import p_astro_gstlal
 from gstlal import pipeio
 from gstlal import simplehandler
 from gstlal import streamthinca
@@ -1295,6 +1296,8 @@ class Handler(simplehandler.Handler):
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
+	def __get_p_astro_json(self, lr, m1, m2, snr, far):
+		return p_astro_gstlal.compute_p_astro(lr, m1, m2, snr, far, self.rankingstatpdf)
 
 	def __get_rankingstat_xmldoc_for_gracedb(self):
 		# FIXME:  remove this wrapper when the horizon history
@@ -1361,7 +1364,7 @@ class Handler(simplehandler.Handler):
 		assert self.fapfar is not None
 
 		# do alerts
-		self.gracedbwrapper.do_alerts(last_coincs, self.psds, self.__get_rankingstat_xmldoc_for_gracedb, self.segmentstracker.seglistdicts)
+		self.gracedbwrapper.do_alerts(last_coincs, self.psds, self.__get_rankingstat_xmldoc_for_gracedb, self.segmentstracker.seglistdicts, self.__get_p_astro_json)
 
 
 	def web_get_sngls_snr_threshold(self):
