@@ -5,13 +5,13 @@ GStreamer elements for gravitational-wave data analysis
 
 [![pipeline status](https://git.ligo.org/lscsoft/gstlal/badges/master/pipeline.svg)](https://git.ligo.org/lscsoft/gstlal/commits/master)
 
-|               | version  |   docs   | source   |
-| :------------:| :------: | :------: | :------: |
-| `gstlal` | 1.5.0  |[docs](https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/gstlal_docs/gstlal/gstlal.html) | [gstlal-1.5.0.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-1.5.0.tar.gz)  |
-| `gstlal-ugly`     | 1.6.4  |[docs](https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/gstlal_docs/gstlal-ugly/gstlal-ugly.html) | [gstlal-ugly-1.6.4.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-ugly-1.6.4.tar.gz)  |
-| `gstlal-inspiral`  | 1.6.5  |[docs](https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/gstlal_docs/gstlal-inspiral/gstlal-inspiral.html) | [gstlal-inspiral-1.6.5.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-inspiral-1.6.5.tar.gz)  |
-| `gstlal-calibration`  |  1.2.10  |[docs](https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/gstlal_docs/gstlal-calibration/gstlal-calibration.html) | [gstlal-calibration-1.2.10.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-calibration-1.2.10.tar.gz)  |
-| `gstlal-burst`  |  0.1.1  |[docs](https://ldas-jobs.ligo.caltech.edu/~patrick.godwin/gstlal_docs/gstlal-burst/gstlal-burst.html) | [gstlal-burst-0.1.1.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-burst-0.1.1.tar.gz)  |
+|               | version  | source   |
+| :------------:| :------: | :------: |
+| `gstlal` | 1.5.0  | [gstlal-1.5.0.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-1.5.0.tar.gz)  |
+| `gstlal-ugly`     | 1.6.4  | [gstlal-ugly-1.6.4.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-ugly-1.6.4.tar.gz)  |
+| `gstlal-inspiral`  | 1.6.5 | [gstlal-inspiral-1.6.5.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-inspiral-1.6.5.tar.gz)  |
+| `gstlal-calibration`  |  1.2.10  | [gstlal-calibration-1.2.10.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-calibration-1.2.10.tar.gz)  |
+| `gstlal-burst`  |  0.1.1  | [gstlal-burst-0.1.1.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-burst-0.1.1.tar.gz)  |
 
 Full documentation is provided [here](https://lscsoft.docs.ligo.org/gstlal/).
 
