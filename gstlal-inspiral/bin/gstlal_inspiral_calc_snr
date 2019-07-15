@@ -119,7 +119,6 @@ def parse_command_line():
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
 	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template for each instrument only.")
 	group.add_option("--approximant", metavar = "name", type = "str", help = "Name of the Waveform model (require).")
-	group.add_option("--template-duration", metavar = "seconds", type = "float", help = "Duration of the template")
 	group.add_option("--sample-rate", metavar = "Hz", default = 2048, type = "int", help = "Sampling rate of the template and SNR for mode 1")
 	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
 	group.add_option("--f-high", metavar = "Hz", type = "float", help = "The maximum frequency of GW signal")
@@ -147,17 +146,21 @@ def parse_command_line():
 
 	options, args = parser.parse_args()
 
-	# Check SNR series output
-	if options.start is None or options.end is None:
-                raise ValueError("Must have --start and --end.")
-        else:
-		if options.start >= options.end:
-			raise ValueError("--start must less than --end.")
 
 	# Setting up GW data
 	gw_data_source_info = datasource.GWDataSourceInfo(options)
 	if options.instrument not in gw_data_source_info.channel_dict.keys():
 		raise ValueError("No such instrument: %s in GWDataSourceInfo: (%s)"% (options.instrument, ", ".join(gw_data_source_info.channel_dict.keys())))
+
+	# Check SNRs series output
+	if options.start is None or options.end is None:
+                raise ValueError("Must have --start and --end.")
+        elif options.start >= options.end:
+                raise ValueError("--start must less than --end.")
+        # Extra handle for SNRs output because SNRs are not stable initially and have padding at the end
+        # FIXME: the 650s is hardcoded (~BNS waveforms duration) and only used as a lower bound to avoid having a frame file that is too short
+        if options.start - gw_data_source_info.seg[0] <= 650 or gw_data_source_info.seg[1] - options.end <= 650:
+                raise ValueError("Check your inputted --start / --end or your frame file. You should have a long enough data such that, the --start/--end is larger/less than the start/end of your data at least 650s. ")
 
 	# Setting up PSD
 	if options.reference_psd:
