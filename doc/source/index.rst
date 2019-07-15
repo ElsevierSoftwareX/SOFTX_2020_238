@@ -10,26 +10,41 @@ Overview
 
 The GstLAL software package is used for the following activities:
 
-- **GstLAL:** The package `GstLAL <http://software.ligo.org/lscsoft/source/gstlal-1.4.1.tar.gz>`_ provides core Gstreamer plugins for signal processing workflows with LIGO data and core python bindings for constructing such workflows.  
+- ``gstlal`` provides core Gstreamer plugins for signal processing workflows with LIGO data and core python bindings for constructing such workflows.  
 
-- **GstLAL Calibration:** The package `GstLAL Calibration <http://software.ligo.org/lscsoft/source/gstlal-calibration-1.2.4.tar.gz>`_ provides real-time calibration of LIGO control system data into strain data.
+- ``gstlal-calibration`` provides real-time calibration of LIGO control system data into strain data.
 
-- **GstLAL Inspiral:** The package `GstLAL Inspiral <http://software.ligo.org/lscsoft/source/gstlal-inspiral-1.5.1.tar.gz>`_ provides additional signal processing plugins that are specific for LIGO / Virgo searches for compact binaries as well as a substantial amount of python code for post-processing raw signal processing results into gravitational wave candidate lists. Several publications about the methodology and workflow exist, see :ref:`publications`
+- ``gstlal-inspiral`` provides additional signal processing plugins that are specific for LIGO / Virgo searches for compact binaries as well as a substantial amount of python code for post-processing raw signal processing results into gravitational wave candidate lists. Several publications about the methodology and workflow exist, see :ref:`publications`
 
-- **GstLAL Ugly:** The package `GstLAL Inspiral <http://software.ligo.org/lscsoft/source/gstlal-inspiral-1.5.1.tar.gz>`_ is an incubator project for gradual inclusion in the other packages.
+- ``gstlal-burst`` provides additional signal processing plugins for use in astrophysical and noise transient burst searches.
 
+- ``gstlal-ugly`` is an incubator project for gradual inclusion in the other packages.
 
-.. _welcome-contents:
-
-Contents
--------------------------
 
 .. toctree::
-   :maxdepth: 2
+    :caption: Getting Started
+    :maxdepth: 2
 
-   getting-started
-   projects
-   publications
+    installation
+    quickstart
+    tutorials/tutorials
+
+.. toctree::
+    :caption: User Guide
+    :maxdepth: 2
+
+    cbc_analysis
+    feature_extraction
+    fake_data
+    psd_estimation
+    publications
+
+.. toctree::
+    :caption: API Reference
+    :maxdepth: 2
+
+    executables
+    api
 
 Build/Test Results
 -------------------------

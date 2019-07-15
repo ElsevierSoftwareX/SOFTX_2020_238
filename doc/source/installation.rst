@@ -1,4 +1,4 @@
-Getting started
+Installation
 ===============
 
 You can get a development copy of the gstlal software suite from git.  Doing this at minimum will require a development copy of lalsuite.

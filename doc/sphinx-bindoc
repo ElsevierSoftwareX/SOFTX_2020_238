@@ -23,7 +23,7 @@ outdir = sys.argv[1]
 
 tocf = open(os.path.join(outdir, "bin.rst"), "w")
 tocf.write("""bin
-===
+=====================
 
 .. toctree::
    :maxdepth: 1

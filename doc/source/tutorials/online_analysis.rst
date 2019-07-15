@@ -1,4 +1,4 @@
-Documentation for starting an online compact binary coalescence analysis
+Running an online compact binary coalescence analysis
 ========================================================================
 
 Prerequisites

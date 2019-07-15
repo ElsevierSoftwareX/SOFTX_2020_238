@@ -1,4 +1,4 @@
-Documentation for running an offline compact binary coalescence analysis
+Running an offline compact binary coalescence analysis
 ========================================================================
 
 Prerequisites
