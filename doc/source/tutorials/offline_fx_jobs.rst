@@ -1,5 +1,4 @@
-####################################################################################################
-Running Offline Jobs
+Running offline feature extraction jobs
 ####################################################################################################
 
 An offline DAG is provided in /gstlal-burst/share/feature_extractor/Makefile.gstlal_feature_extractor_offline

@@ -1,5 +1,4 @@
-####################################################################################################
-Running Online Jobs
+Running online feature extraction jobs
 ####################################################################################################
 
 An online DAG is provided in /gstlal-burst/share/feature_extractor/Makefile.gstlal_feature_extractor_online
