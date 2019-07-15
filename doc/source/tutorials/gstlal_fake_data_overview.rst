@@ -23,7 +23,7 @@ The basic steps to generate and validate LIGO colored noise are:
 
 An example PSD plot:
 
-.. image:: ../images/H1L1fakedataexamplepsd.png
+.. image:: ../gstlal/images/H1L1fakedataexamplepsd.png
    :width: 400px
 
 Custom colored noise, i.e. simulate your own detector
@@ -40,7 +40,7 @@ then you will need to first use gstlal_psd_xml_from_asd_txt to convert it
 in the documentation include this)
 1. Repeat the same validation steps as above to obtain, e.g.:
  
-.. image:: ../images/V1fakedataexamplepsd.png
+.. image:: ../gstlal/images/V1fakedataexamplepsd.png
    :width: 400px
 
 
