@@ -363,7 +363,7 @@ test:offline:
   allow_failure: true
   
 pages:
-  image: aepace/gstlal-dev:el7-mkl-1.14
+  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
   stage: nightly-pages
   script:
     - echo "Building Documentation"
