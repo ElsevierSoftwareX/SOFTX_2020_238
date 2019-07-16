@@ -30,7 +30,7 @@
 import math
 from optparse import OptionParser
 import sys
-
+import numpy
 
 from ligo.lw import utils as ligolw_utils
 from gstlal import far
@@ -55,6 +55,8 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-t", "--threshold", type = "float", default = 0.03, help = "Only keep horizon distance values that differ by this much, fractionally, from their neighbours (default = 0.03).")
+	parser.add_option("--remove-horizon-deviations", action = "store_true", help = "Remove horizon entries that display an uncharacteristic deviation in sensitivity from the non-zero mean.")
+	parser.add_option("--deviation-percent", type = "float", default = 0.50, help = "Remove horizon entries that deviate by this fraction from the non-zero mean.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -117,6 +119,10 @@ for filename in filenames:
 	for instrument, horizon_history in list(rankingstat.numerator.horizon_history.items()):
 		# GPS time / distance pairs
 		items = horizon_history.items()
+		if options.remove_horizon_deviations:
+			values = numpy.array(items)[:,1]
+			mean_horizon = values[values!=0].mean()
+			items = [item for item in items if item[1] < (mean_horizon * (1. + options.deviation_percent))]
 
 		# compress array
 		j = 1
