@@ -26,6 +26,7 @@ Requires: python2-lal >= @MIN_LAL_VERSION@
 Requires: python2-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
 Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
+Requires: python2-ligo-scald
 Requires: numpy >= @MIN_NUMPY_VERSION@
 Requires: scipy
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
