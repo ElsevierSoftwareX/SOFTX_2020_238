@@ -3,11 +3,7 @@
 #
 
 
-<<<<<<< HEAD
-AC_INIT([gstlal-inspiral],[1.6.5],[gstlal-discuss@ligo.org],[gstlal-inspiral])
-=======
 AC_INIT([gstlal-inspiral],[1.6.6],[gstlal-discuss@ligo.org],[gstlal-inspiral])
->>>>>>> 30a880ca4... packaging gstlal-inspiral-1.6.6
 AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -280,11 +276,7 @@ AX_PYTHON_LIGO_LW([$MIN_LIGO_LW_VERSION])
 
 
 AC_SUBST([MIN_GSTLAL_VERSION], [1.5.0])
-<<<<<<< HEAD
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.6.2])
-=======
 AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.6.5])
->>>>>>> 30a880ca4... packaging gstlal-inspiral-1.6.6
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
