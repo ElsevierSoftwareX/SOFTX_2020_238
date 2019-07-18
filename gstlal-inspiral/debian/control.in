@@ -51,6 +51,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  python-ligo-gracedb (>= 1.11),
  python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
  python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
+ python-ligo-scald,
  python-numpy (>= @MIN_NUMPY_VERSION@),
  python-scipy
 Description: GStreamer for GW data analysis (inspiral parts)

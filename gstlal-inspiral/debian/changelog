@@ -1,3 +1,20 @@
+<<<<<<< HEAD
+=======
+gstlal-inspiral (1.6.6-1) unstable; urgency=low
+
+  * gstlal_ll_inspiral_pipe: allow aggregators to be load-balanced, scale
+    based on number of jobs they process
+  * lloidhandler.py: change how kafka topics/partitions are arranged, remove
+   data decimation for kafka topics
+  * gstlal_inspiral_compress_ranking_stat: added option to remove large
+    deviations in horizon history.
+  * p_astro_gstlal.py changes
+  * lloidhandler: truncate ranking data even more since we are still causing
+    gracedb problems with the new analysis
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 18 Jul 2019 09:19:04 -0700
+
+>>>>>>> 30a880ca4... packaging gstlal-inspiral-1.6.6
 gstlal-inspiral (1.6.5-1) unstable; urgency=low
 
   * gstlal_ll_inspiral_pipe: fix repeated option in gstlal_ll_dq jobs causing
