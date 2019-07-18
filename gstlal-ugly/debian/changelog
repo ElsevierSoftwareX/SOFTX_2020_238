@@ -1,3 +1,39 @@
+<<<<<<< Updated upstream
+=======
+gstlal-ugly (1.6.5-1) unstable; urgency=low
+
+  * gstlal_ll_inspiral_aggregator: remove unneccesary Pool, change how kafka
+    topics/partitions are arranged, add --across-jobs option to allow leaders
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 18 Jul 2019 08:47:13 -0700
+
+gstlal-ugly (1.6.4-1) unstable; urgency=low
+  
+  * add options to enable auth, https for inspiral aggregators
+  * add gstlal_ll_inspiral_trigger_aggregator to gstlal-ugly, add job to
+    gstlal_ll_inspiral_pipe
+
+ -- Alexander Pace <alexander.pace@ligo.org> Wed, 05 Jun 2019 12:24:02 -0700
+
+gstlal-ugly (1.6.3-1) unstable; urgency=low
+
+  * gstlal_kafka_dag: add condor universe option into kafka/zookeeper jobs
+  * rough tool to estimate background collected among ifo combos
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 28 Mar 2019 07:44:55 -0700
+
+gstlal-ugly (1.6.2-1) unstable; urgency=low
+
+  * gstlal_svd_bank_checkerboard: Added SVD bank checkerboarding code
+  * some new temp programs
+  * construct_skymap_test_dag: update
+  * gstlal_kafka_dag: add tag information so that multiple analyzes do not
+    have file clashes
+  * Bug fixes and performance improvements
+
+ -- Alexander Pace <alexander.pace@ligo.org> Sun, 17 Mar 2019 09:37:07 -0700
+
+>>>>>>> Stashed changes
 gstlal-ugly (1.6.1-1) unstable; urgency=low
 
   * interpolator: fix bug where interpolator was pushing out nongap buffers
