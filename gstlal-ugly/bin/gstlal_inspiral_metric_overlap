@@ -22,12 +22,12 @@ parser.add_argument("--num-rows", type=int, help = "The number of rows to calcul
 args = parser.parse_args()
 
 g_ij = metric_module.Metric(
-        args.psd_xml_file,
-        coord_func = metric_module.x_y_z_zn_func,
-        duration = 1.0, # FIXME!!!!!
-        flow = 10,
-        fhigh = 1024,
-        approximant = "IMRPhenomD"
+	args.psd_xml_file,
+	coord_func = metric_module.x_y_z_zn_func,
+	duration = 1.0, # FIXME!!!!!
+	flow = 10,
+	fhigh = 1024,
+	approximant = "IMRPhenomD"
 )
 
 xmldoc = ligolw_utils.load_filename(args.bank_file, verbose = True, contenthandler = LIGOLWContentHandler)
