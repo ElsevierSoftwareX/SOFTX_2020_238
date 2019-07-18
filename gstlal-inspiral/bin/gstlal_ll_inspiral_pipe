@@ -569,7 +569,7 @@ agg_routes = list(itertools.chain(snr_routes, network_routes, usage_routes, stat
 # FIXME don't hard code the 1000
 max_agg_jobs = 1000
 agg_job_bounds = range(0, len(jobTags), max_agg_jobs) + [max_agg_jobs]
-agg_routes = list(dagparts.groups(agg_routes, max(max_agg_jobs // (4 * len(jobTags)), 1))) + ["far_history"]
+agg_routes = list(groups(agg_routes, max(max_agg_jobs // (4 * len(jobTags)), 1))) + ["far_history"]
 for routes in agg_routes:
 	these_options = dict(agg_options)
 	these_options["route"] = routes
