@@ -1,3 +1,54 @@
+gstlal-inspiral (1.6.6-1) unstable; urgency=low
+
+  * gstlal_ll_inspiral_pipe: allow aggregators to be load-balanced, scale
+    based on number of jobs they process
+  * lloidhandler.py: change how kafka topics/partitions are arranged, remove
+   data decimation for kafka topics
+  * gstlal_inspiral_compress_ranking_stat: added option to remove large
+    deviations in horizon history.
+  * p_astro_gstlal.py changes
+  * lloidhandler: truncate ranking data even more since we are still causing
+    gracedb problems with the new analysis
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 18 Jul 2019 09:19:04 -0700
+
+gstlal-inspiral (1.6.5-1) unstable; urgency=low
+
+  * gstlal_ll_inspiral_pipe: fix repeated option in gstlal_ll_dq jobs causing
+    issues when auth/https is disabled
+  * gstlal_inspiral_compress_ranking_stat
+  * Added p_astro module
+  * lloidhandler:  reduce size of ranking stat to gracedb
+  * gstlal_ll_inspiral_pipe fixes
+
+ -- Alexander Pace <alexander.pace@ligo.org> Wed, 05 Jun 2019 09:53:10 -0700
+
+gstlal-inspiral (1.6.4-1) unstable; urgency=low
+
+  * lvalert_plots: reduce pressure on gracedb file server
+  * plotfar.py: fix ValueError for misssing instrument
+  * inspiral.py, lloidhandler.py: only provide sub-threshold snr time series
+    if the detector is on at coalescence (Jolien's review request)
+  * cbc_template_fir: moving_median speed improvement
+  * gstlal_itacac.c: actually set the snr threshold when computing chisq
+  * lloidhandler: reduce some of the data going to kafka
+  * gstlal_ll_inspiral_pipe: support external kafka service, remove daily
+    pages - they will be replaced scale out aggregators as future proofing
+  * Revert "normalize the background only using values at likelihood ratios
+    greater than the threshold"
+
+ -- Alexander Pace <alexander.pace@ligo.org> Thu, 28 Mar 2019 07:23:36 -0700
+
+gstlal-inspiral (1.6.3-1) unstable; urgency=low
+
+  * inspiral.py: Fix bug in subthreshold trigger channel name
+  * inspiral.py: Fix bug causing time shift in subthreshold snr time series
+  * inspiral.py: changed ranking stat tag for gracedb uploads 
+  * cbc_template_fir: multiple changes
+  * Bug fixes and performance improvements
+
+ -- Alexander Pace <alexander.pace@ligo.org> Sun, 17 Mar 2019 09:55:37 -0700
+
 gstlal-inspiral (1.6.2-1) unstable; urgency=low
 
   * Enforce that appended zeros in subthreshold trigger generation have same
