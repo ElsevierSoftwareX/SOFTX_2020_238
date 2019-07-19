@@ -276,40 +276,36 @@ parsefailed:
 	return -1;
 }
 
-void gstlal_snglinspiral_array_free(SnglInspiralTable *bankarray) {
+
+void gstlal_snglinspiral_array_free(SnglInspiralTable *bankarray)
+{
 	free(bankarray);
 }
 
 int gstlal_set_channel_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *channel)
 {
-	int i;
-	for (i = 0; i < length; i++) {
-		if (channel) {
-			strncpy(bankarray[i].channel, (const char*) channel, LIGOMETA_CHANNEL_MAX);
-			bankarray[i].channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
+	if(channel)
+		for(; length > 0; bankarray++, length--) {
+			strncpy(bankarray->channel, channel, LIGOMETA_CHANNEL_MAX);
+			bankarray->channel[LIGOMETA_CHANNEL_MAX - 1] = 0;
 		}
-	}
 	return 0;
 }
 
 int gstlal_set_instrument_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, char *instrument)
 {
-	int i;
-	for (i = 0; i < length; i++) {
-		if (instrument) {
-			strncpy(bankarray[i].ifo, (const char*) instrument, LIGOMETA_IFO_MAX);
-			bankarray[i].ifo[LIGOMETA_IFO_MAX - 1] = 0;
+	if(instrument)
+		for(; length > 0; bankarray++, length--) {
+			strncpy(bankarray->ifo, instrument, LIGOMETA_IFO_MAX);
+			bankarray->ifo[LIGOMETA_IFO_MAX - 1] = 0;
 		}
-	}
 	return 0;
 }
 
 int gstlal_set_sigmasq_in_snglinspiral_array(SnglInspiralTable *bankarray, int length, double *sigmasq)
 {
-	int i;
-	for (i = 0; i < length; i++) {
-		bankarray[i].sigmasq = sigmasq[i];
-	}
+	for(; length > 0; bankarray++, sigmasq++, length--)
+		bankarray->sigmasq = *sigmasq;
 	return 0;
 }
 
