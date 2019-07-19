@@ -52,8 +52,6 @@ typedef struct {
 	PyObject_HEAD
 	SnglTriggerTable row;
 	COMPLEX8TimeSeries *snr;
-	/* FIXME:  this should be incorporated into the LAL structure */
-	EventIDColumn event_id;
 } gstlal_GSTLALSnglTrigger;
 
 
@@ -185,11 +183,6 @@ static PyObject *__new__(PyTypeObject *type, PyObject *args, PyObject *kwds)
 	if(!new)
 		return NULL;
 
-	/* link the event_id pointer in the sngl_trigger row structure
-	 * to the event_id structure */
-	//new->row.event_id = &new->event_id;
-	//new->event_id.id = 0;
-
 	/* done */
 	return (PyObject *) new;
 }
@@ -234,8 +227,6 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 			return NULL;
 		}
 		((gstlal_GSTLALSnglTrigger*)item)->row = gstlal_sngltrigger->parent;
-		/* repoint event_id to event_id structure */
-		//((gstlal_GSTLALSnglTrigger*)item)->row.event_id = &((gstlal_GSTLALSnglTrigger*)item)->event_id;
 		/* duplicate the SNR time series */
 		if(gstlal_sngltrigger->length)
 		{
