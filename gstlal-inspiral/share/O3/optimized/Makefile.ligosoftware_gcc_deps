@@ -134,7 +134,7 @@ deps_env.sh :
 	@echo 'export CC="gcc"' >> $@
 	@echo 'export CXX="g++"' >> $@
 	@echo 'export MKL_THREADING_LAYER=SEQUENTIAL' >> $@
-	@echo 'export MKL_INTERFACE_LAYER=ILP64' >> $@
+	@echo 'export MKL_INTERFACE_LAYER=LP64' >> $@
 	@echo '# Force explicit linking of optimized FFTW libraries:' >> $@
 	@echo 'LDFLAGS="-lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads $${LDFLAGS_INTEL} -L$${DEPS_PATH}/opt/lib "' >> $@
 	@echo '# These are environment variables that do get exported' >> $@
