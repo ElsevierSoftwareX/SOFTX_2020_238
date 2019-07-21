@@ -80,6 +80,7 @@ parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
 parser.add_option("--file-name-suffix", metavar = "name", type = str, default = "", help = "Suffix for naming unique file.")
 parser.add_option("--pcal-time-advance", metavar = "seconds", type = float, default = 0.0, help = "Time advance in seconds applied to the Pcal channel. Default = 0.0")
+parser.add_option("--show-stats", action = "store_true", help = "If set, plots will have averages (mean) and standard deviations shown in plot legends.")
 
 options, filenames = parser.parse_args()
 
@@ -315,7 +316,10 @@ for i in range(0, len(frequencies)):
 	if i == 0:
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
-	plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	if options.show_stats:
+		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	else:
+		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_')))
 	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
@@ -325,7 +329,10 @@ for i in range(0, len(frequencies)):
 	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
-	plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(phases[0]), numpy.std(phases[0])))
+	if options.show_stats:
+		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(phases[0]), numpy.std(phases[0])))
+	else:
+		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_')))
 	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.5)
 	if i == 0:
@@ -343,11 +350,17 @@ for i in range(0, len(frequencies)):
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
-		plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		if options.show_stats:
+			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		else:
+			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
 		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
-		plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[j]), numpy.std(phases[j])))
+		if options.show_stats:
+			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[j]), numpy.std(phases[j])))
+		else:
+			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
 		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.5)
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))

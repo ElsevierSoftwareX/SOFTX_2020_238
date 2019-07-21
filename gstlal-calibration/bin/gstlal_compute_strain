@@ -361,6 +361,7 @@ apply_srcq = Config.getboolean("TDCFConfigurations", "applysrcq")
 apply_fs = Config.getboolean("TDCFConfigurations", "applyfs")
 use_coherence = Config.getboolean("TDCFConfigurations", "usecoherence")
 tdcf_default_to_median = Config.getboolean("TDCFConfigurations", "tdcfdefaulttomedian")
+compute_exact_kappas = Config.getboolean("TDCFConfigurations", "computeexactkappas") if "computeexactkappas" in TDCFConfigs else False
 # Boolean for state vector computation
 compute_calib_statevector = Config.getboolean("CalibrationConfigurations", "computecalibstatevector")
 # Boolean for computing factors from filters file
@@ -652,6 +653,62 @@ if factors_from_filters_file or compute_calib_statevector:
 	except:
 		if factors_from_filters_file and (compute_kappapum or compute_kappauim):
 			raise ValueError("Cannot compute kappa_PUM or kappa_UIM, as the needed EPICS are not contained in the specified filters file.")
+
+	try:
+		EP25_real = float(filters["EP25_real"])
+		EP25_imag = float(filters["EP25_imag"])
+		EP26_real = float(filters["EP26_real"])
+		EP26_imag = float(filters["EP26_imag"])
+		EP27_real = float(filters["EP27_real"])
+		EP27_imag = float(filters["EP27_imag"])
+		EP28_real = float(filters["EP28_real"])
+		EP28_imag = float(filters["EP28_imag"])
+		EP29_real = float(filters["EP29_real"])
+		EP29_imag = float(filters["EP29_imag"])
+		EP30_real = float(filters["EP30_real"])
+		EP30_imag = float(filters["EP30_imag"])
+		EP31_real = float(filters["EP31_real"])
+		EP31_imag = float(filters["EP31_imag"])
+		EP32_real = float(filters["EP32_real"])
+		EP32_imag = float(filters["EP32_imag"])
+		EP33_real = float(filters["EP33_real"])
+		EP33_imag = float(filters["EP33_imag"])
+		EP34_real = float(filters["EP34_real"])
+		EP34_imag = float(filters["EP34_imag"])
+		EP35_real = float(filters["EP35_real"])
+		EP35_imag = float(filters["EP35_imag"])
+		EP36_real = float(filters["EP36_real"])
+		EP36_imag = float(filters["EP36_imag"])
+		EP37_real = float(filters["EP37_real"])
+		EP37_imag = float(filters["EP37_imag"])
+		EP38_real = float(filters["EP38_real"])
+		EP38_imag = float(filters["EP38_imag"])
+		EP39_real = float(filters["EP39_real"])
+		EP39_imag = float(filters["EP39_imag"])
+		EP40_real = float(filters["EP40_real"])
+		EP40_imag = float(filters["EP40_imag"])
+		EP41_real = float(filters["EP41_real"])
+		EP41_imag = float(filters["EP41_imag"])
+		EP42_real = float(filters["EP42_real"])
+		EP42_imag = float(filters["EP42_imag"])
+	except:
+		if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappac or compute_fcc or compute_srcq or compute_fs):
+			raise ValueError("Cannot use ComputeExactKappas, as the needed EPICS (25 - 42) are not in the filters file")
+
+if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappac or compute_fcc or compute_srcq or compute_fs):
+	try:
+		EP43_real = float(filters["EP43_real"])
+		EP43_imag = float(filters["EP43_imag"])
+		EP44_real = float(filters["EP44_real"])
+		EP44_imag = float(filters["EP44_imag"])
+		EP45_real = float(filters["EP45_real"])
+		EP45_imag = float(filters["EP45_imag"])
+		EP46_real = float(filters["EP46_real"])
+		EP46_imag = float(filters["EP46_imag"])
+		EP47_real = float(filters["EP47_real"])
+		EP47_imag = float(filters["EP47_imag"])
+	except:
+		raise ValueError("Cannot use ComputeExactKappas, as EPICS 43 - 47 are not in the filters file.")
 
 # Load the high-pass filters for h(t)
 if "ctrl_highpass" in filters:
@@ -987,6 +1044,8 @@ if (ChannelNames["linewitnesschannellist"] != "None") if "linewitnesschannellist
 			line_witness_frequency_channel_list.append([])
 			for j in range(0, len(line_witness_freqs[i])):
 				line_witness_frequency_channel_list[i].append(None)
+else:
+	line_witness_frequency_channel_list = []
 
 if (ChannelNames["powerlineschannel"] not in headkeys) if remove_power_lines else False:
 	channel_list.append((instrument, ChannelNames["powerlineschannel"]))
@@ -1163,7 +1222,7 @@ if use_coherence:
 		else:
 			pcaly_line4_coh = pcaly_line1_coh
 
-if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or (remove_cal_lines and "tstexc_linefreq" in act_line_removal_dict.keys()):
+if compute_kappatst or compute_exact_kappas or compute_kappapu or compute_kappac or compute_fcc or compute_fs or compute_srcq or (remove_cal_lines and "tstexc_linefreq" in act_line_removal_dict.keys()):
 	tstexccaps = "audio/x-raw, format=F64LE, rate=%d" % tst_exc_sr
 	tstexc = calibration_parts.caps_and_progress(pipeline, head_dict["tstexc"], tstexccaps, "tstexc")
 	tstexc = pipeparts.mktee(pipeline, tstexc)
@@ -1174,7 +1233,7 @@ if compute_kappatst or compute_kappapu or compute_kappac or compute_fcc or compu
 				line_witness_channel_list[i][j] = tstexc
 	if "tstexc_linefreq" in act_line_removal_dict:
 		act_line_removal_dict["tstexc_linefreq"][0] = tstexc
-if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)) or (remove_cal_lines and "pumexc_linefreq" in act_line_removal_dict.keys()):
+if compute_kappapum or compute_exact_kappas or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)) or (remove_cal_lines and "pumexc_linefreq" in act_line_removal_dict.keys()):
 	pumexccaps = "audio/x-raw, format=F64LE, rate=%d" % pum_exc_sr
 	pumexc = calibration_parts.caps_and_progress(pipeline, head_dict["pumexc"], pumexccaps, "pumexc")
 	pumexc = pipeparts.mktee(pipeline, pumexc)
@@ -1185,7 +1244,7 @@ if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc o
 				line_witness_channel_list[i][j] = pumexc
 	if "pumexc_linefreq" in act_line_removal_dict:
 		act_line_removal_dict["pumexc_linefreq"][0] = pumexc
-if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)) or (remove_cal_lines and "uimexc_linefreq" in act_line_removal_dict.keys()):
+if compute_kappauim or compute_exact_kappas or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)) or (remove_cal_lines and "uimexc_linefreq" in act_line_removal_dict.keys()):
 	uimexccaps = "audio/x-raw, format=F64LE, rate=%d" % uim_exc_sr
 	uimexc = calibration_parts.caps_and_progress(pipeline, head_dict["uimexc"], uimexccaps, "uimexc")
 	uimexc = pipeparts.mktee(pipeline, uimexc)
@@ -1201,9 +1260,16 @@ if compute_kappapu:
 	darmexc = calibration_parts.caps_and_progress(pipeline, head_dict["darmexc"], hoft_caps, "darmexc")
 
 # Set up computations for kappa_tst, kappa_pum, kappa_uim, kappa_pu,kappa_c, f_cc, f_s, and Q, if applicable
-if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
+if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kappauim or compute_kappac or compute_fcc or compute_srcq or compute_fs):
+	# Use the "exact" algebraic solution of P1900052, Section 5.2.6.
+	# Do all the demodulation up front.  We need DARM_ERR and either Pcal or an actuator
+	# injection channel at each calibration line frequency used for the TDCFs.  We will
+	# also take the ratios injection(f) / DARM_ERR(f) at all the calibration lines and
+	# apply the gating and smoothing here, before computing the TDCFs.
 
-	# demodulate the PCAL channel and apply the PCAL correction factor at the DARM actuation line frequency
+	# First, the actuation Pcal line, starting with DARM_ERR.
+	derr_at_act_pcal_freq = calibration_parts.demodulate(pipeline, derrtee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pcal1_linefreq"] if "pcal1_linefreq" in head_dict else None)
+	# Now Pcal
 	pcal_at_act_pcal_freq = calibration_parts.demodulate(pipeline, pcaltee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_act_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_act_freq_imag, freq_update = [head_dict["pcal1_linefreq"], head_dict["pcal1_line_corr_real"], head_dict["pcal1_line_corr_imag"]] if "pcal1_linefreq" in head_dict else None)
 	pcal_at_act_pcal_freq = pipeparts.mktee(pipeline, pcal_at_act_pcal_freq)
 	if remove_cal_lines:
@@ -1211,7 +1277,180 @@ if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu o
 		pcal_line_removal_dict["pcal1_linefreq"][0] = pcal_at_act_pcal_freq
 		pcal_line_removal_dict["pcal1_linefreq"][4] = True
 
-	# demodulate DARM_ERR at the ~30 Hz pcal line frequency
+	# Take the ratio X1 = Pcal(f1) / DARM_ERR(f1)
+	X1 = calibration_parts.complex_division(pipeline, pcal_at_act_pcal_freq, derr_at_act_pcal_freq)
+
+	# Now the gating and smoothing
+	if use_coherence:
+		X1 = calibration_parts.mkgate(pipeline, X1, pcaly_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'pcal_line1_gate')
+		X1 = calibration_parts.smooth_complex_kappas(pipeline, X1, EP43_real, EP43_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+	else:
+		var = 0.2 * abs(EP43_real + 1j * EP43_imag)
+		X1 = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, X1, var, var, EP43_real, EP43_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+
+	# The sensing Pcal line (~400 Hz), starting with DARM_ERR.
+	derr_at_opt_gain_freq = calibration_parts.demodulate(pipeline, derrtee, opt_gain_fcc_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pcal2_linefreq"] if "pcal2_linefreq" in head_dict else None)
+	# Now Pcal
+	pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_imag, freq_update = [head_dict["pcal2_linefreq"], head_dict["pcal2_line_corr_real"], head_dict["pcal2_line_corr_imag"]] if "pcal2_linefreq" in head_dict else None)
+	if remove_cal_lines:
+		# This will save having to demodulate it again
+		pcal_at_opt_gain_freq = pipeparts.mktee(pipeline, pcal_at_opt_gain_freq)
+		pcal_line_removal_dict["pcal2_linefreq"][0] = pcal_at_opt_gain_freq
+		pcal_line_removal_dict["pcal2_linefreq"][4] = True
+
+	# Take the ratio X2 = Pcal(f2) / DARM_ERR(f2)
+	X2 = calibration_parts.complex_division(pipeline, pcal_at_opt_gain_freq, derr_at_opt_gain_freq)
+
+	# Now the gating and smoothing
+	if use_coherence:
+		X2 = calibration_parts.mkgate(pipeline, X2, pcaly_line2_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'pcal_line2_gate')
+		X2 = calibration_parts.smooth_complex_kappas(pipeline, X2, EP44_real, EP44_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+	else:
+		var = 0.2 * abs(EP44_real + 1j * EP44_imag)
+		X2 = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, X2, var, var, EP44_real, EP44_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+
+	# Now the ESD/TST/L3 actuator line, starting with DARM_ERR.
+	derr_at_esd_act_freq = calibration_parts.demodulate(pipeline, derrtee, esd_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["tstexc_linefreq"] if "tstexc_linefreq" in head_dict else None)
+	# Now the TST excitation channel
+	tstexc_at_esd_act_freq = calibration_parts.demodulate(pipeline, tstexc, esd_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["tstexc_linefreq"] if "tstexc_linefreq" in head_dict else None)
+	if "tstexc_linefreq" in act_line_removal_dict.keys():
+		tstexc_at_esd_act_freq = pipeparts.mktee(pipeline, tstexc_at_esd_act_freq)
+		act_line_removal_dict["tstexc_linefreq"][0] = tstexc_at_esd_act_freq
+		act_line_removal_dict["tstexc_linefreq"][4] = True
+
+	# Take the ratio X_T = Pcal(f_T) / DARM_ERR(f_T)
+	X_T = calibration_parts.complex_division(pipeline, tstexc_at_esd_act_freq, derr_at_esd_act_freq)
+
+	# Now the gating and smoothing
+	if use_coherence:
+		X_T = calibration_parts.mkgate(pipeline, X_T, sus_line3_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line3_gate')
+		X_T = calibration_parts.smooth_complex_kappas(pipeline, X_T, EP45_real, EP45_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+	else:
+		var = 0.2 * abs(EP45_real + 1j * EP45_imag)
+		X_T = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, X_T, var, var, EP45_real, EP45_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+
+	# Now the PUM/L2 actuator line, starting with DARM_ERR.
+	derr_at_pum_act_freq = calibration_parts.demodulate(pipeline, derrtee, pum_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pumexc_linefreq"] if "pumexc_linefreq" in head_dict else None)
+	# Now the PUM excitation channel
+	pumexc_at_pum_act_freq = calibration_parts.demodulate(pipeline, pumexc, pum_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pumexc_linefreq"] if "pumexc_linefreq" in head_dict else None)
+	if "pumexc_linefreq" in act_line_removal_dict.keys():
+		pumexc_at_pum_act_freq = pipeparts.mktee(pipeline, pumexc_at_pum_act_freq)
+		act_line_removal_dict["pumexc_linefreq"][0] = pumexc_at_pum_act_freq
+		act_line_removal_dict["pumexc_linefreq"][4] = True
+
+	# Take the ratio X_P = Pcal(f_P) / DARM_ERR(f_P)
+	X_P = calibration_parts.complex_division(pipeline, pumexc_at_pum_act_freq, derr_at_pum_act_freq)
+
+	# Now the gating and smoothing
+	if use_coherence:
+		X_P = calibration_parts.mkgate(pipeline, X_P, sus_line2_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line2_gate')
+		X_P = calibration_parts.smooth_complex_kappas(pipeline, X_P, EP46_real, EP46_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+	else:
+		var = 0.2 * abs(EP46_real + 1j * EP46_imag)
+		X_P = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, X_P, var, var, EP46_real, EP46_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+
+	# Now the UIM/L3 actuator line, starting with DARM_ERR.
+	derr_at_uim_act_freq = calibration_parts.demodulate(pipeline, derrtee, uim_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["uimexc_linefreq"] if "uimexc_linefreq" in head_dict else None)
+	# Now the UIM excitation channel
+	uimexc_at_uim_act_freq = calibration_parts.demodulate(pipeline, uimexc, uim_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["uimexc_linefreq"] if "uimexc_linefreq" in head_dict else None)
+	if "uimexc_linefreq" in act_line_removal_dict.keys():
+		uimexc_at_uim_act_freq = pipeparts.mktee(pipeline, uimexc_at_uim_act_freq)
+		act_line_removal_dict["uimexc_linefreq"][0] = uimexc_at_uim_act_freq
+		act_line_removal_dict["uimexc_linefreq"][4] = True
+
+	# Take the ratio X_U = Pcal(f_U) / DARM_ERR(f_U)
+	X_U = calibration_parts.complex_division(pipeline, uimexc_at_uim_act_freq, derr_at_uim_act_freq)
+
+	# Now the gating and smoothing
+	if use_coherence:
+		X_U = calibration_parts.mkgate(pipeline, X_U, sus_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line1_gate')
+		X_U = calibration_parts.smooth_complex_kappas(pipeline, X_U, EP47_real, EP47_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+	else:
+		var = 0.2 * abs(EP47_real + 1j * EP47_imag)
+		X_U = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, X_U, var, var, EP47_real, EP47_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+
+	# Finally, compute the kappas
+	if factors_from_filters_file:
+		X_list = [X1, X2, X_T, X_P, X_U]
+		freq_list = [act_pcal_line_freq, opt_gain_fcc_line_freq, esd_act_line_freq, pum_act_line_freq, uim_act_line_freq]
+		EPICS_list = [EP11_real, EP11_imag, EP25_real, EP25_imag, EP26_real, EP26_imag, EP27_real, EP27_imag, EP6_real, EP6_imag, EP28_real, EP28_imag, EP29_real, EP29_imag, EP30_real, EP30_imag, EP31_real, EP31_imag, EP32_real, EP32_imag, EP33_real, EP33_imag, EP34_real, EP34_imag, EP35_real, EP35_imag, EP36_real, EP36_imag, EP37_real, EP37_imag, EP38_real, EP38_imag, EP39_real, EP39_imag, EP40_real, EP40_imag, EP41_real, EP41_imag, EP42_real, EP42_imag]
+
+		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list)
+
+	#else: use non-existent channels in the raw frames
+
+	# A little bit of processing is necessary to ensure backwards compatibility
+	if compute_kappatst:
+		smooth_ktsttee = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ktst, matrix = [[1.0, 0.0]])), pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_tst, matrix = [[0.0, 2.0 * numpy.pi * esd_act_line_freq]])), "cexp")]))
+		smooth_ktstR, smooth_ktstI = calibration_parts.split_into_real(pipeline, smooth_ktsttee)
+		smooth_ktstRtee = pipeparts.mktee(pipeline, smooth_ktstR)
+		smooth_ktstItee = pipeparts.mktee(pipeline, smooth_ktstI)
+		smooth_ktstR_nogate = smooth_ktstRtee
+		smooth_ktstI_nogate = smooth_ktstItee
+	else:
+		pipeparts.mkfakesink(pipeline, ktst)
+		pipeparts.mkfakesink(pipeline, tau_tst)
+
+	if compute_kappapum:
+		smooth_kpumtee = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kpum, matrix = [[1.0, 0.0]])), pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_pum, matrix = [[0.0, 2.0 * numpy.pi * pum_act_line_freq]])), "cexp")]))
+		smooth_kpumR, smooth_kpumI = calibration_parts.split_into_real(pipeline, smooth_kpumtee)
+		smooth_kpumRtee = pipeparts.mktee(pipeline, smooth_kpumR)
+		smooth_kpumItee = pipeparts.mktee(pipeline, smooth_kpumI)
+		smooth_kpumR_nogate = smooth_kpumRtee
+		smooth_kpumI_nogate = smooth_kpumItee
+	else:
+		pipeparts.mkfakesink(pipeline, kpum)
+		pipeparts.mkfakesink(pipeline, tau_pum)
+
+	if compute_kappauim:
+		smooth_kuimtee = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kuim, matrix = [[1.0, 0.0]])), pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_uim, matrix = [[0.0, 2.0 * numpy.pi * uim_act_line_freq]])), "cexp")]))
+		smooth_kuimR, smooth_kuimI = calibration_parts.split_into_real(pipeline, smooth_kuimtee)
+		smooth_kuimRtee = pipeparts.mktee(pipeline, smooth_kuimR)
+		smooth_kuimItee = pipeparts.mktee(pipeline, smooth_kuimI)
+		smooth_kuimR_nogate = smooth_kuimRtee
+		smooth_kuimI_nogate = smooth_kuimItee
+	else:
+		pipeparts.mkfakesink(pipeline, kuim)
+		pipeparts.mkfakesink(pipeline, tau_uim)
+
+	if compute_kappac:
+		smooth_kctee = smooth_kc_nogate = kc
+	else:
+		pipeparts.mkfakesink(pipeline, kc)
+
+	if compute_fcc:
+		smooth_fcctee = smooth_fcc_nogate = fcc
+	else:
+		pipeparts.mkfakesink(pipeline, fcc)
+
+	if compute_fs:
+		smooth_fs_squared_nogate = smooth_fs_squared = fs_squared
+	else:
+		pipeparts.mkfakesink(pipeline, fs_squared)
+
+	if compute_srcq:
+		# fs / Q is a real-valued quantity, but fs and Q are not necessarily, so we compute a complex-valued 1/Q.
+		smooth_srcQ_inv = smooth_srcQ_inv_nogate = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fs_over_Q, matrix = [[1.0, 0.0]])), calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fs_squared, matrix = [[1.0, 0.0]])), exponent = -0.5)]))
+		# We need a real-valued version of Q^(-1) to write the the frames.  If we have
+		# an optical spring, the computed Q^(-1) is imaginary, and if we have an optical
+		# antispring, the computed Q^(-1) is real.  To get a sensible real value either
+		# way AND INCLUDE ANY MINUS SIGN, we use Re(Q^(-1)) + Im(Q^(-1)).
+		smooth_srcQ_inv_real = smooth_srcQ_inv_nogate = pipeparts.mktee(pipeline, calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "creal"), pipeparts.mkgeneric(pipeline, smooth_srcQ_inv, "cimag"))))
+
+	else:
+		pipeparts.mkfakesink(pipeline, fs_over_Q)
+
+elif compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu or compute_kappac or compute_fcc or compute_srcq or compute_fs:
+	# Use the solution in T1700106.
+	# demodulate the PCAL channel and apply the PCAL correction factor at the actuation Pcal line frequency
+	pcal_at_act_pcal_freq = calibration_parts.demodulate(pipeline, pcaltee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_act_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_act_freq_imag, freq_update = [head_dict["pcal1_linefreq"], head_dict["pcal1_line_corr_real"], head_dict["pcal1_line_corr_imag"]] if "pcal1_linefreq" in head_dict else None)
+	pcal_at_act_pcal_freq = pipeparts.mktee(pipeline, pcal_at_act_pcal_freq)
+	if remove_cal_lines:
+		# This will save having to demodulate it again
+		pcal_line_removal_dict["pcal1_linefreq"][0] = pcal_at_act_pcal_freq
+		pcal_line_removal_dict["pcal1_linefreq"][4] = True
+
+	# demodulate DARM_ERR at the actuation pcal line frequency
 	derr_at_act_pcal_freq = calibration_parts.demodulate(pipeline, derrtee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pcal1_linefreq"] if "pcal1_linefreq" in head_dict else None)
 	if dewhitening:
 		# dewhiten DARM_ERR at the ~30 Hz pcal line frequency
@@ -1274,9 +1513,10 @@ if compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu o
 if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
 	# demodulate the PUM excitation channel at the PUM actuation line frequency
 	pumexc_at_pum_act_freq = calibration_parts.demodulate(pipeline, pumexc, pum_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pumexc_linefreq"] if "pumexc_linefreq" in head_dict else None)
-	pumexc_at_pum_act_freq = pipeparts.mktee(pipeline, pumexc_at_pum_act_freq)
-	act_line_removal_dict["pumexc_linefreq"][0] = pumexc_at_pum_act_freq
-	act_line_removal_dict["pumexc_linefreq"][4] = True
+	if "pumexc_linefreq" in act_line_removal_dict.keys():
+		pumexc_at_pum_act_freq = pipeparts.mktee(pipeline, pumexc_at_pum_act_freq)
+		act_line_removal_dict["pumexc_linefreq"][0] = pumexc_at_pum_act_freq
+		act_line_removal_dict["pumexc_linefreq"][4] = True
 
 	# demodulate DARM_ERR at the PUM actuation line frequency
 	derr_at_pum_act_freq = calibration_parts.demodulate(pipeline, derrtee, pum_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pumexc_linefreq"] if "pumexc_linefreq" in head_dict else None)
@@ -1325,9 +1565,10 @@ if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc o
 	# Demodulate DARM_ERR and the UIM excitation channel at the UIM actuation line frequency
 	derr_at_uim_act_freq = calibration_parts.demodulate(pipeline, derrtee, uim_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["uimexc_linefreq"] if "uimexc_linefreq" in head_dict else None)
 	uimexc_at_uim_act_freq = calibration_parts.demodulate(pipeline, uimexc, uim_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["uimexc_linefreq"] if "uimexc_linefreq" in head_dict else None)
-	uimexc_at_uim_act_freq = pipeparts.mktee(pipeline, uimexc_at_uim_act_freq)
-	act_line_removal_dict["uimexc_linefreq"][0] = uimexc_at_uim_act_freq
-	act_line_removal_dict["uimexc_linefreq"][4] = True
+	if "uimexc_linefreq" in act_line_removal_dict.keys():
+		uimexc_at_uim_act_freq = pipeparts.mktee(pipeline, uimexc_at_uim_act_freq)
+		act_line_removal_dict["uimexc_linefreq"][0] = uimexc_at_uim_act_freq
+		act_line_removal_dict["uimexc_linefreq"][4] = True
 
 	# Compute kappa_uim, either using reference factors from the filters file or reading them from EPICS channels
 	if not factors_from_filters_file:
