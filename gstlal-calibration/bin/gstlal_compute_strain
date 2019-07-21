@@ -2964,116 +2964,116 @@ record_kappa_caps = "audio/x-raw, format=F32LE, rate=%d" % record_factors_sr
 # Resample the \kappa_tst channels at the specified recording sample rate and change them to single precision channels
 if compute_kappatst:
 
-	ktstRout = pipeparts.mkaudioconvert(pipeline, smooth_ktstRtee)
+	ktstRout = pipeparts.mkgeneric(pipeline, smooth_ktstRtee, "lal_typecast")
 	ktstRout = calibration_parts.mkresample(pipeline, ktstRout, 1, False, record_kappa_caps)
 	ktstRout = pipeparts.mkprogressreport(pipeline, ktstRout, "progress_kappa_tst_real_%s" % instrument)
 
-	ktstIout = pipeparts.mkaudioconvert(pipeline, smooth_ktstItee)
+	ktstIout = pipeparts.mkgeneric(pipeline, smooth_ktstItee, "lal_typecast")
 	ktstIout = calibration_parts.mkresample(pipeline, ktstIout, 1, False, record_kappa_caps)
 	ktstIout = pipeparts.mkprogressreport(pipeline, ktstIout, "progress_kappa_tst_imag_%s" % instrument)
 
-	smooth_ktstR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_ktstR_nogate)
+	smooth_ktstR_nogate = pipeparts.mkgeneric(pipeline, smooth_ktstR_nogate, "lal_typecast")
 	smooth_ktstR_nogate = calibration_parts.mkresample(pipeline, smooth_ktstR_nogate, 1, False, record_kappa_caps)
 	smooth_ktstR_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstR_nogate, "progress_kappa_tst_real_nogate_%s" % instrument)
 
-	smooth_ktstI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_ktstI_nogate)
+	smooth_ktstI_nogate = pipeparts.mkgeneric(pipeline, smooth_ktstI_nogate, "lal_typecast")
 	smooth_ktstI_nogate = calibration_parts.mkresample(pipeline, smooth_ktstI_nogate, 1, False, record_kappa_caps)
 	smooth_ktstI_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstI_nogate, "progress_kappa_tst_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_pum channels at the specified recording sample rate and change them to single precision channels
 if compute_kappapum:
 
-	kpumRout = pipeparts.mkaudioconvert(pipeline, smooth_kpumRtee)
+	kpumRout = pipeparts.mkgeneric(pipeline, smooth_kpumRtee, "lal_typecast")
 	kpumRout = calibration_parts.mkresample(pipeline, kpumRout, 1, False, record_kappa_caps)
 	kpumRout = pipeparts.mkprogressreport(pipeline, kpumRout, "progress_kappa_pum_real_%s" % instrument)
 
-	kpumIout = pipeparts.mkaudioconvert(pipeline, smooth_kpumItee)
+	kpumIout = pipeparts.mkgeneric(pipeline, smooth_kpumItee, "lal_typecast")
 	kpumIout = calibration_parts.mkresample(pipeline, kpumIout, 1, False, record_kappa_caps)
 	kpumIout = pipeparts.mkprogressreport(pipeline, kpumIout, "progress_kappa_pum_imag_%s" % instrument)
 
-	smooth_kpumR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpumR_nogate)
+	smooth_kpumR_nogate = pipeparts.mkgeneric(pipeline, smooth_kpumR_nogate, "lal_typecast")
 	smooth_kpumR_nogate = calibration_parts.mkresample(pipeline, smooth_kpumR_nogate, 1, False, record_kappa_caps)
 	smooth_kpumR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpumR_nogate, "progress_kappa_pum_real_nogate_%s" % instrument)
 
-	smooth_kpumI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpumI_nogate)
+	smooth_kpumI_nogate = pipeparts.mkgeneric(pipeline, smooth_kpumI_nogate, "lal_typecast")
 	smooth_kpumI_nogate = calibration_parts.mkresample(pipeline, smooth_kpumI_nogate, 1, False, record_kappa_caps)
 	smooth_kpumI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpumI_nogate, "progress_kappa_pum_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_uim channels at the specified recording sample rate and change them to single precision channels
 if compute_kappauim:
 
-	kuimRout = pipeparts.mkaudioconvert(pipeline, smooth_kuimRtee)
+	kuimRout = pipeparts.mkgeneric(pipeline, smooth_kuimRtee, "lal_typecast")
 	kuimRout = calibration_parts.mkresample(pipeline, kuimRout, 1, False, record_kappa_caps)
 	kuimRout = pipeparts.mkprogressreport(pipeline, kuimRout, "progress_kappa_uim_real_%s" % instrument)
 
-	kuimIout = pipeparts.mkaudioconvert(pipeline, smooth_kuimItee)
+	kuimIout = pipeparts.mkgeneric(pipeline, smooth_kuimItee, "lal_typecast")
 	kuimIout = calibration_parts.mkresample(pipeline, kuimIout, 1, False, record_kappa_caps)
 	kuimIout = pipeparts.mkprogressreport(pipeline, kuimIout, "progress_kappa_uim_imag_%s" % instrument)
 
-	smooth_kuimR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kuimR_nogate)
+	smooth_kuimR_nogate = pipeparts.mkgeneric(pipeline, smooth_kuimR_nogate, "lal_typecast")
 	smooth_kuimR_nogate = calibration_parts.mkresample(pipeline, smooth_kuimR_nogate, 1, False, record_kappa_caps)
 	smooth_kuimR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kuimR_nogate, "progress_kappa_uim_real_nogate_%s" % instrument)
 
-	smooth_kuimI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kuimI_nogate)
+	smooth_kuimI_nogate = pipeparts.mkgeneric(pipeline, smooth_kuimI_nogate, "lal_typecast")
 	smooth_kuimI_nogate = calibration_parts.mkresample(pipeline, smooth_kuimI_nogate, 1, False, record_kappa_caps)
 	smooth_kuimI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kuimI_nogate, "progress_kappa_uim_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_pu channels at the specified recording sample rate and change them to single precision channels
 if compute_kappapu:
 
-	kpuRout = pipeparts.mkaudioconvert(pipeline, smooth_kpuRtee)
+	kpuRout = pipeparts.mkgeneric(pipeline, smooth_kpuRtee, "lal_typecast")
 	kpuRout = calibration_parts.mkresample(pipeline, kpuRout, 1, False, record_kappa_caps)
 	kpuRout = pipeparts.mkprogressreport(pipeline, kpuRout, "progress_kappa_pu_real_%s" % instrument)
 
-	kpuIout = pipeparts.mkaudioconvert(pipeline, smooth_kpuItee)
+	kpuIout = pipeparts.mkgeneric(pipeline, smooth_kpuItee, "lal_typecast")
 	kpuIout = calibration_parts.mkresample(pipeline, kpuIout, 1, False, record_kappa_caps)
 	kpuIout = pipeparts.mkprogressreport(pipeline, kpuIout, "progress_kappa_pu_imag_%s" % instrument)
 
-	smooth_kpuR_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpuR_nogate)
+	smooth_kpuR_nogate = pipeparts.mkgeneric(pipeline, smooth_kpuR_nogate, "lal_typecast")
 	smooth_kpuR_nogate = calibration_parts.mkresample(pipeline, smooth_kpuR_nogate, 1, False, record_kappa_caps)
 	smooth_kpuR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuR_nogate, "progress_kappa_pu_real_nogate_%s" % instrument)
 
-	smooth_kpuI_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kpuI_nogate)
+	smooth_kpuI_nogate = pipeparts.mkgeneric(pipeline, smooth_kpuI_nogate, "lal_typecast")
 	smooth_kpuI_nogate = calibration_parts.mkresample(pipeline, smooth_kpuI_nogate, 1, False, record_kappa_caps)
 	smooth_kpuI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuI_nogate, "progress_kappa_pu_imag_nogate_%s" % instrument)
 
 # Resample the \kappa_c channels at the specified recording sample rate and change it to a single precision channel
 if compute_kappac:
-	kcout = pipeparts.mkaudioconvert(pipeline, smooth_kctee)
+	kcout = pipeparts.mkgeneric(pipeline, smooth_kctee, "lal_typecast")
 	kcout = calibration_parts.mkresample(pipeline, kcout, 1, False, record_kappa_caps)
 	kcout = pipeparts.mkprogressreport(pipeline, kcout, "progress_kappa_c_%s" % instrument)
 
-	smooth_kc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_kc_nogate)
+	smooth_kc_nogate = pipeparts.mkgeneric(pipeline, smooth_kc_nogate, "lal_typecast")
 	smooth_kc_nogate = calibration_parts.mkresample(pipeline, smooth_kc_nogate, 1, False, record_kappa_caps)
 	smooth_kc_nogate = pipeparts.mkprogressreport(pipeline, smooth_kc_nogate, "progress_kappa_c_nogate_%s" % instrument)
 
 # Resample the f_cc channels at the specified recording sample rate and change it to a single precision channel
 if compute_fcc:
-	fccout = pipeparts.mkaudioconvert(pipeline, smooth_fcctee)
+	fccout = pipeparts.mkgeneric(pipeline, smooth_fcctee, "lal_typecast")
 	fccout = calibration_parts.mkresample(pipeline, fccout, 1, False, record_kappa_caps)
 	fccout = pipeparts.mkprogressreport(pipeline, fccout, "progress_f_cc_%s" % instrument)
 
-	smooth_fcc_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fcc_nogate)
+	smooth_fcc_nogate = pipeparts.mkgeneric(pipeline, smooth_fcc_nogate, "lal_typecast")
 	smooth_fcc_nogate = calibration_parts.mkresample(pipeline, smooth_fcc_nogate, 1, False, record_kappa_caps)
 	smooth_fcc_nogate = pipeparts.mkprogressreport(pipeline, smooth_fcc_nogate, "progress_f_cc_nogate_%s" % instrument)
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if compute_fs:
-	fs_squared_out = pipeparts.mkaudioconvert(pipeline, smooth_fs_squared)
+	fs_squared_out = pipeparts.mkgeneric(pipeline, smooth_fs_squared, "lal_typecast")
 	fs_squared_out = calibration_parts.mkresample(pipeline, fs_squared_out, 1, False, record_kappa_caps)
 	fs_squared_out = pipeparts.mkprogressreport(pipeline, fs_squared_out, "progress_f_s_squared_%s" % instrument)
 
-	smooth_fs_squared_nogate = pipeparts.mkaudioconvert(pipeline, smooth_fs_squared_nogate)
+	smooth_fs_squared_nogate = pipeparts.mkgeneric(pipeline, smooth_fs_squared_nogate, "lal_typecast")
 	smooth_fs_squared_nogate = calibration_parts.mkresample(pipeline, smooth_fs_squared_nogate, 1, False, record_kappa_caps)
 	smooth_fs_squared_nogate = pipeparts.mkprogressreport(pipeline, smooth_fs_squared_nogate, "progress_f_s_squared_nogate_%s" % instrument)
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if compute_srcq:
-	srcQ_inv_out = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv_real)
+	srcQ_inv_out = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_real, "lal_typecast")
 	srcQ_inv_out = calibration_parts.mkresample(pipeline, srcQ_inv_out, 1, False, record_kappa_caps)
 	srcQ_inv_out = pipeparts.mkprogressreport(pipeline, srcQ_inv_out, "progress_SRC_Q_%s" % instrument)
 
-	smooth_srcQ_inv_nogate = pipeparts.mkaudioconvert(pipeline, smooth_srcQ_inv_nogate)
+	smooth_srcQ_inv_nogate = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_nogate, "lal_typecast")
 	smooth_srcQ_inv_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_inv_nogate, 1, False, record_kappa_caps)
 	smooth_srcQ_inv_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_inv_nogate, "progress_SRC_Q_nogate_%s" % instrument)
 
