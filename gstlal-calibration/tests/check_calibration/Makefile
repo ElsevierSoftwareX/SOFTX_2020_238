@@ -139,6 +139,9 @@ latency_tests:
 	#$(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache
 	python latency_plot.py --intime-file-list 'gstlal_compute_strain_timestamps_in_resample.txt,gstlal_compute_strain_timestamps_in_old.txt,gstlal_compute_strain_timestamps_in_better.txt' --outtime-file-list 'gstlal_compute_strain_timestamps_out_resample.txt,gstlal_compute_strain_timestamps_out_old.txt,gstlal_compute_strain_timestamps_out_better.txt' --plot-filename-prefix $(IFO)1GDS_latency --labels 'Including resampling latency,6s Tukey-windowed actuation filter,3.5s Kaiser-windowed actuation filter'
 
+RMS_timeseries: $(IFO)1_C00_frames.cache $(IFO)1_X02_frames.cache
+	python plot_rms_timeseries.py --ifo $(IFO)1 --gps-end-time $(PLOT_END) --gps-start-time $(PLOT_START) --frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_X02_frames.cache' --channel-list 'GDS-CALIB_STRAIN,DCS-CALIB_STRAIN_X02' --sample-rates '16,16' --labels 'C00,X02' --fmax 5.0
+
 CALCS_GDS_ASD: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	./ASD_comparison_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --raw-frame-cache $(IFO)1_easy_raw_frames.cache --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache
 
