@@ -723,5 +723,7 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 	assert any(itacac_dict.values())
 	if verbose:
 		for bank_id, head in itacac_dict.items():
-			itacac_dict[bank_id] = pipeparts.mkprogressreport(pipeline, head, "progress_xml_bank_%s" % bank_id)
+			# FIXME Not sure why we need a queue here, but without
+			# the queue one injection job in ~5000 hangs
+			itacac_dict[bank_id] = pipeparts.mkprogressreport(pipeline, pipeparts.mkqueue(pipeline, head, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0), "progress_xml_bank_%s" % bank_id)
 	return itacac_dict
