@@ -103,6 +103,14 @@ def create_new_dataset(path, base, data, name = 'data', group = None, tmp = Fals
 
 	return fname
 
+def feature_dtype(columns):
+	"""
+	given a set of columns, returns back numpy dtypes associated with those
+	columns. All time-based columns are double-precision, others are stored
+	in single-precision.
+	"""
+	return [(column, numpy.float64) if 'time' in column else (column, numpy.float32) for column in columns]
+
 #----------------------------------
 ### gps time utilities
 
@@ -273,7 +281,7 @@ class HDF5TimeseriesFeatureData(FeatureData):
 		self.sample_rate = kwargs['sample_rate']
 		self.waveform = kwargs['waveform']
 		self.metadata = dict(**kwargs)
-		self.dtype = [(column, 'float') for column in self.columns]
+		self.dtype = feature_dtype(self.columns)
 		self.feature_data = {key: numpy.empty((self.cadence * self.sample_rate,), dtype = self.dtype) for key in keys}
 		self.last_save_time = 0
 		self.clear()
@@ -322,7 +330,7 @@ class HDF5ETGFeatureData(FeatureData):
 		self.cadence = kwargs['cadence']
 		self.waveform = kwargs['waveform']
 		self.metadata = dict(**kwargs)
-		self.dtype = [(column, 'float') for column in self.columns]
+		self.dtype = feature_dtype(self.columns)
 		self.feature_data = {key: [] for key in keys}
 		self.clear()
 
