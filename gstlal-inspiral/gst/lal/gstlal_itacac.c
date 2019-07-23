@@ -1249,7 +1249,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// copysamps = nongapsamps
 					// outsamps = itacacpad->n + itacacpad->adjust_window
 					// peak_finding_length = itacacpad->n + itacacpad->adjust_window - 2 * itacacpad->maxdata->pad = outsamps - 2 * itacacpad->maxdata->pad
-					g_assert(availablesamps > nongapsamps);
+					g_assert(availablesamps > nongapsamps || (itacacpad->EOS && availablesamps == nongapsamps));
 					outsamps = itacacpad->n + itacacpad->adjust_window;
 					copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					itacacpad->last_gap = TRUE;
