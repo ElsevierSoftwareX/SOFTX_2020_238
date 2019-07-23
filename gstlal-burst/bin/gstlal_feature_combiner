@@ -36,7 +36,7 @@ import shutil
 import h5py
 import numpy
 
-from ligo.segments import segment, segmentlist
+from ligo.segments import infinity, segment, segmentlist
 
 from gstlal import aggregator
 from gstlal.fxtools import utils
@@ -88,8 +88,8 @@ if __name__ == "__main__":
 	)
 
 	### define gps bounds to grab features
-	start_time = options.start_time if options.start_time else -numpy.inf
-	end_time = options.end_time if options.end_time else numpy.inf
+	start_time = options.start_time if options.start_time else -infinity()
+	end_time = options.end_time if options.end_time else infinity()
 	file_segs = segmentlist([segment(start_time, end_time)])
 
 	### get base temp directory
