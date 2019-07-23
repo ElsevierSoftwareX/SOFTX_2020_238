@@ -215,7 +215,8 @@ feature_extractor_job = dagparts.DAGJob("gstlal_feature_extractor", condor_comma
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, data_source_info.seg, options.segment_length, max_template_length=max_template_length)
 
 combiner_condor_options = {"request_memory":"4GB", "request_cpus":2, "want_graceful_removal":"True", "kill_sig":"15"}
-feature_combiner_job = dagparts.DAGJob("gstlal_feature_combiner", condor_commands = combiner_condor_options)
+combiner_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, combiner_condor_options)
+feature_combiner_job = dagparts.DAGJob("gstlal_feature_combiner", condor_commands = combiner_condor_commands)
 
 #
 # set up jobs
