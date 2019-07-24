@@ -209,7 +209,7 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 	guint sample;
 	gint channel;
 
-	length = get_available_samples(element); 
+	length = get_available_samples(element);
 	if(length < autocorrelation_length(element->autocorrelation_matrix)) {
 		/* FIXME:  PTS and duration are not necessarily correct.
 		 * they're correct for now because we know how this element
@@ -489,6 +489,7 @@ static GstFlowReturn prepare_output_buffer(GstBaseTransform *trans, GstBuffer *i
 static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALStringTriggergen *element = GSTLAL_STRING_TRIGGERGEN(trans);
+	guint64 length;
 	GstFlowReturn result;
 
 	g_assert(GST_BUFFER_PTS_IS_VALID(inbuf));
@@ -500,7 +501,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		gst_audioadapter_clear(element->adapter);
 		element->t0 = GST_BUFFER_PTS(inbuf);
 		element->offset0 = GST_BUFFER_OFFSET(inbuf);
-		element->next_out_offset = 0;
+		element->next_out_offset = GST_BUFFER_OFFSET(inbuf);
 	} else if(!gst_audioadapter_is_empty(element->adapter))
 		g_assert_cmpuint(GST_BUFFER_PTS(inbuf), ==, gst_audioadapter_expected_timestamp(element->adapter));
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
@@ -509,17 +510,21 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	 * gap logic
 	 */
 
+	gst_buffer_ref(inbuf);
+	gst_audioadapter_push(element->adapter, inbuf);
 	if (!GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP)) {
 		/* not gaps */
-		gst_buffer_ref(inbuf);
-		gst_audioadapter_push(element->adapter, inbuf);
 		result = trigger_generator(element, outbuf);
 	} else {
 		/* gaps */
-		GST_BUFFER_PTS(outbuf) = element->t0;
-		GST_BUFFER_DURATION(outbuf) = 0;
+		length = get_available_samples(element);
+		element->next_out_offset += length;
+		gst_audioadapter_flush_samples(element->adapter, length);
+		GST_BUFFER_PTS(outbuf) = element->t0 + gst_util_uint64_scale_int_round(element->next_out_offset - element->offset0, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
+		GST_BUFFER_DURATION(outbuf) = gst_util_uint64_scale_int_round(length, GST_SECOND, GST_AUDIO_INFO_RATE(&element->audio_info));
 		/* we get no triggers, so outbuf offset is unchanged */
 		GST_BUFFER_OFFSET_END(outbuf) = GST_BUFFER_OFFSET(outbuf);
+		GST_BUFFER_FLAG_SET(outbuf, GST_BUFFER_FLAG_GAP);
 		result = GST_FLOW_OK;
 	}
 
