@@ -821,7 +821,11 @@ class GracedBWrapper(object):
 								print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
 							gracedb_ids.append(resp_json["graceid"])
 							p_astro = get_p_astro_func(coinc_event.likelihood, last_coincs.sngl_inspirals(coinc_event.coinc_event_id)[0].mass1, last_coincs.sngl_inspirals(coinc_event.coinc_event_id)[0].mass2, coinc_inspiral_index[coinc_event.coinc_event_id].snr, coinc_inspiral_index[coinc_event.coinc_event_id].combined_far)
-							self.__upload_aux_data("GstLAL internally computed p-astro", "gstlal_p_astro.json", "p_astro", p_astro, [gracedb_ids[-1]])
+							self.__upload_aux_data("GstLAL internally computed p-astro", "p_astro.json", "p_astro", p_astro, [gracedb_ids[-1]])
+							try:
+								resp = self.gracedb_client.writeLabel(gracedb_ids[-1], 'PASTRO_READY')
+							except gracedb.rest.HTTPError as resp:
+								print >> sys.stderr, resp
 							break
 					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d: %d: %s"  % (filename, attempt, self.retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
 					print >>sys.stderr, resp_json
