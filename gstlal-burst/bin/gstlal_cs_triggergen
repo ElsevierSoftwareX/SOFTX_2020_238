@@ -309,6 +309,8 @@ if options.reference_psd is not None:
 else:
 	psd = None
 
+# delete the reference_psd to save memory
+del options.reference_psd
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
