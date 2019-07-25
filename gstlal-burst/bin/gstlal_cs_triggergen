@@ -129,13 +129,13 @@ class PipelineHandler(simplehandler.Handler):
 			instrument = elem.get_property("name")
 			# extract segment.  move the segment's upper
 			# boundary to include all triggers.
+			buf_timestamp = LIGOTimeGPS(0, buf.pts)
 			if buf.mini_object.flags & Gst.BufferFlags.GAP:
 				buf_seg = None
+				# sanity check that gap buffers are empty
+				assert not events
 			else:
-				buf_timestamp = LIGOTimeGPS(0, buf.pts)
-				buf_seg = {instrument: segments.segmentlist([segments.segment(buf_timestamp, buf_timestamp + LIGOTimeGPS(0, buf.duration))])}
-			if events:
-				buf_seg[instrument] |= segments.segmentlist([segments.segment(buf_timestamp, max(event.peak for event in events if event.ifo == instrument))])
+				buf_seg = {instrument: segments.segmentlist([segments.segment(buf_timestamp, max(buf_timestamp + LIGOTimeGPS(0, buf.duration), max(event.peak for event in events if event.ifo == instrument) if events else 0.0))])}
 			# obtain union of this segment and the previously added segments
 			self.analyzed_seglistdict |= buf_seg
 			# put info of each event in the sngl burst table
@@ -438,11 +438,10 @@ for ifo in all_ifos:
 	pipeparts.src_deferred_link(head, channel_dict[ifo], elem.get_static_pad("sink"))
 	head = elem
 	# put gate for the segments and vetoes
-	# currently with leaky option on to avoid step function-like disconts in the data affect the PSD.
 	if options.segments_file is not None:
-		head = datasource.mksegmentsrcgate(pipeline, head, seglists[ifo], invert_output = False, leaky = True)
+		head = datasource.mksegmentsrcgate(pipeline, head, seglists[ifo], invert_output = False)
 	if options.vetoes_file is not None:
-		head = datasource.mksegmentsrcgate(pipeline, head, vetolists[ifo], invert_output = True, leaky = True)
+		head = datasource.mksegmentsrcgate(pipeline, head, vetolists[ifo], invert_output = True)
 	# limit the maximum buffer duration.  keeps RAM use under control
 	# in the even that we are loading gigantic frame files
 	head = pipeparts.mkreblock(pipeline, head, block_duration = 8 * 1000000000)
