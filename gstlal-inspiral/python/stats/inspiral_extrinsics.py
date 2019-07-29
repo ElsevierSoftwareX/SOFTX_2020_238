@@ -1658,8 +1658,8 @@ class p_of_instruments_given_horizons(object):
 			# histogram to just be the value in the last(first)
 			# bin, so we track those center values here in order to
 			# decide if something should be clipped.
-			self.first_center = histograms.values()[0].centres()[0][0]
-			self.last_center = histograms.values()[0].centres()[0][-1]
+			self.first_center = self.histograms.values()[0].centres()[0][0]
+			self.last_center = self.histograms.values()[0].centres()[0][-1]
 		# Otherwise we need to initialize these ourselves, which can be pretty slow.
 		else:
 			# We reuse the function in TimePhaseSNR to get
@@ -1928,7 +1928,6 @@ class InspiralExtrinsics(object):
 	* :py:class:`TimePhaseSNR`
 	* :py:class:`p_of_instruments_given_horizons`
 	"""
-	time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
 	p_of_ifos = {}
 	# FIXME add Kagra
 	p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
@@ -1936,7 +1935,7 @@ class InspiralExtrinsics(object):
 	p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
 
-	def __init__(self, min_instruments = 1):
+	def __init__(self, min_instruments = 1, filename = None):
 		#
 		# NOTE every instance will repeat this min_instruments
 		# normalization.  Therefore different min_instruments are not
@@ -1955,6 +1954,11 @@ class InspiralExtrinsics(object):
 			for combo in pofI.histograms:
 				pofI.histograms[combo].array /= total
 			pofI.mkinterp()
+		if filename is not None:
+			self.time_phase_snr = TimePhaseSNR.from_hdf5(filename)
+		else:
+			self.time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
+
 
 	def p_of_instruments_given_horizons(self, instruments, horizons):
 		horizons = dict((k,v) for k,v in horizons.items() if v != 0)
