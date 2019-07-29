@@ -59,6 +59,7 @@ import ligo.lw.utils.segments as ligolw_segments
 from gstlal import inspiral, inspiral_pipe
 from gstlal import dagparts
 from gstlal import datasource
+from gstlal import paths as gstlal_config_paths
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
@@ -169,6 +170,7 @@ def model_node_gen(modelJob, dag, parent_nodes, instruments, options, seg, templ
 	else:
 		return [], options.mass_model_file
 
+svd_to_dtdphi_map = {}
 def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, template_mchirp_dict):
 	svd_nodes = {}
 	new_template_mchirp_dict = {}
@@ -190,7 +192,7 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 					ids.append("%d_%d" % (i+bin_offset, n))
 					if f in template_mchirp_dict:
 						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
-
+				svd_to_dtdphi_map[i+bin_offset] = options.dtdphi_file[j]
 				svd_bank_name = dagparts.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = svdJob.output_path)
 				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
 					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
@@ -230,7 +232,6 @@ def svd_node_gen(svdJob, dag, parent_nodes, psd, bank_cache, options, seg, templ
 					"output-dir": output_dir},
 				input_files = {"template-bank-file":options.template_bank}
 				)
-
 	return svd_nodes, new_template_mchirp_dict
 
 def create_svd_bank_strings(svd_nodes, instruments = None):
@@ -511,7 +512,7 @@ def rank_and_merge(dag, createPriorDistStatsJob, calcRankPDFsJob, calcRankPDFsWi
 		priornode = dagparts.DAGNode(createPriorDistStatsJob, dag,
 				parent_nodes = [one_ifo_svd_nodes[n]] + mass_model_add_node or [],
 				opts = {"instrument":instrument_set, "background-prior":10000, "min-instruments":options.min_instruments, "df": "bandwidth", "coincidence-threshold":options.coincidence_threshold},
-				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file, "psd-xml": ref_psd},
+				input_files = {"svd-file":one_ifo_svd_nodes[n].output_files["write-svd"], "mass-model-file":mass_model_file, "dtdphi-file":svd_to_dtdphi_map[n], "psd-xml": ref_psd},
 				output_files = {"write-likelihood":dagparts.T050017_filename(instruments, '%04d_CREATE_PRIOR_DIST_STATS' % (n,), boundary_seg, '.xml.gz', path = createPriorDistStatsJob.output_path)}
 			)
 		# Create a file that has the priors *and* all of the diststats
@@ -1045,6 +1046,9 @@ def parse_command_line():
 	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', 'uniform-template', or 'file'")
 	parser.add_option("--mass-model-file", metavar = "filename", help = "Set the name of the mass model file, e.g., mass_model.h5.  Required if --mass-model=file")
 
+	# dtdphi option
+	parser.add_option("--dtdphi-file", metavar = "filename", action = "append", help = "dtdphi snr ratio pdfs to read from (hdf5 format)")
+
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", action = "append", help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
@@ -1119,6 +1123,12 @@ def parse_command_line():
 		raise ValueError("--mass-model must be 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', 'uniform-template', or 'file'")
 	if options.mass_model == "file" and not options.mass_model_file:
 		raise ValueError("--mass-model-file must be provided if --mass-model=file")
+
+	if not options.dtdphi_file:
+		options.dtdphi_file = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
+
+	if len(options.dtdphi_file) != len(options.overlap):
+		raise ValueError("You must provide as many dtdphi files as banks")
 
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
