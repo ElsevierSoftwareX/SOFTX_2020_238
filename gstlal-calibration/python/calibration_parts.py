@@ -958,7 +958,7 @@ def compute_kappaa(pipeline, afctrl, EP4, EP5):
 
 	return ka
 
-def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS):
+def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 
 	#
 	# See P1900052, Section 5.2.6 for details.  All constants are contained in the list
@@ -987,13 +987,13 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS):
 		if i < 2:
 			# Then it's a Pcal line
 			Y = pipeparts.mktee(pipeline, complex_audioamplify(pipeline, X[i], EPICS[2 * (1 + num_stages) * i], EPICS[2 * (1 + num_stages) * i + 1]))
-			Yreal.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Y, "creal"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0", name = "capsfilter_Yreal_%d" % i)))
-			Yimag.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Y, "cimag"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0", name = "capsfilter_Yimag_%d" % i)))
+			Yreal.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Y, "creal"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0" % rate, name = "capsfilter_Yreal_%d" % i)))
+			Yimag.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Y, "cimag"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0" % rate, name = "capsfilter_Yimag_%d" % i)))
 		else:
 			# It's an actuator line
 			CAX.append(pipeparts.mktee(pipeline, complex_audioamplify(pipeline, X[i], EPICS[2 * (1 + num_stages) * i], EPICS[2 * (1 + num_stages) * i + 1])))
-			CAXreal.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, CAX[-1], "creal"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0", name = "capsfilter_CAXreal_%d" % i)))
-			CAXimag.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, CAX[-1], "cimag"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0", name = "capsfilter_CAXimag_%d" % i)))
+			CAXreal.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, CAX[-1], "creal"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0" % rate, name = "capsfilter_CAXreal_%d" % i)))
+			CAXimag.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, CAX[-1], "cimag"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0" % rate, name = "capsfilter_CAXimag_%d" % i)))
 
 	# Let's start by computing the V's of Eqs. 5.2.78 and 5.2.79
 	for j in range(num_stages):
@@ -1008,7 +1008,8 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS):
 
 	# Now let's compute the elements of the matrix M, given by Eqs. 5.2.70 - 5.2.77
 	# Many of the elements are constant, so make a stream of ones to multiply
-	ones = pipeparts.mktee(pipeline, mkpow(pipeline, Yreal[0], exponent = 0.0))
+	if num_stages > 1:
+		ones = pipeparts.mktee(pipeline, mkpow(pipeline, Yreal[0], exponent = 0.0))
 	print("exact kappas 10")
 	for j in range(num_stages):
 		# Time-dependent matrix elements
@@ -1066,11 +1067,12 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS):
 		for j in range(num_stages):
 			kappajGresjatn = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kappas[j], matrix = [[EPICS[2 * (n * (1 + num_stages) + 1 + j)], EPICS[1 + 2 * (n * (1 + num_stages) + 1 + j)]]]))
 			i_omega_tau = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kappas[num_stages + j], matrix = [[0, 2.0 * numpy.pi * freqs[n]]]))
+			i_omega_tau = pipeparts.mkcapsfilter(pipeline, i_omega_tau, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0" % rate)
 			phase = pipeparts.mkgeneric(pipeline, i_omega_tau, "cexp")
 			Gres_components.append(mkmultiplier(pipeline, list_srcs(pipeline, kappajGresjatn, phase)))
 		Gres = pipeparts.mktee(pipeline, mkadder(pipeline, Gres_components))
-		Gresreal.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Gres, "creal"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0")))
-		Gresimag.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Gres, "cimag"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0")))
+		Gresreal.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Gres, "creal"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0" % rate)))
+		Gresimag.append(pipeparts.mktee(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkgeneric(pipeline, Gres, "cimag"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0" % rate)))
 
 	print("exact kappas 30")
 	# Next, let us find the H's, I's, Xi, and zeta, defined by Eqs. 5.2.48, 5.2.49, 5.2.50, and 5.2.58, respectively.
