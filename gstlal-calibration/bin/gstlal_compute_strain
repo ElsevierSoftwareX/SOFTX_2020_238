@@ -1112,10 +1112,10 @@ if not verbose:
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
 	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = input_frame_duration)
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
-	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument)
+	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument, use_mmap = True)
 
 if test_latency:
-	src = pipeparts.mkgeneric(pipeline, src, "splitcounter", filename = "%s_timestamps_in.txt" % OutputConfigs["frametype"])
+	src = pipeparts.mklatency(pipeline, src, name = "%s_src" % OutputConfigs["frametype"])
 
 #
 # Hook up the relevant channels to the demuxer
@@ -1375,7 +1375,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		freq_list = [act_pcal_line_freq, opt_gain_fcc_line_freq, esd_act_line_freq, pum_act_line_freq, uim_act_line_freq]
 		EPICS_list = [EP11_real, EP11_imag, EP25_real, EP25_imag, EP26_real, EP26_imag, EP27_real, EP27_imag, EP6_real, EP6_imag, EP28_real, EP28_imag, EP29_real, EP29_imag, EP30_real, EP30_imag, EP31_real, EP31_imag, EP32_real, EP32_imag, EP33_real, EP33_imag, EP34_real, EP34_imag, EP35_real, EP35_imag, EP36_real, EP36_imag, EP37_real, EP37_imag, EP38_real, EP38_imag, EP39_real, EP39_imag, EP40_real, EP40_imag, EP41_real, EP41_imag, EP42_real, EP42_imag]
 
-		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list)
+		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list, compute_factors_sr)
 
 	#else: use non-existent channels in the raw frames
 
@@ -1510,7 +1510,7 @@ elif compute_kappatst or compute_kappapum or compute_kappauim or compute_kappapu
 				act_line_removal_dict["tstexc_linefreq"][7] = smooth_ktstRtee
 
 # Check if we need to compute kappa_pum
-if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
+if not compute_exact_kappas and (compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq))):
 	# demodulate the PUM excitation channel at the PUM actuation line frequency
 	pumexc_at_pum_act_freq = calibration_parts.demodulate(pipeline, pumexc, pum_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pumexc_linefreq"] if "pumexc_linefreq" in head_dict else None)
 	if "pumexc_linefreq" in act_line_removal_dict.keys():
@@ -1561,7 +1561,7 @@ if compute_kappapum or (not compute_kappapu and (compute_kappac or compute_fcc o
 				act_line_removal_dict["pumexc_linefreq"][7] = smooth_kpumRtee
 
 # Check if we need to compute kappa_uim
-if compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq)):
+if not compute_exact_kappas and (compute_kappauim or (not compute_kappapu and (compute_kappac or compute_fcc or compute_fs or compute_srcq))):
 	# Demodulate DARM_ERR and the UIM excitation channel at the UIM actuation line frequency
 	derr_at_uim_act_freq = calibration_parts.demodulate(pipeline, derrtee, uim_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["uimexc_linefreq"] if "uimexc_linefreq" in head_dict else None)
 	uimexc_at_uim_act_freq = calibration_parts.demodulate(pipeline, uimexc, uim_act_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["uimexc_linefreq"] if "uimexc_linefreq" in head_dict else None)
@@ -1658,7 +1658,7 @@ if compute_kappapu:
 	smooth_kpuItee = pipeparts.mktee(pipeline, smooth_kpuI)	
 
 # Compute \kappa_c and f_cc
-if compute_kappac or compute_fcc or compute_fs or compute_srcq:
+if not compute_exact_kappas and (compute_kappac or compute_fcc or compute_fs or compute_srcq):
 	# demodulate the PCAL channel and apply the PCAL correction factor at optical gain and f_cc line frequency
 	pcal_at_opt_gain_freq = calibration_parts.demodulate(pipeline, pcaltee, opt_gain_fcc_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, prefactor_real = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_real, prefactor_imag = pcal_sign * pcal_corr_at_opt_gain_fcc_freq_imag, freq_update = [head_dict["pcal2_linefreq"], head_dict["pcal2_line_corr_real"], head_dict["pcal2_line_corr_imag"]] if "pcal2_linefreq" in head_dict else None)
 	if remove_cal_lines:
@@ -1766,7 +1766,7 @@ if compute_kappac or compute_fcc or compute_fs or compute_srcq:
 #			pipeparts.mkfakesink(pipeline, update_fcc)
 
 # compute f_s and Q
-if compute_fs or compute_srcq:
+if not compute_exact_kappas and (compute_fs or compute_srcq):
 	expected_Xi = complex((fs_squared_default - 1j * src_pcal_line_freq * fs_default / srcQ_default) / (src_pcal_line_freq * src_pcal_line_freq))
 	Xi_real_var = float((pow(abs(fs_default) + fs_var, 2.0) - pow(abs(fs_default), 2.0)) / pow(src_pcal_line_freq, 2))
 	Xi_imag_var = float(fs_var / (abs(srcQ_default) * src_pcal_line_freq))
@@ -2376,6 +2376,8 @@ except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
+if test_latency:
+	strain = pipeparts.mklatency(pipeline, strain, name = "%s_hoft" % OutputConfigs["frametype"])
 
 # Put the units back to strain before writing to frames
 straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
@@ -2896,6 +2898,8 @@ if any(witness_channel_list):
 
 if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
+	if test_latency:
+		clean_strain = pipeparts.mklatency(pipeline, clean_strain, name = "%s_hoft_cleaned" % OutputConfigs["frametype"])
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
 	clean_straintee = pipeparts.mktee(pipeline, clean_strain)
 	if not pick_cleanest_strain_channel:
@@ -2952,6 +2956,8 @@ if noisesubgatetee is not None:
 
 if compute_calib_statevector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
+	if test_latency:
+		calibstatevector = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec" % OutputConfigs["frametype"])
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
 
@@ -2967,18 +2973,26 @@ if compute_kappatst:
 	ktstRout = pipeparts.mkgeneric(pipeline, smooth_ktstRtee, "lal_typecast")
 	ktstRout = calibration_parts.mkresample(pipeline, ktstRout, 1, False, record_kappa_caps)
 	ktstRout = pipeparts.mkprogressreport(pipeline, ktstRout, "progress_kappa_tst_real_%s" % instrument)
+	if test_latency:
+		ktstRout = pipeparts.mklatency(pipeline, ktstRout, name = "%s_kappa_tst_real" % OutputConfigs["frametype"])
 
 	ktstIout = pipeparts.mkgeneric(pipeline, smooth_ktstItee, "lal_typecast")
 	ktstIout = calibration_parts.mkresample(pipeline, ktstIout, 1, False, record_kappa_caps)
 	ktstIout = pipeparts.mkprogressreport(pipeline, ktstIout, "progress_kappa_tst_imag_%s" % instrument)
+	if test_latency:
+		ktstIout = pipeparts.mklatency(pipeline, ktstIout, name = "%s_kappa_tst_imag" % OutputConfigs["frametype"])
 
 	smooth_ktstR_nogate = pipeparts.mkgeneric(pipeline, smooth_ktstR_nogate, "lal_typecast")
 	smooth_ktstR_nogate = calibration_parts.mkresample(pipeline, smooth_ktstR_nogate, 1, False, record_kappa_caps)
 	smooth_ktstR_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstR_nogate, "progress_kappa_tst_real_nogate_%s" % instrument)
+	if test_latency:
+		smooth_ktstR_nogate = pipeparts.mklatency(pipeline, smooth_ktstR_nogate, name = "%s_kappa_tst_real_nogate" % OutputConfigs["frametype"])
 
 	smooth_ktstI_nogate = pipeparts.mkgeneric(pipeline, smooth_ktstI_nogate, "lal_typecast")
 	smooth_ktstI_nogate = calibration_parts.mkresample(pipeline, smooth_ktstI_nogate, 1, False, record_kappa_caps)
 	smooth_ktstI_nogate = pipeparts.mkprogressreport(pipeline, smooth_ktstI_nogate, "progress_kappa_tst_imag_nogate_%s" % instrument)
+	if test_latency:
+		smooth_ktstI_nogate = pipeparts.mklatency(pipeline, smooth_ktstI_nogate, name = "%s_kappa_tst_imag_nogate" % OutputConfigs["frametype"])
 
 # Resample the \kappa_pum channels at the specified recording sample rate and change them to single precision channels
 if compute_kappapum:
@@ -2986,18 +3000,26 @@ if compute_kappapum:
 	kpumRout = pipeparts.mkgeneric(pipeline, smooth_kpumRtee, "lal_typecast")
 	kpumRout = calibration_parts.mkresample(pipeline, kpumRout, 1, False, record_kappa_caps)
 	kpumRout = pipeparts.mkprogressreport(pipeline, kpumRout, "progress_kappa_pum_real_%s" % instrument)
+	if test_latency:
+                kpumRout = pipeparts.mklatency(pipeline, kpumRout, name = "%s_kappa_pum_real" % OutputConfigs["frametype"])
 
 	kpumIout = pipeparts.mkgeneric(pipeline, smooth_kpumItee, "lal_typecast")
 	kpumIout = calibration_parts.mkresample(pipeline, kpumIout, 1, False, record_kappa_caps)
 	kpumIout = pipeparts.mkprogressreport(pipeline, kpumIout, "progress_kappa_pum_imag_%s" % instrument)
+	if test_latency:
+                kpumIout = pipeparts.mklatency(pipeline, kpumIout, name = "%s_kappa_pum_imag" % OutputConfigs["frametype"])
 
 	smooth_kpumR_nogate = pipeparts.mkgeneric(pipeline, smooth_kpumR_nogate, "lal_typecast")
 	smooth_kpumR_nogate = calibration_parts.mkresample(pipeline, smooth_kpumR_nogate, 1, False, record_kappa_caps)
 	smooth_kpumR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpumR_nogate, "progress_kappa_pum_real_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kpumR_nogate = pipeparts.mklatency(pipeline, smooth_kpumR_nogate, name = "%s_kappa_pum_real_nogate" % OutputConfigs["frametype"])
 
 	smooth_kpumI_nogate = pipeparts.mkgeneric(pipeline, smooth_kpumI_nogate, "lal_typecast")
 	smooth_kpumI_nogate = calibration_parts.mkresample(pipeline, smooth_kpumI_nogate, 1, False, record_kappa_caps)
 	smooth_kpumI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpumI_nogate, "progress_kappa_pum_imag_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kpumI_nogate = pipeparts.mklatency(pipeline, smooth_kpumI_nogate, name = "%s_kappa_pum_imag_nogate" % OutputConfigs["frametype"])
 
 # Resample the \kappa_uim channels at the specified recording sample rate and change them to single precision channels
 if compute_kappauim:
@@ -3005,18 +3027,26 @@ if compute_kappauim:
 	kuimRout = pipeparts.mkgeneric(pipeline, smooth_kuimRtee, "lal_typecast")
 	kuimRout = calibration_parts.mkresample(pipeline, kuimRout, 1, False, record_kappa_caps)
 	kuimRout = pipeparts.mkprogressreport(pipeline, kuimRout, "progress_kappa_uim_real_%s" % instrument)
+	if test_latency:
+                kuimRout = pipeparts.mklatency(pipeline, kuimRout, name = "%s_kappa_uim_real" % OutputConfigs["frametype"])
 
 	kuimIout = pipeparts.mkgeneric(pipeline, smooth_kuimItee, "lal_typecast")
 	kuimIout = calibration_parts.mkresample(pipeline, kuimIout, 1, False, record_kappa_caps)
 	kuimIout = pipeparts.mkprogressreport(pipeline, kuimIout, "progress_kappa_uim_imag_%s" % instrument)
+	if test_latency:
+                kuimIout = pipeparts.mklatency(pipeline, kuimIout, name = "%s_kappa_uim_imag" % OutputConfigs["frametype"])
 
 	smooth_kuimR_nogate = pipeparts.mkgeneric(pipeline, smooth_kuimR_nogate, "lal_typecast")
 	smooth_kuimR_nogate = calibration_parts.mkresample(pipeline, smooth_kuimR_nogate, 1, False, record_kappa_caps)
 	smooth_kuimR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kuimR_nogate, "progress_kappa_uim_real_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kuimR_nogate = pipeparts.mklatency(pipeline, smooth_kuimR_nogate, name = "%s_kappa_uim_real_nogate" % OutputConfigs["frametype"])
 
 	smooth_kuimI_nogate = pipeparts.mkgeneric(pipeline, smooth_kuimI_nogate, "lal_typecast")
 	smooth_kuimI_nogate = calibration_parts.mkresample(pipeline, smooth_kuimI_nogate, 1, False, record_kappa_caps)
 	smooth_kuimI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kuimI_nogate, "progress_kappa_uim_imag_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kuimI_nogate = pipeparts.mklatency(pipeline, smooth_kuimI_nogate, name = "%s_kappa_uim_imag_nogate" % OutputConfigs["frametype"])
 
 # Resample the \kappa_pu channels at the specified recording sample rate and change them to single precision channels
 if compute_kappapu:
@@ -3024,58 +3054,82 @@ if compute_kappapu:
 	kpuRout = pipeparts.mkgeneric(pipeline, smooth_kpuRtee, "lal_typecast")
 	kpuRout = calibration_parts.mkresample(pipeline, kpuRout, 1, False, record_kappa_caps)
 	kpuRout = pipeparts.mkprogressreport(pipeline, kpuRout, "progress_kappa_pu_real_%s" % instrument)
+	if test_latency:
+                kpuRout = pipeparts.mklatency(pipeline, kpuRout, name = "%s_kappa_pu_real" % OutputConfigs["frametype"])
 
 	kpuIout = pipeparts.mkgeneric(pipeline, smooth_kpuItee, "lal_typecast")
 	kpuIout = calibration_parts.mkresample(pipeline, kpuIout, 1, False, record_kappa_caps)
 	kpuIout = pipeparts.mkprogressreport(pipeline, kpuIout, "progress_kappa_pu_imag_%s" % instrument)
+	if test_latency:
+                kpuIout = pipeparts.mklatency(pipeline, kpuIout, name = "%s_kappa_pu_imag" % OutputConfigs["frametype"])
 
 	smooth_kpuR_nogate = pipeparts.mkgeneric(pipeline, smooth_kpuR_nogate, "lal_typecast")
 	smooth_kpuR_nogate = calibration_parts.mkresample(pipeline, smooth_kpuR_nogate, 1, False, record_kappa_caps)
 	smooth_kpuR_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuR_nogate, "progress_kappa_pu_real_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kpuR_nogate = pipeparts.mklatency(pipeline, smooth_kpuR_nogate, name = "%s_kappa_pu_real_nogate" % OutputConfigs["frametype"])
 
 	smooth_kpuI_nogate = pipeparts.mkgeneric(pipeline, smooth_kpuI_nogate, "lal_typecast")
 	smooth_kpuI_nogate = calibration_parts.mkresample(pipeline, smooth_kpuI_nogate, 1, False, record_kappa_caps)
 	smooth_kpuI_nogate = pipeparts.mkprogressreport(pipeline, smooth_kpuI_nogate, "progress_kappa_pu_imag_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kpuI_nogate = pipeparts.mklatency(pipeline, smooth_kpuI_nogate, name = "%s_kappa_pu_imag_nogate" % OutputConfigs["frametype"])
 
 # Resample the \kappa_c channels at the specified recording sample rate and change it to a single precision channel
 if compute_kappac:
 	kcout = pipeparts.mkgeneric(pipeline, smooth_kctee, "lal_typecast")
 	kcout = calibration_parts.mkresample(pipeline, kcout, 1, False, record_kappa_caps)
 	kcout = pipeparts.mkprogressreport(pipeline, kcout, "progress_kappa_c_%s" % instrument)
+	if test_latency:
+                kcout = pipeparts.mklatency(pipeline, kcout, name = "%s_kappa_c_imag" % OutputConfigs["frametype"])
 
 	smooth_kc_nogate = pipeparts.mkgeneric(pipeline, smooth_kc_nogate, "lal_typecast")
 	smooth_kc_nogate = calibration_parts.mkresample(pipeline, smooth_kc_nogate, 1, False, record_kappa_caps)
 	smooth_kc_nogate = pipeparts.mkprogressreport(pipeline, smooth_kc_nogate, "progress_kappa_c_nogate_%s" % instrument)
+	if test_latency:
+                smooth_kc_nogate = pipeparts.mklatency(pipeline, smooth_kc_nogate, name = "%s_kappa_c_nogate" % OutputConfigs["frametype"])
 
 # Resample the f_cc channels at the specified recording sample rate and change it to a single precision channel
 if compute_fcc:
 	fccout = pipeparts.mkgeneric(pipeline, smooth_fcctee, "lal_typecast")
 	fccout = calibration_parts.mkresample(pipeline, fccout, 1, False, record_kappa_caps)
 	fccout = pipeparts.mkprogressreport(pipeline, fccout, "progress_f_cc_%s" % instrument)
+	if test_latency:
+                fccout = pipeparts.mklatency(pipeline, fccout, name = "%s_f_cc_imag" % OutputConfigs["frametype"])
 
 	smooth_fcc_nogate = pipeparts.mkgeneric(pipeline, smooth_fcc_nogate, "lal_typecast")
 	smooth_fcc_nogate = calibration_parts.mkresample(pipeline, smooth_fcc_nogate, 1, False, record_kappa_caps)
 	smooth_fcc_nogate = pipeparts.mkprogressreport(pipeline, smooth_fcc_nogate, "progress_f_cc_nogate_%s" % instrument)
+	if test_latency:
+                smooth_fcc_nogate = pipeparts.mklatency(pipeline, smooth_fcc_nogate, name = "%s_f_cc_nogate" % OutputConfigs["frametype"])
 
 # Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
 if compute_fs:
 	fs_squared_out = pipeparts.mkgeneric(pipeline, smooth_fs_squared, "lal_typecast")
 	fs_squared_out = calibration_parts.mkresample(pipeline, fs_squared_out, 1, False, record_kappa_caps)
 	fs_squared_out = pipeparts.mkprogressreport(pipeline, fs_squared_out, "progress_f_s_squared_%s" % instrument)
+	if test_latency:
+                fs_squared_out = pipeparts.mklatency(pipeline, fs_squared_out, name = "%s_f_s_squared" % OutputConfigs["frametype"])
 
 	smooth_fs_squared_nogate = pipeparts.mkgeneric(pipeline, smooth_fs_squared_nogate, "lal_typecast")
 	smooth_fs_squared_nogate = calibration_parts.mkresample(pipeline, smooth_fs_squared_nogate, 1, False, record_kappa_caps)
 	smooth_fs_squared_nogate = pipeparts.mkprogressreport(pipeline, smooth_fs_squared_nogate, "progress_f_s_squared_nogate_%s" % instrument)
+	if test_latency:
+                smooth_fs_squared_nogate = pipeparts.mklatency(pipeline, smooth_fs_squared_nogate, name = "%s_f_s_squared_nogate" % OutputConfigs["frametype"])
 
-# Resample the f_s channels at the specified recording sample rate and change it to a single precision channel
+# Resample the SRC Q channels at the specified recording sample rate and change it to a single precision channel
 if compute_srcq:
 	srcQ_inv_out = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_real, "lal_typecast")
 	srcQ_inv_out = calibration_parts.mkresample(pipeline, srcQ_inv_out, 1, False, record_kappa_caps)
 	srcQ_inv_out = pipeparts.mkprogressreport(pipeline, srcQ_inv_out, "progress_SRC_Q_%s" % instrument)
+	if test_latency:
+                srcQ_inv_out = pipeparts.mklatency(pipeline, srcQ_inv_out, name = "%s_SRC_Q" % OutputConfigs["frametype"])
 
 	smooth_srcQ_inv_nogate = pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_nogate, "lal_typecast")
 	smooth_srcQ_inv_nogate = calibration_parts.mkresample(pipeline, smooth_srcQ_inv_nogate, 1, False, record_kappa_caps)
 	smooth_srcQ_inv_nogate = pipeparts.mkprogressreport(pipeline, smooth_srcQ_inv_nogate, "progress_SRC_Q_nogate_%s" % instrument)
+	if test_latency:
+                smooth_srcQ_inv_nogate = pipeparts.mklatency(pipeline, smooth_srcQ_inv_nogate, name = "%s_SRC_Q_nogate" % OutputConfigs["frametype"])
 
 #
 # CREATE MUXER AND HOOK EVERYTHING UP TO IT
@@ -3177,7 +3231,7 @@ else:
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
 if test_latency:
-	mux = pipeparts.mkgeneric(pipeline, mux, "splitcounter", filename = "%s_timestamps_out.txt" % OutputConfigs["frametype"])
+	mux = pipeparts.mklatency(pipeline, mux, name = "%s_sink" % OutputConfigs["frametype"])
 
 if OutputConfigs["datasink"] == "lvshm":
 	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*options.frame_duration*options.frames_per_file, buffer_mode = int(OutputConfigs["buffermode"]))
