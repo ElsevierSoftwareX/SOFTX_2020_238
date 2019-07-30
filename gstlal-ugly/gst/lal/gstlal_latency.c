@@ -95,6 +95,30 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 );
 
 
+/*
+ * ============================================================================
+ *
+ *				Utilities
+ *
+ * ============================================================================
+ */
+
+
+/* Need to define "property" before the GObject Methods section since it gets used earlier */
+enum property {
+	ARG_SILENT = 1,
+	ARG_CURRENT_LATENCY,
+	ARG_FAKE
+};
+
+static GParamSpec *properties[ARG_FAKE];
+
+#define DEFAULT_SILENT FALSE
+
+static void lal_latency_dummy_function(GObject *object) {
+	return;
+}
+
 
 /*
  * ============================================================================
@@ -128,14 +152,19 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	gdouble current_time = current_s + current_us;
 	gdouble buffer_time = (double) GST_TIME_AS_SECONDS(GST_BUFFER_PTS(buf));
 	
-	gdouble latency = current_time - buffer_time;
-	 
+	element->current_latency = current_time - buffer_time;
+
+	/* Tell the world about the latency by updating the latency property */
+	GST_LOG_OBJECT(element, "Just computed new latency");
+	g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_CURRENT_LATENCY]);
+
+	/* And write to file if we want */
 	if (!silent) {
 		FILE *out_file;
 		out_file = fopen("latency_output.txt", "a");
 
 		fprintf(out_file, "current time = %9.3f, buffer time = %9d, latency = %6.3f, %s\n",
-			current_time, (int) buffer_time, latency, GST_OBJECT_NAME(element));
+			current_time, (int) buffer_time, element->current_latency, GST_OBJECT_NAME(element));
 
 		fclose(out_file);
 	}
@@ -156,13 +185,6 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
  */
 
 
-enum property {
-	ARG_SILENT = 1
-};
-
-#define DEFAULT_SILENT FALSE
-
-
 /*
  * set_property()
  */
@@ -178,6 +200,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 
 	case ARG_SILENT:
 		element->silent = g_value_get_boolean(value);
+		break;
+
+	case ARG_CURRENT_LATENCY:
+		element->current_latency = g_value_get_double(value);
 		break;
 
 	default:
@@ -204,6 +230,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	case ARG_SILENT:
 		g_value_set_boolean(value, element->silent);
+		break;
+
+	case ARG_CURRENT_LATENCY:
+		g_value_set_double(value, element->current_latency);
 		break;
 
 	default:
@@ -237,16 +267,30 @@ static void gstlal_latency_class_init(GSTLALLatencyClass *klass)
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
 
+	properties[ARG_SILENT] = g_param_spec_boolean(
+		"silent",
+		"Silent",
+		"Do not print output to stdout.",
+		DEFAULT_SILENT,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_CURRENT_LATENCY] = g_param_spec_double(
+		"current-latency",
+		"Current Latency",
+		"The current measured value of the latency",
+		-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+	);
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SILENT,
-		g_param_spec_boolean(
-			"silent",
-			"Silent",
-			"Do not print output to stdout.",
-			DEFAULT_SILENT,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-		)
+		properties[ARG_SILENT]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CURRENT_LATENCY,
+		properties[ARG_CURRENT_LATENCY]
 	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));
@@ -263,6 +307,7 @@ static void gstlal_latency_class_init(GSTLALLatencyClass *klass)
 
 static void gstlal_latency_init(GSTLALLatency *element)
 {
+	g_signal_connect(G_OBJECT(element), "notify::current-latency", G_CALLBACK(lal_latency_dummy_function), NULL);
 	gst_base_transform_set_passthrough(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 
