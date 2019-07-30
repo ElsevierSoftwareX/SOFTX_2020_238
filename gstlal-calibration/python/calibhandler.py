@@ -33,7 +33,7 @@ GObject.threads_init()
 Gst.init(None)
 
 from gstlal import simplehandler
-from kafka import KafkaProducer
+from lal import LIGOTimeGPS
 
 #
 # =============================================================================
@@ -71,6 +71,7 @@ class Handler(simplehandler.Handler):
 		self.verbose = verbose
 		self.kafka_server = kafka_server
 		if self.kafka_server is not None:
+			from kafka import KafkaProducer
 			self.producer = KafkaProducer(
 					bootstrap_servers = [kafka_server],
 					key_serializer = lambda m: json.dumps(m).encode('utf-8'),
@@ -87,12 +88,11 @@ class Handler(simplehandler.Handler):
 				s = StringIO.StringIO(mapinfo.data)
 				time, state = s.getvalue().split('\n')[0].split()
 				state = int(state)
-			buf.unmap(mapinfo)
-			monitor_dict = {}
-			for keys, bitmask in bitmaskdict.items():
-				monitor_dict[key] = state & bitmask
-			if self.kafka_server is not None:
-				self.producer.send("%s_statevector_bit_check" % ifo, value = monitor_dict) 
-
-				
+				buf.unmap(mapinfo)
+				monitor_dict = {}
+				for key, bitmask in bitmaskdict.items():
+					monitor_dict[key] = state & bitmask
+				if self.kafka_server is not None:
+					self.producer.send("%s_statevector_bit_check" % ifo, value = monitor_dict) 
+			return Gst.FlowReturn.OK	
 

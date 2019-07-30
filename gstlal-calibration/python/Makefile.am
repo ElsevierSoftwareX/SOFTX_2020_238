@@ -5,6 +5,7 @@
 pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
-	calibration_parts.py
+	calibration_parts.py \
+	calibhandler.py
 
 

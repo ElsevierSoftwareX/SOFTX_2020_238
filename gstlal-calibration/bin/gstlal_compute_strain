@@ -174,6 +174,11 @@ SampleRates = ConfigSectionMap("SampleRates")
 Bitmasks = ConfigSectionMap("Bitmasks")
 PipelineConfigs = ConfigSectionMap("PipelineConfigurations")
 DataCleaningConfigs = ConfigSectionMap("DataCleaningConfigurations")
+try:
+	MonitorConfigs = ConfigSectionMap("MonitoringConfigurations")
+	kafka_server = MonitorConfigs["kafkaserver"]
+except:
+	kafka_server = None
 
 
 # Sanity checks for command line options
@@ -1095,7 +1100,7 @@ if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_
 
 pipeline = Gst.Pipeline(name="gstlal_compute_strain")
 mainloop = GObject.MainLoop()
-handler = calibhandler.Handler(mainloop, pipeline, kafka_server = MonitorConfigs["kafkaserver"])
+handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server)
 
 # 
 # Turn off debugging tools or verboseness
@@ -2437,10 +2442,9 @@ if apply_fcc:
 	TDCFs_valid_bitmask_list.append(pow(2, fcc_smooth_bitnum))
 if apply_fs:
 	TDCFs_valid_bitmask_list.append(pow(2, fs_smooth_bitnum))
-if apply_Qinv:
+if apply_srcq:
 	TDCFs_valid_bitmask_list.append(pow(2, Qinv_smooth_bitnum))
 TDCFs_valid_bitmask = sum(TDCFs_valid_bitmask_list)
-print(TDCFs_valid_bitmask)
 monitor_bitmask_dict = {'monitor_on': check_state_bitmask, 'TDCFs_valid': TDCFs_valid_bitmask}
 
 if compute_calib_statevector:
@@ -2982,9 +2986,9 @@ if compute_calib_statevector:
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
 	calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-	statevector_monitor = pipeparts.generic(pipeline, calibstatevector, "lal_nxydump")
+	statevector_monitor = pipeparts.mkgeneric(pipeline, calibstatevector, "lal_nxydump")
 	statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)
-	statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, ifo, monitor_bitmask_dict)
+	statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
