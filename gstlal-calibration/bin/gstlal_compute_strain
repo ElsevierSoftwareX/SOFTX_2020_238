@@ -70,7 +70,6 @@ import lal
 
 from gstlal import pipeparts
 from gstlal import calibration_parts
-from gstlal import simplehandler
 from gstlal import datasource
 from gstlal import calibhandler
 
@@ -1096,7 +1095,7 @@ if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_
 
 pipeline = Gst.Pipeline(name="gstlal_compute_strain")
 mainloop = GObject.MainLoop()
-handler = calibhandler.Handler(mainloop, pipeline)
+handler = calibhandler.Handler(mainloop, pipeline, kafka_server = MonitorConfigs["kafkaserver"])
 
 # 
 # Turn off debugging tools or verboseness
