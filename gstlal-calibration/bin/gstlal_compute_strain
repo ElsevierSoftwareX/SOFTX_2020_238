@@ -72,6 +72,7 @@ from gstlal import pipeparts
 from gstlal import calibration_parts
 from gstlal import simplehandler
 from gstlal import datasource
+from gstlal import calibhandler
 
 from ligo import segments
 
@@ -1095,7 +1096,7 @@ if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_
 
 pipeline = Gst.Pipeline(name="gstlal_compute_strain")
 mainloop = GObject.MainLoop()
-handler = simplehandler.Handler(mainloop, pipeline)
+handler = calibhandler.Handler(mainloop, pipeline)
 
 # 
 # Turn off debugging tools or verboseness
@@ -2422,6 +2423,27 @@ line_sub_bitnum = 26
 noise_sub_bitnum = 27
 noise_sub_gate_bitnum = 28
 
+# We'll only want to check things when the OBSERVATION-INTENT and LOW-NOISE bits are set
+check_state_bitmask = pow(2, obs_intent_bitnum) + pow(2, lownoise_bitnum)
+TDCFs_valid_bitmask_list = []
+if apply_kappatst:
+	TDCFs_valid_bitmask_list.append(pow(2, ktst_smooth_bitnum))
+if apply_kappapum:
+	TDCFs_valid_bitmask_list.append(pow(2, kpum_smooth_bitnum))
+if apply_kappauim:
+	TDCFs_valid_bitmask_list.append(pow(2, kuim_smooth_bitnum))
+if apply_kappac:
+	TDCFs_valid_bitmask_list.append(pow(2, kc_smooth_bitnum))
+if apply_fcc:
+	TDCFs_valid_bitmask_list.append(pow(2, fcc_smooth_bitnum))
+if apply_fs:
+	TDCFs_valid_bitmask_list.append(pow(2, fs_smooth_bitnum))
+if apply_Qinv:
+	TDCFs_valid_bitmask_list.append(pow(2, Qinv_smooth_bitnum))
+TDCFs_valid_bitmask = sum(TDCFs_valid_bitmask_list)
+print(TDCFs_valid_bitmask)
+monitor_bitmask_dict = {'monitor_on': check_state_bitmask, 'TDCFs_valid': TDCFs_valid_bitmask}
+
 if compute_calib_statevector:
 
 	# 
@@ -2960,6 +2982,10 @@ if compute_calib_statevector:
 		calibstatevector = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec" % OutputConfigs["frametype"])
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
+	calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+	statevector_monitor = pipeparts.generic(pipeline, calibstatevector, "lal_nxydump")
+	statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)
+	statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, ifo, monitor_bitmask_dict)
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
