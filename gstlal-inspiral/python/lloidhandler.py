@@ -1290,7 +1290,7 @@ class Handler(simplehandler.Handler):
 		return xmldoc
 
 	def __get_p_astro_json(self, lr, m1, m2, snr, far):
-		return p_astro_gstlal.compute_p_astro(lr, m1, m2, snr, far, self.rankingstatpdf)
+		return p_astro_gstlal.compute_p_astro(lr, m1, m2, snr, far, self.rankingstatpdf.copy())
 
 	def __get_rankingstat_xmldoc_for_gracedb(self):
 		# FIXME:  remove this wrapper when the horizon history
