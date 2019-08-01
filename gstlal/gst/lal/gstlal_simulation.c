@@ -46,6 +46,7 @@
  */
 
 
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -71,12 +72,14 @@
 #include <lal/GenerateBurst.h>
 #include <lal/LALConfig.h>
 #include <lal/LALDatatypes.h>
+#include <lal/LALInspiral.h>
 #include <lal/LALSimInspiral.h>
 #include <lal/LALSimulation.h>
 #include <lal/LALStdlib.h>
 #include <lal/LIGOLwXML.h>
 #include <lal/LIGOMetadataTables.h>
 #include <lal/LIGOMetadataUtils.h>
+#include <lal/LIGOMetadataInspiralUtils.h>
 #include <lal/SnglBurstUtils.h>
 #include <lal/TimeSeries.h>
 #include <lal/Units.h>
