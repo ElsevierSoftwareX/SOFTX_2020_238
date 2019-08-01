@@ -108,6 +108,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 enum property {
 	ARG_SILENT = 1,
 	ARG_CURRENT_LATENCY,
+	ARG_TIMESTAMP,
 	ARG_FAKE
 };
 
@@ -153,6 +154,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	gdouble buffer_time = (double) GST_TIME_AS_SECONDS(GST_BUFFER_PTS(buf));
 	
 	element->current_latency = current_time - buffer_time;
+	element->timestamp = buffer_time;
 
 	/* Tell the world about the latency by updating the latency property */
 	GST_LOG_OBJECT(element, "Just computed new latency");
@@ -206,6 +208,10 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->current_latency = g_value_get_double(value);
 		break;
 
+	case ARG_TIMESTAMP:
+		element->timestamp = g_value_get_double(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -234,6 +240,10 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 
 	case ARG_CURRENT_LATENCY:
 		g_value_set_double(value, element->current_latency);
+		break;
+
+	case ARG_TIMESTAMP:
+		g_value_set_double(value, element->timestamp);
 		break;
 
 	default:
@@ -282,6 +292,14 @@ static void gstlal_latency_class_init(GSTLALLatencyClass *klass)
 		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
 
+	properties[ARG_TIMESTAMP] = g_param_spec_double(
+		"timestamp",
+		"Timestamp",
+		"The current buffer timestamp",
+		-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+	);
+
 	g_object_class_install_property(
 		gobject_class,
 		ARG_SILENT,
@@ -291,6 +309,11 @@ static void gstlal_latency_class_init(GSTLALLatencyClass *klass)
 		gobject_class,
 		ARG_CURRENT_LATENCY,
 		properties[ARG_CURRENT_LATENCY]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_TIMESTAMP,
+		properties[ARG_TIMESTAMP]
 	);
 
 	gst_element_class_add_pad_template(element_class, gst_static_pad_template_get(&src_factory));

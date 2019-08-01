@@ -35,6 +35,7 @@ Gst.init(None)
 
 from gstlal import simplehandler
 from lal import LIGOTimeGPS
+from kafka import errors
 
 #
 # =============================================================================
@@ -73,11 +74,14 @@ class Handler(simplehandler.Handler):
 		self.kafka_server = kafka_server
 		if self.kafka_server is not None:
 			from kafka import KafkaProducer
-			self.producer = KafkaProducer(
-					bootstrap_servers = [kafka_server],
-					key_serializer = lambda m: json.dumps(m).encode('utf-8'),
-					value_serializer = lambda m: json.dumps(m).encode('utf-8'),
-				)
+			try:
+				self.producer = KafkaProducer(
+						bootstrap_servers = [kafka_server],
+						key_serializer = lambda m: json.dumps(m).encode('utf-8'),
+						value_serializer = lambda m: json.dumps(m).encode('utf-8'),
+					)
+			except errors.NoBrokersAvaialble:
+				self.producer = None
 
 	def appsink_statevector_new_buffer(self, elem, ifo, bitmaskdict):
 		with self.lock:
@@ -91,9 +95,19 @@ class Handler(simplehandler.Handler):
 				state = int(state)
 				buf.unmap(mapinfo)
 				monitor_dict = {}
+				monitor_dict['time'] = float(buf_timestamp)
 				for key, bitmask in bitmaskdict.items():
 					monitor_dict[key] = state & bitmask
-				if self.kafka_server is not None:
+				if self.kafka_server is not None and self.producer is not None:
 					self.producer.send("%s_statevector_bit_check" % ifo, value = monitor_dict) 
 			return Gst.FlowReturn.OK	
+
+	def latency_new_buffer(self, elem, param):
+		with self.lock:
+			latency = elem.get_property("current-latency")
+			name = elem.get_property("name")
+			time = elem.get_property("timestamp")
+			if self.kafka_server is not None and self.producer is not None:
+				self.producer.send("%s_latency" % (name.split("_")[0]), value = {"time": time, name: latency})
+			return Gst.FlowReturn.OK
 
