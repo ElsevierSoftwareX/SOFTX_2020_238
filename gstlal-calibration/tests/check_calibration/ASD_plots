@@ -99,7 +99,7 @@ if options.write_ASD_txt:
 		numpy.savetxt("%s_%s_ASD_%d_%d%s.txt" % (ifo, channel_list[i], start_time, end_time, options.filename_suffix), asd_txt)
 
 # Plot ASDs
-colors = ['blue', 'limegreen', "royalblue", "deepskyblue", "red", "yellow", "purple", "pink"]
+colors = ['blue', 'limegreen', "red", "deepskyblue", "red", "yellow", "purple", "pink"]
 if len(ASD_title):
 	plot = ASDs[0].plot(color = colors[0], title = "%s" % ASD_title, linewidth = 0.75, label = ASD_labels[0])
 else:

@@ -59,20 +59,23 @@ def lal_gate_01(pipeline, name):
 	#
 
 	# Make a sine wave
-	src = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 0, volume = 1.0, freq = frequency, width = 64)
+	src = test_common.complex_test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 0, freq = frequency, width = 64)
 
 	# Add a DC offset
 	head = pipeparts.mkgeneric(pipeline, src, "lal_add_constant", value = DC_offset)
 	head = pipeparts.mktee(pipeline, head)
 	pipeparts.mknxydumpsink(pipeline, head, "%s_in.txt" % name)
-	control = calibration_parts.mkqueue(pipeline, head, min_length = 8)
-	control = pipeparts.mkgeneric(pipeline, control, "splitcounter", name = "control")
-	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "before")
+	control = test_common.test_src(pipeline, buffer_length = buffer_length, rate = rate, test_duration = test_duration, wave = 0, volume = 1.0, freq = frequency, width = 64, src_suffix = "_control")
+	control = pipeparts.mkgeneric(pipeline, control, "lal_add_constant", value = DC_offset)
+	#control = pipeparts.mkgeneric(pipeline, control, "splitcounter", name = "control")
+	#head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "before")
 
 	# Gate it
 	head = calibration_parts.mkgate(pipeline, head, control, threshold, attack_length = int(attack_length * rate), hold_length = int(hold_length * rate))
-	head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "after")
-	pipeparts.mknxydumpsink(pipeline, head, "%s_out.txt" % name)
+	#head = pipeparts.mkgeneric(pipeline, head, "splitcounter", name = "after")
+	real, imag = calibration_parts.split_into_real(pipeline, head)
+	pipeparts.mknxydumpsink(pipeline, real, "%s_real_out.txt" % name)
+	pipeparts.mknxydumpsink(pipeline, imag, "%s_imag_out.txt" % name)
 
 	#
 	# done
