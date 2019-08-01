@@ -87,7 +87,6 @@ class SNR_Pipeline(object):
                         "f0": 0,
                         "sampleUnits" : lal.DimensionlessUnit,
                         "length" : len(data)}
-
 		if data.dtype == numpy.float32:
 			tseries = lal.CreateREAL4TimeSeries(**para)
 		elif data.dtype == numpy.float64:
@@ -103,7 +102,7 @@ class SNR_Pipeline(object):
 		return tseries
 
 	def get_snr_series(self, COMPLEX = False):
-                assert snr_info["epoch"] is not None, "No SNRs are obtained, check your start time."
+                assert self.snr_info["epoch"] is not None, "No SNRs are obtained, check your start time."
 		gps_start = self.snr_info["epoch"].gpsSeconds + self.snr_info["epoch"].gpsNanoSeconds * 10.**-9
 		gps = gps_start + numpy.arange(len(self.snr_info["data"])) * self.snr_info["deltaT"]
 
