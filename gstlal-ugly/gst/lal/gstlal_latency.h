@@ -79,6 +79,7 @@ struct _GSTLALLatency {
 	/* properties */
 	gboolean silent;
 	gdouble current_latency;
+	gdouble timestamp;
 };
 
 
