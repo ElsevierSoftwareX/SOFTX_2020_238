@@ -405,8 +405,8 @@ def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize =
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-capsfilter.html">capsfilter</a> element to a pipeline with useful default properties
-def mkcapsfilter(pipeline, src, caps):
-	return mkgeneric(pipeline, src, "capsfilter", caps = Gst.Caps.from_string(caps))
+def mkcapsfilter(pipeline, src, caps, **properties):
+	return mkgeneric(pipeline, src, "capsfilter", caps = Gst.Caps.from_string(caps), **properties)
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-capssetter.html">capssetter</a> element to a pipeline with useful default properties
