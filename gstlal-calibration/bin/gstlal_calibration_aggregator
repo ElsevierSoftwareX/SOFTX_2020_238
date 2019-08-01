@@ -147,9 +147,10 @@ if __name__ == '__main__':
 						data[topic][formatted_tag]['time'].append(message.value['time'])
 						data[topic][formatted_tag]['fields']['data'].append(message.value[tag])
 					elif 'statevector' in topic:
-						tag = [name for name in message.value.keys() if name in statevector_tags][0]
-						data[topic][tag]['time'].append(message.value['time'])
-						data[topic][tag]['fields']['data'].append(message.value[tag])
+						tags = [name for name in message.value.keys() if name in statevector_tags]
+						for tag in tags:
+							data[topic][tag]['time'].append(message.value['time'])
+							data[topic][tag]['fields']['data'].append(message.value[tag])
 
 				except KeyError: ### no metrics
 					pass
