@@ -1125,7 +1125,7 @@ def parse_command_line():
 		raise ValueError("--mass-model-file must be provided if --mass-model=file")
 
 	if not options.dtdphi_file:
-		options.dtdphi_file = os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
+		options.dtdphi_file = [os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")]*len(options.overlap)
 
 	if len(options.dtdphi_file) != len(options.overlap):
 		raise ValueError("You must provide as many dtdphi files as banks")
