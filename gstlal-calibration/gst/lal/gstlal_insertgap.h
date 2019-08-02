@@ -60,12 +60,10 @@ struct _GSTLALInsertGap {
 	GstElement element;
 
 	/* pads */
-
 	GstPad *sinkpad;
 	GstPad *srcpad;
 
 	/* stream parameters */
-
 	gint rate;
 	gint channels;
 	gint unit_size;
@@ -82,13 +80,13 @@ struct _GSTLALInsertGap {
 	guint64 discont_offset;
 	guint64 discont_time;
 	guint64 empty_bufs;
+	GMutex mutex;
+	gboolean finished_running;
 
 	/* timestamp bookkeeping */
-
 	GstClockTime t0;
 
 	/* properties */
-
 	gboolean insert_gap;
 	gboolean remove_gap;
 	gboolean remove_nan;
@@ -99,6 +97,7 @@ struct _GSTLALInsertGap {
 	gint array_length;
 	guint64 chop_length;
 	GstClockTime block_duration;
+	guint64 wait_time;
 };
 
 
