@@ -604,6 +604,11 @@ if options.agg_data_backend == 'influx':
 		"influx-hostname": options.influx_hostname,
 		"influx-port": options.influx_port,
 	})
+	if options.enable_auth:
+		trigagg_options.update({"enable-auth": ""})
+	if options.enable_https:
+		trigagg_options.update({"enable-https": ""})
+
 aggNode = dagparts.DAGNode(trigaggJob, dag, [], opts = trigagg_options)
 
 #
