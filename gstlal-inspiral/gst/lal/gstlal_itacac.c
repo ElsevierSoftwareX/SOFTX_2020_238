@@ -1184,7 +1184,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 					if(!itacacpad->last_gap && itacacpad->adjust_window == 0) {
 						// We are at the beginning of the window, and did not just come off a gap, thus the first 
-						// pad + max_coinc_window_samps worth of samples we flushed came from the previous window
+						// pad  worth of samples we flushed came from the previous window
 						g_assert(samples_left_in_window == itacacpad->n);
 						samples_left_in_window -= outsamps - itacacpad->maxdata->pad;
 					} else 
@@ -1232,10 +1232,10 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				if(nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad) {
 					// We have enough nongaps to cover this entire trigger window and a pad worth of samples in the next trigger window
 					// We want to copy all of the samples up to a pad past the end of the window, and we want to flush 
-					// all of the samples up until a (pad+max_coinc_window_samps) worth of samples before the end of the window (leaving samples for a pad in the next window)
+					// all of the samples up until a pad worth of samples before the end of the window (leaving samples for a pad in the next window)
 					// We want the peak finding length to be the length from the first sample after a pad worth of samples to the last sample in the window.
 					// copysamps = n + adjust_window + pad
-					// outsamps = n + adjust_window - pad - max_coinc_window_samps
+					// outsamps = n + adjust_window - pad
 					// peak_finding_length = n + adjust_window - itacacpad->maxdata->pad
 					outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad;
 					copy_nongapsamps(itacac, itacacpad, copysamps, itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
@@ -1285,7 +1285,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				// and we have a pad worth of samples from before this window starts (though the negation is not true)
 				//
 				if(!itacacpad->last_gap) {
-					// last_gap == FALSE and nongaps >= samples_left_in_window + 2*pad + max_coinc_window_samps
+					// last_gap == FALSE and nongaps >= samples_left_in_window + 2*pad
 					// Have a pad worth of samples before this window and after this window
 					// want to copy samples_left_in_window + 2* pad
 					// Want to flush up to a pad worth of samples before the next window
@@ -1297,14 +1297,14 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps, 0, -1 * (gint) itacacpad->maxdata->pad);
 						samples_left_in_window = 0;
 					}
-					// last_gap == FALSE and nongaps < samples_left_in_window + 2*pad but nongaps >= samples_left_in_window + pad + max_coinc_window_samps
+					// last_gap == FALSE and nongaps < samples_left_in_window + 2*pad but nongaps >= samples_left_in_window + pad
 					// this means you do not have a full pad worth of samples in the next window, and since we always guaranteed to get at least 
 					// a pad full of samples after the window boundary, we know there's a gap there, and because of the previous else if we know 
 					// we dont have enough samples after the window to be able to make a trigger at the end of this window that could be coincident 
 					// with something in the next window, so we can flush samples up to the window boundary.
 					// In this case we want to copy all the nongaps we have
 					// We want outsamps to go to the window boundary
-					// The peak finding length will be nongaps - 2*pad - itacac->max_coinc_window_samps
+					// The peak finding length will be nongaps - 2*pad
 					// samples_left_in_window will be zero after this
 					else if(nongapsamps >= itacacpad->n + itacacpad->maxdata->pad) {
 						g_assert(availablesamps > nongapsamps || itacacpad->EOS);
@@ -1314,10 +1314,10 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 						samples_left_in_window = 0;
 						itacacpad->last_gap = TRUE;
 					}
-					// last_gap == FALSE and nongaps < samples_left_in_window + pad + max_coinc_window_samps
+					// last_gap == FALSE and nongaps < samples_left_in_window + pad 
 					// This means there is a gap somewhere in this trigger window, so we want to copy and flush up to that gap
-					// Peak finding length in this case will be nongaps - 2*pad - max_coinc_window_samps
-					// samples_left_in_window -= (nongaps - pad - max_coinc_window_samps)
+					// Peak finding length in this case will be nongaps - 2*pad 
+					// samples_left_in_window -= (nongaps - pad)
 					// Note that nothing changes if nongaps < n
 					// FIXME Note that this assumes the pad is larger than the largest coincidence window, havent thought through 
 					// what would happen if this assumption wasnt true
@@ -1331,7 +1331,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// this means we have enough samples in the next window to use for padding
 					// we already know (from earlier in the if else if chain) that samples_left_in_window > 2pad
 					// want to copy all samples up to a pad past the window boundary
-					// want to flush all samples up to (pad+max_coinc_window_samps) before the window boundary
+					// want to flush all samples up to pad before the window boundary
 					// want peak finding length to go from a pad into the nongapsamps to the end of the window, so samples_left_in_window - pad
 					// samples_left_in_window will be zero after this
 					if(nongapsamps >= samples_left_in_window + itacacpad->maxdata->pad) {
@@ -1361,7 +1361,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// want to copy and flush all the nongaps
 					// peak finding length will nongaps - 2*pad
 					// samples_left_in_window -= nongaps
-					// FIXME NOTE this currently assumes the pad will always be greater than max_coinc_window_samps
 					else {
 						copysamps = outsamps = nongapsamps;
 						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
