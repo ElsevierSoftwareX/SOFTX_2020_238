@@ -23,6 +23,7 @@ AC_CONFIG_FILES([ \
 	gst/cmath/Makefile \
 	gst/splitcounter/Makefile \
 	python/Makefile \
+	share/Makefile \
 	tests/Makefile \
 ])
 
