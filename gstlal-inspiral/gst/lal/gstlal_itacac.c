@@ -1164,8 +1164,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 			// Check if the samples are gap, and flush up to samples_left_in_window of them if so
 			if(gapsamps > 0) {
-				// FIXME wtf does the FIXME below mean?, that cant be right, i think its leftover from an early version of the code
-				itacacpad->last_gap = TRUE; // FIXME This will not work for case where each itacac has multiple sinkpads 
+				itacacpad->last_gap = TRUE; 
 				outsamps = gapsamps > samples_left_in_window ? samples_left_in_window : gapsamps;
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 				samples_left_in_window -= outsamps;
