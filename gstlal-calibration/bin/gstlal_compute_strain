@@ -269,6 +269,7 @@ compute_calib_factors_complex_caps = "audio/x-raw, format=Z128LE, rate=%d, chann
 
 # Short cut names for a few other items that appear numerous times
 input_frame_duration = int(InputConfigs["inputframeduration"])
+wait_time = float(InputConfigs["waittime"]) if ("waittime" in InputConfigs and InputConfigs["datasource"] == "lvshm") else 0.0
 filter_latency_factor = float(PipelineConfigs["filterlatency"])
 demodulation_filter_time = int(TDCFConfigs["demodulationfiltertime"])
 coherence_unc_threshold = float(TDCFConfigs["coherenceuncthreshold"])
@@ -1140,7 +1141,7 @@ if DebuggingConfigs["pipelinegraphfilename"] != "None":
 
 # Get everything hooked up and fill in discontinuities
 for key, chan in zip(headkeys, channel_list):
-	head_dict[key] = calibration_parts.hook_up(pipeline, demux, chan[1], instrument, float(PipelineConfigs["bufferlength"]))
+	head_dict[key] = calibration_parts.hook_up(pipeline, demux, chan[1], instrument, float(PipelineConfigs["bufferlength"]), wait_time = wait_time)
 
 # The DARM_ERR channel follows different paths if we're doing full vs. partial calibration
 if CalibrationConfigs["calibrationmode"] == "Full":
