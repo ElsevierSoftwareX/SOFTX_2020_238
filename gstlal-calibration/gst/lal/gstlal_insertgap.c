@@ -206,7 +206,6 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	 */ \
 	if(element->fill_discont && (element->last_sinkbuf_ets != 0) && (sinkbuf_pts != element->last_sinkbuf_ets)) { \
  \
-		g_print("Filling Discont!\n"); \
 		guint64 standard_blocks, last_block_length, buffer_num, sample_num, missing_samples = 0; \
 		DTYPE COMPLEX sample_value; \
  \
@@ -444,8 +443,7 @@ static void *input_buffer_timer(void *void_element) {
 		ets_min = gst_util_uint64_scale_int_round(gst_util_uint64_scale_int(ets_min, element->rate, 1000000000), 1000000000, element->rate);
 
 		g_mutex_lock(&element->mutex);
-		if((double) ets_min - (double) element->last_sinkbuf_ets + 1000000000.0 - (double) (rand() % 2000000000) > 1000000000.0 / element->rate) {
-			g_print("input_buffer_timer going to push a buffer: ets_min=%lu, last_sinkbuf_ets=%lu\n", ets_min, element->last_sinkbuf_ets);
+		if((double) ets_min - (double) element->last_sinkbuf_ets > 1000000000.0 / element->rate) {
 			/*
 			 * Then we need to push a buffer.  Note the requirement that the
 			 * time is late enough for us to produce at least one full sample.
@@ -474,14 +472,11 @@ static void *input_buffer_timer(void *void_element) {
 			if(G_UNLIKELY(result != GST_FLOW_OK))
 				GST_WARNING_OBJECT(element, "push failed in function input_buffer_timer(): %s", gst_flow_get_name(result));
 
-			g_print("input_buffer_timer pushed a buffer\n");
 		}
 		g_mutex_unlock(&element->mutex);
 
-		if(element->finished_running) {
-			g_print("input_buffer_timer pthread_exit()\n");
+		if(element->finished_running)
 			pthread_exit(NULL);
-		}
 	}
 }
 
@@ -663,9 +658,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	}
 
 	if(sinkbuf_pts >= element->last_sinkbuf_ets) {
-		g_print("chain pushing buffer\n");
-		if(sinkbuf_pts == element->last_sinkbuf_ets)
-			g_print("chain pushing buffer no discont\n");
 		GstMapInfo inmap;
 		gst_buffer_map(sinkbuf, &inmap, GST_MAP_READ);
 
@@ -701,7 +693,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		g_free(outdata);
 		outdata = NULL;
 		gst_buffer_unmap(sinkbuf, &inmap);
-		g_print("chain done pushing buffer\n");
 	}
 
 	gst_buffer_unref(sinkbuf);
