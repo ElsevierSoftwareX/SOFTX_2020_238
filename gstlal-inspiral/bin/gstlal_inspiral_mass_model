@@ -91,8 +91,9 @@ for row in sngl_inspiral_table:
 	mchirps[row.template_id] = mchirp
 
 	if options.model == "narrow-bns":
-		sigma = 0.04
-		mean = 1.20
+		# comes from component mass mean 1.33, std 0.09, and redshift 0.02
+		sigma = 0.055
+		mean = 1.18
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 
 	elif options.model == "broad-bns":
@@ -123,7 +124,8 @@ for row in sngl_inspiral_table:
 		# BNS portion
 		#
 
-		# assume a 0.15 solar mass std deviation, this should capture both population distribution and snr effects
+		# assume a 0.35 solar mass std deviation in component masses to make it very broad, this should capture both population distribution and snr effects. This gives mean-mchirp = 1.179 and sigma-mchirp =0.186. Taking z = 0.02, and making std extra broad, we use:
+
 		sigma = 0.25
 		mean = 1.2
 		bnsprob = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
