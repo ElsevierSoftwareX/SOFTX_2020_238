@@ -75,16 +75,17 @@ struct _GSTLALInsertGap {
 		GSTLAL_INSERTGAP_Z128
 	} data_type;
 
-	guint64 last_sinkbuf_ets;
-	guint64 last_sinkbuf_offset_end;
-	guint64 discont_offset;
-	guint64 discont_time;
 	guint64 empty_bufs;
+	guint64 timeout_bufs;
 	GMutex mutex;
 	gboolean finished_running;
 
 	/* timestamp bookkeeping */
 	GstClockTime t0;
+	guint64 offset0;
+	guint64 next_out_offset;
+	guint64 last_sinkbuf_ets;
+	guint64 discont_time;
 
 	/* properties */
 	gboolean insert_gap;
