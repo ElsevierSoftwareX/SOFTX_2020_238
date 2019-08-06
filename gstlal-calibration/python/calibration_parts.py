@@ -222,11 +222,11 @@ def write_graph(demux, pipeline, name):
 # Common element combo functions
 #
 
-def hook_up(pipeline, demux, channel_name, instrument, buffer_length, element_name_suffix = ""):
+def hook_up(pipeline, demux, channel_name, instrument, buffer_length, element_name_suffix = "", wait_time = 0):
 	if channel_name.endswith("UNCERTAINTY"):
-		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 1, name = "insertgap_%s%s" % (channel_name, element_name_suffix))
+		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 1, name = "insertgap_%s%s" % (channel_name, element_name_suffix), wait_time = int(1000000000 * wait_time))
 	else:
-		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 0, name = "insertgap_%s%s" % (channel_name, element_name_suffix))
+		head = mkinsertgap(pipeline, None, bad_data_intervals = [-1e35, -1e-35, 1e-35, 1e35], insert_gap = False, remove_gap = True, fill_discont = True, block_duration = int(1000000000 * buffer_length), replace_value = 0, name = "insertgap_%s%s" % (channel_name, element_name_suffix), wait_time = int(1000000000 * wait_time))
 	pipeparts.src_deferred_link(demux, "%s:%s" % (instrument, channel_name), head.get_static_pad("sink"))
 
 	return head
