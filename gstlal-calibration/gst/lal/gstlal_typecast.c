@@ -1105,6 +1105,11 @@ static void gstlal_typecast_class_init(GSTLALTypeCastClass *klass) {
 
 static void gstlal_typecast_init(GSTLALTypeCast *element) {
 
+	element->t0 = GST_CLOCK_TIME_NONE;
+	element->offset0 = GST_BUFFER_OFFSET_NONE;
+	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
+	element->next_out_offset = GST_BUFFER_OFFSET_NONE;
+	element->need_discont = TRUE;
 	element->unit_size_in = 0;
 	element->unit_size_out = 0;
 	element->channels = 0;
