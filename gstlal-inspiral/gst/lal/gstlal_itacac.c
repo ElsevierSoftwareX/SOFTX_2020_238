@@ -475,47 +475,6 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 }
 
 /*
-GType gstlal_itacac_meta_api_get_type(void) {
-	static volatile GType type;
-	static const *tags[] = { "ifos", NULL };
-
-	if(g_init_once_enter(&type)) {
-		GType _type = gst_meta_api_type_register ("GSTLALItacacMetaAPI", tags);
-		g_once_init_leave (&type, _type);
-	}
-	return type;
-}
-
-static gboolean gstlal_itacac_meta_init(GstMeta *meta, gpointer params, GstBuffer *buf) {
-	GSTLALItacacMeta *itacac_meta = (GSTLALItacacMeta *) meta;
-	itacac_meta->ifos = NULL;
-
-	return TRUE;
-}
-
-static void gstlal_itacac_meta_free(GstMeta *meta, GstBuffer *buf) {
-	GSTLALItacacMeta *itacac_meta = (GSTLALItacacMeta *) meta;
-	free(itacac_meta->ifos);
-}
-
-static gboolean gstlal_itacac_meta_transform(GstBuffer *transbuf, GstMeta *meta, GstBuffer *buf, GQuark type, gpointer data) {
-	GSTLALItacacMeta *itacac_meta = (GSTLALItacacMeta *) meta;
-	if(GST_META_TRANSFORM_IS_COPY(type)) {
-		gst_buffer_add_meta(transbuf, GSTLAL_ITACAC_META_INFO, NULL);
-		itacac_meta
-	}
-}
-
-const GstMetaInfo *gstlal_itacac_meta_api_get_info(void) {
-	static const GstMetaInfo *itacac_meta_info = NULL;
-	if (g_once_init_enter ((GstMetaInfo **) &itacac_meta_info)) {
-	const GstMetaInfo *meta = gst_meta_register (GST_PROTECTION_META_API_TYPE, "GSTLALItacacMetaAPI", sizeof(GSTLALItacacMeta), 
-	}
-}
-*/
-
-
-/*
  * aggregate()
 */ 
 
@@ -1757,7 +1716,6 @@ static void gstlal_itacac_pad_init(GSTLALItacacPad *itacacpad)
 	itacacpad->bankarray = NULL;
 	itacacpad->EOS = FALSE;
 	itacacpad->waiting = TRUE;
-	//itacacpad->waiting = FALSE;
 
 	itacacpad->samples_available_for_padding = 0;
 	itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
@@ -1779,6 +1737,5 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 
 	itacac->EOS = FALSE;
 	itacac->waiting = TRUE;
-	//itacac->waiting = FALSE;
 
 }
