@@ -656,7 +656,7 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	return result;
 }
 
-static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, guint copysamps, guint peak_finding_length, guint previously_searched_samples, gint offset_from_trigwindow) {
+static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, guint copysamps, guint peak_finding_length, gint offset_from_trigwindow) {
 	guint data_container_index = 0;
 	guint offset_from_copied_data = 0;
 	guint duration = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, 0, 0);
@@ -809,7 +809,6 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 		// Replace maxdata->interpvalues.as_float_complex, maxdata->interpvalues.as_double_complex etc with whichever of the two is larger
 		// // Do same as above, but with maxdata->values instead of maxdata->interpvalues
 		// // Make sure to replace samples and interpsamples too
-		gsl_vector_complex_float_view old_snr_vector_view, new_snr_vector_view;
 		double old_snr, new_snr;
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			double *old_chi2 = (double *) itacacpad->chi2;
@@ -837,8 +836,8 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 
 					if(itacacpad->autocorrelation_matrix) {
 						// Replace the snr time series around the peak with the new one
-						old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view.matrix), channel);
-						new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->tmp_snr_matrix_view.matrix), channel);
+						gsl_vector_complex_float_view old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view.matrix), channel);
+						gsl_vector_complex_float_view new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->tmp_snr_matrix_view.matrix), channel);
 						old_snr_vector_view.vector = new_snr_vector_view.vector;
 					}
 				}
@@ -868,8 +867,8 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 
 					if(itacacpad->autocorrelation_matrix) {
 						// Replace the snr time series around the peak with the new one
-						old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view.matrix), channel);
-						new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->tmp_snr_matrix_view.matrix), channel);
+						gsl_vector_complex_float_view old_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->snr_matrix_view.matrix), channel);
+						gsl_vector_complex_float_view new_snr_vector_view = gsl_matrix_complex_float_column(&(itacacpad->tmp_snr_matrix_view.matrix), channel);
 						old_snr_vector_view.vector = new_snr_vector_view.vector;
 					}
 				}
@@ -892,7 +891,6 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 	double complex *tmp_snr_mat_doubleptr;
 	float complex *tmp_snr_mat_floatptr;
 
-	guint max_sample;
 	
 
 	// First zero the tmp_snr_mat objects in the other pads
@@ -901,7 +899,6 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 			continue;
 		memset(GSTLAL_ITACAC_PAD(itacacpadlist->data)->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad) * itacacpad->maxdata->unit);
 	}
-	max_sample = 0;
 
 	for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
 		// Identify which sample was the peak
@@ -1113,7 +1110,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 	
 	GstElement *element = GST_ELEMENT(itacac);
-	guint outsamps, nongapsamps, copysamps, samples_left_in_window, previous_samples_left_in_window;
+	guint outsamps, nongapsamps, copysamps, samples_left_in_window;
 	guint gapsamps = 0;
 	GstFlowReturn result = GST_FLOW_OK;
 	GList *padlist;
@@ -1155,7 +1152,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 			// Check how many gap samples there are until a nongap
 			// or vice versa, depending on which comes first
-			previous_samples_left_in_window = samples_left_in_window;
 			gapsamps = gst_audioadapter_head_gap_length(itacacpad->adapter);
 			nongapsamps = gst_audioadapter_head_nongap_length(itacacpad->adapter);
 			availablesamps = gst_audioadapter_available_samples(itacacpad->adapter);
@@ -1164,7 +1160,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 			// Check if the samples are gap, and flush up to samples_left_in_window of them if so
 			if(gapsamps > 0) {
-				itacacpad->last_gap = TRUE; 
 				outsamps = gapsamps > samples_left_in_window ? samples_left_in_window : gapsamps;
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 				samples_left_in_window -= outsamps;
@@ -1172,204 +1167,61 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			// Check if we have enough nongap samples to compute chisq for a potential trigger, and if not, check if we should flush the samples or 
 			// if theres a possibility we could get more nongapsamples in the future
 			else if(nongapsamps <= 2 * itacacpad->maxdata->pad) {
-				if(samples_left_in_window >= itacacpad->maxdata->pad) {
+				if(nongapsamps == availablesamps && !itacacpad->EOS) {
+					// We have reached the end of available samples, thus there could still be enough nongaps in the next window for triggers
+					// Assertion logic: we're guarenteed at least one more sample than a trigger window and 2 pad's worth of samples, thus if 
+					// all of the available samples are nongapsamps and we have 2 pad worth of non gap samples samples or less, our nongapsamps
+					// must go into the next window and we must have just come off a gap, meaning we dont have any samples already available for
+					// padding
+					g_assert(nongapsamps > samples_left_in_window);
+					g_assert(itacacpad->samples_available_for_padding == 0);
+					itacacpad->samples_available_for_padding = samples_left_in_window;
+					samples_left_in_window = 0;
+				} else {
 					// We are guaranteed to have at least one sample more than a pad worth of samples past the end of the 
 					// trigger window, thus we know there must be a gap sample after these, and can ditch them, though we 
 					// need to make sure we aren't flushing any samples from the next trigger window
-					// The only time adjust_window != 0 is if you're at the beginning of the window
 					g_assert(availablesamps > nongapsamps || itacacpad->EOS);
+					g_assert(itacacpad->samples_available_for_padding == 0);
 					outsamps = nongapsamps > samples_left_in_window ? samples_left_in_window : nongapsamps;
 					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
+					samples_left_in_window =- outsamps;
 
-					if(!itacacpad->last_gap && itacacpad->adjust_window == 0) {
-						// We are at the beginning of the window, and did not just come off a gap, thus the first 
-						// pad  worth of samples we flushed came from the previous window
-						g_assert(samples_left_in_window == itacacpad->n);
-						samples_left_in_window -= outsamps - itacacpad->maxdata->pad;
-					} else 
-						samples_left_in_window -= outsamps - itacacpad->adjust_window;
-
-					if(itacacpad->adjust_window > 0)
-						itacacpad->adjust_window = 0;
-
-				} else if(nongapsamps == availablesamps && !itacacpad->EOS) {
-					// We have reached the end of available samples, thus there could still be enough nongaps in the next 
-					// window for a trigger, so we want to leave a pad worth of samples at the end of this window
-					// FIXME this next line is assuming you have enough nongaps to fit into the next window, but it might just be a couple
-					g_assert(nongapsamps > samples_left_in_window);
-					itacacpad->adjust_window = samples_left_in_window;
-
-					samples_left_in_window = 0;
-					itacacpad->last_gap = FALSE;
-				} else {
-					// We know there is a gap after these, so we can flush these up to the edge of the window
-					g_assert(nongapsamps < availablesamps || itacacpad->EOS);
-					outsamps = nongapsamps >= samples_left_in_window ? samples_left_in_window : nongapsamps;
-					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
-					samples_left_in_window -= outsamps;
-				}
+				} 
 			}
 			// Not enough samples left in the window to produce a trigger or possibly even fill up a pad for a trigger in the next window
 			else if(samples_left_in_window <= itacacpad->maxdata->pad) {
-				// Need to just zero out samples_left_in_window and set itacacpad->adjust_window for next iteration
-				if(samples_left_in_window < itacacpad->maxdata->pad)
-					itacacpad->adjust_window = samples_left_in_window;
-
+				itacacpad->samples_available_for_padding = samples_left_in_window;
 				samples_left_in_window = 0;
-				itacacpad->last_gap = FALSE;
 			}
-			// Previous window had pad or fewer samples, meaning we cannot find generate any triggers with samples before the window begins and we 
-			// may not have enough samples before the window begins to pad the beginning of the window, which needs to be accounted for when generating 
-			// a trigger and flushing samples. This conditional will only ever return TRUE at the beginning of a window since itacacpad->adjust_window 
-			// is only set to nonzero values at the end of a window
-			else if(itacacpad->adjust_window > 0) {
-				// This should only ever happen at the beginning of a window, so we use itacacpad->n instead of samples_left_in_window for conditionals
-				//fprintf(stderr, "samples_left_in_window = %u, itacacpad->n = %u, ifo = %s\n", samples_left_in_window, itacacpad->n, itacacpad->instrument);
-				g_assert(samples_left_in_window == itacacpad->n);
-				g_assert(itacacpad->last_gap == FALSE);
-				copysamps = nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad ? itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad : nongapsamps;
-				if(nongapsamps >= itacacpad->n + itacacpad->adjust_window + itacacpad->maxdata->pad) {
-					// We have enough nongaps to cover this entire trigger window and a pad worth of samples in the next trigger window
-					// We want to copy all of the samples up to a pad past the end of the window, and we want to flush 
-					// all of the samples up until a pad worth of samples before the end of the window (leaving samples for a pad in the next window)
-					// We want the peak finding length to be the length from the first sample after a pad worth of samples to the last sample in the window.
-					// copysamps = n + adjust_window + pad
-					// outsamps = n + adjust_window - pad
-					// peak_finding_length = n + adjust_window - itacacpad->maxdata->pad
-					outsamps = itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad;
-					copy_nongapsamps(itacac, itacacpad, copysamps, itacacpad->n + itacacpad->adjust_window - itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
-					itacacpad->last_gap = FALSE;
-				} else if(nongapsamps >= itacacpad->n + itacacpad->adjust_window) {
-					// We have enough nongaps to cover this entire trigger window, but not cover a full pad worth of samples in the next window
-					// Because we are guaranteed to have at least a pad worth of samples after this window, we know these samples preceed a gap,
-					// and we know there's no chance of forming a coincidence with something at the end of this window 
-					// We want to copy all of the nongap samples, and we want to flush all of the samples up until the end of the current window
-					// we want the peak finding length to be from the first sample after a pad worth of samples to the last sample that preceeds a pad worth of samples
-					// copysamps = nongapsamps
-					// outsamps = itacacpad->n + itacacpad->adjust_window
-					// peak_finding_length = itacacpad->n + itacacpad->adjust_window - 2 * itacacpad->maxdata->pad = outsamps - 2 * itacacpad->maxdata->pad
-					g_assert(availablesamps > nongapsamps || (itacacpad->EOS && availablesamps == nongapsamps));
-					outsamps = itacacpad->n + itacacpad->adjust_window;
-					copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
-					itacacpad->last_gap = TRUE;
-				} else {
-					// There's a gap in the middle of this window or we've hit EOS
-					// We want to copy and flush all of the samples up to the gap
-					// We want the peak finding length to be the length from the first sample
-					// after a pad worth of samples to the last sample that preceeds a pad worth of samples
-					// copysamps = outsamps = nongapsamps
-					// peak_finding_length = nongapsamps - 2*itacacpad->maxdata->pad
-					g_assert(availablesamps > nongapsamps || itacacpad->EOS);
-					outsamps = copysamps = nongapsamps;
-					copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
-				}
+			// Have a pad worth of samples after this window and possibly some (up to a pad) before
+			// want to copy samples_left_in_window + pad + samples from previous window if any
+			// Want to flush up to a pad worth of samples before the next window
+			// Want peak finding length to go from first sample after pad to last sample of window
+			// samples_left_in_window will be zero after this
+			else if(nongapsamps >= samples_left_in_window + itacacpad->maxdata->pad + itacacpad->samples_available_for_padding) {
+				copysamps = samples_left_in_window + itacacpad->maxdata->pad + itacacpad->samples_available_for_padding;
+				outsamps = samples_left_in_window + itacacpad->samples_available_for_padding - itacacpad->maxdata->pad;
+				copy_nongapsamps(itacac, itacacpad, copysamps, outsamps, (gint) itacacpad->n - 1 * (gint) samples_left_in_window - 1 * (gint) itacacpad->samples_available_for_padding);
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
-				// FIXME This can put in the conditionals with outsamps and copy_nongapsamps once everything is working
-				if(nongapsamps >= itacacpad->n + itacacpad->adjust_window) {
-					samples_left_in_window = 0;
-				} else {
-					samples_left_in_window -= (outsamps - itacacpad->adjust_window);
-				}
-				itacacpad->adjust_window = 0;
+				samples_left_in_window = 0;
+				itacacpad->samples_available_for_padding = itacacpad->maxdata->pad;
 			}
-			// If we've made it this far, we have enough nongap samples to generate a trigger, now we need to check if we're close 
-			// enough to the end of the trigger window that we'll be able to save the normal number of samples (which is enough for 
-			// padding and the maximum number of coincident window samples)
-			// We now know we have enough nongap samples to generate triggers, and we dont need to worry about any corner cases
+			// There is a gap coming up in the next window
 			else {
-
-				// Possible scenarios
-				//
-				// REMEMBER that last_gap == FALSE means you're definitely at the beginning of the window (thus will use n instead of samples_left_in_window), 
-				// and we have a pad worth of samples from before this window starts (though the negation is not true)
-				//
-				if(!itacacpad->last_gap) {
-					// last_gap == FALSE and nongaps >= samples_left_in_window + 2*pad
-					// Have a pad worth of samples before this window and after this window
-					// want to copy samples_left_in_window + 2* pad
-					// Want to flush up to a pad worth of samples before the next window
-					// Want peak finding length of samples_left_in_window
-					// samples_left_in_window will be zero after this
-					if(nongapsamps >= itacacpad->n + 2*itacacpad->maxdata->pad) {
-						copysamps = itacacpad->n + 2*itacacpad->maxdata->pad;
-						outsamps = itacacpad->n;
-						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps, 0, -1 * (gint) itacacpad->maxdata->pad);
-						samples_left_in_window = 0;
-					}
-					// last_gap == FALSE and nongaps < samples_left_in_window + 2*pad but nongaps >= samples_left_in_window + pad
-					// this means you do not have a full pad worth of samples in the next window, and since we always guaranteed to get at least 
-					// a pad full of samples after the window boundary, we know there's a gap there, and because of the previous else if we know 
-					// we dont have enough samples after the window to be able to make a trigger at the end of this window that could be coincident 
-					// with something in the next window, so we can flush samples up to the window boundary.
-					// In this case we want to copy all the nongaps we have
-					// We want outsamps to go to the window boundary
-					// The peak finding length will be nongaps - 2*pad
-					// samples_left_in_window will be zero after this
-					else if(nongapsamps >= itacacpad->n + itacacpad->maxdata->pad) {
-						g_assert(availablesamps > nongapsamps || itacacpad->EOS);
-						copysamps = nongapsamps;
-						outsamps = itacacpad->n + itacacpad->maxdata->pad;
-						copy_nongapsamps(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) (itacacpad->maxdata->pad));
-						samples_left_in_window = 0;
-						itacacpad->last_gap = TRUE;
-					}
-					// last_gap == FALSE and nongaps < samples_left_in_window + pad 
-					// This means there is a gap somewhere in this trigger window, so we want to copy and flush up to that gap
-					// Peak finding length in this case will be nongaps - 2*pad 
-					// samples_left_in_window -= (nongaps - pad)
-					// Note that nothing changes if nongaps < n
-					// FIXME Note that this assumes the pad is larger than the largest coincidence window, havent thought through 
-					// what would happen if this assumption wasnt true
-					else {
-						copysamps = outsamps = nongapsamps;
-						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) (itacacpad->maxdata->pad));
-						samples_left_in_window -= nongapsamps - itacacpad->maxdata->pad;
-					}
-				} else {
-					// last_gap == TRUE and nongaps >= samples_left_in_window + pad
-					// this means we have enough samples in the next window to use for padding
-					// we already know (from earlier in the if else if chain) that samples_left_in_window > 2pad
-					// want to copy all samples up to a pad past the window boundary
-					// want to flush all samples up to pad before the window boundary
-					// want peak finding length to go from a pad into the nongapsamps to the end of the window, so samples_left_in_window - pad
-					// samples_left_in_window will be zero after this
-					if(nongapsamps >= samples_left_in_window + itacacpad->maxdata->pad) {
-						copysamps = samples_left_in_window + itacacpad->maxdata->pad;
-						outsamps = samples_left_in_window - itacacpad->maxdata->pad;
-						copy_nongapsamps(itacac, itacacpad, copysamps, samples_left_in_window - itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
-						samples_left_in_window = 0;
-						itacacpad->last_gap = FALSE;
-					}
-					// last_gap == TRUE and nongaps < samples_left_in_window + pad but nongaps >= samples_left_in_window
-					// We dont have enough samples in the next window for padding the final sample in this window that could produce 
-					// a trigger coincident with something in the next window
-					// We are guaranteed to have samples out to at least a pad past the window boundary (assuming we havent hit EOS), 
-					// thus we know a gap is after these nongaps. So we want want to copy all of the nongaps, and flush them up to the window boundary
-					// want peak finding length to go from a pad into the nongapsamps to a pad before the end of its, so nongapsamps - 2*pad
-					// samples_left_in_window will be zero after this
-					else if(nongapsamps >= samples_left_in_window) {
-						g_assert(availablesamps > nongapsamps || itacacpad->EOS);
-						copysamps = nongapsamps;
-						outsamps = samples_left_in_window;
-						copy_nongapsamps(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
-						samples_left_in_window = 0;
-						itacacpad->last_gap = TRUE;
-					}
-					// last_gap == TRUE and nongaps < samples_left_in_window
-					// These nongaps are sandwiched between two gaps
-					// want to copy and flush all the nongaps
-					// peak finding length will nongaps - 2*pad
-					// samples_left_in_window -= nongaps
-					else {
-						copysamps = outsamps = nongapsamps;
-						copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, itacacpad->n - samples_left_in_window, (gint) (itacacpad->n - samples_left_in_window));
-						samples_left_in_window -= nongapsamps;
-						itacacpad->last_gap = FALSE;
-					}
-				}
-
+				//copysamps = outsamps = nongapsamps;
+				//copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) (itacacpad->maxdata->pad));
+				//samples_left_in_window -= nongapsamps - itacacpad->maxdata->pad;
+				g_assert(availablesamps > nongapsamps || itacacpad->EOS);
+				copysamps = nongapsamps;
+				outsamps = nongapsamps >= samples_left_in_window + itacacpad->samples_available_for_padding ? samples_left_in_window + itacacpad->samples_available_for_padding : nongapsamps;
+				copy_nongapsamps(itacac, itacacpad, copysamps, copysamps - 2*itacacpad->maxdata->pad, (gint) itacacpad->n - 1*(gint) samples_left_in_window - 1 * (gint) itacacpad->samples_available_for_padding);
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
+				samples_left_in_window = nongapsamps >= samples_left_in_window + itacacpad->samples_available_for_padding ? 0 : samples_left_in_window + itacacpad->samples_available_for_padding - nongapsamps;
+				itacacpad->samples_available_for_padding = 0;
+				//samples_left_in_window + itacacpad->maxdata->pad + itacacpad->samples_available_for_padding;
 			}
+
 		}
 	}
 
@@ -1505,7 +1357,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		result = process(itacac);
 		return result;
 	}
-	guint64 tmp_uint;
 	
 		
 
@@ -1653,10 +1504,9 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			// FIXME Assumes n is the same for all detectors
 			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->rate));
 			//fprintf(stderr, "itacac->next_output_timestamp = %lu, itacacpad->initial_timestamp = %lu, %u num_samples_behind, gapsamps = %u, available_samps = %u, %s\n", (guint64) itacac->next_output_timestamp, (guint64) itacacpad->initial_timestamp, num_samples_behind, gst_audioadapter_head_gap_length(itacacpad->adapter), gst_audioadapter_available_samples(itacacpad->adapter), itacacpad->instrument);
-			if(num_samples_behind > itacacpad->maxdata->pad) {
+			if(num_samples_behind > itacacpad->maxdata->pad)
 				gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
-			} else if(num_samples_behind < itacacpad->maxdata->pad)
-				itacacpad->adjust_window = num_samples_behind;
+			itacacpad->samples_available_for_padding = num_samples_behind > itacacpad->maxdata->pad ? itacacpad->maxdata->pad : num_samples_behind;
 
 			itacacpad->waiting = FALSE;
 			//time_t rawtime;
@@ -1665,8 +1515,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			//timeinfo = localtime ( &rawtime );
 			//fprintf(stderr, "\n\n\n%s set waiting to FALSE %s \n\n\n\n", itacacpad->instrument, asctime(timeinfo));
 			//raise(SIGINT);
-			if(itacacpad->initial_timestamp != itacac->next_output_timestamp)
-				itacacpad->last_gap = FALSE;
 		}
 
 		//fprintf(stderr, "about to enter process from waiting=FALSE\n");
@@ -1756,14 +1604,9 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 	G_OBJECT_CLASS(gstlal_itacac_pad_parent_class)->dispose(object);
 }
 
-static void gstlal_itacac_unref_pad(GSTLALItacacPad *itacacpad)
-{
-	gst_object_unref(GST_PAD(itacacpad));
-}
-
 static void gstlal_itacac_finalize(GObject *object)
 {
-	GSTLALItacac *itacac = GSTLAL_ITACAC(object);
+	//GSTLALItacac *itacac = GSTLAL_ITACAC(object);
 	//fprintf(stderr, "num gaps pushed = %u\n", itacac->test);
 	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
 }
@@ -1965,12 +1808,11 @@ static void gstlal_itacac_pad_init(GSTLALItacacPad *itacacpad)
 	itacacpad->snr_mat = NULL;
 	itacacpad->tmp_snr_mat = NULL;
 	itacacpad->bankarray = NULL;
-	itacacpad->last_gap = TRUE;
 	itacacpad->EOS = FALSE;
 	itacacpad->waiting = TRUE;
 	//itacacpad->waiting = FALSE;
 
-	itacacpad->adjust_window = 0;
+	itacacpad->samples_available_for_padding = 0;
 	itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
 
 

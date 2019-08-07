@@ -128,12 +128,11 @@ typedef struct {
 	gsl_matrix_complex_float_view snr_matrix_view;
 	gsl_matrix_complex_float_view tmp_snr_matrix_view;
 	SnglInspiralTable *bankarray;
-	gboolean last_gap;
 	gboolean EOS;
 	gboolean waiting;
 
 	GstClockTime initial_timestamp;
-	guint adjust_window;
+	guint samples_available_for_padding;
 	GList *next_in_coinc_order;
 
 
