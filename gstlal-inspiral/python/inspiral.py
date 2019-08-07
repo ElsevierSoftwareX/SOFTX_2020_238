@@ -478,6 +478,8 @@ class FakeGracedbClient(object):
 		return FakeGracedbResp()
 	def writeLog(self, gracedb_id, message, filename, filecontents, tagname):
 		return FakeGracedbResp()
+	def writeLabel(self, gracedb_id, tagname):
+		return FakeGracedbResp()
 
 
 class GracedBWrapper(object):
