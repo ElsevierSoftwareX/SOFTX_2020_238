@@ -204,7 +204,6 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *event) {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(aggpad);
-	//fprintf(stderr, "%s got setcaps event\n", itacacpad->instrument);
 	GstCaps *caps;
 	guint width = 0; 
 
@@ -254,7 +253,6 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
 	GList *padlist;
 
 	GST_DEBUG_OBJECT(aggpad, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
-	//fprintf(stderr, "%s got %s event on sink pad\n", itacacpad->instrument, GST_EVENT_TYPE_NAME (event));
 
 	switch (GST_EVENT_TYPE(event)) {
 		case GST_EVENT_CAPS:
@@ -533,7 +531,6 @@ static GstFlowReturn push_buffer(GstAggregator *agg, GstBuffer *srcbuf) {
 	update_state(itacac, srcbuf);
 
 	GST_DEBUG_OBJECT(itacac, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
-	//fprintf(stderr, "pushing %" GST_BUFFER_BOUNDARIES_FORMAT "\n", GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
 	return GST_AGGREGATOR_CLASS(gstlal_itacac_parent_class)->finish_buffer(agg, srcbuf);
 }
 
@@ -556,7 +553,6 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	GstElement *element = GST_ELEMENT(itacac);
 	GList *padlist, *padlist2;
 	GstFlowReturn result = GST_FLOW_OK;
-	//fprintf(stderr, "\n\n\n\n\nin final_setup\n\n\n\n\n");
 
 	// Ensure all of the pads have the same channels and rate, and set them on itacac for easy access
 	for(padlist = element->sinkpads; padlist !=NULL; padlist = padlist->next) {
@@ -1106,9 +1102,6 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 
 static GstFlowReturn process(GSTLALItacac *itacac) {
 	// Iterate through audioadapters and generate triggers
-	// FIXME Needs to push a gap for the padding of the first buffer with nongapsamps
-
-	
 	GstElement *element = GST_ELEMENT(itacac);
 	guint outsamps, nongapsamps, copysamps, samples_left_in_window;
 	guint gapsamps = 0;
@@ -1123,7 +1116,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 		if(gst_audioadapter_available_samples( itacacpad->adapter ) <= itacacpad->n + 2*itacacpad->maxdata->pad && !itacacpad->EOS && !itacacpad->waiting) {
-			//fprintf(stderr, "%s\n", itacacpad->instrument);
 			return result;
 		}
 	}
@@ -1134,18 +1126,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		if(itacacpad->waiting)
 			continue;
 
-		/*(
-		if(itacacpad->initial_timestamp == itacac->next_output_timestamp) {
-			// FIXME Only do this once
-			GList *tmp_padlist;
-			for(tmp_padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) 
-				g_assert(itacacpad->initial_timestamp == itacac->next_output_timestamp);
-		}
-		*/
 		samples_left_in_window = itacacpad->n;
 
-		//fprintf(stderr, "%s going into big loop\n", itacacpad->instrument);
-		//raise(SIGINT);
 
 		// FIXME Currently assumes n is the same for all detectors
 		while( samples_left_in_window > 0 && gst_audioadapter_available_samples(itacacpad->adapter) ) {
@@ -1225,9 +1207,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 		}
 	}
 
-	// FIXME put some logic here to push a gap and return GST_FLOW_OK if there were only gaps in the window
-
-	//raise(SIGINT);
 	guint data_container_index;
 	guint peak_finding_start;
 	guint duration;
@@ -1258,7 +1237,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			g_assert(samples_searched_in_window < itacacpad->n);
 
 
-			//fprintf(stderr, "%s about to generate triggers\n", itacacpad->instrument);
 			//raise(SIGINT);
 			generate_triggers(
 				itacac, 
@@ -1339,18 +1317,13 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 
 static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 {
-	//fprintf(stderr, "in aggregate\n");
 	GSTLALItacac *itacac = GSTLAL_ITACAC(aggregator);
 	GList *padlist;
 	GstFlowReturn result = GST_FLOW_OK;
 
 	// Calculate the coincidence windows and make sure the pads caps are compatible with each other if we're just starting
 	if(itacac->rate == 0) {
-		//fprintf(stderr, "about to go into final_setup\n");
-		//raise(SIGINT);
 		result = final_setup(itacac);
-		//raise(SIGINT);
-		//return result;
 	}
 
 	if(itacac->EOS) {
@@ -1414,7 +1387,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			// FIXME For now, this should ensure we only see disconts at start up
 			g_assert(gst_audioadapter_available_samples(itacacpad->adapter) == 0);
 			itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
-			//fprintf(stderr, "%s clearing audioadapter\n", itacacpad->instrument);
 			gst_audioadapter_clear(itacacpad->adapter);
 			if(!itacacpad->waiting) { 
 				reset_time_and_offset(itacac);
@@ -1434,22 +1406,11 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		if(itacacpad->initial_timestamp == GST_CLOCK_TIME_NONE) {
 			g_assert(gst_audioadapter_available_samples(itacacpad->adapter) == 0);
 			itacacpad->initial_timestamp = GST_BUFFER_PTS(sinkbuf);
-			//fprintf(stderr, "%s initial_timestamp = %u + 1e-9*%u\n", itacacpad->instrument, (guint) (itacacpad->initial_timestamp / 1000000000), (guint) (itacacpad->initial_timestamp - 1000000000 * (itacacpad->initial_timestamp / 1000000000)));
 		}
 
 		// Push buf to gstaudioadapter
 		gst_audioadapter_push(itacacpad->adapter, sinkbuf);
 		gst_aggregator_pad_drop_buffer(GST_AGGREGATOR_PAD(itacacpad));
-		/*
-		if(gst_audioadapter_available_samples(itacacpad->adapter) > 0) {
-			time_t rawtime;
-			struct tm *timeinfo;
-			time(&rawtime);
-			timeinfo = localtime ( &rawtime );
-			//fprintf(stderr, "%s got samples %s", itacacpad->instrument, asctime(timeinfo));
-			//raise(SIGINT);
-		}
-		*/
 
 
 	}
@@ -1503,28 +1464,15 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 
 			// FIXME Assumes n is the same for all detectors
 			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->rate));
-			//fprintf(stderr, "itacac->next_output_timestamp = %lu, itacacpad->initial_timestamp = %lu, %u num_samples_behind, gapsamps = %u, available_samps = %u, %s\n", (guint64) itacac->next_output_timestamp, (guint64) itacacpad->initial_timestamp, num_samples_behind, gst_audioadapter_head_gap_length(itacacpad->adapter), gst_audioadapter_available_samples(itacacpad->adapter), itacacpad->instrument);
 			if(num_samples_behind > itacacpad->maxdata->pad)
 				gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
 			itacacpad->samples_available_for_padding = num_samples_behind > itacacpad->maxdata->pad ? itacacpad->maxdata->pad : num_samples_behind;
 
 			itacacpad->waiting = FALSE;
-			//time_t rawtime;
-			//struct tm *timeinfo;
-			//time(&rawtime);
-			//timeinfo = localtime ( &rawtime );
-			//fprintf(stderr, "\n\n\n%s set waiting to FALSE %s \n\n\n\n", itacacpad->instrument, asctime(timeinfo));
-			//raise(SIGINT);
 		}
 
-		//fprintf(stderr, "about to enter process from waiting=FALSE\n");
-		//raise(SIGINT);
 		result = process(itacac);
-		//fprintf(stderr, "out of process from waiting=FALSE\n");
-		//raise(SIGINT);
 	}
-
-	//result = process(itacac);
 
 	return result;
 }
@@ -1607,7 +1555,6 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 static void gstlal_itacac_finalize(GObject *object)
 {
 	//GSTLALItacac *itacac = GSTLAL_ITACAC(object);
-	//fprintf(stderr, "num gaps pushed = %u\n", itacac->test);
 	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
 }
 
