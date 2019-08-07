@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 '''
-./construct_skymap_test_dag path/to/injection/database path/to/tmp/space max_number_inspiral_jobs
+construct_skymap_test_dag --injection-database=path/to/injection/database --tmp-space=path/to/tmp/space --far-threshold=1e-7 --max-number-inspiral-jobs=max_number_inspiral_jobs
 '''
 
+from optparse import OptionParser
 import sqlite3
-import sys
 import os
 import glob
 
@@ -14,6 +14,30 @@ from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
 from ligo.lw import dbtables
 from gstlal import dagparts
+
+def parse_command_line():
+	parser = OptionParser()
+	parser.add_option("-i", "--injection-database", metavar = "filename", help = "Path to the injection database.")
+	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to temp space. Defaults to _CONDOR_SCRATCH_DIR .")
+	parser.add_option("-f", "--far-threshold", type = "float", default = 3.86e-7, help = "Threshold for rerunning an injection job to produce the time series.")
+	parser.add_option("-m", "--max-number-inspiral-jobs", type = "int", default = 10000, help = "Maximum number of inspiral jobs to queue. If this option is not provided, the program defaults to the top 10000 that pass the imposed FAR threshold.")
+
+	options, filenames = parser.parse_args()
+
+	return options, filenames
+
+options, filenames = parse_command_line()
+
+if not options.injection_database:
+	raise ValueError("You must provide an injection database.")
+
+if not options.tmp_space:
+	if '_CONDOR_SCRATCH_DIR' in os.environ:
+		options.tmp_space = os.environ['_CONDOR_SCRATCH_DIR']
+	else:
+		options.tmp_space = os.environ['TMPDIR']
+
+
 
 # copied from gstlal_inspiral_plotsummary
 def create_sim_coinc_view(connection):
@@ -68,10 +92,6 @@ AS
 				sim_coinc_map_helper
                         WHERE
                                 sid = simulation_id
-			AND
-				nevents < 3
-			AND
-				instruments = "H1,L1,V1"
                         ORDER BY
                                 lr
 			DESC
@@ -138,9 +158,9 @@ CREATE TEMPORARY TABLE
 	connection.cursor().execute("DROP INDEX sim_id_combined_far_index")
 	connection.cursor().execute("DROP INDEX sim_id_sngl_id_index")
 
-inj_db = sys.argv[1]
-tmp_space = sys.argv[2]
-num_inspiral_jobs = int(sys.argv[3])
+inj_db = options.injection_database
+tmp_space = options.tmp_space
+num_inspiral_jobs = options.max_number_inspiral_jobs
 analysis_dir = os.path.dirname(inj_db)
 
 working_filename = dbtables.get_connection_filename(inj_db, tmp_path = tmp_space, verbose = True)
@@ -156,11 +176,11 @@ SELECT
 FROM 
 	sim_sngl_far 
 WHERE 
-	far <= 3.86e-7 
+	far <= %e 
 ORDER BY 
 	far ASC
 LIMIT ? 
-""", (int(num_inspiral_jobs),)):
+""" % (options.far_threshold,), (int(num_inspiral_jobs),)):
 	process_id = record[0]
 	bank_id = record[1]
 	far = record[2]
@@ -257,6 +277,13 @@ except OSError:
 
 try:
 	os.mkdir("lloid_files")
+except OSError:
+	pass
+
+mass_model = analysis_dir + '/gstlal_inspiral_mass_model'
+try:
+	os.mkdir("gstlal_inspiral_mass_model")
+	os.system('cp -r %s .' % (mass_model,))
 except OSError:
 	pass
 
