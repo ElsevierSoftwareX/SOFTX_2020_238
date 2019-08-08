@@ -1,8 +1,20 @@
+gstlal-inspiral (1.6.8-1) unstable; urgency=low
+
+  * lloidhandler: aggregate max SNRs from each IFO rather than across ifos -
+    Fixes weird correlations in SNR heat map - addresses request to provide
+    gstlal background for Virgo
+  * gstlal_ll_inspiral_trigger_aggregator: port over to changed topic schema,
+    allow for auth + https
+  * gstlal_ll_inspiral_pipe: add option to turn on auth + https for trigger
+    aggregator
+
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 08 Aug 2019 08:37:59 -0700
+
 gstlal-inspiral (1.6.7-1) unstable; urgency=low
 
   * inspiral.py: make gstlal's pastro the production pastro
 
- -- Alexander Pace <alexander.pace@ligo.org> Thu, 25 Jul 2019 13:53:03 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 25 Jul 2019 13:53:03 -0700
 
 gstlal-inspiral (1.6.6-1) unstable; urgency=low
 
@@ -16,7 +28,7 @@ gstlal-inspiral (1.6.6-1) unstable; urgency=low
   * lloidhandler: truncate ranking data even more since we are still causing
     gracedb problems with the new analysis
 
- -- Alexander Pace <alexander.pace@ligo.org> Thu, 18 Jul 2019 09:19:04 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 18 Jul 2019 09:19:04 -0700
 
 gstlal-inspiral (1.6.5-1) unstable; urgency=low
 
@@ -27,7 +39,7 @@ gstlal-inspiral (1.6.5-1) unstable; urgency=low
   * lloidhandler:  reduce size of ranking stat to gracedb
   * gstlal_ll_inspiral_pipe fixes
 
- -- Alexander Pace <alexander.pace@ligo.org> Wed, 05 Jun 2019 09:53:10 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Wed, 05 Jun 2019 09:53:10 -0700
 
 gstlal-inspiral (1.6.4-1) unstable; urgency=low
 
@@ -43,7 +55,7 @@ gstlal-inspiral (1.6.4-1) unstable; urgency=low
   * Revert "normalize the background only using values at likelihood ratios
     greater than the threshold"
 
- -- Alexander Pace <alexander.pace@ligo.org> Thu, 28 Mar 2019 07:23:36 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 28 Mar 2019 07:23:36 -0700
 
 gstlal-inspiral (1.6.3-1) unstable; urgency=low
 
@@ -53,7 +65,7 @@ gstlal-inspiral (1.6.3-1) unstable; urgency=low
   * cbc_template_fir: multiple changes
   * Bug fixes and performance improvements
 
- -- Alexander Pace <alexander.pace@ligo.org> Sun, 17 Mar 2019 09:55:37 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Sun, 17 Mar 2019 09:55:37 -0700
 
 gstlal-inspiral (1.6.2-1) unstable; urgency=low
 
