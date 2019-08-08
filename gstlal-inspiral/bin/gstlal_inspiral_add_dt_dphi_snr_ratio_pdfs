@@ -18,11 +18,14 @@
 
 import sys
 import numpy
+import h5py
 from gstlal.stats.inspiral_extrinsics import TimePhaseSNR
 
 # Read in and combine all of the input files
-files = sys.argv[1:]
-TPS = TimePhaseSNR.from_hdf5(files[0], files[1:])
+h5_covmat = h5py.File(sys.argv[1])
+kwargs = {"SNR":h5_covmat["SNR"], "psd_fname":h5_covmat["psd"]}
+files = sys.argv[2:]
+TPS = TimePhaseSNR.from_hdf5(files[0], files[1:], **kwargs)
 
 # compute the normalization
 time, phase, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
