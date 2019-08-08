@@ -204,11 +204,16 @@ class EyeCandy(object):
 	def update(self, events, last_coincs):
 		self.ram_history.append((float(lal.UTCToGPS(time.gmtime())), (resource.getrusage(resource.RUSAGE_SELF).ru_maxrss + resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss) / 1048576.)) # GB
 		if events:
-			max_snr_event = max(events, key = lambda event: event.snr)
-			self.ifo_snr_history[max_snr_event.ifo].append((float(max_snr_event.end), max_snr_event.snr))
-			if self.producer is not None:
-				for ii, column in enumerate(["time", "data"]):
-					self.kafka_data["%s_snr_history" % max_snr_event.ifo][column].append(float(self.ifo_snr_history[max_snr_event.ifo][-1][ii]))
+			maxevents = {}
+			for event in events:
+				if (event.ifo not in maxevents) or (event.snr > maxevents[event.ifo].snr):
+					maxevents[event.ifo] = event
+			for ifo, event in maxevents.items():
+				t, snr = float(event.end), event.snr
+				self.ifo_snr_history[ifo].append((t, snr))
+				if self.producer is not None:
+					self.kafka_data["%s_snr_history" % ifo]["time"].append(t)
+					self.kafka_data["%s_snr_history" % ifo]["data"].append(snr)
 		if last_coincs:
 			coinc_inspiral_index = last_coincs.coinc_inspiral_index
 			coinc_event_index = last_coincs.coinc_event_index
