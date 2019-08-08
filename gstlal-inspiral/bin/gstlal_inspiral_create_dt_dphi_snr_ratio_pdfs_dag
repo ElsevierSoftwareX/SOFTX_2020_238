@@ -56,7 +56,9 @@ for start in range(0, 3345408, num):
 	stop = start + num
 	margnodes.append(dagparts.DAGNode(margJob, dag, parent_nodes = [covnode], opts = {"start":str(start), "stop":str(stop)}, input_files = {"cov-mat": "covmat.h5"}, output_files = {"output":"%s/inspiral_dtdphi_pdf_%d_%d.h5" % (margJob.output_path, start, stop)}))
 
-addnode = dagparts.DAGNode(addJob, dag, parent_nodes = margnodes, input_files = {"": [n.output_files["output"] for n in margnodes]})
+addJob_input = ["covmat.h5"]
+addJob_input.extend([n.output_files["output"] for n in margnodes])
+addnode = dagparts.DAGNode(addJob, dag, parent_nodes = margnodes, input_files = {"": addJob_input})
 
 dag.write_sub_files()
 dag.write_dag()
