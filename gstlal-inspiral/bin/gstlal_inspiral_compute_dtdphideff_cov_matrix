@@ -21,7 +21,6 @@ import numpy, scipy.interpolate
 from lal import series
 from gstlal import templates
 from ligo.lw import utils as ligolw_utils
-import sys
 import h5py
 
 parser = argparse.ArgumentParser(description = 'generate a dt dphi covariance matrix')
@@ -46,11 +45,11 @@ refpsd = args.psd_xml
 rho = {"L1": args.L_snr, "H1": args.H_snr, "V1": args.V_snr, "K1": args.K_snr}
 
 instruments = ("H1", "L1", "V1", "K1")
-psd = series.read_psd_xmldoc(ligolw_utils.load_filename(refpsd, verbose = True, contenthandler = series.PSDContentHandler))
+snr = series.read_psd_xmldoc(ligolw_utils.load_filename(refpsd, verbose = True, contenthandler = series.PSDContentHandler))
 psddict = {}
 for ifo in rho:
-	f = numpy.arange(len(psd[ifo].data.data)) * psd[ifo].deltaF
-	psddict[ifo] = scipy.interpolate.interp1d(f, psd[ifo].data.data)
+	f = numpy.arange(len(snr[ifo].data.data)) * snr[ifo].deltaF
+	psddict[ifo] = scipy.interpolate.interp1d(f, snr[ifo].data.data)
 
 def moment(fmin, fmax, n, m1, m2, s1, s2, ifo, psddict = psddict, delta_f = 0.25):
 	farr = numpy.linspace(0, fmax, fmax / delta_f + delta_f)
@@ -94,6 +93,10 @@ for pair in pairs:
 	transdd[frozenset(pair)] = 1. / numpy.sqrt(sigsqdd[a] + sigsqdd[b])
 
 f = h5py.File(args.output, "w")
+f.create_dataset("psd", data=args.psd_xml)
+h5_snr = f.create_group("SNR")
+for ifo, snr in rho.items():
+    h5_snr.create_dataset(ifo, data=snr)
 h5_transtt = f.create_group("transtt")
 h5_transtp = f.create_group("transtp")
 h5_transpt = f.create_group("transpt")
