@@ -1144,7 +1144,7 @@ class TimePhaseSNR(object):
 	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 	numchunks = 20
 
-	def __init__(self, transtt = None, transtp = None, transpt = None, transpp = None, transdd = None, norm = None, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
+	def __init__(self, transtt = None, transtp = None, transpt = None, transpp = None, transdd = None, norm = None, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None, SNR=None, psd_fname=None):
 		"""
 		Initialize a new class from scratch via explicit computation
 		of the tree data and marginalized probability distributions or by providing
@@ -1227,7 +1227,10 @@ class TimePhaseSNR(object):
 		self.tree_data = tree_data
 		self.margsky = margsky
 
-		if self.tree_data is None or numpy.shape(self.tree_data)[1] != 1 + max(sum(self.slices.values(),[])):
+		self.snr = SNR
+		self.psd_fname = psd_fname
+
+		if self.tree_data is None:
 			time, phase, deff = TimePhaseSNR.tile(verbose = verbose)
 			self.tree_data = self.dtdphideffpoints(time, phase, deff, self.slices)
 
@@ -1281,6 +1284,11 @@ class TimePhaseSNR(object):
 		for group, mat in zip((h5_transtt, h5_transtp, h5_transpt, h5_transpp, h5_transdd, h5_norm), (self.transtt, self.transtp, self.transpt, self.transpp, self.transdd, self.norm)):
 			for k,v in mat.items():
 				group.create_dataset(",".join(sorted(k)), data = float(v))
+
+		f.create_dataset("psd", data=self.psd_fname)
+		h5_snr = f.create_group("SNR")
+		for ifo in self.snr:
+			h5_snr.create_dataset(ifo, data=self.snr[ifo].value)
 
 		f.close()
 
@@ -1920,7 +1928,7 @@ class InspiralExtrinsics(object):
 	* :py:class:`TimePhaseSNR`
 	* :py:class:`p_of_instruments_given_horizons`
 	"""
-	time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"), other_fnames=[os.path.join(gstlal_config_paths["pkgdatadir"], "covmat.h5")])
+	time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
 	p_of_ifos = {}
 	# FIXME add Kagra
 	p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
