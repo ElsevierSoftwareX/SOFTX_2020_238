@@ -423,10 +423,10 @@ class LnSignalDensity(LnLRDensity):
 		vtdict = self.horizon_history.functional_integral_dict(window.shift(float(gps)), lambda D: D**3.)
 		return dict((instrument, (vt / t)**(1./3.)) for instrument, vt in vtdict.items())
 
-	def add_signal_model(self, prefactors_range = (0.001, 0.01), df = 400, inv_snr_pow = 4.):
+	def add_signal_model(self, prefactors_range = (0.001, 0.30), df = 200, inv_snr_pow = 4.):
 		# normalize to 10 *mi*llion signals.  this count makes the
 		# density estimation code choose a suitable kernel size
-		inspiral_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["snr_chi"], 10000000., prefactors_range, df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
+		inspiral_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["snr_chi"], 1e12, prefactors_range, df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
 		self.densities["snr_chi"].normalize()
 
 	def candidate_count_model(self, rate = 1000.):
