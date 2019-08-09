@@ -1062,7 +1062,7 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 	MV_matrix = mkinterleave(pipeline, MV_matrix)
 	MV_matrix = pipeparts.mkcapsfilter(pipeline, MV_matrix, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=%d" % (rate, (2 * num_stages) * (2 * num_stages + 1)))
 	kappas = pipeparts.mkgeneric(pipeline, MV_matrix, "lal_matrixsolver")
-	kappas = list(mkdeinterleave(pipeline, kappas, 2 * num_stages))
+	kappas = list(mkdeinterleave(pipeline, pipeparts.mkcapsfilter(pipeline, kappas, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=%d" % (rate, 2 * num_stages)), 2 * num_stages))
 	for i in range(len(kappas)):
 		kappas[i] = pipeparts.mkcapsfilter(pipeline, kappas[i], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)
 		if i >= len(kappas) / 2:

@@ -69,7 +69,7 @@ parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS
 parser.add_option("--ifo", metavar = "name", type = str, help = "Name of the interferometer (IFO), e.g., H1, L1")
 parser.add_option("--denominator-frame-cache", metavar = "name", type = str, help = "Name of frame cache file that contains denominator of transfer functions")
 parser.add_option("--denominator-channel-name", metavar = "name", type = str, default = None, help = "Channel-name of denominator")
-parser.add_option("--denominator-name", metavar = "name", type = str, default = 'Pcal(f)', help = "Name of denominator in plot title, in latex math mode")
+parser.add_option("--denominator-name", metavar = "name", type = str, default = '{\\rm Pcal}(f)', help = "Name of denominator in plot title, in latex math mode")
 parser.add_option("--denominator-correction", metavar = "name", type = str, default = None, help = "Name of filters-file parameter needed to apply a correction to the denominator")
 parser.add_option("--numerator-frame-cache-list", metavar = "name", type = str, help = "Comma-separated list of frame cache files that contain numerators of transfer functions")
 parser.add_option("--numerator-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of channel-names of numerators")
@@ -177,7 +177,7 @@ if options.config_file is not None:
 num_corr = []
 denom_corr = []
 if options.numerator_correction is not None:
-	if len(filters[options.numerator_correction]) > 1:
+	if numpy.size(filters[options.numerator_correction]) > 1:
 		corr = filters[options.numerator_correction]
 		# Check the frequency spacing of the correction
 		corr_df = corr[0][1] - corr[0][0]
@@ -199,7 +199,7 @@ if options.numerator_correction is not None:
 			num_corr.append(corr[1][before_idx] + 1j * corr[2][before_idx])
 
 if options.denominator_correction is not None:
-	if len(filters[options.denominator_correction]) > 1:
+	if numpy.size(filters[options.denominator_correction]) > 1:
 		corr = filters[options.denominator_correction]
 		# Check the frequency spacing of the correction
 		corr_df = corr[0][1] - corr[0][0]
@@ -243,7 +243,7 @@ def plot_transfer_function(pipeline, name):
 	denominator = calibration_parts.caps_and_progress(pipeline, denominator, "audio/x-raw,format=F64LE", "denominator")
 	denominator = calibration_parts.mkresample(pipeline, denominator, 5, False, int(sample_rate))
 	if options.denominator_correction is not None:
-		if len(filters[options.denominator_correction]) == 1:
+		if numpy.size(filters[options.denominator_correction]) == 1:
 			denominator = pipeparts.mkaudioamplify(pipeline, denominator, float(filters[options.denominator_correction]))
 	denominator = pipeparts.mktee(pipeline, denominator)
 
@@ -251,11 +251,11 @@ def plot_transfer_function(pipeline, name):
 	for i in range(0, len(labels)):
 		numerator = pipeparts.mklalcachesrc(pipeline, location = numerator_frame_cache_list[i], cache_dsc_regex = ifo)
 		numerator = pipeparts.mkframecppchanneldemux(pipeline, numerator, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
-		numerator = calibration_parts.hook_up(pipeline, numerator, numerator_channel_list[i], ifo, 1.0)
+		numerator = calibration_parts.hook_up(pipeline, numerator, numerator_channel_list[i], ifo, 1.0, element_name_suffix = "%d" % i)
 		numerator = calibration_parts.caps_and_progress(pipeline, numerator, "audio/x-raw,format=F64LE", labels[i])
 		numerator = calibration_parts.mkresample(pipeline, numerator, 5, False, int(sample_rate))
 		if options.numerator_correction is not None:
-			if len(filters[options.numerator_correction] == 1):
+			if numpy.size(filters[options.numerator_correction] == 1):
 				numerator = pipeparts.mkaudioamplify(pipeline, numerator, float(filters[options.numerator_correction]))
 		# Interleave the channels to make one stream
 		channels = calibration_parts.mkinterleave(pipeline, [numerator, denominator])
@@ -294,7 +294,7 @@ if options.poles is not None:
 	for i in range(0, len(real_poles) / 2):
 		poles.append(float(real_poles[2 * i]) + 1j * float(real_poles[2 * i + 1]))
 
-colors = ['limegreen', 'g', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['blue', 'limegreen', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
 	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")
@@ -330,13 +330,13 @@ for i in range(0, len(labels)):
 	if i == 0:
 		plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.75, label = labels[i].replace('_', '\_'))
-	#leg = plt.legend(fancybox = True)
-	#leg.get_frame().set_alpha(0.8)
+	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.75, label = r'${\rm %s}$' % labels[i].replace('_', '\_').replace(' ', '\ '))
+	leg = plt.legend(fancybox = True)
+	leg.get_frame().set_alpha(0.8)
 	plt.gca().set_xscale(freq_scale)
 	plt.gca().set_yscale(mag_scale)
 	if i == 0:
-		#plt.title(r'%s $%s$ / $%s$' % (ifo, options.numerator_name.replace('_', '\_'), options.denominator_name.replace('_', '\_')))
+		plt.title(r'${\rm %s} \ %s \ / \ %s$' % (ifo, options.numerator_name, options.denominator_name))
 		plt.ylabel(r'${\rm Magnitude}$')
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.magnitude_min, options.magnitude_max)
@@ -350,6 +350,6 @@ for i in range(0, len(labels)):
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.phase_min, options.phase_max)
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
-plt.savefig('%s_transfer_functions_%s_%s%s_%d-%d.png' % (ifo, options.numerator_name, options.denominator_name, options.filename_suffix, options.gps_start_time, data_duration))
-plt.savefig('%s_transfer_functions_%s_%s%s_%d-%d.pdf' % (ifo, options.numerator_name, options.denominator_name, options.filename_suffix, options.gps_start_time, data_duration))
+plt.savefig('%s_%s_over_%s_%d-%d.pdf' % (ifo, numerator_channel_list[-1], options.denominator_channel_name, options.gps_start_time, data_duration))
+plt.savefig('%s_%s_over_%s_%d-%d.png' % (ifo, numerator_channel_list[-1], options.denominator_channel_name, options.gps_start_time, data_duration))
 
