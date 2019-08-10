@@ -459,11 +459,11 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if(!strcmp(name, GST_AUDIO_NE(F32))) {
 		element->data_type = GSTLAL_SENSINGTDCFS_FLOAT;
 		g_assert_cmpuint(unit_size_out, ==, 4 * (guint) channels_out);
-		g_assert_cmpuint(unit_size_in, ==, 4 * (guint) channels_in);
+		g_assert_cmpuint(unit_size_in, ==, 8 * (guint) channels_in);
 	} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
 		element->data_type = GSTLAL_SENSINGTDCFS_DOUBLE;
 		g_assert_cmpuint(unit_size_out, ==, 8 * (guint) channels_out);
-		g_assert_cmpuint(unit_size_in, ==, 8 * (guint) channels_in);
+		g_assert_cmpuint(unit_size_in, ==,16 * (guint) channels_in);
 	} else
 		g_assert_not_reached();
 
