@@ -1425,23 +1425,23 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		pipeparts.mkfakesink(pipeline, tau_uim)
 
 	if compute_kappac:
-		smooth_kctee = smooth_kc_nogate = kc
+		smooth_kctee = smooth_kc_nogate = pipeparts.mktee(pipeline, kc)
 	else:
 		pipeparts.mkfakesink(pipeline, kc)
 
 	if compute_fcc:
-		smooth_fcctee = smooth_fcc_nogate = fcc
+		smooth_fcctee = smooth_fcc_nogate = pipeparts.mktee(pipeline, fcc)
 	else:
 		pipeparts.mkfakesink(pipeline, fcc)
 
 	if compute_fs:
-		smooth_fs_squared_nogate = smooth_fs_squared = fs_squared
+		smooth_fs_squared_nogate = smooth_fs_squared = pipeparts.mktee(pipeline, fs_squared)
 	else:
 		pipeparts.mkfakesink(pipeline, fs_squared)
 
 	if compute_srcq:
 		# fs / Q is a real-valued quantity, but fs and Q are not necessarily, so we compute a complex-valued 1/Q.
-		smooth_srcQ_inv = smooth_srcQ_inv_nogate = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fs_over_Q, matrix = [[1.0, 0.0]])), calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fs_squared, matrix = [[1.0, 0.0]])), exponent = -0.5)]))
+		smooth_srcQ_inv = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fs_over_Q, matrix = [[1.0, 0.0]])), calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_fs_squared, matrix = [[1.0, 0.0]])), exponent = -0.5)]))
 		# We need a real-valued version of Q^(-1) to write the the frames.  If we have
 		# an optical spring, the computed Q^(-1) is imaginary, and if we have an optical
 		# antispring, the computed Q^(-1) is real.  To get a sensible real value either

@@ -975,26 +975,25 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 	# ratios X[i] = injection(f_i) / d_err(f_i) for each calibration line frequency.
 	#
 
-	print("starting exact kappas")
 	kappas = []
 	num_lines = len(freqs)
 	num_stages = num_lines - 2 # Stages of actuation (currently 3)
 	MV_matrix = list(numpy.zeros(2 * num_stages * (2 * num_stages + 1)))
+	Y = []
 	Yreal = []
 	Yimag = []
 	CAX = []
 	CAXreal = []
 	CAXimag = []
-	Gresreal = []
-	Gresimag = []
+	Gres = []
 	kappas = []
 
 	for i in range(num_lines):
 		if i < 2:
 			# Then it's a Pcal line
-			Y = pipeparts.mktee(pipeline, complex_audioamplify(pipeline, X[i], EPICS[2 * (1 + num_stages) * i], EPICS[2 * (1 + num_stages) * i + 1]))
-			Yreal.append(pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, Y, "creal"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate, name = "capsfilter_Yreal_%d" % i)))
-			Yimag.append(pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, Y, "cimag"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate, name = "capsfilter_Yimag_%d" % i)))
+			Y.append(pipeparts.mktee(pipeline, complex_audioamplify(pipeline, X[i], EPICS[2 * (1 + num_stages) * i], EPICS[2 * (1 + num_stages) * i + 1])))
+			Yreal.append(pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, Y[i], "creal"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate, name = "capsfilter_Yreal_%d" % i)))
+			Yimag.append(pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, Y[i], "cimag"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate, name = "capsfilter_Yimag_%d" % i)))
 		else:
 			# It's an actuator line
 			CAX.append(pipeparts.mktee(pipeline, complex_audioamplify(pipeline, X[i], EPICS[2 * (1 + num_stages) * i], EPICS[2 * (1 + num_stages) * i + 1])))
@@ -1018,7 +1017,6 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 	# Many of the elements are constant, so make a stream of ones to multiply
 	if num_stages > 1:
 		ones = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, Yreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 0.0))
-	print("exact kappas 10")
 	for j in range(num_stages):
 		# Time-dependent matrix elements
 		factor = pow(freqs[0], -2) - pow(freqs[1], -2)
@@ -1057,7 +1055,6 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 			MV_matrix[(1 + num_stages + j) * 2 * num_stages + k] = Mjplus3k
 			MV_matrix[(1 + num_stages + j) * 2 * num_stages + num_stages + k] = Mjplus3kplus3
 
-	print("exact kappas 20")
 	# Now pass these to the matrix solver to find kappa_T, kappa_P, kappa_U, tau_T, tau_P, and tau_U.
 	MV_matrix = mkinterleave(pipeline, MV_matrix)
 	MV_matrix = pipeparts.mkcapsfilter(pipeline, MV_matrix, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=%d" % (rate, (2 * num_stages) * (2 * num_stages + 1)))
@@ -1071,7 +1068,6 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 
 	# Next, compute kappa_C.  This is going to take some work...
 	# Start by computing G_res at each frequency, defined in Eq. 5.2.30
-	print("exact kappas 25")
 	for n in range(2):
 		Gres_components = []
 		for j in range(num_stages):
@@ -1080,82 +1076,14 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 			i_omega_tau = mkcapsfiltersetter(pipeline, i_omega_tau, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)
 			phase = pipeparts.mkgeneric(pipeline, i_omega_tau, "cexp")
 			Gres_components.append(mkmultiplier(pipeline, list_srcs(pipeline, kappajGresjatn, phase)))
-		Gres = pipeparts.mktee(pipeline, mkadder(pipeline, Gres_components))
-		Gresreal.append(pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, Gres, "creal"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)))
-		Gresimag.append(pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, Gres, "cimag"), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)))
+		Gres.append(mkadder(pipeline, Gres_components))
 
-	print("exact kappas 30")
-	# Next, let us find the H's, I's, Xi, and zeta, defined by Eqs. 5.2.48, 5.2.49, 5.2.50, and 5.2.58, respectively.
-	H1 = pipeparts.mkaudioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkcapsfilter(pipeline, Gresreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkcapsfilter(pipeline, Yreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0))), pow(freqs[0], 2))
-	print("exact kappas 31")
-	H2 = pipeparts.mktee(pipeline, pipeparts.mkaudioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkcapsfilter(pipeline, Gresreal[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, pipeparts.mkcapsfilter(pipeline, Yreal[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0))), pow(freqs[1], 2)))
-	print("exact kappas 32")
-	I1 = pipeparts.mkaudioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkcapsfilter(pipeline, Gresimag[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yimag[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0))), pow(freqs[0], 2))
-	print("exact kappas 33")
-	I2 = pipeparts.mktee(pipeline, pipeparts.mkaudioamplify(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkcapsfilter(pipeline, Gresimag[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yimag[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0))), pow(freqs[1], 2)))
-	print("exact kappas 34")
-	Xi = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, H1, pow(freqs[1], 2) / (pow(freqs[0], 2) - pow(freqs[1], 2))), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, H2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -pow(freqs[0], 2) / (pow(freqs[0], 2) - pow(freqs[1], 2))))))
-	print("exact kappas 35")
-	zeta = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, I1, 1.0 / freqs[0]), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, I2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0 / freqs[1]))))
+	sensing_inputs = mkinterleave(pipeline, Gres + Y, complex_data = True)
+	sensing_outputs = pipeparts.mkgeneric(pipeline, sensing_inputs, "lal_sensingtdcfs", sensing_model = 0, freq1 = freqs[0], freq2 = freqs[1])
+	sensing_outputs = list(mkdeinterleave(pipeline, sensing_outputs, 4))
 
-	print("exact kappas 40")
-	# Now, we define the coefficients of the quartic equation a kC^4 + b kC^3 + c kC^2 + d kC + e = 0.
-	a = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, Xi, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, H2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, Xi, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, zeta, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0)]), pow(freqs[1], 2))
-	print("exact kappas 41")
-	a = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, a, matrix = [[1.0, 0.0]])))
-	print("exact kappas 42")
-	b = mkadder(pipeline, [pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, [mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, H2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, Xi, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), pipeparts.mkcapsfilter(pipeline, zeta, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, I2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), freqs[1] * (pow(freqs[1], 2) - pow(freqs[0], 2))), pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, [mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, H2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Xi, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), 2.0)]), mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, zeta, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0)]), pow(freqs[1], 4))])
-	print("exact kappas 43")
-	b = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, b, matrix = [[1.0, 0.0]])))
-	print("exact kappas 44")
-	c = mkadder(pipeline, [pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, zeta, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, I2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), pow(freqs[1], 3) * (pow(freqs[1], 2) - pow(freqs[0], 2))), pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, H2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, Xi, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), exponent = 2.0), pow(pow(freqs[1], 2) - pow(freqs[0], 2), 2)), pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, zeta, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), pow(freqs[1], 6))])
-	print("exact kappas 45")
-	c = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, c, matrix = [[1.0, 0.0]])))
-	print("exact kappas 46")
-	d = pipeparts.mkaudioamplify(pipeline, mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, H2, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, Xi, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), pow(freqs[1], 4) * pow(pow(freqs[1], 2) - pow(freqs[0], 2), 2))
-	d = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, d, matrix = [[1.0, 0.0]])))
-	e = pow(freqs[1], 4) * pow(pow(freqs[1], 2) - pow(freqs[0], 2), 2)
+	kappas += sensing_outputs
 
-	print("exact kappas 50")
-	# More parameters we need to define to solve the quartic...
-	Delta0 = pipeparts.mktee(pipeline, mkadder(pipeline, [mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, d, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), -3.0, 0.0), complex_audioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), 12 * e, 0.0)]))
-	print("exact kappas 51")
-	Delta1 = pipeparts.mktee(pipeline, mkadder(pipeline, [complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 3.0), 2.0, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, d, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), -9.0, 0.0), complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), 27.0 * e, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, d, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0)]), 27.0, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), -72.0 * e, 0.0)]))
-	print("exact kappas 52")
-	p = pipeparts.mktee(pipeline, mkmultiplier(pipeline, [mkadder(pipeline, [complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), 8.0, 0.0), complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), -3.0, 0.0)]), complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = -2.0), 1.0 / 8.0, 0.0)]))
-	print("exact kappas 53")
-	q = mkmultiplier(pipeline, [mkadder(pipeline, [mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 3.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), -4.0, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), pipeparts.mkcapsfilter(pipeline, d, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), 8.0, 0.0)]), complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = -3.0), 1.0 / 8.0, 0.0)])
-	print("exact kappas 54")
-	Q0 = pipeparts.mktee(pipeline, mkpow(pipeline, complex_audioamplify(pipeline, mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, Delta1, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), mkpow(pipeline, mkadder(pipeline, [mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, Delta1, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, Delta0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 3.0), -4.0, 0.0)]), exponent = 0.5)]), 0.5, 0.0), exponent = 1.0 / 3.0))
-	print("exact kappas 55")
-	S0 = pipeparts.mktee(pipeline, mkpow(pipeline, mkadder(pipeline, [complex_audioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, p, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0 / 6.0, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = -1.0), mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, Q0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), complex_division(pipeline, pipeparts.mkcapsfilter(pipeline, Delta0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, Q0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate))])]), 1.0 / 12.0, 0.0)]), exponent = 0.5))
-	print("exact kappas 56")
-	R0 = pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, mkadder(pipeline, [mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 3.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, d, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0)]), 8.0, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, c, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), -4.0, 0.0)]), "creal"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0,channels=1"))
-	print("exact kappas 57")
-	R0sign = pipeparts.mktee(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, mkmultiplier(pipeline, [pipeparts.mkgeneric(pipeline, pipeparts.mkcapsfilter(pipeline, R0, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), "creal"), mkpow(pipeline, pipeparts.mkgeneric(pipeline, pipeparts.mkcapsfilter(pipeline, R0, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), "cabs"), exponent = -1.0)]), matrix = [[1.0, 0.0]])))
-
-	print("exact kappas 60")
-	# Finally, compute kappa_C
-	kappa_C = mkadder(pipeline, [complex_audioamplify(pipeline, complex_division(pipeline, pipeparts.mkcapsfilter(pipeline, b, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, a, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)), -0.25, 0.0), mkmultiplier(pipeline, [pipeparts.mkcapsfilter(pipeline, R0sign, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkcapsfilter(pipeline, S0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), complex_audioamplify(pipeline, mkpow(pipeline, mkadder(pipeline, [complex_audioamplify(pipeline, mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, S0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = 2.0), -4.0, 0.0), complex_audioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, p, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -2.0, 0.0), complex_audioamplify(pipeline, mkmultiplier(pipeline, [q, pipeparts.mkcapsfilter(pipeline, R0sign, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), mkpow(pipeline, pipeparts.mkcapsfilter(pipeline, S0, "audio/x-raw,format=Z128LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), exponent = -1.0)]), -1.0, 0.0)]), exponent = 0.5), -0.5, 0.0)])
-	kappa_C = pipeparts.mktee(pipeline, mkcapsfiltersetter(pipeline, pipeparts.mkgeneric(pipeline, kappa_C, "creal"), "audio/x-raw,format=F64LE,channel-mask=(bitmask)0x0,channels=1"))
-	kappas.append(kappa_C)
-
-	print("exact kappas 70")
-	# Next, compute f_cc using Eq. 5.2.45
-	f_cc = pipeparts.mktee(pipeline, pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, mkmultiplier(pipeline, [kappa_C, mkadder(pipeline, [pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Gresimag[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), freqs[0]), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yimag[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -freqs[0]), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Gresimag[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -freqs[1]), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yimag[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), freqs[1])])]), exponent = -1.0), pow(freqs[1], 2) - pow(freqs[0], 2)))
-	kappas.append(f_cc)
-
-	print("exact kappas 80")
-	# Compute f_s^2 using Eq. 5.2.41
-	f_s_squared = pipeparts.mktee(pipeline, pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, [kappa_C, mkadder(pipeline, [pipeparts.mkcapsfilter(pipeline, Yreal[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Gresreal[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), -1.0), pipeparts.mkcapsfilter(pipeline, Gresreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)])]), 1.0 / (pow(freqs[1], -2) - pow(freqs[0], -2))))
-	kappas.append(f_s_squared)
-
-	print("exact kappas 90")
-	# Compute f_s / Q using Eq. 5.2.33
-	f_s_over_Q = pipeparts.mktee(pipeline, mkmultiplier(pipeline, [f_cc, pipeparts.mkgeneric(pipeline, mkadder(pipeline, [mkmultiplier(pipeline, [kappa_C, pipeparts.mkcapsfilter(pipeline, Yreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), pipeparts.mkaudioamplify(pipeline, f_s_squared, -pow(freqs[0], -2)), pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, [kappa_C, pipeparts.mkcapsfilter(pipeline, Gresreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)]), -1.0)]), "lal_add_constant", value = -1.0)]))
-	kappas.append(f_s_over_Q)
-
-	print("exact kappas done")
 	return kappas
 
 def compute_S_from_filters_file(pipeline, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP7R, EP7I, ktst, EP8R, EP8I, kpu, EP9R, EP9I):
