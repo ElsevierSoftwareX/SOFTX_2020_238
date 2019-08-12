@@ -1616,7 +1616,7 @@ class p_of_instruments_given_horizons(object):
 
 	Note, linear interpolation is used over the bins
 	"""
-	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None):
+	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None, bin_start = 0, bin_stop = None):
 		"""
 		for each sub-combintation of the "on" instruments, e.g.,
 		"H1","L1" out of "H1","L1","V1", the probability of getting a trigger above the
@@ -1642,6 +1642,12 @@ class p_of_instruments_given_horizons(object):
 
 		# The number of bins in the histogram of horizond distance ratios.
 		self.nbins = nbins
+
+		# Set the stop bin number and make sure that start/stop bin numbers are the multiple of nbins
+		if bin_stop is not None and bin_stop % self.nbins:
+			raise ValueError("stop bin indexd must be multiple of nbins=%d" % self.nbins)
+		elif bin_start % self.nbins:
+			raise ValueError("start bin index must be multiple of nbins=%d" % self.nbins)
 
 		# The minimum and maximum horizon distance ratio to consider
 		# for the binning.  Anything outside this range will be
@@ -1694,8 +1700,8 @@ class p_of_instruments_given_horizons(object):
 			# NOTE we end up clipping any value outside of our
 			# histogram to just be the value in the last(first)
 			# bin, so we track those center values here.
-			self.first_center = histograms.values()[0].centres()[0][0]
-			self.last_center = histograms.values()[0].centres()[0][-1]
+			self.first_center = self.histograms.values()[0].centres()[0][0]
+			self.last_center = self.histograms.values()[0].centres()[0][-1]
 
 			# Now we start the monte carlo simulation of a bunch of
 			# signals distributed uniformly in the volume of space
@@ -1718,7 +1724,7 @@ class p_of_instruments_given_horizons(object):
 			# Iterate over the (# of instruments - 1) horizon
 			# distance ratios for all of the instruments that could
 			# have produced coincs
-			for horizontuple in itertools.product(*[b.centres() for b in bins]):
+			for horizontuple in list(itertools.product(*[b.centres() for b in bins]))[bin_start:bin_stop]:
 				horizondict = {}
 				# Calculate horizon distances for each of the
 				# instruments based on these ratios NOTE by
@@ -1819,9 +1825,10 @@ class p_of_instruments_given_horizons(object):
 					# record this probability in the histograms
 					self.histograms[combo][horizontuple] += count
 					total += count
-				# normalize the result so that the sum at this horizon ratio is one over all the combinations
-				for I in self.histograms:
-					self.histograms[I][horizontuple] /= total
+				if bin_stop is None:
+					# normalize the result so that the sum at this horizon ratio is one over all the combinations
+					for I in self.histograms:
+						self.histograms[I][horizontuple] /= total
 		self.mkinterp()
 
 	def mkinterp(self):
@@ -1859,7 +1866,7 @@ class p_of_instruments_given_horizons(object):
 		f.close()
 
 	@staticmethod
-	def from_hdf5(fname):
+	def from_hdf5(fname, other_fnames=[], **kwargs):
 		"""
 		Read data from a file so that you don't have to remake it from scratch
 		"""
@@ -1872,13 +1879,26 @@ class p_of_instruments_given_horizons(object):
 		instruments = tuple(sorted(grp.attrs["instruments"].split(",")))
 		histograms = {}
 		bins = []
+		combos = TimePhaseSNR.instrument_combos(instruments, min_instruments = 1)
 		for i in range(len(instruments) - 1):
 			bins.append(rate.LogarithmicBins(hmin, hmax, nbins))
-		for combo in TimePhaseSNR.instrument_combos(instruments, min_instruments = 1):
+		for combo in combos:
 			histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 			histograms[combo].array[:] = numpy.array(grp[",".join(combo)])[:]
 		f.close()
-		return p_of_instruments_given_horizons(instruments = instruments, snr_thresh = snr_thresh, nbins = nbins, hmin = hmin, hmax = hmax, histograms = histograms)
+
+		if len(other_fnames) > 0:
+			for fn in other_fnames:
+				f = h5py.File(fn, "r")
+				grp = f['gstlal_p_of_instruments']
+				for combo in combos:
+					histograms[combo].array[:] += numpy.array(grp[",".join(combo)])[:]
+				f.close()
+		norm = numpy.sum([BinnedArray.array[:] for BinnedArray in histograms.values()], axis=0)
+		for combo in combos:
+			histograms[combo].array[:][norm!=0] /= norm[norm!=0]
+
+		return p_of_instruments_given_horizons(instruments = instruments, snr_thresh = snr_thresh, nbins = nbins, hmin = hmin, hmax = hmax, histograms = histograms, **kwargs)
 
 
 #
