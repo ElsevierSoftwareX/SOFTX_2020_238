@@ -1,8 +1,0 @@
-all: lines_ratio_DCS
-
-lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
-	python ../../../check_calibration/demod_ratio_timeseries.py --ifo $(IFO)1 --gps-end-time $(SHORT_PLOT_END) --gps-start-time $(SHORT_PLOT_START) --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-channel-name 'DCS-CALIB_STRAIN' --numerator-channel-name 'DCS-CALIB_STRAIN_CLEAN' --frequencies '35.9,36.7,331.9,1083.7;60,120,180' --magnitude-ranges '0.0,0.1;0.0,1.0' --phase-ranges '-180.0,180.0;-180.0,180.0' --plot-titles '$(IFO)1 Calibration Line Subtraction;$(IFO)1 Power Mains Line Subtraction'
-
-clean:
-	rm *.gwf *.cache *.png *.txt
-

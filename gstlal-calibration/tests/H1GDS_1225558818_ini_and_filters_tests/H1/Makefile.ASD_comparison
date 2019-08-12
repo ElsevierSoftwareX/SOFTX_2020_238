@@ -1,8 +1,0 @@
-all: ASD_comparison_plots
-
-ASD_comparison_plots: 
-	python ../../check_calibration/ASD_comparison_plots --ifo $(IFO)1 --gps-start-time $(SHORT_PLOT_START) --gps-end-time $(SHORT_PLOT_END) --raw-frame-cache $(IFO)1_raw_frames.cache --hoft-frame-cache $(IFO)1_hoft_GDS_frames.cache
-
-clean: 
-	rm *.png 
-
