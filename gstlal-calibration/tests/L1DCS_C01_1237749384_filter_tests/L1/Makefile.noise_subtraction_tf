@@ -1,8 +1,0 @@
-all: noise_subtraction_tf_DCS
-
-noise_subtraction_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
-	python ../../check_calibration/plot_transfer_function.py --gps-start-time $(SHORT_PLOT_START) --gps-end-time $(SHORT_PLOT_END) --ifo $(IFO)1 --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-channel-name DCS-CALIB_STRAIN_CLEAN --denominator-channel-name DCS-CALIB_STRAIN --magnitude-min 0.0 --magnitude-max 1.5 --phase-min -20.0 --phase-max 20.0 --plot-title 'Noise Subtraction Transfer Function'
-
-clean:
-	rm *.gwf *.cache *.png *.txt
-
