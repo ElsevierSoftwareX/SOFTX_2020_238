@@ -1341,24 +1341,13 @@ class TimePhaseSNR(object):
 		Initialize one of these from a file instead of computing it from scratch
 		"""
 		f = h5py.File(fname, "r")
-		if os.path.join(gstlal_config_paths["pkgdatadir"], "covmat.h5") in other_fnames:
-			# These *have* to be here
-			f_covmat = h5py.File(os.path.join(gstlal_config_paths["pkgdatadir"], "covmat.h5"))
-			other_fnames.remove(os.path.join(gstlal_config_paths["pkgdatadir"], "covmat.h5"))
-			transtt = dict((frozenset(k.split(",")), numpy.array(f_covmat["transtt"][k])) for k in f_covmat["transtt"])
-			transtp = dict((frozenset(k.split(",")), numpy.array(f_covmat["transtp"][k])) for k in f_covmat["transtp"])
-			transpt = dict((frozenset(k.split(",")), numpy.array(f_covmat["transpt"][k])) for k in f_covmat["transpt"])
-			transpp = dict((frozenset(k.split(",")), numpy.array(f_covmat["transpp"][k])) for k in f_covmat["transpp"])
-			transdd = dict((frozenset(k.split(",")), numpy.array(f_covmat["transdd"][k])) for k in f_covmat["transdd"])
-			norm = dict((frozenset(k.split(",")), numpy.array(f_covmat["norm"][k])) for k in f_covmat["norm"])
-		else:
-			# These *have* to be here
-			transtt = dict((frozenset(k.split(",")), numpy.array(f["transtt"][k])) for k in f["transtt"])
-			transtp = dict((frozenset(k.split(",")), numpy.array(f["transtp"][k])) for k in f["transtp"])
-			transpt = dict((frozenset(k.split(",")), numpy.array(f["transpt"][k])) for k in f["transpt"])
-			transpp = dict((frozenset(k.split(",")), numpy.array(f["transpp"][k])) for k in f["transpp"])
-			transdd = dict((frozenset(k.split(",")), numpy.array(f["transdd"][k])) for k in f["transdd"])
-			norm = dict((frozenset(k.split(",")), numpy.array(f["norm"][k])) for k in f["norm"])
+		# These *have* to be here
+		transtt = dict((frozenset(k.split(",")), numpy.array(f["transtt"][k])) for k in f["transtt"])
+		transtp = dict((frozenset(k.split(",")), numpy.array(f["transtp"][k])) for k in f["transtp"])
+		transpt = dict((frozenset(k.split(",")), numpy.array(f["transpt"][k])) for k in f["transpt"])
+		transpp = dict((frozenset(k.split(",")), numpy.array(f["transpp"][k])) for k in f["transpp"])
+		transdd = dict((frozenset(k.split(",")), numpy.array(f["transdd"][k])) for k in f["transdd"])
+		norm = dict((frozenset(k.split(",")), numpy.array(f["norm"][k])) for k in f["norm"])
 
 		try:
 			dgrp = f["gstlal_extparams"]
@@ -1993,11 +1982,17 @@ class InspiralExtrinsics(object):
 	"""
 	p_of_ifos = {}
 	# FIXME add Kagra
+	p_of_ifos[("H1", "K1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1L1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("H1", "K1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1V1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("H1", "K1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1L1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("K1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1L1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "K1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("K1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1L1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("K1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1V1_p_of_instruments_given_H_d.h5"))
 
 	def __init__(self, min_instruments = 1, filename = None):
 		#
