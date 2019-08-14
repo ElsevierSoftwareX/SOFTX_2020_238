@@ -80,6 +80,7 @@ class Handler(simplehandler.Handler):
 						key_serializer = lambda m: json.dumps(m).encode('utf-8'),
 						value_serializer = lambda m: json.dumps(m).encode('utf-8'),
 					)
+				print("Kafka server established.")
 			except errors.NoBrokersAvailable:
 				self.producer = None
 				print("No brokers available for kafka. Defaulting to not pushing to kafka.")

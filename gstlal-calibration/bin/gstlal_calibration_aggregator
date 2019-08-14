@@ -80,6 +80,10 @@ if __name__ == '__main__':
 	Config = ConfigParser.ConfigParser()
 	Config.read(options.config_file)
 	MonitoringConfigs = ConfigSectionMap("MonitoringConfigurations")
+	CalibrationConfigs = ConfigSectionMap("CalibrationConfigurations")
+	OutputConfigs = ConfigSectionMap("OutputConfigurations")
+
+	# Read in monitoring options
 	kafka_server = MonitoringConfigs["kafkaserver"]
 	influx_hostname = MonitoringConfigs["influxhostname"]
 	influx_port = MonitoringConfigs["influxport"]
@@ -89,8 +93,11 @@ if __name__ == '__main__':
 	across_jobs = Config.getboolean("MonitoringConfigurations", "acrossjobs")
 	data_type = MonitoringConfigs["datatype"]
 	dump_period = float(MonitoringConfigs["dumpperiod"])
-	topics = ['H1_latency', 'H1_statevector_bit_check']
-	channel = 'H1_HOFT_TEST'
+
+	# Read in ifo specific options
+	ifo = CalibrationConfigs["ifo"]
+	topics = ['%s_latency' % ifo, '%s_statevector_bit_check' % ifo]
+	channel = OutputConfigs["frametype"]
 	statevector_tags = ['TDCFs_valid', 'monitor_on']
 
 	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
