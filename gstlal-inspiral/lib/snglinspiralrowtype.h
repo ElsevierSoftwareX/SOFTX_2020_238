@@ -56,15 +56,15 @@ struct GSTLALSnglInspiral {
 	SnglInspiralTable parent;
 	LIGOTimeGPS epoch;
 	double deltaT;
-	size_t L1_length;
 	size_t H1_length;
-	size_t V1_length;
 	size_t K1_length;
+	size_t L1_length;
+	size_t V1_length;
 	float complex snr[];
 };
 
 
-struct GSTLALSnglInspiral *gstlal_snglinspiral_new(size_t L1_length, size_t H1_length, size_t V1_length, size_t K1_length);
+struct GSTLALSnglInspiral *gstlal_snglinspiral_new(size_t H1_length, size_t K1_length, size_t L1_length, size_t V1_length);
 void gstlal_snglinspiral_free(struct GSTLALSnglInspiral *row);
 
 

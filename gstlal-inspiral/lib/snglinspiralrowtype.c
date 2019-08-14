@@ -45,14 +45,14 @@
  */
 
 
-struct GSTLALSnglInspiral *gstlal_snglinspiral_new(size_t H1_length, size_t L1_length, size_t V1_length, size_t K1_length)
+struct GSTLALSnglInspiral *gstlal_snglinspiral_new(size_t H1_length, size_t K1_length, size_t L1_length, size_t V1_length)
 {
-	struct GSTLALSnglInspiral *row = calloc(1, sizeof(*row) + (H1_length + L1_length + V1_length + K1_length) * sizeof(row->snr[0]));
+	struct GSTLALSnglInspiral *row = calloc(1, sizeof(*row) + (H1_length + K1_length + L1_length + V1_length) * sizeof(row->snr[0]));
 	if (row) {
-		row->L1_length = L1_length;
 		row->H1_length = H1_length;
-		row->V1_length = V1_length;
 		row->K1_length = K1_length;
+		row->L1_length = L1_length;
+		row->V1_length = V1_length;
 	}
 
 

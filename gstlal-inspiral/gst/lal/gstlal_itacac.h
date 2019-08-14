@@ -133,7 +133,6 @@ typedef struct {
 
 	GstClockTime initial_timestamp;
 	guint samples_available_for_padding;
-	GList *next_in_coinc_order;
 
 
 } GSTLALItacacPad;
@@ -158,6 +157,7 @@ typedef struct {
 	GMutex snr_lock;
 	gboolean waiting;
 	guint test;
+	GSTLALItacacPad *H1_itacacpad, *K1_itacacpad, *L1_itacacpad, *V1_itacacpad;
 
 	//guint max_coinc_window_samps;
 

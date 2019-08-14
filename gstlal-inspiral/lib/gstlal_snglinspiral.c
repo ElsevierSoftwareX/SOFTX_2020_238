@@ -364,9 +364,9 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 		 * Populate the SNR snippet if available
 		 * FIXME: only supported for single precision at the moment
 		 */
-		gsl_vector_complex_float_view L1_snr_vector_view, H1_snr_vector_view, V1_snr_vector_view, K1_snr_vector_view;
-		gsl_vector_complex_float_view L1_snr_series_view, H1_snr_series_view, V1_snr_series_view, K1_snr_series_view;
-		if ((L1_snr_matrix_view || H1_snr_matrix_view || V1_snr_matrix_view || K1_snr_matrix_view) && !input->no_peaks_past_threshold)
+		gsl_vector_complex_float_view H1_snr_vector_view, K1_snr_vector_view, L1_snr_vector_view, V1_snr_vector_view;
+		gsl_vector_complex_float_view H1_snr_series_view, K1_snr_series_view, L1_snr_series_view, V1_snr_series_view;
+		if ((H1_snr_matrix_view || K1_snr_matrix_view || L1_snr_matrix_view || V1_snr_matrix_view) && !input->no_peaks_past_threshold)
 		{
 			/* Allocate a set of empty time series. The event takes ownership, so no need to free it*/
 			/* Get the columns of SNR we are interested in */
@@ -375,6 +375,11 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 				H1_snr_timeseries_length = H1_snr_vector_view.vector.size;
 			} else
 				H1_snr_timeseries_length = 0;
+			if(K1_snr_matrix_view != NULL) {
+				K1_snr_vector_view = gsl_matrix_complex_float_column(&(K1_snr_matrix_view->matrix), channel);
+				K1_snr_timeseries_length = K1_snr_vector_view.vector.size;
+			} else
+				K1_snr_timeseries_length = 0;
 			if(L1_snr_matrix_view != NULL) {
 				L1_snr_vector_view = gsl_matrix_complex_float_column(&(L1_snr_matrix_view->matrix), channel);
 				L1_snr_timeseries_length = L1_snr_vector_view.vector.size;
@@ -385,13 +390,8 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 				V1_snr_timeseries_length = V1_snr_vector_view.vector.size;
 			} else
 				V1_snr_timeseries_length = 0;
-			if(K1_snr_matrix_view != NULL) {
-				K1_snr_vector_view = gsl_matrix_complex_float_column(&(K1_snr_matrix_view->matrix), channel);
-				K1_snr_timeseries_length = K1_snr_vector_view.vector.size;
-			} else
-				K1_snr_timeseries_length = 0;
 
-			event = gstlal_snglinspiral_new(H1_snr_timeseries_length, L1_snr_timeseries_length, V1_snr_timeseries_length, K1_snr_timeseries_length);
+			event = gstlal_snglinspiral_new(H1_snr_timeseries_length, K1_snr_timeseries_length, L1_snr_timeseries_length, V1_snr_timeseries_length);
 
 			if(H1_snr_matrix_view != NULL) {
 				/* Make a GSL view of the time series array data */
@@ -399,23 +399,23 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 				/* Use BLAS to do the copy */
 				gsl_blas_ccopy (&(H1_snr_vector_view.vector), &(H1_snr_series_view.vector));
 			}
+			if(K1_snr_matrix_view != NULL) {
+				/* Make a GSL view of the time series array data */
+				K1_snr_series_view = gsl_vector_complex_float_view_array((float *) &(event->snr[event->H1_length]), event->K1_length);
+				/* Use BLAS to do the copy */
+				gsl_blas_ccopy (&(K1_snr_vector_view.vector), &(K1_snr_series_view.vector));
+			}
 			if(L1_snr_matrix_view != NULL) {
 				/* Make a GSL view of the time series array data */
-				L1_snr_series_view = gsl_vector_complex_float_view_array((float *) &(event->snr[event->H1_length]), event->L1_length);
+				L1_snr_series_view = gsl_vector_complex_float_view_array((float *) &(event->snr[event->H1_length + event->K1_length]), event->L1_length);
 				/* Use BLAS to do the copy */
 				gsl_blas_ccopy (&(L1_snr_vector_view.vector), &(L1_snr_series_view.vector));
 			}
 			if(V1_snr_matrix_view != NULL) {
 				/* Make a GSL view of the time series array data */
-				V1_snr_series_view = gsl_vector_complex_float_view_array((float *) &(event->snr[event->H1_length + event->L1_length]), event->V1_length);
+				V1_snr_series_view = gsl_vector_complex_float_view_array((float *) &(event->snr[event->H1_length + event->K1_length + event->L1_length]), event->V1_length);
 				/* Use BLAS to do the copy */
 				gsl_blas_ccopy (&(V1_snr_vector_view.vector), &(V1_snr_series_view.vector));
-			}
-			if(K1_snr_matrix_view != NULL) {
-				/* Make a GSL view of the time series array data */
-				K1_snr_series_view = gsl_vector_complex_float_view_array((float *) &(event->snr[event->H1_length + event->L1_length + event->V1_length]), event->K1_length);
-				/* Use BLAS to do the copy */
-				gsl_blas_ccopy (&(K1_snr_vector_view.vector), &(K1_snr_series_view.vector));
 			}
 		} else {
 			if(!provided_empty_trigger) {
@@ -475,9 +475,9 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 			gst_memory_new_wrapped(
 				GST_MEMORY_FLAG_READONLY | GST_MEMORY_FLAG_PHYSICALLY_CONTIGUOUS,
 				event,
-				sizeof(*event) + (event->H1_length + event->L1_length + event->V1_length + event->K1_length) * sizeof(event->snr[0]),
+				sizeof(*event) + (event->H1_length + event->K1_length + event->L1_length + event->V1_length) * sizeof(event->snr[0]),
 				0,
-				sizeof(*event) + (event->H1_length + event->L1_length + event->V1_length + event->K1_length) * sizeof(event->snr[0]),
+				sizeof(*event) + (event->H1_length + event->K1_length + event->L1_length + event->V1_length) * sizeof(event->snr[0]),
 				event,
 				(GDestroyNotify) gstlal_snglinspiral_free
 			)
@@ -486,7 +486,7 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 	return 0;
 }
 
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, GstClockTimeDiff timediff)
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view, GstClockTimeDiff timediff)
 {
 	GstBuffer *srcbuf = gst_buffer_new();
 
@@ -513,7 +513,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 	return srcbuf;
 }
 
-int gstlal_snglinspiral_append_peak_to_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view)
+int gstlal_snglinspiral_append_peak_to_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view)
 {
 	//
 	// Add peak information to a buffer, GST_BUFFER_OFFSET cannot be
