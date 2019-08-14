@@ -12,9 +12,9 @@ dashboard:
 
 plots:
   # latency history
-  - title: Latency at various stages for H1_HOFT_TEST
+  - title: Latency at various stages for L1 h(t) data production
     type: TimeSeries
-    measurement: H1_latency
+    measurement: L1_latency
     schema:
       column: data
       aggregate: max
@@ -54,9 +54,9 @@ plots:
     value: checked
 
   # state vector checks
-  - title: 'State vector check: monitor_on'
+  - title: 'L1 state vector check'
     type: TimeSeries
-    measurement: H1_statevector_bit_check
+    measurement: L1_statevector_bit_check
     schema:
       column: data
       aggregate: max

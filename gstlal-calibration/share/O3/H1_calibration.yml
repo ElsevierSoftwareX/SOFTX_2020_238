@@ -1,0 +1,117 @@
+# configuration file for monitoring
+dashboard:
+  title: GstLAL Calibration Monitoring
+  image: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/static/gstlal.png
+  tabs:
+    - name: Docs
+      url: https://lscsoft.docs.ligo.org/gstlal
+    - name: Git
+      url: https://git.ligo.org/lscsoft/gstlal
+  gps: -30
+  duration: 600
+
+plots:
+  # latency history
+  - title: Latency at various stages for H1 h(t) data production
+    type: TimeSeries
+    measurement: H1_latency
+    schema:
+      column: data
+      aggregate: max
+      tag: stage
+      tag_key: stage
+      stage:
+        - src
+        - res
+        - hoft
+        - hoft_cleaned
+        - ctrl
+        - calibstatevec
+        - sink
+    layout:
+      yaxis:
+        title:
+          text: Latency [s]
+      margin:
+        l: 60
+        r: 0
+        t: 10
+        b: 20
+      font:
+        family: "'Nunito', sans-serif"
+        size: 14
+        color: '#666'
+      plot_bgcolor: 'rgba(0,0,0,0)'
+      paper_bgcolor: 'rgba(0,0,0,0)'
+    data_options:
+      #marker:
+      #  color: 'rgb(255, 0, 0)'
+    grid:
+      x: 0
+      y: 0
+      h: 3
+      w: 12
+    value: checked
+
+  # state vector checks
+  - title: 'H1 state vector check'
+    type: TimeSeries
+    measurement: H1_statevector_bit_check
+    schema:
+      column: data
+      aggregate: max
+      tag: check
+      tag_key: check
+      check:
+        - monitor_on
+        - TDCFs_valid
+    layout:
+      yaxis:
+        title:
+          text: 
+      margin:
+        l: 60
+        r: 0
+        t: 10
+        b: 20
+      font:
+        family: "'Nunito', sans-serif"
+        size: 14
+        color: '#666'
+      plot_bgcolor: 'rgba(0,0,0,0)'
+      paper_bgcolor: 'rgba(0,0,0,0)'
+    data_options:
+      #marker:
+      #  color: 'rgb(255, 0, 0)'
+    grid:
+      x: 0
+      y: 3
+      h: 3
+      w: 12
+    value: checked
+
+nagios:
+  heartbeat:
+    lookback: 180
+    measurement: L1_strain_dropped
+    column: data
+    aggregate: max
+    alert_type: heartbeat
+    alert_settings:
+      tag_type: job
+      tag_format: 4digit
+      num_tags: 856
+
+measurements:
+  latency_history:
+    tag: job
+    num_tags: 856
+    default: 1e3
+    transform: none
+
+backends:
+  default:
+    backend: influxdb
+    db: gstlal_calibration
+    hostname: influxdb.ligo.caltech.edu
+    port: 8086
