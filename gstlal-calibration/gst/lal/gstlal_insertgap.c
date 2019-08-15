@@ -408,6 +408,11 @@ static void *input_buffer_timer(void *void_element) {
 
 	GSTLALInsertGap *element = GSTLAL_INSERTGAP(void_element);
 
+	GstDateTime *current_gst_time;
+	gchar *current_utc_time;
+	struct tm tm;
+	guint64 current_time, ets_min;
+
 	while(TRUE) {
 		/*
 		 * When element->wait_time > 0, this function runs continuously on a
@@ -416,7 +421,7 @@ static void *input_buffer_timer(void *void_element) {
 		 * input data is more than the wait time behind real time, we will
 		 * push buffers from the source pad.
 		 */
-
+naptime:
 		/* don't hog a billion CPUs */
 		if(element->block_duration < G_MAXUINT64 / 2)
 			sleep(element->block_duration / 1000000000.0);
@@ -424,21 +429,24 @@ static void *input_buffer_timer(void *void_element) {
 			sleep(1);
 
 		/* Get the current real time as a string */
-		GstDateTime *current_gst_time = gst_date_time_new_now_utc();
-		gchar *current_utc_time = gst_date_time_to_iso8601_string(current_gst_time);
+		current_gst_time = gst_date_time_new_now_utc();
+		current_utc_time = gst_date_time_to_iso8601_string(current_gst_time);
+		if(current_utc_time == NULL)
+			goto naptime;
 
 		/* parse DateTime to gps time */
-		struct tm tm;
 		strptime(current_utc_time, "%Y-%m-%dT%H:%M:%SZ", &tm);
 
 		/* Time in nanoseconds */
-		guint64 current_time = (guint64) XLALUTCToGPS(&tm) * 1000000000 + (guint64) gst_date_time_get_microsecond(current_gst_time) * 1000;
+		current_time = (guint64) XLALUTCToGPS(&tm) * 1000000000 + (guint64) gst_date_time_get_microsecond(current_gst_time) * 1000;
+		gst_date_time_unref(current_gst_time);
+		g_free(current_utc_time);
 		/*
 		 * The minimum allowable current buffer timestamp.  If the input buffer
 		 * has an earlier timestamp, we will push output buffers without waiting
 		 * any longer for input.
 		 */
-		guint64 ets_min = current_time - element->wait_time;
+		ets_min = current_time - element->wait_time;
 		/* It needs to be a multiple of the sample period. */
 		ets_min = gst_util_uint64_scale_int_round(gst_util_uint64_scale_int(ets_min, element->rate, 1000000000), 1000000000, element->rate);
 
