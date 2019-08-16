@@ -986,7 +986,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					g_assert(itacacpad->samples_available_for_padding == 0);
 					outsamps = nongapsamps > samples_left_in_window ? samples_left_in_window : nongapsamps;
 					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
-					samples_left_in_window =- outsamps;
+					samples_left_in_window -= outsamps;
 
 				} 
 			}
@@ -1010,9 +1010,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			}
 			// There is a gap coming up in the next window
 			else {
-				//copysamps = outsamps = nongapsamps;
-				//copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2*itacacpad->maxdata->pad, 0, -1 * (gint) (itacacpad->maxdata->pad));
-				//samples_left_in_window -= nongapsamps - itacacpad->maxdata->pad;
 				g_assert(availablesamps > nongapsamps || itacacpad->EOS);
 				copysamps = nongapsamps;
 				outsamps = nongapsamps >= samples_left_in_window + itacacpad->samples_available_for_padding ? samples_left_in_window + itacacpad->samples_available_for_padding : nongapsamps;
