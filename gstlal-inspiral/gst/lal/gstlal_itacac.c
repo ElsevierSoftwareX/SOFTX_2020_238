@@ -970,7 +970,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			else if(nongapsamps <= 2 * itacacpad->maxdata->pad) {
 				if(nongapsamps == availablesamps && !itacacpad->EOS) {
 					// We have reached the end of available samples, thus there could still be enough nongaps in the next window for triggers
-					// Assertion logic: we're guarenteed at least one more sample than a trigger window and 2 pad's worth of samples, thus if 
+					// Assertion logic: we're guarenteed at least one more sample than a trigger window and 2 pad's worth of samples, thus if
 					// all of the available samples are nongapsamps and we have 2 pad worth of non gap samples samples or less, our nongapsamps
 					// must go into the next window and we must have just come off a gap, meaning we dont have any samples already available for
 					// padding
@@ -988,7 +988,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 					samples_left_in_window -= outsamps;
 
-				} 
+				}
 			}
 			// Not enough samples left in the window to produce a trigger or possibly even fill up a pad for a trigger in the next window
 			else if(samples_left_in_window <= itacacpad->maxdata->pad) {
