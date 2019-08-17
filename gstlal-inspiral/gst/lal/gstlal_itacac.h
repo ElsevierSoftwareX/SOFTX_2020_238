@@ -70,12 +70,6 @@ G_BEGIN_DECLS
 #define GST_IS_GSTLAL_ITACAC_CLASS(klass) \
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_ITACAC_TYPE))
 
-//#define GSTLAL_ITACAC_META_API_TYPE (gstlal_itacac_meta_api_get_type())
-
-//#define GSTLAL_ITACAC_META_INFO (gstlal_itacac_meta_get_info()) 
-
-
-
 struct data_container {
 	union {
 		float complex *as_complex;
@@ -87,14 +81,6 @@ struct data_container {
 	void *data;
 };
 
-/*
-typedef struct {
-	GstMeta meta;
-
-	char *ifos;
-} GSTLALItacacMeta;
-*/
-	
 
 typedef struct {
 	GstAggregatorPadClass parent_class;
@@ -106,7 +92,6 @@ typedef struct {
 	GstAudioAdapter *adapter;
 	gint rate;
 	guint channels;
-	//void *data;
 	struct data_container *data;
 	void *chi2;
 	void *tmp_chi2;
@@ -134,7 +119,6 @@ typedef struct {
 	GstClockTime initial_timestamp;
 	guint samples_available_for_padding;
 
-
 } GSTLALItacacPad;
 
 typedef struct {
@@ -159,15 +143,10 @@ typedef struct {
 	guint test;
 	GSTLALItacacPad *H1_itacacpad, *K1_itacacpad, *L1_itacacpad, *V1_itacacpad;
 
-	//guint max_coinc_window_samps;
-
 } GSTLALItacac;
 
 GType gstlal_itacac_get_type(void);
 GType gstlal_itacac_pad_get_type(void);
-//GST_API GType gstlal_itacac_meta_api_get_type(void);
-//GST_API const GstMetaInfo * gst_protection_meta_get_info (void);
-
 
 G_END_DECLS
 
