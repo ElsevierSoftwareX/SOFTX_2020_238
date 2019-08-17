@@ -71,12 +71,6 @@ G_BEGIN_DECLS
 	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_ITACAC_TYPE))
 
 struct data_container {
-	union {
-		float complex *as_complex;
-		double complex *as_double_complex;
-		void *as_void;
-	} dataptr;
-
 	gsl_matrix *duration_dataoffset_trigwindowoffset_peakfindinglength_matrix;
 	void *data;
 };
@@ -90,20 +84,16 @@ typedef struct {
 	GstAggregatorPad aggpad;
 
 	GstAudioAdapter *adapter;
-	gint rate;
-	guint channels;
 	struct data_container *data;
 	void *chi2;
 	void *tmp_chi2;
 	char *bank_filename;
 	char *instrument;
 	char *channel_name;
-	GstClockTimeDiff difftime;
 	GMutex bank_lock;
 	guint n;
 	struct gstlal_peak_state *maxdata;
 	struct gstlal_peak_state *tmp_maxdata;
-	gstlal_peak_type_specifier peak_type;
 	gdouble snr_thresh;
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask;
@@ -130,7 +120,7 @@ typedef struct {
 	GstAggregator aggregator;
 
 	// itacac's members
-	gint rate;
+	guint rate;
 	guint channels;
 	gstlal_peak_type_specifier peak_type;
 	GstClockTime initial_output_timestamp;
@@ -140,6 +130,7 @@ typedef struct {
 	gboolean EOS;
 	gboolean waiting;
 	GSTLALItacacPad *H1_itacacpad, *K1_itacacpad, *L1_itacacpad, *V1_itacacpad;
+	GMutex caps_lock;
 
 } GSTLALItacac;
 

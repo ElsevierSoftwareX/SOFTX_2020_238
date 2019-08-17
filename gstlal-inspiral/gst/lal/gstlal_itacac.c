@@ -199,13 +199,31 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
         return TRUE;
 }
 
-
+static gboolean get_instrument_pad_pointer(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad)
+{
+	gboolean result = TRUE;
+	if(strcmp(itacacpad->instrument, "H1") == 0)
+		itacac->H1_itacacpad = itacacpad;
+	else if(strcmp(itacacpad->instrument, "K1") == 0)
+		itacac->K1_itacacpad = itacacpad;
+	else if(strcmp(itacacpad->instrument, "L1") == 0)
+		itacac->L1_itacacpad = itacacpad;
+	else if(strcmp(itacacpad->instrument, "V1") == 0)
+		itacac->V1_itacacpad = itacacpad;
+	else {
+		GST_ERROR_OBJECT(itacacpad, "pad has unknown detector, %s", itacacpad->instrument);
+		result = FALSE;
+	}
+	return result;
+}
 
 static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *event) {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(aggpad);
 	GstCaps *caps;
-	guint width = 0; 
+	guint width = 0;
+	gstlal_peak_type_specifier peak_type = 0;
+	gint rate;
 
 	//
 	// Update element metadata
@@ -213,20 +231,30 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	gst_event_parse_caps(event, &caps);
 	GstStructure *str = gst_caps_get_structure(caps, 0);
 	const gchar *format = gst_structure_get_string(str, "format");
-	gst_structure_get_int(str, "rate", &(itacacpad->rate));
+	gst_structure_get_int(str, "rate", &rate);
 
 	if(!strcmp(format, GST_AUDIO_NE(Z64))) {
 		width = sizeof(float complex);
-		itacacpad->peak_type = GSTLAL_PEAK_COMPLEX;
+		peak_type = GSTLAL_PEAK_COMPLEX;
 	} else if(!strcmp(format, GST_AUDIO_NE(Z128))) {
 		width = sizeof(double complex);
-		itacacpad->peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
+		peak_type = GSTLAL_PEAK_DOUBLE_COMPLEX;
 	} else
 		GST_ERROR_OBJECT(itacac, "unsupported format %s", format);
 
-	g_object_set(itacacpad->adapter, "unit-size", itacacpad->channels * width, NULL); 
-	itacacpad->chi2 = calloc(itacacpad->channels, width);
-	itacacpad->tmp_chi2 = calloc(itacacpad->channels, width);
+	g_mutex_lock(&itacac->caps_lock);
+	if(itacac->rate == 0) {
+		itacac->rate = (guint) rate;
+		itacac->peak_type = peak_type;
+	} else {
+		g_assert(itacac->rate == (guint) rate);
+		g_assert(itacac->peak_type == peak_type);
+	}
+	g_mutex_unlock(&itacac->caps_lock);
+
+	g_object_set(itacacpad->adapter, "unit-size", itacac->channels * width, NULL);
+	itacacpad->chi2 = calloc(itacac->channels, width);
+	itacacpad->tmp_chi2 = calloc(itacac->channels, width);
 
 	if (itacacpad->maxdata)
 		gstlal_peak_state_free(itacacpad->maxdata);
@@ -234,11 +262,20 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	if (itacacpad->tmp_maxdata)
 		gstlal_peak_state_free(itacacpad->tmp_maxdata);
 
-	itacacpad->maxdata = gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type);
-	itacacpad->tmp_maxdata = gstlal_peak_state_new(itacacpad->channels, itacacpad->peak_type);
+	itacacpad->maxdata = gstlal_peak_state_new(itacac->channels, itacac->peak_type);
+	itacacpad->tmp_maxdata = gstlal_peak_state_new(itacac->channels, itacac->peak_type);
 
 	// This should be called any time the autocorrelation property is updated 
 	update_peak_info_from_autocorrelation_properties(itacacpad);
+
+	// Set up data_container struct
+	// FIXME Can simplify this process by reworking audioadapter to provide
+	// the information currently contained duration_..._matrix
+	itacacpad->data->data = g_malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * (2 * itacacpad->maxdata->pad));
+	// The largest number of disjoint sets of non-gap-samples (large enough
+	// to produce a trigger) that we could have in a given trigger window
+	guint max_number_disjoint_sets_in_trigger_window = itacac->rate / (2 * itacacpad->maxdata->pad) + 1;
+	itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix = gsl_matrix_calloc(max_number_disjoint_sets_in_trigger_window, 4);
 
 	return GST_AGGREGATOR_CLASS(gstlal_itacac_parent_class)->sink_event(agg, aggpad, event);
 
@@ -273,9 +310,10 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
 				g_free(itacacpad->channel_name);
 				itacacpad->channel_name = channel_name;
 				g_mutex_lock(&itacacpad->bank_lock);
-				gstlal_set_channel_in_snglinspiral_array(itacacpad->bankarray, itacacpad->channels, itacacpad->channel_name);
-				gstlal_set_instrument_in_snglinspiral_array(itacacpad->bankarray, itacacpad->channels, itacacpad->instrument);
+				gstlal_set_channel_in_snglinspiral_array(itacacpad->bankarray, (int) itacac->channels, itacacpad->channel_name);
+				gstlal_set_instrument_in_snglinspiral_array(itacacpad->bankarray, (int) itacac->channels, itacacpad->instrument);
 				g_mutex_unlock(&itacacpad->bank_lock);
+				result &= get_instrument_pad_pointer(itacac, itacacpad);
 			}
                         break;
 
@@ -323,7 +361,10 @@ enum itacacproperty {
 
 static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id, const GValue *value, GParamSpec *pspec)
 {
+	GSTLALItacac *itacac = GSTLAL_ITACAC(gst_pad_get_parent(GST_PAD(object)));
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(object);
+	guint channels;
+	GstClockTimeDiff difftime;
 
 	GST_OBJECT_LOCK(itacacpad);
 
@@ -340,22 +381,34 @@ static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id,
 		g_mutex_lock(&itacacpad->bank_lock);
 		free_bank(itacacpad);
 		itacacpad->bank_filename = g_value_dup_string(value);
-		itacacpad->channels = gstlal_snglinspiral_array_from_file(itacacpad->bank_filename, &(itacacpad->bankarray));
-		gstlal_set_min_offset_in_snglinspiral_array(itacacpad->bankarray, itacacpad->channels, &(itacacpad->difftime));
+		channels = gstlal_snglinspiral_array_from_file(itacacpad->bank_filename, &(itacacpad->bankarray));
+		gstlal_set_min_offset_in_snglinspiral_array(itacacpad->bankarray, (gint) channels, &difftime);
 		if(itacacpad->instrument && itacacpad->channel_name) {
-			gstlal_set_instrument_in_snglinspiral_array(itacacpad->bankarray, itacacpad->channels, itacacpad->instrument);
-			gstlal_set_channel_in_snglinspiral_array(itacacpad->bankarray, itacacpad->channels, itacacpad->channel_name);
+			gstlal_set_instrument_in_snglinspiral_array(itacacpad->bankarray, (gint) channels, itacacpad->instrument);
+			gstlal_set_channel_in_snglinspiral_array(itacacpad->bankarray, (gint) channels, itacacpad->channel_name);
 		}
 		g_mutex_unlock(&itacacpad->bank_lock);
+
+		g_assert(itacac != NULL);
+		g_mutex_lock(&itacac->caps_lock);
+		if(itacac->channels == 0) {
+			itacac->channels = channels;
+			itacac->difftime = difftime;
+		} else {
+			g_assert(itacac->channels == channels);
+			g_assert(itacac->difftime == difftime);
+		}
+		g_mutex_unlock(&itacac->caps_lock);
 		break;
 
 	case ARG_SIGMASQ:
 		g_mutex_lock(&itacacpad->bank_lock);
 		if (itacacpad->bankarray) {
+			g_assert(itacac != NULL);
 			gint length;
 			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
-			if((gint) itacacpad->channels != length)
-				GST_ERROR_OBJECT(itacacpad, "vector length (%d) does not match number of templates (%d)", length, itacacpad->channels);
+			if((gint) itacac->channels != length)
+				GST_ERROR_OBJECT(itacacpad, "vector length (%d) does not match number of templates (%u)", length, itacac->channels);
 			else
 				gstlal_set_sigmasq_in_snglinspiral_array(itacacpad->bankarray, length, sigmasq);
 			g_free(sigmasq);
@@ -405,11 +458,14 @@ static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id,
 	}
 
 	GST_OBJECT_UNLOCK(itacacpad);
+	if(itacac != NULL)
+		gst_object_unref(GST_OBJECT(itacac));
 }
 
 
 static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id, GValue *value, GParamSpec *pspec)
 {
+	GSTLALItacac *itacac = GSTLAL_ITACAC(gst_pad_get_parent(GST_PAD(object)));
 	GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(object);
 
 	GST_OBJECT_LOCK(itacacpad);
@@ -432,11 +488,12 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
         case ARG_SIGMASQ:
 		g_mutex_lock(&itacacpad->bank_lock);
 		if(itacacpad->bankarray) {
-			double sigmasq[itacacpad->channels];
+			g_assert(itacac != NULL);
+			double sigmasq[itacac->channels];
 			gint i;
-			for(i = 0; i < (gint) itacacpad->channels; i++)
+			for(i = 0; i < (gint) itacac->channels; i++)
 				sigmasq[i] = itacacpad->bankarray[i].sigmasq;
-			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, itacacpad->channels));
+			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(sigmasq, (gint) itacac->channels));
 		} else {
 			GST_WARNING_OBJECT(itacacpad, "no template bank");
 			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
@@ -472,6 +529,8 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 	}
 
 	GST_OBJECT_UNLOCK(itacacpad);
+	if(itacac != NULL)
+		gst_object_unref(GST_OBJECT(itacac));
 }
 
 /*
@@ -500,65 +559,10 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 	GST_BUFFER_OFFSET(srcbuf) = itacac->next_output_offset;
 	GST_BUFFER_OFFSET_END(srcbuf) = itacac->next_output_offset + samps;
 	GST_BUFFER_PTS(srcbuf) = itacac->next_output_timestamp + itacac->difftime;
-	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, samps, itacac->rate);
+	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, samps, (gint) itacac->rate);
 
 	return gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 
-}
-
-static GstFlowReturn final_setup(GSTLALItacac *itacac) {
-	GstElement *element = GST_ELEMENT(itacac);
-	GList *padlist;
-	GstFlowReturn result = GST_FLOW_OK;
-
-	// Ensure all of the pads have the same channels and rate, and set them on itacac for easy access
-	for(padlist = element->sinkpads; padlist !=NULL; padlist = padlist->next) {
-		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		if(padlist == element->sinkpads){
-			itacac->channels = itacacpad->channels;
-			itacac->rate = itacacpad->rate;
-			itacac->difftime = itacacpad->difftime;
-			itacac->peak_type = itacacpad->peak_type;
-		} else {
-			g_assert(itacac->channels == itacacpad->channels);
-			g_assert(itacac->rate == itacacpad->rate);
-			g_assert(itacac->difftime == itacacpad->difftime);
-			g_assert(itacac->peak_type == itacacpad->peak_type);
-		}
-		if(strcmp(itacacpad->instrument, "H1") == 0)
-			itacac->H1_itacacpad = itacacpad;
-		else if(strcmp(itacacpad->instrument, "K1") == 0)
-			itacac->K1_itacacpad = itacacpad;
-		else if(strcmp(itacacpad->instrument, "L1") == 0)
-			itacac->L1_itacacpad = itacacpad;
-		else if(strcmp(itacacpad->instrument, "V1") == 0)
-			itacac->V1_itacacpad = itacacpad;
-		else {
-			GST_ERROR_OBJECT(itacacpad, "pad has unknown detector, %s", itacacpad->instrument);
-			result = GST_FLOW_ERROR;
-			return result;
-		}
-
-	}
-
-
-	// The max size to copy from an adapter is the typical output size plus
-	// the padding plus the largest coincidence window. we should never try
-	// to copy from an adapter with a larger buffer than this. 
-
-	for(padlist = GST_ELEMENT(itacac)->sinkpads; padlist != NULL; padlist = padlist->next) {
-		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		itacacpad->data = g_malloc(sizeof(*itacacpad->data));
-		itacacpad->data->data = g_malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * (2 * itacacpad->maxdata->pad));
-
-		// The largest number of disjoint sets of non-gap-samples (large enough
-		// to produce a trigger) that we could have in a given trigger window
-		guint max_number_disjoint_sets_in_trigger_window = (guint) itacacpad->rate / (2 * itacacpad->maxdata->pad) + 1;
-		itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix = gsl_matrix_calloc(max_number_disjoint_sets_in_trigger_window, 4);
-	}
-
-
-	return result;
 }
 
 static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, guint copysamps, guint peak_finding_length, gint offset_from_trigwindow) {
@@ -1132,19 +1136,10 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 	GList *padlist;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	// Calculate the coincidence windows and make sure the pads caps are compatible with each other if we're just starting
-	if(itacac->rate == 0) {
-		result = final_setup(itacac);
-		if(result == GST_FLOW_ERROR)
-			return result;
-	}
-
 	if(itacac->EOS) {
 		result = process(itacac);
 		return result;
 	}
-	
-		
 
 	// FIXME need to confirm the aggregator does enough checks that the
 	// checks itac does are unncessary
@@ -1276,7 +1271,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 				continue;
 
 			// FIXME Assumes n is the same for all detectors
-			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->rate));
+			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacac->rate));
 			if(num_samples_behind > itacacpad->maxdata->pad)
 				gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
 			itacacpad->samples_available_for_padding = num_samples_behind > itacacpad->maxdata->pad ? itacacpad->maxdata->pad : num_samples_behind;
@@ -1547,15 +1542,14 @@ static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 static void gstlal_itacac_pad_init(GSTLALItacacPad *itacacpad)
 {
 	itacacpad->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, NULL);
-	itacacpad->rate = 0;
-	itacacpad->channels = 0;
-	itacacpad->data = NULL;
+	itacacpad->data = g_malloc(sizeof(*itacacpad->data));
+	itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix = NULL;
+	itacacpad->data->data = NULL;
 	itacacpad->chi2 = NULL;
 	itacacpad->tmp_chi2 = NULL;
 	itacacpad->bank_filename = NULL;
 	itacacpad->instrument = NULL;
 	itacacpad->channel_name = NULL;
-	itacacpad->difftime = 0;
 	itacacpad->snr_thresh = 0;
 	g_mutex_init(&itacacpad->bank_lock);
 
@@ -1591,5 +1585,6 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 	itacac->K1_itacacpad = NULL;
 	itacac->L1_itacacpad = NULL;
 	itacac->V1_itacacpad = NULL;
+	g_mutex_init(&itacac->caps_lock);
 
 }
