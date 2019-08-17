@@ -508,7 +508,6 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 }
 
 static GstFlowReturn final_setup(GSTLALItacac *itacac) {
-	// FIXME Need to add logic to finish initializing GLists. Make sure to ensure there always at least two elements in the GList, even in the case of only having one sinkpad
 	GstElement *element = GST_ELEMENT(itacac);
 	GList *padlist;
 	GstFlowReturn result = GST_FLOW_OK;
@@ -516,9 +515,6 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 	// Ensure all of the pads have the same channels and rate, and set them on itacac for easy access
 	for(padlist = element->sinkpads; padlist !=NULL; padlist = padlist->next) {
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		//GstBuffer *sinkbuf = gst_aggregator_pad_peek_buffer(GST_AGGREGATOR_PAD(itacacpad));
-		//gst_buffer_unref(sinkbuf);
-		// FIXME Should gst_object_sync_values be called here too?
 		if(padlist == element->sinkpads){
 			itacac->channels = itacacpad->channels;
 			itacac->rate = itacacpad->rate;
