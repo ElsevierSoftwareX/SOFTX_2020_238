@@ -328,7 +328,7 @@ int gstlal_set_min_offset_in_snglinspiral_array(SnglInspiralTable *bankarray, in
 	return 0;
 }
 
-int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view)
+int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view)
 {
 	guint channel;
 	guint L1_snr_timeseries_length, H1_snr_timeseries_length, V1_snr_timeseries_length, K1_snr_timeseries_length;
@@ -508,7 +508,7 @@ GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *in
 	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, length, rate);
 
 	if (input->num_events || input->no_peaks_past_threshold) {
-		populate_snglinspiral_buffer(srcbuf, input, bankarray, pad, length, time, rate, chi2, L1_snr_matrix_view, H1_snr_matrix_view, V1_snr_matrix_view, K1_snr_matrix_view);
+		populate_snglinspiral_buffer(srcbuf, input, bankarray, pad, length, time, rate, chi2, H1_snr_matrix_view, K1_snr_matrix_view, L1_snr_matrix_view, V1_snr_matrix_view);
 	}
 	return srcbuf;
 }
@@ -526,7 +526,7 @@ int gstlal_snglinspiral_append_peak_to_buffer(GstBuffer *srcbuf, struct gstlal_p
 		GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, GST_BUFFER_OFFSET_END(srcbuf) - GST_BUFFER_OFFSET(srcbuf), rate);
 	}
 
-	populate_snglinspiral_buffer(srcbuf, input, bankarray, pad, length, time, rate, chi2, L1_snr_matrix_view, H1_snr_matrix_view, V1_snr_matrix_view, K1_snr_matrix_view);
+	populate_snglinspiral_buffer(srcbuf, input, bankarray, pad, length, time, rate, chi2, H1_snr_matrix_view, K1_snr_matrix_view, L1_snr_matrix_view, V1_snr_matrix_view);
 
 	return 0;
 }
