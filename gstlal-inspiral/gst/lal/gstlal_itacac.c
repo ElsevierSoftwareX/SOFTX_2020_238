@@ -144,7 +144,6 @@ static int reset_time_and_offset(GSTLALItacac *itacac) {
         return 0;
 }
 
-
 static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter) {
         guint size;
         g_object_get(adapter, "size", &size, NULL);
@@ -178,7 +177,6 @@ static void update_peak_info_from_autocorrelation_properties(GSTLALItacacPad *it
         }
 }
 
-
 /*
  * ============================================================================
  *
@@ -186,7 +184,6 @@ static void update_peak_info_from_autocorrelation_properties(GSTLALItacacPad *it
  *
  * ============================================================================
  */
-
 
 static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest)
 {
@@ -276,8 +273,6 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix = gsl_matrix_calloc(max_number_disjoint_sets_in_trigger_window, 4);
 
 	return GST_AGGREGATOR_CLASS(gstlal_itacac_parent_class)->sink_event(agg, aggpad, event);
-
-
 }
 
 static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *event)
@@ -342,7 +337,6 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
  *
  * ============================================================================
  */
-
 
 enum padproperty {
 	ARG_N = 1,
@@ -456,7 +450,6 @@ static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id,
 		gst_object_unref(GST_OBJECT(itacac));
 }
 
-
 static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id, GValue *value, GParamSpec *pspec)
 {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(gst_pad_get_parent(GST_PAD(object)));
@@ -537,7 +530,6 @@ static void update_state(GSTLALItacac *itacac, GstBuffer *srcbuf) {
 	itacac->next_output_timestamp += GST_BUFFER_DURATION(srcbuf);
 }
 
-
 static GstFlowReturn push_buffer(GstAggregator *agg, GstBuffer *srcbuf) {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(agg);
 	update_state(itacac, srcbuf);
@@ -587,8 +579,6 @@ static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 		gst_audioadapter_copy_samples(itacacpad->adapter, (float complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
         else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
 		gst_audioadapter_copy_samples(itacacpad->adapter, (double complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
-
-
 }
 
 static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, void *data, guint peak_finding_start, guint peak_finding_length, guint samples_previously_searched, gboolean numerous_peaks_in_window) {
@@ -782,7 +772,6 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 		gstlal_peak_state_clear(itacacpad->tmp_maxdata);
 		itacacpad->tmp_maxdata->no_peaks_past_threshold = TRUE;
 	}
-
 }
 
 static void get_snr_series(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, guint channel, guint peak_sample) {
@@ -910,7 +899,6 @@ static GstBuffer* assemble_srcbuf(GSTLALItacac *itacac, GSTLALItacacPad *itacacp
 	}
 	return srcbuf;
 }
-
 
 static GstFlowReturn process(GSTLALItacac *itacac) {
 	// Iterate through audioadapters and generate triggers
@@ -1279,7 +1267,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 	return result;
 }
 
-
 /*
  * ============================================================================
  *
@@ -1362,7 +1349,6 @@ static void gstlal_itacac_finalize(GObject *object)
  *
  * http://developer.gnome.org/doc/API/2.0/gobject/gobject-Type-Information.html#GClassInitFunc
  */
-
 
 static void gstlal_itacac_pad_class_init(GSTLALItacacPadClass *klass)
 {
@@ -1523,9 +1509,7 @@ static void gstlal_itacac_class_init(GSTLALItacacClass *klass)
 		&src_templ,
 		GST_TYPE_AGGREGATOR_PAD
 	);
-
 }
-
 
 /*
  * Instance init function.  See
@@ -1561,7 +1545,6 @@ static void gstlal_itacac_pad_init(GSTLALItacacPad *itacacpad)
 
 
 	gst_pad_use_fixed_caps(GST_PAD(itacacpad));
-
 }
 
 static void gstlal_itacac_init(GSTLALItacac *itacac)
@@ -1580,5 +1563,4 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 	itacac->L1_itacacpad = NULL;
 	itacac->V1_itacacpad = NULL;
 	g_mutex_init(&itacac->caps_lock);
-
 }
