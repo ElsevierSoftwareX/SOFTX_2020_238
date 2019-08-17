@@ -160,7 +160,7 @@ static void free_bank(GSTLALItacacPad *itacacpad) {
 
 static void update_peak_info_from_autocorrelation_properties(GSTLALItacacPad *itacacpad) {
 	// FIXME Need to make sure that itacac can run without autocorrelation matrix
-	if (itacacpad->maxdata && itacacpad->tmp_maxdata && itacacpad->autocorrelation_matrix) {
+	if(itacacpad->maxdata && itacacpad->tmp_maxdata && itacacpad->autocorrelation_matrix) {
 		itacacpad->maxdata->pad = itacacpad->tmp_maxdata->pad = autocorrelation_length(itacacpad) / 2;
 		free(itacacpad->snr_mat);
 		free(itacacpad->tmp_snr_mat);
@@ -254,10 +254,10 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	itacacpad->chi2 = calloc(itacac->channels, width);
 	itacacpad->tmp_chi2 = calloc(itacac->channels, width);
 
-	if (itacacpad->maxdata)
+	if(itacacpad->maxdata)
 		gstlal_peak_state_free(itacacpad->maxdata);
 	
-	if (itacacpad->tmp_maxdata)
+	if(itacacpad->tmp_maxdata)
 		gstlal_peak_state_free(itacacpad->tmp_maxdata);
 
 	itacacpad->maxdata = gstlal_peak_state_new(itacac->channels, itacac->peak_type);
@@ -397,7 +397,7 @@ static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id,
 
 	case ARG_SIGMASQ:
 		g_mutex_lock(&itacacpad->bank_lock);
-		if (itacacpad->bankarray) {
+		if(itacacpad->bankarray) {
 			g_assert(itacac != NULL);
 			gint length;
 			double *sigmasq = gstlal_doubles_from_g_value_array(g_value_get_boxed(value), NULL, &length);
@@ -583,9 +583,9 @@ static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 	gsl_matrix_set(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, data_container_index, 3, (double) peak_finding_length);
 
 	// copy the samples that we will call the peak finding library on (if no events are found the result will be a GAP)
-        if (itacac->peak_type == GSTLAL_PEAK_COMPLEX)
+        if(itacac->peak_type == GSTLAL_PEAK_COMPLEX)
 		gst_audioadapter_copy_samples(itacacpad->adapter, (float complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
-        else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
+        else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
 		gst_audioadapter_copy_samples(itacacpad->adapter, (double complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
 
 
@@ -627,7 +627,7 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 	// AEP- 180417 Turning XLAL Errors off
 	old_gsl_error_handler=gsl_set_error_handler_off();
 
-        if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+        if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
                 // Find the peak, making sure to put the data pointer at the start of the interval we care about
                 gstlal_float_complex_peak_over_window_interp(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
@@ -643,7 +643,7 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 			}
 		}
 	}
-        else if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+        else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
                 // Find the peak, making sure to put the data pointer at the start of the interval we care about
                 gstlal_double_complex_peak_over_window_interp(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
@@ -679,7 +679,7 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 			gstlal_double_complex_series_around_peak(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (double complex *) this_snr_mat, this_maxdata->pad);
 			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 
-		} else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+		} else if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_float_complex_series_around_peak(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (float complex *) this_snr_mat, this_maxdata->pad);
 			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
@@ -826,18 +826,18 @@ static void get_snr_series(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, gui
 
 		// find snr time series
 		// FIXME Should the gstlal*series_around_peak functions be generalized so that they can do this?
-		if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			tmp_snr_mat_doubleptr = (double complex *) itacacpad->tmp_snr_mat;
-		} else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+		} else if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			tmp_snr_mat_floatptr = (float complex *) itacacpad->tmp_snr_mat;
 		}
 
 		for(snr_index = 0; snr_index < 2*itacacpad->maxdata->pad + 1; snr_index++) {
 
-			if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
+			if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
 				tmp_snr_mat_doubleptr[snr_index * itacacpad->maxdata->channels + channel] = *(((double complex *) itacacpad->data->data) + (series_start + snr_index) * itacacpad->maxdata->channels + channel);
 
-			else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX)
+			else if(itacac->peak_type == GSTLAL_PEAK_COMPLEX)
 				tmp_snr_mat_floatptr[snr_index * itacacpad->maxdata->channels + channel] = *(((float complex *) itacacpad->data->data) + (series_start + snr_index) * itacacpad->maxdata->channels + channel);
 		}
 
@@ -863,11 +863,11 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 		// Identify which sample was the peak
 		// See if we that have that sample in the other ifos
 		// zeropad other ifos if we need to
-		if (itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			// First check if there's a trigger
 			if(!itacacpad->maxdata->values.as_double_complex[channel])
 				continue;
-		} else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+		} else if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			// First check if there's a trigger
 			if(!itacacpad->maxdata->values.as_float_complex[channel])
 				continue;
@@ -1185,7 +1185,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 
 		// FIXME if we were more careful we wouldn't lose so much data around disconts
 		// FIXME I don't think this logic works for itacac, it came from itac, need to think carefully about what to do around disconts
-		if (GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
+		if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
 			// FIXME For now, this should ensure we only see disconts at start up
 			g_assert(gst_audioadapter_available_samples(itacacpad->adapter) == 0);
 			itacacpad->initial_timestamp = GST_CLOCK_TIME_NONE;
