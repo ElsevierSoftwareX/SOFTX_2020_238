@@ -43,8 +43,6 @@
 #include <string.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_blas.h>
-//#include <signal.h>
-//#include <time.h>
 
 /*
  * our own stuff
