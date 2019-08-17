@@ -553,8 +553,8 @@ static GstFlowReturn final_setup(GSTLALItacac *itacac) {
 
 	for(padlist = GST_ELEMENT(itacac)->sinkpads; padlist != NULL; padlist = padlist->next) {
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		itacacpad->data = malloc(sizeof(*itacacpad->data));
-		itacacpad->data->data = malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * (2 * itacacpad->maxdata->pad));
+		itacacpad->data = g_malloc(sizeof(*itacacpad->data));
+		itacacpad->data->data = g_malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * (2 * itacacpad->maxdata->pad));
 
 		// The largest number of disjoint sets of non-gap-samples (large enough
 		// to produce a trigger) that we could have in a given trigger window
