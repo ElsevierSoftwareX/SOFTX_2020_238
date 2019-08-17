@@ -501,7 +501,6 @@ static GstFlowReturn push_gap(GSTLALItacac *itacac, guint samps) {
 	GST_BUFFER_OFFSET_END(srcbuf) = itacac->next_output_offset + samps;
 	GST_BUFFER_PTS(srcbuf) = itacac->next_output_timestamp + itacac->difftime;
 	GST_BUFFER_DURATION(srcbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, samps, itacac->rate);
-	itacac->test++;
 
 	return gst_aggregator_finish_buffer(GST_AGGREGATOR(itacac), srcbuf);
 
@@ -1581,7 +1580,6 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 {
 	itacac->rate = 0;
 	itacac->channels = 0;
-	itacac->test = 0;
 
 	itacac->difftime = 0;
 	
