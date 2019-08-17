@@ -353,10 +353,6 @@ enum padproperty {
 	ARG_AUTOCORRELATION_MASK
 };
 
-enum itacacproperty {
-	ARG_COINC_THRESH = 1
-};
-
 static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id, const GValue *value, GParamSpec *pspec)
 {
 	GSTLALItacac *itacac = GSTLAL_ITACAC(gst_pad_get_parent(GST_PAD(object)));
