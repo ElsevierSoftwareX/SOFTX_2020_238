@@ -1195,62 +1195,37 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 
 	}
 
-	if(itacac->waiting) {
-		// Check if timestamps of all sinkpads are the same, if not,
-		// take the earliest timestamp as the next output timestamp and
-		// start processing samples from sinkpads that have that
-		// timestamp
+	// Find earliest timestamp between all of the pads if we don't have the
+	// first output timestamp, which means itacac hasn't pushed any buffers yet
+	if(itacac->next_output_timestamp == GST_CLOCK_TIME_NONE) {
 		for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
 			GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 			if(gst_audioadapter_available_samples(itacacpad->adapter) == 0)
 				continue;
-
-			if(padlist == GST_ELEMENT(aggregator)->sinkpads)
-				itacac->next_output_timestamp = itacacpad->initial_timestamp;
-			else
-				itacac->next_output_timestamp = itacac->next_output_timestamp <= itacacpad->initial_timestamp ? itacac->next_output_timestamp : itacacpad->initial_timestamp;
+			itacac->next_output_timestamp = itacac->next_output_timestamp == GST_CLOCK_TIME_NONE ? itacacpad->initial_timestamp : itacac->next_output_timestamp <= itacacpad->initial_timestamp ? itacac->next_output_timestamp : itacacpad->initial_timestamp;
 		}
-
-		if(itacac->next_output_timestamp != GST_CLOCK_TIME_NONE) {
-			for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
-				GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-				if(itacacpad->initial_timestamp == itacac->next_output_timestamp && gst_audioadapter_available_samples(itacacpad->adapter) > 0) {
-					itacacpad->waiting = FALSE;
-					if(itacac->waiting)
-						itacac->waiting = FALSE;
-				}
-			}
-			if(!itacac->waiting)
-				result = process(itacac);
-		}
-
-	} else {
-		if(itacac->next_output_timestamp == GST_CLOCK_TIME_NONE) {
-			for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
-				GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-				if(padlist == GST_ELEMENT(aggregator)->sinkpads)
-					itacac->next_output_timestamp = itacacpad->initial_timestamp;
-				else
-					itacac->next_output_timestamp = itacac->next_output_timestamp <= itacacpad->initial_timestamp ? itacac->next_output_timestamp : itacacpad->initial_timestamp;
-			}
-		}
-		// Figure out if we can start taking data from each pad that is still waiting
-		for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
-			GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-			if(!itacacpad->waiting || itacacpad->initial_timestamp > itacac->next_output_timestamp)
-				continue;
-
-			// FIXME Assumes n is the same for all detectors
-			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacac->rate));
-			if(num_samples_behind > itacacpad->maxdata->pad)
-				gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
-			itacacpad->samples_available_for_padding = num_samples_behind > itacacpad->maxdata->pad ? itacacpad->maxdata->pad : num_samples_behind;
-
-			itacacpad->waiting = FALSE;
-		}
-
-		result = process(itacac);
 	}
+
+	// Determine if we can start taking data from each pad that is still waiting (if any)
+	for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
+		if(itacac->next_output_timestamp == GST_CLOCK_TIME_NONE)
+			// We're at the beginning and don't have any data yet (for reaons I don't understand, itacac receives empty buffers at start up)
+			return result;
+
+		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
+		if(!itacacpad->waiting || itacacpad->initial_timestamp > itacac->next_output_timestamp)
+			continue;
+
+		// FIXME Assumes n is the same for all detectors
+		guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacac->rate));
+		if(num_samples_behind > itacacpad->maxdata->pad)
+			gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
+		itacacpad->samples_available_for_padding = num_samples_behind > itacacpad->maxdata->pad ? itacacpad->maxdata->pad : num_samples_behind;
+
+		itacacpad->waiting = FALSE;
+	}
+
+	result = process(itacac);
 
 	return result;
 }
@@ -1545,7 +1520,6 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 	reset_time_and_offset(itacac);
 
 	itacac->EOS = FALSE;
-	itacac->waiting = TRUE;
 	itacac->H1_itacacpad = NULL;
 	itacac->K1_itacacpad = NULL;
 	itacac->L1_itacacpad = NULL;

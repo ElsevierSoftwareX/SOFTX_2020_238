@@ -128,7 +128,6 @@ typedef struct {
 	GstClockTime next_output_timestamp;
 	GstClockTimeDiff difftime;
 	gboolean EOS;
-	gboolean waiting;
 	GSTLALItacacPad *H1_itacacpad, *K1_itacacpad, *L1_itacacpad, *V1_itacacpad;
 	GMutex caps_lock;
 
