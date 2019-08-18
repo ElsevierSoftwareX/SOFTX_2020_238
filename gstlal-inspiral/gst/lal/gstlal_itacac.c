@@ -124,7 +124,6 @@ static unsigned autocorrelation_channels(const GSTLALItacacPad *itacacpad) {
 }
 
 static unsigned autocorrelation_length(GSTLALItacacPad *itacacpad) {
-	// The autocorrelation length should be the same for all of the detectors, so we can just use the first
 	return gstlal_autocorrelation_chi2_autocorrelation_length(itacacpad->autocorrelation_matrix);
 }
 
@@ -907,7 +906,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 	guint gapsamps = 0;
 	GstFlowReturn result = GST_FLOW_OK;
 	GList *padlist;
-	//GSTLALItacacPad *itacacpad;
 	GstBuffer *srcbuf = NULL;
 	guint availablesamps;
 
@@ -1034,7 +1032,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			g_assert(samples_searched_in_window < itacacpad->n);
 
 
-			//raise(SIGINT);
 			generate_triggers(
 				itacac, 
 				itacacpad, 
@@ -1044,7 +1041,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				samples_searched_in_window,
 				triggers_generated
 			);
-			//raise(SIGINT);
 
 			triggers_generated = TRUE;
 			duration = (guint) gsl_matrix_get(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, ++data_container_index, 0);
@@ -1123,16 +1119,11 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		return result;
 	}
 
-	// FIXME need to confirm the aggregator does enough checks that the
-	// checks itac does are unncessary
 	for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
 		// Get the buffer from the pad we're looking at and assert it
 		// has a valid timestamp
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-		//raise(SIGINT);
-		//sinkbuf = gst_aggregator_pad_pop_buffer(GST_AGGREGATOR_PAD(itacacpad));
 		// We don't need to worry about this if this pad is waiting
-		//if(!itacac->waiting && itacacpad->waiting)
 		if(itacacpad->waiting && gst_audioadapter_available_samples(itacacpad->adapter) != 0)
 			continue;
 
@@ -1172,7 +1163,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 
 
 		// FIXME if we were more careful we wouldn't lose so much data around disconts
-		// FIXME I don't think this logic works for itacac, it came from itac, need to think carefully about what to do around disconts
 		if(GST_BUFFER_FLAG_IS_SET(sinkbuf, GST_BUFFER_FLAG_DISCONT)) {
 			// FIXME For now, this should ensure we only see disconts at start up
 			g_assert(gst_audioadapter_available_samples(itacacpad->adapter) == 0);
@@ -1204,9 +1194,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 
 
 	}
-	//raise(SIGINT);
 
-	//raise(SIGINT);
 	if(itacac->waiting) {
 		// Check if timestamps of all sinkpads are the same, if not,
 		// take the earliest timestamp as the next output timestamp and
