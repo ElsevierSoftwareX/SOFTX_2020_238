@@ -943,13 +943,15 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		rcoss, drcoss = lnpdf.bins[1].centres()[rcossindices], lnpdf.bins[1].upper()[rcossindices] - lnpdf.bins[1].lower()[rcossindices]
 
 		snr2 = snr**2.
-		snrchi2 = numpy.outer(snr2, rcoss) * df
+		ncparam_per_pf = snr2
+		# takes into account the mean depending on noncentrality parameter
+		snrchi2 = numpy.outer(snr2 * df * (1.0 + numpy.mean(pfs)), rcoss)
 
 		arr = numpy.zeros_like(lnpdf.array)
 		for pf in pfs:
 			if progressbar is not None:
 				progressbar.increment()
-			arr[snrindices, rcossindices] += gstlalstats.ncx2pdf(snrchi2, df, numpy.array([pf * snr2]).T)
+			arr[snrindices, rcossindices] += gstlalstats.ncx2pdf(snrchi2, df, numpy.array([pf * ncparam_per_pf]).T)
 
 		# convert to counts by multiplying by bin volume, and also
 		# multiply by an SNR powr law
