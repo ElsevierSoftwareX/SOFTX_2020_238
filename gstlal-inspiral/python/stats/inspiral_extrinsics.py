@@ -945,7 +945,7 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		snr2 = snr**2.
 		ncparam_per_pf = snr2
 		# takes into account the mean depending on noncentrality parameter
-		snrchi2 = numpy.outer(snr2 * df * (1.0 + numpy.mean(pfs)), rcoss)
+		snrchi2 = numpy.outer(snr2 * df * (1.0 + max(pfs)), rcoss)
 
 		arr = numpy.zeros_like(lnpdf.array)
 		for pf in pfs:
