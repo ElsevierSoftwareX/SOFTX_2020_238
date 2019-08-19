@@ -1,7 +1,7 @@
 /*
  * An inspiral trigger, autocorrelation chisq, and coincidence (itacac) element
  *
- * Copyright (C) 2011 Chad Hanna, Kipp Cannon, 2018 Cody Messick, Alex Pace
+ * Copyright (C) 2011 Chad Hanna, Kipp Cannon, 2018 Cody Messick, Alex Pace, 2019 Cody Messick
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
