@@ -154,7 +154,7 @@ if options.analyze_calcs_hoft:
 	plot.add_frequencyseries(CALCS_tf, dB=False, color='#4ba6ff', linewidth=2)
 if options.analyze_additional_hoft:
 	plot.add_frequencyseries(additional_hoft_tf*3995.1, dB = False, color="#94ded7", linewidth=2)
-plot.legend([r'Reference model response function', r'GDS h(t) derived response function', r'CALCS h(t) derived response function'], loc='upper right', fontsize='x-small')
+plot.legend([r'Reference model response function', r'GDS h(t) derived response function', r'CALCS h(t) derived response function', r'DCS h(t) derived response function'], loc='upper right', fontsize='x-small')
 # FIXME: Figure out how to make the legend and title appropriate and flexible
 plot.maxes.set_yscale('log')
 plot.paxes.set_yscale("linear")
@@ -172,7 +172,7 @@ if options.analyze_calcs_hoft:
 	plot.add_frequencyseries(ratio_CALCS, dB = False, color='#4ba6ff',linewidth=2)
 if options.analyze_additional_hoft:
 	plot.add_frequencyseries(ratio_additional_hoft*3995.1, dB = False, color="#94ded7", linewidth=2)
-plot.legend([r'GDS h(t) derived response / Reference model response', 'CALCS h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
+plot.legend([r'GDS h(t) derived response / Reference model response', r'CALCS h(t) derived response / Reference model response', r'DCS h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
 plot.maxes.set_yscale('linear')
 plot.paxes.set_yscale('linear')
 plot.maxes.set_ylim(0,2)
@@ -183,7 +183,7 @@ if options.analyze_calcs_hoft:
 	plot.add_frequencyseries(ratio_CALCS, dB = False, color='#4ba6ff',linewidth=2)
 if options.analyze_additional_hoft:
 	plot.add_frequencyseries(ratio_additional_hoft*3995.1, dB = False, color="#94ded7", linewidth=2)
-plot.legend([r'GDS h(t) derived response / Reference model response', r'CALCS h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
+plot.legend([r'GDS h(t) derived response / Reference model response', r'CALCS h(t) derived response / Reference model response', r'DCS h(t) derived response / Reference model response'], loc='upper right', fontsize='small')
 plot.maxes.set_yscale('linear')
 plot.paxes.set_yscale('linear')
 plot.maxes.set_ylim(.9, 1.1)

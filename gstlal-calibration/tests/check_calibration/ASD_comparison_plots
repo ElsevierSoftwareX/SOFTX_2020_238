@@ -40,7 +40,7 @@ calcs_asd = calcs_data.asd(4, 2, method = 'lal_median_mean')
 hoft_asd = hoft_data.asd(4, 2, method = 'lal_median_mean')
 if options.analyze_additional_hoft_channel:
 	additional_hoft_asd = additional_hoft_data.asd(4,2, method = 'lal_median_mean')
-	additional_hoft_asd = additional_hoft_asd.filter([30]*6, [0.3]*6, 1e-12 / 4e3)
+	#additional_hoft_asd = additional_hoft_asd.filter([30]*6, [0.3]*6, 1e-12 / 4e3)
 
 #dewhiten CALCS
 calcs_asd = calcs_asd.filter([30]*6, [0.3]*6, 1e-12 / 4e3)
@@ -53,7 +53,7 @@ if options.analyze_additional_hoft_channel:
 ax = plot.gca()
 ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
 ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-ax.legend([r'CAL-DELTAL\_EXTERNAL', r'GDS-CALIB\_STRAIN', r'CAL-CFTD\_DELTAL\_EXTERNAL'], loc='upper right', fontsize='small')
+ax.legend([r'CAL-DELTAL\_EXTERNAL', r'GDS-CALIB\_STRAIN', r'DCS-CALIB\_STRAIN'], loc='upper right', fontsize='small')
 ax.set_xlim(0.5,8192)
 ax.set_ylim(1e-24,1e-16)
 plot.save('%s_%s_%s_spectrum_comparison.png' % (options.ifo, start_time, end_time))
@@ -69,7 +69,7 @@ if options.analyze_additional_hoft_channel:
 ax = plot.gca()
 ax.set_ylabel('Strain [Hz $^{-1/2}$]', fontname = 'Times', fontsize = 18)
 ax.set_xlabel('Frequency [Hz]', fontname = 'Times', fontsize = 18)
-ax.legend([r'GDS h(t) ASD / CALCS h(t) ASD', r'CALCS h(t) ASD / CFTD CALCS h(t) ASD', r'GDS h(t) ASD / CFTD CALCS h(t) ASD'], loc='upper right', fontsize='small')
-ax.set_xlim(5,5000)
+ax.legend([r'GDS h(t) ASD / CALCS h(t) ASD', r'CALCS h(t) ASD / DCS h(t) ASD', r'GDS h(t) ASD / DCS h(t) ASD'], loc='upper right', fontsize='small')
+ax.set_xlim(0.5,8192)
 ax.set_ylim(0.75, 1.25)
 plot.save('%s_%s_%s_ASD_residual.png' % (options.ifo, start_time, end_time))
