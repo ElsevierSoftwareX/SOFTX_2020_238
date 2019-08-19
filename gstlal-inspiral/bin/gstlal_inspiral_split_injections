@@ -93,6 +93,7 @@ def parse_command_line():
 	parser.add_option("--injection-rate-tolerance", type = "float", default = 0.1, help = "Acceptable tolerance for target injection rate, files will be written to disk once a splitting has been found such that the injection rate is target-injection-rate +- (injection-rate-tolerance*target-injection-rate) (default: 0.1)")
 	parser.add_option("--generate-inj-string-only", action = "store_true", help = "Do not combine files, generate an injection string specifying which chirp mass bounds to use to search for the provided injection files")
 	parser.add_option("--single-output", action = "store_true", help = "Produce a single output file containing all injections")
+	parser.add_option("--injection-str-output", default = "injection_str.txt", help = "Write injection string used in analysis Makefile to this file. [Default: injection_str.txt]")
 
 	# FIXME Add option checking so num-output and target-injection-rate cannot both be provided
 
@@ -159,4 +160,5 @@ else:
 		create_split_injection(processmap, process_params_dict, [siminspiralmap[tuple(k for k in key)] for key in keys], keys[0][0], keys[-1][0], "%s_%04d.xml" %( options.output_tag, i) if not options.single_output else "%s.xml" % options.output_tag, options)
 		mchirp_str += mchirp_injection_str(keys, "%s_%04d.xml" %( options.output_tag, i) if not options.single_output else "%s.xml" % options.output_tag)
 
-print 'MCHIRP_INJECTIONS := %s' % mchirp_str[:-1]
+with open(options.injection_str_output, 'w') as f:
+	f.write('MCHIRP_INJECTIONS := %s' % mchirp_str[:-1])
