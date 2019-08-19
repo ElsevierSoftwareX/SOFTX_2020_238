@@ -84,6 +84,7 @@ typedef struct {
 	GstAggregatorPad aggpad;
 
 	GstAudioAdapter *adapter;
+	guint adapter_unit_size;
 	struct data_container *data;
 	void *chi2;
 	void *tmp_chi2;

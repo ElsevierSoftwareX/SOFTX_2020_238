@@ -132,7 +132,7 @@ static guint64 output_num_samps(GSTLALItacacPad *itacacpad) {
 }
 
 static guint64 output_num_bytes(GSTLALItacacPad *itacacpad) {
-	return (guint64) output_num_samps(itacacpad) * itacacpad->adapter->unit_size;
+	return (guint64) output_num_samps(itacacpad) * itacacpad->adapter_unit_size;
 }
 
 static int reset_time_and_offset(GSTLALItacac *itacac) {
@@ -246,7 +246,8 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	}
 	g_mutex_unlock(&itacac->caps_lock);
 
-	g_object_set(itacacpad->adapter, "unit-size", itacac->channels * width, NULL);
+	itacacpad->adapter_unit_size = itacac->channels * width;
+	g_object_set(itacacpad->adapter, "unit-size", itacacpad->adapter_unit_size, NULL);
 	itacacpad->chi2 = calloc(itacac->channels, width);
 	itacacpad->tmp_chi2 = calloc(itacac->channels, width);
 
@@ -265,7 +266,7 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	// Set up data_container struct
 	// FIXME Can simplify this process by reworking audioadapter to provide
 	// the information currently contained duration_..._matrix
-	itacacpad->data->data = g_malloc(output_num_bytes(itacacpad) + itacacpad->adapter->unit_size * (2 * itacacpad->maxdata->pad));
+	itacacpad->data->data = g_malloc(output_num_bytes(itacacpad) + itacacpad->adapter_unit_size * (2 * itacacpad->maxdata->pad));
 	// The largest number of disjoint sets of non-gap-samples (large enough
 	// to produce a trigger) that we could have in a given trigger window
 	guint max_number_disjoint_sets_in_trigger_window = itacac->rate / (2 * itacacpad->maxdata->pad) + 1;
