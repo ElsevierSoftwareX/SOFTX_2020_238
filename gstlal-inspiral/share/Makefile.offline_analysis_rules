@@ -26,6 +26,6 @@ FRAME_CACHE_FILES := $(addsuffix $(frame_suffix),$(IFOS))
 # Injection file names
 injections:=--injections $(space)
 far_injections:=--far-injections $(space)
-INJECTIONS := $(shell for x in $(MCHIRP_INJECTIONS); do echo $${x} | cut -d: -f3; done)
-INJECTION_LIST := $(subst $(space), $(injections), $(MCHIRP_INJECTIONS))
+INJECTIONS = $(shell for x in $(MCHIRP_INJECTIONS); do echo $${x} | cut -d: -f3; done)
+INJECTION_LIST = $(subst $(space), $(injections), $(MCHIRP_INJECTIONS))
 FAR_INJECTION_LIST := $(subst $(space), $(far_injections), $(FAR_INJECTIONS))
