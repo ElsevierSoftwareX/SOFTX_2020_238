@@ -161,4 +161,4 @@ else:
 		mchirp_str += mchirp_injection_str(keys, "%s_%04d.xml" %( options.output_tag, i) if not options.single_output else "%s.xml" % options.output_tag)
 
 with open(options.injection_str_output, 'w') as f:
-	f.write('MCHIRP_INJECTIONS := %s' % mchirp_str[:-1])
+	f.write(mchirp_str[:-1])
