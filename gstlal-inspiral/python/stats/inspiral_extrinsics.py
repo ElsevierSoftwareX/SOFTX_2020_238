@@ -963,6 +963,47 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		# add to lnpdf
 		lnpdf.array += arr
 
+	@staticmethod
+	def add_glitch_model(lnpdf, n, prefactors_range, df, inv_snr_pow = 4., snr_min = 3.5, progressbar = None):
+		if df <= 0.:
+			raise ValueError("require df >= 0: %s" % repr(df))
+		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 100)
+		if progressbar is not None:
+			progressbar.max = len(pfs)
+
+		# FIXME:  except for the low-SNR cut, the slicing is done
+		# to work around various overflow and loss-of-precision
+		# issues in the extreme parts of the domain of definition.
+		# it would be nice to identify the causes of these and
+		# either fix them or ignore them one-by-one with a comment
+		# explaining why it's OK to ignore the ones being ignored.
+		# for example, computing snrchi2 by exponentiating the sum
+		# of the logs of the terms might permit its evaluation
+		# everywhere on the domain.  can ncx2pdf() be made to work
+		# everywhere?
+		snrindices, rcossindices = lnpdf.bins[snr_min:1e10, 1e-10:1e10]
+		snr, dsnr = lnpdf.bins[0].centres()[snrindices], lnpdf.bins[0].upper()[snrindices] - lnpdf.bins[0].lower()[snrindices]
+		rcoss, drcoss = lnpdf.bins[1].centres()[rcossindices], lnpdf.bins[1].upper()[rcossindices] - lnpdf.bins[1].lower()[rcossindices]
+
+		snr2 = snr**2.
+		snrchi2 = numpy.outer(snr2, rcoss) * df
+
+		arr = numpy.zeros_like(lnpdf.array)
+		for pf in pfs:
+			if progressbar is not None:
+				progressbar.increment()
+			arr[snrindices, rcossindices] += gstlalstats.ncx2pdf(snrchi2, df, numpy.array([pf * snr2]).T)
+
+		# convert to counts by multiplying by bin volume, and also
+		# multiply by an SNR powr law
+		arr[snrindices, rcossindices] *= numpy.outer(dsnr / snr**inv_snr_pow, drcoss)
+
+		# normalize to a total count of n
+		arr *= n / arr.sum()
+
+		# add to lnpdf
+		lnpdf.array += arr
+
 	def to_xml(self, *args, **kwargs):
 		elem = super(rate.BinnedLnPDF, self).to_xml(*args, **kwargs)
 		elem.appendChild(ligolw_array.Array.build("norm", self.norm))
