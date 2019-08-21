@@ -83,6 +83,7 @@ rm -Rf ${RPM_BUILD_DIR}/%{name}-%{version}
 %files
 %defattr(-,root,root)
 %{_bindir}/*
+%{_datadir}/gstlal/*
 %{_libdir}/gstreamer-*/lib*.a
 %{_libdir}/gstreamer-*/lib*.so
 %{_prefix}/%{_lib}/python*/site-packages/gstlal
