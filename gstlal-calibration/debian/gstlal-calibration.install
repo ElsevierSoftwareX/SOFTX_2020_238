@@ -3,3 +3,4 @@ usr/lib/gstreamer-*/lib*.a
 #usr/lib/gstreamer-*/lib*.la
 usr/lib/gstreamer-*/lib*.so*
 usr/lib/python*/*-packages/gstlal
+usr/share/gstlal/*
