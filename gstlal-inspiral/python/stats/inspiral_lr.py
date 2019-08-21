@@ -831,7 +831,7 @@ class LnNoiseDensity(LnLRDensity):
 			# add in the 99% noise model
 			lnpdf.array += arr
 			# add 1% from the "glitch model"
-			inspiral_extrinsics.NumeratorSNRCHIPDF.add_signal_model(lnpdf, n = 0.01 * number_of_events, prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
+			inspiral_extrinsics.NumeratorSNRCHIPDF.add_glitch_model(lnpdf, n = 0.01 * number_of_events, prefactors_range = prefactors_range, df = df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
 			# re-normalize
 			lnpdf.normalize()
 
