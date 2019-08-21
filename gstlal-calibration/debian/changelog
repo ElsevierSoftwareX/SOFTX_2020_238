@@ -1,3 +1,15 @@
+gstlal-calibration (1.2.11-1) unstable; urgency=low
+
+  * Added ability of calibration pipeline to only wait for data for a set
+    period of time before filling in as gap when running pipeline online
+  * Added in monitoring to calibration pipeline
+  * Added in prototype for calculating TDCFs exactly if desired
+  * Improved latency of pipeline when running online by lowering quality of
+    resampler
+  * Improvements to line subtraction code to update line frequencies
+ 
+ -- Madeline Wade <madeline.wade@ligo.org>  Tue, 20 Aug 2019 15:58:03 -0400
+
 gstlal-calibration (1.2.10-1) unstable; urgency=low
 
   * In the actuation path, separate the correction filter from the model
