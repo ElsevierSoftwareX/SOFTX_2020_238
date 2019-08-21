@@ -662,7 +662,7 @@ class OnlineFrankensteinLnSignalDensity(LnSignalDensity):
 	"""
 	@classmethod
 	def splice(cls, src, Dh_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, min_instruments = src.min_instruments, horizon_factors = src.horizon_factors)
+		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, dtdphi_file = src.dtdphi_file, min_instruments = src.min_instruments, horizon_factors = src.horizon_factors)
 		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
