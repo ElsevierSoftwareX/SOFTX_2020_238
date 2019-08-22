@@ -283,6 +283,7 @@ def parse_command_line():
 	group.add_option("--job-tag", metavar = "tag", help = "Set the string to identify this job and register the resources it provides on a node.  Should be 4 digits of the form 0001, 0002, etc.;  may not contain \".\" nor \"-\".")
 	group.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data, performs downsampling, and stores to local filespace. ")
 	group.add_option("--nxydump-segment", metavar = "start:stop", default = ":", help = "Set the time interval to dump from nxydump elments (optional).  The default is \":\", i.e. dump all time.")
+	group.add_option("--reconstruction-segment", metavar = "start:stop", action = "append", help = "Only reconstruct the SNRs for this time interval (optional). Can be provided multiple times.")
 	group.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	group.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
@@ -719,6 +720,11 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	if options.injections:
 		offset_padding = max(math.ceil(abs(row.end))+1 for bank in banks.items()[0][-1] for row in bank.sngl_inspiral_table)
 		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
+	elif options.reconstruction_segment:
+		reconstruction_segment_list = segments.segmentlist()
+		for reconstruction_segment in options.reconstruction_segment:
+			t0, t1 = reconstruction_segment.split(":")
+			reconstruction_segment_list.append(segments.segment(LIGOTimeGPS(int(t0)), LIGOTimeGPS(int(t1))))
 	else:
 		reconstruction_segment_list = None
 
