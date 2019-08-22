@@ -147,6 +147,7 @@ import socket
 import StringIO
 import sys
 import tempfile
+import time
 import uuid
 import warnings
 
@@ -158,6 +159,7 @@ Gst.init(None)
 
 import lal
 from lal import LIGOTimeGPS
+from lal import UTCToGPS
 from lal.utils import CacheEntry
 from ligo.gracedb.rest import DEFAULT_SERVICE_URL as gracedb_default_service_url
 
@@ -180,6 +182,8 @@ from gstlal import reference_psd
 from gstlal import servicediscovery
 from gstlal import simulation
 from gstlal import svd_bank
+
+GSTLAL_PROCESS_START_TIME = UTCToGPS(time.gmtime())
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -812,6 +816,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		coincs_document = inspiral.CoincsDocument(
 			url = output_url or "%s-%s_LLOID-%d-%d.xml.gz" % (lsctables.instrumentsproperty.set(detectors.channel_dict.keys()).replace(",", ""), options.job_tag, int(detectors.seg[0]), int(abs(detectors.seg))),
 			process_params = process_params,
+			process_start_time = GSTLAL_PROCESS_START_TIME,
 			comment = options.comment,
 			instruments = rankingstat.instruments,
 			seg = detectors.seg,

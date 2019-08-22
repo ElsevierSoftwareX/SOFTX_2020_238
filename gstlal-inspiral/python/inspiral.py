@@ -313,12 +313,12 @@ def chisq_distribution(df, non_centralities, size):
 class CoincsDocument(object):
 	sngl_inspiral_columns = ("process:process_id", "ifo", "end_time", "end_time_ns", "eff_distance", "coa_phase", "mass1", "mass2", "snr", "chisq", "chisq_dof", "bank_chisq", "bank_chisq_dof", "sigmasq", "spin1x", "spin1y", "spin1z", "spin2x", "spin2y", "spin2z", "template_duration", "event_id", "Gamma0", "Gamma1")
 
-	def __init__(self, url, process_params, comment, instruments, seg, offsetvectors, injection_filename = None, tmp_path = None, replace_file = None, verbose = False):
+	def __init__(self, url, process_params, process_start_time, comment, instruments, seg, offsetvectors, injection_filename = None, tmp_path = None, replace_file = None, verbose = False):
 		#
 		# how to make another like us
 		#
 
-		self.get_another = lambda: CoincsDocument(url = url, process_params = process_params, comment = comment, instruments = instruments, seg = seg, offsetvectors = offsetvectors, injection_filename = injection_filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
+		self.get_another = lambda: CoincsDocument(url = url, process_params = process_params, process_start_time = process_start_time, comment = comment, instruments = instruments, seg = seg, offsetvectors = offsetvectors, injection_filename = injection_filename, tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
 
 		#
 		# url
@@ -332,7 +332,16 @@ class CoincsDocument(object):
 
 		self.xmldoc = ligolw.Document()
 		self.xmldoc.appendChild(ligolw.LIGO_LW())
+		# NOTE FIXME override the process start time.  Since gstlal
+		# inspiral can produce several output files from the same
+		# process, this can plot the process metadata by a factor of 50
+		# even though the same process generated the files. It is a
+		# major contributor to the size of merged databases and xml
+		# files.  A patch to ligolw_process.register_to_xmldoc would be
+		# welcomed
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral", process_params, comment = comment, ifos = instruments)
+		if process_start_time is not None:
+			self.process.start_time = process_start_time
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.SnglInspiralTable, columns = self.sngl_inspiral_columns))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincDefTable))
 		self.xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
