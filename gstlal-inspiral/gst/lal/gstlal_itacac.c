@@ -997,7 +997,6 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 				gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 				samples_left_in_window = nongapsamps >= samples_left_in_window + itacacpad->samples_available_for_padding ? 0 : samples_left_in_window + itacacpad->samples_available_for_padding - nongapsamps;
 				itacacpad->samples_available_for_padding = 0;
-				//samples_left_in_window + itacacpad->maxdata->pad + itacacpad->samples_available_for_padding;
 			}
 
 		}
@@ -1304,7 +1303,6 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 
 static void gstlal_itacac_finalize(GObject *object)
 {
-	//GSTLALItacac *itacac = GSTLAL_ITACAC(object);
 	G_OBJECT_CLASS(gstlal_itacac_parent_class)->finalize(object);
 }
 
