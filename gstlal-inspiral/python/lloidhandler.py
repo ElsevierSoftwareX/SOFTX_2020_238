@@ -977,6 +977,10 @@ class Handler(simplehandler.Handler):
 			# FIXME:  ugly way to get the instrument
 			instruments = set([event.ifo for event in events])
 
+			# FIXME calculate a chisq weighted SNR and store it in the bank_chisq column
+			for event in events:
+				event.bank_chisq = event.snr / ((1 + max(1., event.chisq)**3)/2.0)**(1./5.)
+
 			# extract segment.  move the segment's upper
 			# boundary to include all triggers.  ARGH the 1 ns
 			# offset is needed for the respective trigger to be
