@@ -71,7 +71,6 @@ def parse_command_line():
 		version = "Name: %%prog\n%s" % "" # FIXME
 	)
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("-s", "--synthesize-numerator", action = "store_true", help = "Synthesize a numerator (SNR, \\chi^2) distribution.")
 	# FIXME:  default must be identical to gstlal_inspiral's default
 	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	# FIXME:  default must be identical to gstlal_inspiral's default
@@ -163,8 +162,8 @@ rankingstat = far.RankingStat(template_ids = template_ids, instruments = options
 if options.background_prior > 0:
 	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior, df = int(options.df))
 
-if options.synthesize_numerator:
-	rankingstat.numerator.add_signal_model()
+# Add the numerator
+rankingstat.numerator.add_signal_model()
 
 
 #
