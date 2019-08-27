@@ -107,7 +107,7 @@ all : split
 # N injection sets / Time step / M output split files
 # 10. / 100. / 2. = 0.05
 split : $(BNS_INJECTION_1) $(BNS_INJECTION_2) $(NSBH_INJECTION_1) $(NSBH_INJECTION_2) $(NSBH_INJECTION_3) $(BBH_INJECTION_1) $(BBH_INJECTION_2) $(IMBH_INJECTION_1) $(IMBH_INJECTION_2) $(IMBH_INJECTION_3)
-	gstlal_inspiral_split_injections $^ -r 0.05
+	gstlal_inspiral_combine_injection_sets $^ -r 0.05
 
 # BNS 1
 $(BNS_INJECTION_1) :
