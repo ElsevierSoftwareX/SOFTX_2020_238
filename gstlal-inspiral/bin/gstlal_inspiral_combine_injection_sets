@@ -65,7 +65,7 @@ def create_split_injection(processmap, process_params_dict, endtimesim_tuples, m
 	xmldoc.childNodes[-1].appendChild(siminspiraltable)
 
 	# FIXME add this to process params table
-	#process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral_split_injections", param_dict)
+	#process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_inspiral_combine_injection_sets", param_dict)
 	
 	process_ids = {}
 	siminspiraltimemap = {}
