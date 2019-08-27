@@ -143,7 +143,6 @@ def do_it_to(xmldoc):
 		#
 
 		newtable.extend(newrow(row) for row in table)
-		newtable._end_of_rows()
 
 		#
 		# dispose of the old table
