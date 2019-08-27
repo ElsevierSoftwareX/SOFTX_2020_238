@@ -25,6 +25,7 @@ from glue import git_version
 __date__ = git_version.date
 __version__ = git_version.id
 
+from collections import OrderedDict
 import os
 import sys
 import re
@@ -386,7 +387,7 @@ class CondorJob(object):
     self.__options = {}
     self.__short_options = {}
     self.__arguments = []
-    self.__condor_cmds = {}
+    self.__condor_cmds = OrderedDict()
     self.__notification = None
     self.__log_file = None
     self.__in_file = None
