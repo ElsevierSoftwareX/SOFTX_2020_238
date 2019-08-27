@@ -178,7 +178,7 @@ class DAGJob(pipeline.CondorDAGJob):
 			os.mkdir(self.output_path)
 		except:
 			pass
-		for cmd,val in condor_commands.items():
+		for cmd, val in condor_commands.items():
 			self.add_condor_cmd(cmd, val)
 
 
