@@ -189,18 +189,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_hoft" % (instrument, max(rates)))
 
 	#
-	# optionally add vetoes
-	#
-
-	# FIXME NOTE The pre whitening vetoes are only applied via the
-	# deglitcher if they are impulse like.  What that means is that they
-	# have to be shorter than 1s.
-	# This should be revisted for O3.
-	if veto_segments is not None:
-		short_veto_segments = segments.segmentlist([seg for seg in veto_segments if abs(seg) < 1.0]).protract(0.25).coalesce()
-		head = pipeparts.mkdeglitcher(pipeline, head, short_veto_segments)
-
-	#
 	# construct whitener.
 	#
 
@@ -351,13 +339,13 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	#
 	# optional gate on whitened h(t) amplitude.  attack and hold are
-	# made to be 1/4 second or 1 sample, whichever is larger
+	# made to be 1/2 second or 1 sample, whichever is larger
 	#
 
 	# FIXME:  this could be omitted if ht_gate_threshold is None, but
 	# we need to collect whitened h(t) segments, however something
 	# could be done to collect those if these gates aren't here.
-	ht_gate_window = max(max(rates) // 4, 1)	# samples
+	ht_gate_window = max(max(rates) // 2, 1)	# samples
 	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
 	# emit signals so that a user can latch on to them
 	head.set_property("emit-signals", True)
