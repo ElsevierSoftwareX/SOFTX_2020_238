@@ -81,12 +81,17 @@ from ligo.lw import param as ligolw_param
 from ligo.lw import array as ligolw_array
 from ligo.lw import lsctables
 from ligo.lw import table
+from ligo.lw.utils import segments as ligolw_segments
 
 @ligolw_param.use_in
 @ligolw_array.use_in
 @lsctables.use_in
 class ContentHandler(ligolw.LIGOLWContentHandler):
 	pass
+
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+        pass
 
 # disable mkchecktimestamps()
 # FIXME:  python plugin broken until we switch to Python 3
@@ -125,12 +130,11 @@ def parse_command_line():
 	group.add_option("--template-psd", metavar = "filename", help = "The psd for whitening template (require).")
 	parser.add_option_group(group)
 
-	# FIXME: implement it if needed
-	#group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")
-	#group.add_option("--ht-gate-threshold", metavar= "sigma", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to excise glitches in units of standard deviation (optional)")
-	#group.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
-	#group.add_option("--veto-segments-name", metavar = "name", default = "vetoes", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (default = 'veto') (optional).")
-	#parser.add_option_group(group)
+	group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")
+	group.add_option("--ht-gate-threshold", metavar= "sigma", type = "float", default = float("inf"), help = "Set the threshold on whitened h(t) to excise glitches in units of standard deviation (defalut = inf). ")
+	group.add_option("--veto-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (optional).")
+	group.add_option("--veto-segments-name", metavar = "name", default = "vetoes", help = "Set the name of the LIGO light-weight XML file from which to load vetoes (default = 'veto') (optional).")
+	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
 	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (require).")
@@ -145,7 +149,6 @@ def parse_command_line():
 	parser.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
 
 	options, args = parser.parse_args()
-
 
 	# Setting up GW data
 	gw_data_source_info = datasource.GWDataSourceInfo(options)
@@ -228,6 +231,12 @@ def parse_command_line():
 		raise ValueError("Invalid mode: %d" % options.mode)
 
 options, gw_data_source_info, template, psd  = parse_command_line()
+
+if options.veto_segments_file is not None:
+        veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
+else:
+        veto_segments = None
+
 #====================================================================================================
 #
 #						main
@@ -242,11 +251,13 @@ if options.mode == 0:
 		gw_data_source_info,
 		bank,
 		options.instrument,
-                options.row_number,
-                options.start,
-                options.end,
+		options.row_number,
+		options.start,
+		options.end,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
+		ht_gate_threshold = options.ht_gate_threshold,
+		veto_segments = veto_segments,
 		track_psd = options.track_psd,
 		width = options.output_width,
 		verbose = options.verbose
@@ -283,6 +294,8 @@ elif options.mode == 1:
                 options.end,
 		psd = psd,
 		psd_fft_length = options.psd_fft_length,
+                ht_gate_threshold = options.ht_gate_threshold,
+                veto_segments = veto_segments,
 		width = options.output_width,
 		track_psd = options.track_psd,
 		verbose = options.verbose
