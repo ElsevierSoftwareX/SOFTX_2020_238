@@ -1060,7 +1060,6 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 				"background-prior": 1,
 				"min-instruments": options.min_instruments,
 				"coincidence-threshold":options.coincidence_threshold,
-				"synthesize-numerator": "",
 				"df": "bandwidth"
 			},
 			input_files = {
