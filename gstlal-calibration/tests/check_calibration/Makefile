@@ -32,7 +32,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
+all: $(IFO)1_hoft_DCS_frames.cache
 
 ###############################################
 ### These commands should change less often ###
