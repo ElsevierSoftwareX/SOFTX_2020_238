@@ -3,6 +3,7 @@ Short cutting gstlal inspiral pipeline to produce SNR for gstlal_svd_bank.
 A gstlal-based direct matched filter in time domain is also implemented.
 """
 
+import os
 import sys
 import numpy
 import threading
@@ -16,14 +17,19 @@ Gst.init(None)
 
 from gstlal import cbc_template_fir
 from gstlal import datasource
+from gstlal import inspiral
 from gstlal import lloidparts
+from gstlal import lvalert_helper
 from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal import reference_psd
 from gstlal import simplehandler
 
+import gwdatafind
+
 import lal
+from lal.utils import CacheEntry
 from lal import LIGOTimeGPS
 import lal.series
 import lalsimulation as lalsim
@@ -33,6 +39,7 @@ from ligo.lw import ligolw
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils
 from ligo.lw import lsctables
+from ligo.gracedb import rest as gracedb
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -157,7 +164,7 @@ class SNR_Pipeline(object):
                         buf = sample.get_buffer()
                         if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
                                 return Gst.FlowReturn.OK
-                        
+
                         # drop snrs that are irrelevant
                         cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts)
                         if self.start >= cur_time_stamp and self.end > cur_time_stamp:
@@ -348,3 +355,69 @@ def write_url(xmldoc, filename, verbose = False):
 # wrapper for reading snr series from URL
 def read_url(filename, contenthandler = SNRContentHandler, verbose = False):
 	return ligolw_utils.load_url(filename, verbose = verbose, contenthandler = contenthandler)
+
+
+#=============================================================================================
+#
+# 					Gracedb Events Utilities
+#
+#=============================================================================================
+
+def svd_banks_from_event(gid, verbose = False):
+	gracedb_client = gracedb.GraceDb()
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
+	eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+
+	assert len(set([row.template_id for row in eventid_trigger_dict.values()])) == 1, "Templates should have the same template_id."
+
+	try:
+		bank_urls = inspiral.parse_svdbank_string([row.value for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--svd-bank"].pop())
+		banks_dict = inspiral.parse_bank_files(bank_urls, verbose = verbose)
+	except IOError:
+		sys.stderr.write("Files Not Found! Make sure you are on the LIGO-Caltech Computing Cluster or check if file exist.\nAbortting...\n")
+		sys.exit()
+
+	# Just get one of the template bank from any instrument,
+	# the templates should all have the same template_id because they are exact-matched.
+	sub_bank_id = None
+        for i, bank in enumerate(banks_dict.values()[0]):
+                for j, row in enumerate(bank.sngl_inspiral_table):
+                        if row.template_id == eventid_trigger_dict.values()[0].template_id:
+                                sub_bank_id = i
+                                row_number = j
+                                break
+                if sub_bank_id is not None:
+                        break
+
+	return banks_dict, sub_bank_id, row_number
+
+def gwdata_from_event(gid, observatory, frame_type, time_span = 1000, outdir = ".", verbose = False):
+	assert time_span >= 1000., "Please use time_span larger or equal to 1000."
+
+	obs2ifo = {"H": "H1", "L": "L1", "V": "V1"}
+
+        gracedb_client = gracedb.GraceDb()
+        coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
+        eventid_trigger_dict = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+	channel_names_dict = dict([(row.value.split("=")[0], row.value) for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--channel-name"])
+
+	trigger_time = eventid_trigger_dict[obs2ifo[observatory]].end
+	gps_start_time = int(trigger_time - time_span)
+	gps_end_time = int(trigger_time + time_span)
+
+	urls = gwdatafind.find_urls(observatory, frame_type, gps_start_time, gps_end_time)
+	with open(os.path.join(outdir, "frame.cache"), "w") as cache:
+		for url in urls:
+			filename = str(CacheEntry.from_T050017(url))
+			cache.write("%s\n" % filename)
+			if verbose:
+				sys.stderr.write("writing %s to %s\n" % (filename, os.path.join(outdir, "frame.cache")))
+		if verbose:
+			sys.stderr.write("Done.\n")
+
+	return trigger_time, gps_start_time, gps_end_time, channel_names_dict[obs2ifo[observatory]]
+
+def psd_from_event(gid, filename = "psd.xml.gz"):
+	gracedb_client = gracedb.GraceDb()
+	psd_fileobj = lvalert_helper.get_filename(gracedb_client, gid, filename)
+	return lal.series.read_psd_xmldoc(ligolw_utils.load_fileobj(psd_fileobj, contenthandler = lal.series.PSDContentHandler))
