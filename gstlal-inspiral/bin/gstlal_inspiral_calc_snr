@@ -67,6 +67,7 @@ from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 import os
 
 from gstlal import datasource
+from gstlal import inspiral
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import svd_bank
@@ -119,7 +120,7 @@ def parse_command_line():
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Template Options", "Choose a template from a SVD bank file / a single SnglInspiral Table")
-	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information (require)." )
+	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments (require)." )
 	group.add_option("--sub-bank-id", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (require).")
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
 	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template for each instrument only.")
@@ -138,19 +139,20 @@ def parse_command_line():
 
 	group = OptionGroup(parser, "GraceDb Event Options", "Produce SNR time series for gstlal gracedb event.")
 	group.add_option("--gid", metavar = "gracedb event id", type = "str", help = "The gracedb event id.")
-	group.add_option("--observatory", metavar = "OBS", type = "str", help = "See gwdatafind.")
-	group.add_option("--type", metavar = "frame type", type = "str", help = "See gwdatafind.")
+	group.add_option("--observatory", metavar = "OBS", type = "str", action = "append", help = "See gwdatafind.")
+	group.add_option("--type", metavar = "frame type", type = "str", action = "append", help = "See gwdatafind.")
 	group.add_option("--time-span", metavar = "seconds", type = "int", default = 1000, help = "The time span around the event's trigger time (default = 1000).")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
-	group.add_option("--outdir", metavar = "directory", type = "str", help = "Output directory for SNR(s) (require).")
+	group.add_option("--outdir", metavar = "directory", default = ".", type = "str", help = "Output directory for SNR(s) (default = .).")
+	group.add_option("--save", action = "store_true", default = False, help = "Save frame cache / svd bank / psd (default = True).")
 	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
 	group.add_option("--complex", action = "store_true", help = "Choose whether to output the complex snr or not.")
 	group.add_option("--start", metavar = "seconds", type = "float", help = "Start SNR time series at GPS time '--start' (require).")
 	group.add_option("--end", metavar = "seconds", type = "float", help = "End SNR time series at GPS time '--end' (require).")
 	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
-	group.add_option("--instrument", metavar = "name", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
+	group.add_option("--instrument", metavar = "name", type = "str", action = "append", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
 	parser.add_option_group(group)
 
 	parser.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
@@ -160,42 +162,52 @@ def parse_command_line():
 	# initialize gw_data_source_info
 	gw_data_source_info = None
 
+	if options.outdir is None:
+		missing_required_options.append("--outdir")
 	# Setting up GW data
 	if options.gid is not None:
-		# Setting up files for GraceDb event
+		# Setting up inputs for GraceDb event, this will overwrite svd-bank/template/psd related inputs.
 		if options.observatory is None or options.type is None:
 			raise ValueError("When using --gid, --observatory and --type must be provided.")
 		else:
-			trigger_time, gps_start_time, gps_end_time, channel_name = svd_bank_snr.gwdata_from_event(options.gid, options.observatory, options.type, time_span = options.time_span, outdir = options.outdir, verbose = options.verbose)
+			gwdata_metavars = svd_bank_snr.framecache_from_event(options.gid, options.observatory, options.type, time_span = options.time_span, outdir = options.outdir, verbose = options.verbose)
 			# We can hardcoded here, since we know all the information from gracedb.
-			# This assume everything on the gracedb are correct and complete which could go wrong in future.
+			# This assume everything on the gracedb are correct and complete which could go wrong in the future.
+			# (e.g files are deleted)
 			options.data_source = "frames"
 			options.frame_cache = os.path.join(options.outdir, "frame.cache")
-			options.gps_start_time = gps_start_time
-			options.gps_end_time = gps_end_time
-			options.channel_name = [channel_name]
+			options.gps_start_time = gwdata_metavars["gps_start_time"][0]
+			options.gps_end_time = gwdata_metavars["gps_end_time"][0]
+			options.channel_name = gwdata_metavars["channels_name"]
+			options.instrument = gwdata_metavars["instruments"]
 			gw_data_source_info = datasource.GWDataSourceInfo(options)
 
-			# FIXME: This could change in the future
-			obs2ifo = {"H": "H1", "L": "L1", "V": "V1"}
-			options.instrument = obs2ifo[options.observatory]
-
 			# FIXME: Adjustable parameters, hardcoded here for simplicity.
+			trigger_time = min(gwdata_metavars["trigger_times"])
 			options.start = trigger_time - 5
 			options.end = trigger_time + 5
 
-			psd = svd_bank_snr.psd_from_event(options.gid)
+			# It must be using LLOID
+			options.mode = 0
 
-			banks_dict, options.sub_bank_id, options.row_number = svd_bank_snr.svd_banks_from_event(options.gid, options.verbose)
-			bank = banks_dict[options.instrument][options.sub_bank_id]
+			psds_dict = svd_bank_snr.psd_from_event(options.gid, save = options.save, verbose = options.verbose)
 
+			banks_dict, options.sub_bank_id, options.row_number = svd_bank_snr.svd_banks_from_event(options.gid, save = options.save, verbose = options.verbose)
 
-			return options, gw_data_source_info, bank, psd
+			return options, gw_data_source_info, banks_dict, psds_dict
 	else:
 		# Setting up GW data for non-GraceDb event
 		gw_data_source_info = datasource.GWDataSourceInfo(options)
-		if options.instrument not in gw_data_source_info.channel_dict.keys():
-			raise ValueError("No such instrument: %s in GWDataSourceInfo: (%s)"% (options.instrument, ", ".join(gw_data_source_info.channel_dict.keys())))
+		# Setting up how many instruments to analyze
+		if options.instrument is not None:
+			# Avoid repeated --instrument
+			options.instrument = list(set(options.instrument))
+		else:
+			raise ValueError("Must provide at least one --instrument.")
+		# Check if --frame-cache contains the data from --instrument
+		for instrument in options.instrument:
+			if instrument not in gw_data_source_info.channel_dict.keys():
+				raise ValueError("No such instrument: %s in GWDataSourceInfo: (%s)"% (instrument, ", ".join(gw_data_source_info.channel_dict.keys())))
 
 	# Check SNRs series output
 	if options.start is None or options.end is None:
@@ -210,8 +222,10 @@ def parse_command_line():
 	# Setting up PSD
 	if options.reference_psd:
 		psd = lal.series.read_psd_xmldoc(ligolw_utils.load_url(options.reference_psd, contenthandler = lal.series.PSDContentHandler))
-		if options.instrument not in set(psd):
-			raise ValueError("No such instrument: %s in psd: (%s)"% (options.instrument, ", ".join(set(psd))))
+		# Check if --reference-psd contains the psd from --instrument
+		for instrument in options.instrument:
+			if instrument not in set(psd):
+				raise ValueError("No such instrument: %s in psd: (%s)"% (instrument, ", ".join(set(psd))))
 	else:
 		options.track_psd = True
 
@@ -223,27 +237,26 @@ def parse_command_line():
 			missing_required_options.append("--svd-bank")
 		if options.sub_bank_id is None:
 			missing_required_options.append("--sub-bank-id")
-		if options.outdir is None:
-			missing_required_options.append("--outdir")
-		if options.instrument is None:
-			missing_required_options.append("--instrument")
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
 
 		# Setting up SVD bank
-		banks = svd_bank.read_banks(options.svd_bank, svd_bank.DefaultContentHandler)
-		if banks is None:
-			raise ValueError("svd bank is empty: Invaild --svd-bank %s" % options.svd_bank)
-		else:
-			if 0 <= options.sub_bank_id < len(banks) :
-				bank = banks[options.sub_bank_id]
-			else:
-				raise ValueError("Invaild --sub-bank-id %d. Possible id [0-%d)\n" % (options.sub_bank_id, len(banks)))
-		if not( 0 <= options.row_number < len(bank.sngl_inspiral_table) ):
-			raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(bank.sngl_inspiral_table)))
+		svdbanks_dict = inspiral.parse_svdbank_string(options.svd_bank)
+		# Check if --svd-bank contains svd banks from --instrument
+                for instrument in options.instrument:
+                        if instrument not in set(svdbanks_dict):
+                                raise ValueError("No SVD Banks for --instrument=%s." % instrument)
 
-		return options, gw_data_source_info, bank, psd
+		banks = dict([(ifo, svd_bank.read_banks(svdbanks, svd_bank.DefaultContentHandler)) for ifo, svdbanks in svdbanks_dict.items()])
+		# Check if --sub-bank-id and --row-number is valid
+		for bank in banks.values():
+			if not (0 <= options.sub_bank_id < len(bank)) :
+				raise ValueError("Invaild --sub-bank-id %d. Possible id [0-%d)\n" % (options.sub_bank_id, len(bank)))
+			if options.row_number is not None and not (0 <= options.row_number < len(bank[options.sub_bank_id].sngl_inspiral_table)):
+				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(bank[options.sub_bank_id].sngl_inspiral_table)))
+
+		return options, gw_data_source_info, banks, psd
 
 	# Use Finite Impulse Response
 	elif options.mode == 1:
@@ -253,10 +266,6 @@ def parse_command_line():
 			missing_required_options.append("--table")
 		if options.approximant is None:
 			missing_required_options.append("--approximant")
-		if options.outdir is None:
-			missing_required_options.append("--outdir")
-		if options.instrument is None:
-			missing_required_options.append("--instrument")
 		if options.template_psd is None:
 			missing_required_options.append("--template-psd")
 		# Raise VauleError is required option(s) is/are missing
@@ -272,7 +281,7 @@ def parse_command_line():
 	else:
 		raise ValueError("Invalid mode: %d" % options.mode)
 
-options, gw_data_source_info, template, psd  = parse_command_line()
+options, gw_data_source_info, template, psds_dict  = parse_command_line()
 
 if options.veto_segments_file is not None:
         veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
@@ -286,64 +295,61 @@ else:
 #====================================================================================================
 
 if options.mode == 0:
-	bank = template
-	num_of_row = bank.bank_fragments[0].mix_matrix.shape[1] / 2
+	banks_dict = template
 
-	lloid_snr = svd_bank_snr.LLOID_SNR(
-		gw_data_source_info,
-		bank,
-		options.instrument,
-		options.row_number,
-		options.start,
-		options.end,
-		psd = psd,
-		psd_fft_length = options.psd_fft_length,
-		ht_gate_threshold = options.ht_gate_threshold,
-		veto_segments = veto_segments,
-		track_psd = options.track_psd,
-		width = options.output_width,
-		verbose = options.verbose
-	)
-
-	if options.row_number is None:
-		for index, snr in enumerate(lloid_snr(COMPLEX = options.complex)):
-			snr.epoch += bank.sngl_inspiral_table[index].end
-			snrdict = {options.instrument: [snr]}
-			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR_%d-%d-%d.xml.gz" % (options.instrument, index, int(snr.epoch), int(snr.data.length * snr.deltaT))), verbose = options.verbose)
-	else:
-		lloidsnr = lloid_snr(COMPLEX = options.complex)
-		lloidsnr[0].epoch += bank.sngl_inspiral_table[options.row_number].end
-		snrdict = {options.instrument: lloidsnr}
-		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR_%d-%d-%d.xml.gz" % (options.instrument, options.row_number, int(lloidsnr[0].epoch), int(lloidsnr[0].data.length * lloidsnr[0].deltaT))), verbose = options.verbose)
-	#
-	# uncomment to save all snrs in one single XML
-	#
-	#snrdict = {options.instrument : lloid_snr(COMPLEX = options.complex)}
-	#svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SNR-%d-%d.xml.gz" % (options.instrument, int(snrdict.[options.instrument][0].epoch), int(snrdict[options.instrument][0].data.length * snrdict[options.instrument][0].deltaT))), verbose = options.verbose)
+	for instrument in options.instrument:
+		lloid_snr = svd_bank_snr.LLOID_SNR(
+			gw_data_source_info,
+			banks_dict[instrument][options.sub_bank_id],
+			instrument,
+			options.row_number,
+			options.start,
+			options.end,
+			psd = psds_dict,
+			psd_fft_length = options.psd_fft_length,
+			ht_gate_threshold = options.ht_gate_threshold,
+			veto_segments = veto_segments,
+			track_psd = options.track_psd,
+			width = options.output_width,
+			verbose = options.verbose
+		)
+		snrdict = {}
+		if options.row_number is None:
+			snrdict.setdefault(instrument, [])
+			for index, snr in enumerate(lloid_snr(COMPLEX = options.complex)):
+				snr.epoch += banks_dict[instrument][options.sub_bank_id].sngl_inspiral_table[index].end
+				snrdict[instrument].append(snr)
+			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SVD_BANK_SNR_%d-%d-%d.xml.gz" % (instrument, options.sub_bank_id, int(snr.epoch), int(snr.data.length * snr.deltaT))), verbose = options.verbose)
+		else:
+			snrdict = {instrument : lloid_snr(COMPLEX = options.complex)}
+			snrdict[instrument][0].epoch += banks_dict[instrument][options.sub_bank_id].sngl_inspiral_table[options.row_number].end
+			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SVD_BANK_SNR_%d_%d-%d-%d.xml.gz" % (instrument, options.sub_bank_id, options.row_number, int(snrdict[instrument][0].epoch), int(snrdict[instrument][0].data.length * snrdict[instrument][0].deltaT))), verbose = options.verbose)
 
 elif options.mode == 1:
 	template_table = template
-	template, time_offset = svd_bank_snr.FIR_SNR.make_template(template_table, options.template_psd, options.sample_rate, options.approximant, options.instrument, options.f_low, f_high = options.f_high, verbose = options.verbose)
 
-	#FIXME: proper handle for latency
-	fir_snr = svd_bank_snr.FIR_SNR(
-		gw_data_source_info,
-		template,
-		options.instrument,
-		options.sample_rate,
-		0,
-                options.start,
-                options.end,
-		psd = psd,
-		psd_fft_length = options.psd_fft_length,
-                ht_gate_threshold = options.ht_gate_threshold,
-                veto_segments = veto_segments,
-		width = options.output_width,
-		track_psd = options.track_psd,
-		verbose = options.verbose
-		)
+	for instrument in options.instrument:
+		template, time_offset = svd_bank_snr.FIR_SNR.make_template(template_table, options.template_psd, options.sample_rate, options.approximant, instrument, options.f_low, f_high = options.f_high, verbose = options.verbose)
 
-	firsnr = fir_snr(COMPLEX = options.complex)
-	firsnr[0].epoch += time_offset
-	snrdict = {options.instrument : firsnr}
-	svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "%s-SNR-%d-%d.xml.gz" % (options.instrument, int(snrdict[options.instrument][0].epoch), int(snrdict[options.instrument][0].data.length * snrdict[options.instrument][0].deltaT))), verbose = options.verbose)
+		#FIXME: proper handle for latency
+		fir_snr = svd_bank_snr.FIR_SNR(
+			gw_data_source_info,
+			template,
+			instrument,
+			options.sample_rate,
+			0,
+			options.start,
+			options.end,
+			psd = psds_dict,
+			psd_fft_length = options.psd_fft_length,
+			ht_gate_threshold = options.ht_gate_threshold,
+			veto_segments = veto_segments,
+			width = options.output_width,
+			track_psd = options.track_psd,
+			verbose = options.verbose
+			)
+
+		firsnr = fir_snr(COMPLEX = options.complex)
+		snrdict = {instrument : firsnr}
+		snrdict[instrument][0].epoch += time_offset
+		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "%s-FIR_SNR-%d-%d.xml.gz" % (instrument, int(snrdict[instrument][0].epoch), int(snrdict[instrument][0].data.length * snrdict[instrument][0].deltaT))), verbose = options.verbose)

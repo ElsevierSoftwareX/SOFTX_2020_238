@@ -5,6 +5,7 @@ A gstlal-based direct matched filter in time domain is also implemented.
 
 import os
 import sys
+import shutil
 import numpy
 import threading
 
@@ -273,9 +274,9 @@ class FIR_SNR(SNR_Pipeline):
 
 	@staticmethod
 	def make_template(template_table, template_psd, sample_rate, approximant, instrument, f_low, f_high = None, autocorrelation_length = None, verbose = False):
-		row = [row for row in template_table if row.ifo == instrument]
+		row = [row for row in template_table]
 		if len(row) != 1 :
-			raise ValueError("Expecting only one template for instrument=%s or cannot find template for instrument=%s" % (instrument, instrument))
+			raise ValueError("Expecting only one template or cannot find any template.")
 
 		template_psd = lal.series.read_psd_xmldoc(ligolw_utils.load_url(template_psd, contenthandler = lal.series.PSDContentHandler))
 		if instrument not in set(template_psd):
@@ -363,7 +364,7 @@ def read_url(filename, contenthandler = SNRContentHandler, verbose = False):
 #
 #=============================================================================================
 
-def svd_banks_from_event(gid, verbose = False):
+def svd_banks_from_event(gid, outdir = ".", save = True, verbose = False):
 	gracedb_client = gracedb.GraceDb()
 	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
 	eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
@@ -376,6 +377,17 @@ def svd_banks_from_event(gid, verbose = False):
 	except IOError:
 		sys.stderr.write("Files Not Found! Make sure you are on the LIGO-Caltech Computing Cluster or check if file exist.\nAbortting...\n")
 		sys.exit()
+
+	if save:
+		try:
+			for bank_url in bank_urls.values():
+				outname =os.path.join(outdir, os.path.basename(bank_url))
+				if verbose:
+					sys.stderr.write("saving SVD bank file to %s  ...\n" % outname)
+				shutil.copyfile(bank_url, outname)
+		# FIXME: in python > 2.7, OSError will be raised if destination is not writable.
+		except IOError as e:
+			raise e
 
 	# Just get one of the template bank from any instrument,
 	# the templates should all have the same template_id because they are exact-matched.
@@ -391,21 +403,35 @@ def svd_banks_from_event(gid, verbose = False):
 
 	return banks_dict, sub_bank_id, row_number
 
-def gwdata_from_event(gid, observatory, frame_type, time_span = 1000, outdir = ".", verbose = False):
+def framecache_from_event(gid, observatories, frame_types, time_span = 1000, outdir = ".", filename = "frame.cache", verbose = False):
 	assert time_span >= 1000., "Please use time_span larger or equal to 1000."
 
 	obs2ifo = {"H": "H1", "L": "L1", "V": "V1"}
+
+	observatories = set(observatories)
+	frame_types = set(frame_types)
+
+	if len(observatories) != len(frame_types):
+		raise ValueError("Must have as many frame_types as observatories.")
+	# FIXME: This is not reliable, have a better way to map frame_type to observatory?
+	obs_type_dict = dict([(obs, frame_type) for obs in observatories for frame_type in frame_types if obs == frame_type[0]])
 
         gracedb_client = gracedb.GraceDb()
         coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
         eventid_trigger_dict = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 	channel_names_dict = dict([(row.value.split("=")[0], row.value) for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--channel-name"])
 
-	trigger_time = eventid_trigger_dict[obs2ifo[observatory]].end
-	gps_start_time = int(trigger_time - time_span)
-	gps_end_time = int(trigger_time + time_span)
+	gwdata_metavar_headers = ["instruments", "trigger_times", "gps_start_time", "gps_end_time", "channels_name"]
+	gwdata_metavar_values = []
+	urls = []
+        for observatory, frame_type in obs_type_dict.items():
+		trigger_time = eventid_trigger_dict[obs2ifo[observatory]].end
+		gps_start_time = int(trigger_time - time_span)
+		gps_end_time = int(trigger_time + time_span)
+                gwdata_metavar_values.append((obs2ifo[observatory], trigger_time, gps_start_time, gps_end_time, channel_names_dict[obs2ifo[observatory]]))
 
-	urls = gwdatafind.find_urls(observatory, frame_type, gps_start_time, gps_end_time)
+		urls += gwdatafind.find_urls(observatory, frame_type, gps_start_time, gps_end_time)
+
 	with open(os.path.join(outdir, "frame.cache"), "w") as cache:
 		for url in urls:
 			filename = str(CacheEntry.from_T050017(url))
@@ -415,9 +441,14 @@ def gwdata_from_event(gid, observatory, frame_type, time_span = 1000, outdir = "
 		if verbose:
 			sys.stderr.write("Done.\n")
 
-	return trigger_time, gps_start_time, gps_end_time, channel_names_dict[obs2ifo[observatory]]
+	return dict(zip(gwdata_metavar_headers, zip(*gwdata_metavar_values)))
 
-def psd_from_event(gid, filename = "psd.xml.gz"):
+def psd_from_event(gid, outdir = ".", save = True, filename = "psd.xml.gz", verbose = False):
 	gracedb_client = gracedb.GraceDb()
 	psd_fileobj = lvalert_helper.get_filename(gracedb_client, gid, filename)
-	return lal.series.read_psd_xmldoc(ligolw_utils.load_fileobj(psd_fileobj, contenthandler = lal.series.PSDContentHandler))
+	xmldoc = ligolw_utils.load_fileobj(psd_fileobj, contenthandler = lal.series.PSDContentHandler)
+	if save:
+		if verbose:
+			sys.stderr.write("saving psd file to %s ...\n" % os.path.join(outdir, filename))
+		ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith("gz"))
+	return lal.series.read_psd_xmldoc(xmldoc)
