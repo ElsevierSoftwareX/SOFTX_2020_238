@@ -8,9 +8,9 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1246224240 - 256 | bc)
+START = $(shell echo 1246211968 - 256 | bc)
 #1238997618
-END = $(shell echo 1246225240 + 256 | bc)
+END = $(shell echo 1246212480 + 256 | bc)
 #1240876818
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
