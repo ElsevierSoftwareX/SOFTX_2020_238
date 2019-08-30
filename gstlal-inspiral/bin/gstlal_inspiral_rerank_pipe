@@ -1,0 +1,273 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011-2014 Chad Hanna
+# Copyright (C) 2019      Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+### The offline gstlal inspiral workflow generator; Use to make HTCondor DAGs to rerank triggers
+###
+### Usage:
+### ------
+###
+### It is rare that you would invoke this program in a standalone mode. Usually
+### the inputs are complicated and best automated via a Makefile.
+
+"""
+This program makes a dag to rerank triggers from offline runs
+"""
+
+__author__ = 'Chad Hanna <chad.hanna@ligo.org>, Patrick Godwin <patrick.godwin@ligo.org>'
+
+#----------------------------------------------------------
+### imports
+
+from collections import OrderedDict
+from optparse import OptionParser
+import os
+
+import numpy
+
+from lal.utils import CacheEntry
+
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+import ligo.lw.utils as ligolw_utils
+
+from gstlal import inspiral_pipe
+from gstlal import dagparts
+from gstlal import datasource
+from gstlal import paths as gstlal_config_paths
+
+
+#----------------------------------------------------------
+### ligolw initialization
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+
+#----------------------------------------------------------
+### command line options
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	# reference_psd
+	parser.add_option("--reference-psd", help = "Set the reference PSD. Required.")
+
+	# mass model options
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
+	parser.add_option("--mass-model", metavar = "filename", help = "Set the name of the mass model. Options are 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', 'uniform-template', or 'file'")
+	parser.add_option("--mass-model-file", metavar = "filename", help = "Set the name of the mass model file, e.g., mass_model.h5.  Required if --mass-model=file")
+
+	# dtdphi option
+	parser.add_option("--dtdphi-file", metavar = "filename", action = "append", help = "dtdphi snr ratio pdfs to read from (hdf5 format)")
+
+	# trigger generation options
+	parser.add_option("--web-dir", metavar = "directory", help = "Set the web directory like /home/USER/public_html")
+	parser.add_option("--coincidence-threshold", metavar = "value", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
+	parser.add_option("--reference-likelihood-file", metavar = "file", help = "Set a reference likelihood file to compute initial likelihood ratios. Required")
+	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
+	parser.add_option("--ranking-stat-samples", metavar = "N", default = 2**24, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).")
+
+	# FIXME: uhhhhh... yeah
+	parser.add_option("--injections", action = "append", help = "append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.")
+
+	# caches
+	parser.add_option("--dist-stats-cache", metavar = "filename", help = "Set the cache file for dist stats")
+	parser.add_option("--lloid-cache", metavar = "filename", help = "Set the cache file for LLOID")
+	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc.. (can be given multiple times)")
+
+	# Data from a zero lag run in the case of an injection-only run.
+	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Set the cache file for svd banks (required iff running injection-only analysis)")
+	# NOTE: delete unless we want db metadata. injection db?
+	parser.add_option("--non-injection-db", metavar = "filename", help = "Set the non injection data base file (required iff running injection-only analysis)")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis)")
+	parser.add_option("--marginalized-likelihood-with-zerolag-file", metavar = "filename", help = "Set the marginalized likelihood with zerolag file (required iff running injection-only analysis)")
+
+	# Condor commands
+	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
+
+	options, filenames = parser.parse_args()
+
+	if options.template_bank:
+		bank_xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
+		assert len(sngl_inspiral_table) == len(set([r.template_id for r in sngl_inspiral_table])), "Template bank ids are not unique"
+
+	if options.mass_model not in ("narrow-bns", "broad-bns", "bbh", "ligo", "detected-logm", "uniform-template", "file"):
+		raise ValueError("--mass-model must be 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', 'uniform-template', or 'file'")
+	if options.mass_model == "file" and not options.mass_model_file:
+		raise ValueError("--mass-model-file must be provided if --mass-model=file")
+
+	if not options.dtdphi_file:
+		options.dtdphi_file = [os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")] * len(options.bank_cache)
+
+	if len(options.dtdphi_file) != len(options.bank_cache):
+		raise ValueError("You must provide as many dtdphi files as banks")
+
+	#missing_injection_options = []
+	#for option in ("dist_stats_cache", "svd_bank_cache", "psd_cache", "non_injection_db", "marginalized_likelihood_file", "marginalized_likelihood_with_zerolag_file"):
+	#	if getattr(options, option) is None:
+	#		missing_injection_options.append(option)
+	#if len(missing_injection_options) > 0 and len(missing_injection_options) < 6:
+	#	raise ValueError("missing injection-only options %s." % ", ".join([option for option in missing_injection_options]))
+	#if len(missing_injection_options) == 0 and options.num_banks:
+	#	raise ValueError("cant specify --num-banks in injection-only run")
+
+	#FIXME a hack to find the sql paths
+	share_path = os.path.split(dagparts.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
+	options.cluster_sql_file = os.path.join(share_path, 'simplify_and_cluster.sql')
+	options.snr_cluster_sql_file = os.path.join(share_path, 'snr_simplify_and_cluster.sql')
+	options.injection_snr_cluster_sql_file = os.path.join(share_path, 'inj_snr_simplify_and_cluster.sql')
+	options.injection_sql_file = os.path.join(share_path, 'inj_simplify_and_cluster.sql')
+	options.injection_proc_sql_file = os.path.join(share_path, 'simplify_proc_table_in_inj_file.sql')
+
+	return options, filenames
+
+
+#----------------------------------------------------------
+### DAG utilities
+
+def set_up_jobs(options):
+	jobs = {}
+
+	# default condor options
+	default_condor_opts = OrderedDict()
+	default_condor_opts['want_graceful_removal'] = "True"
+	default_condor_opts['kill_sig'] = "15"
+	default_condor_opts['request_cpus'] = "1"
+	default_condor_opts['+MemoryUsage'] = "( 1000 ) * 2 / 3"
+	default_condor_opts['request_memory'] = "( MemoryUsage ) * 3 / 2"
+	default_condor_opts['periodic_hold'] = "( MemoryUsage >= ( ( RequestMemory ) * 3 / 2 ) )"
+	default_condor_opts['periodic_release'] = "(JobStatus == 5) && ((CurrentTime - EnteredCurrentStatus) > 180) && (HoldReasonCode != 34)"
+
+	# job-specific condor options
+	calc_rank_pdf_condor_opts = default_condor_opts.copy()
+	calc_rank_pdf_condor_opts['request_cpus'] = "4"
+
+	inj_snr_condor_opts = default_condor_opts.copy()
+	inj_snr_condor_opts['+MemoryUsage'] = "( 2000 ) * 2 / 3"
+	inj_snr_condor_opts['request_cpus'] = "2"
+
+	# set condor commands
+	base_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, default_condor_opts)
+	calc_rank_pdf_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, calc_rank_pdf_condor_opts)
+	inj_snr_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, inj_snr_condor_opts)
+	sh_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"})
+
+	# set up rest of jobs
+	jobs['svd'] = dagparts.DAGJob("gstlal_svd_bank", condor_commands = base_condor_commands)
+	jobs['model'] = dagparts.DAGJob("gstlal_inspiral_mass_model", condor_commands = base_condor_commands)
+	jobs['modelAdd'] = dagparts.DAGJob("gstlal_inspiral_add_mass_models", condor_commands = base_condor_commands)
+	jobs['horizon'] = dagparts.DAGJob("gstlal_plot_psd_horizon", condor_commands = base_condor_commands)
+	jobs['createPriorDistStats'] = dagparts.DAGJob("gstlal_inspiral_create_prior_diststats", condor_commands = base_condor_commands)
+	jobs['calcRankPDFs'] = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", condor_commands = calc_rank_pdf_condor_commands)
+	jobs['calcRankPDFsWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", tag_base="gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands=calc_rank_pdf_condor_commands)
+	jobs['calcLikelihood'] = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", condor_commands = base_condor_commands)
+	jobs['marginalize'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = base_condor_commands)
+	jobs['marginalizeWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base="gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands=base_condor_commands)
+
+	jobs['injSplitter'] = dagparts.DAGJob("gstlal_injsplitter", tag_base="gstlal_injsplitter", condor_commands = base_condor_commands)
+	jobs['gstlalInjSnr'] = dagparts.DAGJob("gstlal_inspiral_injection_snr", condor_commands = inj_snr_condor_commands)
+	jobs['ligolwAdd'] = dagparts.DAGJob("ligolw_add", condor_commands = base_condor_commands)
+	jobs['calcLikelihoodInj'] = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", tag_base='gstlal_inspiral_calc_likelihood_inj', condor_commands=base_condor_commands)
+	jobs['ComputeFarFromSnrChisqHistograms'] = dagparts.DAGJob("gstlal_compute_far_from_snr_chisq_histograms", condor_commands = base_condor_commands)
+	jobs['ligolwInspinjFind'] = dagparts.DAGJob("lalapps_inspinjfind", condor_commands = base_condor_commands)
+	jobs['toSqlite'] = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml", condor_commands = base_condor_commands)
+	jobs['toSqliteNoCache'] = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_from_xml_final", condor_commands = base_condor_commands)
+	jobs['toXML'] = dagparts.DAGJob("ligolw_sqlite", tag_base = "ligolw_sqlite_to_xml", condor_commands = base_condor_commands)
+	jobs['lalappsRunSqlite'] = dagparts.DAGJob("lalapps_run_sqlite", condor_commands = base_condor_commands)
+	jobs['plotSummary'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", condor_commands = base_condor_commands)
+	jobs['plotSummaryIsolatePrecession'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base="gstlal_inspiral_plotsummary_isolated_precession", condor_commands=base_condor_commands)
+	jobs['plotSnglInjSummary'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base = "gstlal_inspiral_plotsummary_inj", condor_commands=base_condor_commands)
+	jobs['plotSnglInjSummaryIsolatePrecession'] = dagparts.DAGJob("gstlal_inspiral_plotsummary", tag_base="gstlal_inspiral_plotsummary_isolated_precession_inj", condor_commands=base_condor_commands)
+	jobs['plotSensitivity'] = dagparts.DAGJob("gstlal_inspiral_plot_sensitivity", condor_commands = base_condor_commands)
+	jobs['summaryPage'] = dagparts.DAGJob("gstlal_inspiral_summary_page", condor_commands = base_condor_commands)
+	jobs['plotBackground'] = dagparts.DAGJob("gstlal_inspiral_plot_background", condor_commands = base_condor_commands)
+	jobs['cp'] = dagparts.DAGJob("cp", tag_base = "cp", condor_commands = sh_condor_commands)
+	jobs['rm'] = dagparts.DAGJob("rm", tag_base = "rm_intermediate_merger_products", condor_commands = sh_condor_commands)
+
+	return jobs
+
+
+#----------------------------------------------------------
+### main
+
+if __name__ == '__main__':
+	options, filenames = parse_command_line()
+
+	# load analysis output from run
+	lloid_output, lloid_diststats, svd_dtdphi_map, instrument_set, boundary_seg = inspiral_pipe.load_analysis_output(options)
+	instruments = "".join(sorted(instrument_set))
+
+	# output directories
+	output_dir = "plots"
+	if not os.path.exists("logs"):
+		os.mkdir("logs")
+
+	#
+	# Set up DAG architecture
+	#
+
+	dag = dagparts.DAG("trigger_rerank_pipe")
+	jobs = set_up_jobs(options)
+
+	# generate xml integrity checker (if requested) and pre-script to back up data
+	#inspiral_pipe.set_up_scripts(options)
+
+	# mass model job
+	model_node, model_file = inspiral_pipe.mass_model_layer(dag, jobs, [], instruments, options, boundary_seg, options.reference_psd)
+
+	# marginalize jobs
+	marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, [], lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, options.reference_psd, svd_dtdphi_map)
+
+	# calc rank PDF jobs
+	rankpdf_nodes, rankpdf_zerolag_nodes = inspiral_pipe.calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set)
+
+	# final marginalization step
+	final_marg_nodes, margfiles_to_delete = inspiral_pipe.final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, options)
+
+	# likelihood jobs
+	likelihood_nodes = inspiral_pipe.likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set)
+
+	# Setup clustering and/or merging
+	# after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
+	injdbs, noninjdb, final_sqlite_nodes, dbs_to_delete = inspiral_pipe.sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, options, boundary_seg, instruments)
+
+	# Compute FAR
+	farnode = inspiral_pipe.compute_far_layer(dag, jobs, final_marg_nodes, injdbs, noninjdb, final_sqlite_nodes, options)
+
+	# make summary plots
+	plotnodes = inspiral_pipe.summary_plot_layer(dag, jobs, farnode, options, injdbs, noninjdb, output_dir)
+
+	# make a web page
+	inspiral_pipe.summary_page_layer(dag, jobs, plotnodes, options, boundary_seg, injdbs, output_dir)
+
+	# rm intermediate merger products
+	inspiral_pipe.clean_merger_products_layer(dag, jobs, plotnodes, dbs_to_delete, margfiles_to_delete)
+
+	#
+	# generate DAG files
+	#
+
+	dag.write_sub_files()
+	dag.write_dag()
+	dag.write_script()
+	dag.write_cache()
