@@ -86,6 +86,11 @@ def parse_command_line():
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 	parser.add_option("--ranking-stat-samples", metavar = "N", default = 2**24, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).")
 
+	# veto options
+	parser.add_option("--vetoes", metavar = "filename", help = "Set the veto xml file.")
+	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
+	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
+
 	# FIXME: uhhhhh... yeah
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.")
 
@@ -249,7 +254,7 @@ if __name__ == '__main__':
 
 	# Setup clustering and/or merging
 	# after all of the likelihood ranking and preclustering is finished put everything into single databases based on the injection file (or lack thereof)
-	injdbs, noninjdb, final_sqlite_nodes, dbs_to_delete = inspiral_pipe.sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, options, boundary_seg, instruments)
+	injdbs, noninjdb, final_sqlite_nodes, dbs_to_delete = inspiral_pipe.sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, [], options, boundary_seg, instruments)
 
 	# Compute FAR
 	farnode = inspiral_pipe.compute_far_layer(dag, jobs, final_marg_nodes, injdbs, noninjdb, final_sqlite_nodes, options)

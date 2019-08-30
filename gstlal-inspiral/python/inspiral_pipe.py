@@ -41,6 +41,7 @@
 # imports
 #
 
+from collections import defaultdict
 import copy
 import doctest
 import functools
@@ -619,7 +620,7 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 			svd_file = one_ifo_svd_nodes[bin_key].output_files["write-svd"]
 		else:
 			parent_nodes = model_node
-			svd_file = dagparts.T050017_filename(ifo, '%s_SVD' % bin_key, boundary_arg, '.xml.gz', path = jobs['svd'].output_path)
+			svd_file = dagparts.T050017_filename(instrument_set[0], '%s_SVD' % bin_key, boundary_seg, '.xml.gz', path = jobs['svd'].output_path)
 
 		# FIXME we keep this here in case we someday want to have a
 		# mass bin dependent prior, but it really doesn't matter for
@@ -1033,7 +1034,7 @@ def webserver_url():
 
 def load_analysis_output(options):
 	# load triggers
-	bgbin_lloid_map = {}
+	bgbin_lloid_map = defaultdict(dict)
 	for ce in map(CacheEntry, open(options.lloid_cache)):
 		try:
 			bgbin_idx, _, inj = ce.description.split('_', 2)
@@ -1041,7 +1042,7 @@ def load_analysis_output(options):
 			bgbin_idx, _ = ce.description.split('_', 1)
 			inj = None
 		finally:
-			bgbin_lloid_map.setdefault(sim_tag_from_inj_file(inj), []).append(ce.path)
+			bgbin_lloid_map[sim_tag_from_inj_file(inj)].setdefault(bgbin_idx, []).append((ce.path, []))
 
 	# load dist stats
 	lloid_diststats = {}
@@ -1061,6 +1062,10 @@ def load_analysis_output(options):
 		for j, svd_caches in enumerate(list_of_svd_caches):
 			for i, individual_svd_cache in enumerate(ce.path for ce in map(CacheEntry, open(svd_caches))):
 				svd_dtdphi_map["%04d" % (i+bin_offset)] = options.dtdphi_file[j]
+
+	# modify injections option, as is done in 'adapt_inspiral_output'
+	# FIXME: don't do this, find a cleaner way of handling this generally
+	options.injections = [inj.split(':')[-1] for inj in options.injections]
 
 	return bgbin_lloid_map, lloid_diststats, svd_dtdphi_map, instrument_set, boundary_seg
 
