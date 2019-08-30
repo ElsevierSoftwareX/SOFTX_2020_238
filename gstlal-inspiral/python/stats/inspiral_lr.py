@@ -309,8 +309,7 @@ class LnSignalDensity(LnLRDensity):
 		# source population model
 		# FIXME:  introduce a mechanism for selecting the file
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
-		if self.dtdphi_file is not None:
-			self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments, self.dtdphi_file)
+		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments, filename = self.dtdphi_file)
 
 	def set_horizon_factors(self, horizon_factors):
 		self.horizon_factors = horizon_factors
@@ -571,8 +570,7 @@ class LnSignalDensity(LnLRDensity):
 			self.horizon_factors = dict((int(k), v) for k, v in self.horizon_factors.items())
 			assert set(self.template_ids) == set(self.horizon_factors)
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
-		if self.dtdphi_file is not None:
-			self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments, self.dtdphi_file)
+		self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments, filename = self.dtdphi_file)
 		return self
 
 
