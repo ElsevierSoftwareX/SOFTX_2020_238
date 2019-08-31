@@ -40,13 +40,13 @@ def axes_add_snr(axes, snrdict, center = None, span = None):
 		axes[col].tick_params(labelbottom = True)
 		col += 1
 
-def plot_snr(filename, width = 6, center = None, span = None, verbose = False):
+def plot_snr(SNR_dict, width = 8, center = None, span = None, verbose = False):
 	"""
 
-	Plot snr time series from LIGO light-weighted XML file
+	Plot snr time series from snrdicts
 
 	Args:
-		filename: A LIGO light-weighted XML file
+		SNR_dict: A dictionary containing (instrument, LAL series) pairs
 		width (int): width of the output figure in inch
 		center (float): the center gpstime of the plot
 		span (float): seconds to span around center
@@ -57,16 +57,13 @@ def plot_snr(filename, width = 6, center = None, span = None, verbose = False):
 		fig (object): matplotlib figure
 	"""
 
-	xmldoc = svd_bank_snr.read_url(filename, svd_bank_snr.SNRContentHandler, verbose = verbose)
-	SNRs_dict = svd_bank_snr.read_xmldoc(xmldoc)
-
-	nrows = len(SNRs_dict.keys())
+	nrows = len(SNR_dict.keys())
 	ncols = 1
 
 	fig, axes = pyplot.subplots(nrows = nrows, ncols = ncols, sharex = True)
 	if nrows == 1:
 		axes = [axes]
-	axes_add_snr(axes, SNRs_dict, center = center, span = span)
+	axes_add_snr(axes, SNR_dict, center = center, span = span)
 	fig.set_size_inches(width, int(round(width/plotutil.golden_ratio)))
 	fig.tight_layout(pad = 0.8)
 

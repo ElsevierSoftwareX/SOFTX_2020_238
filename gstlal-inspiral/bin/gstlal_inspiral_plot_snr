@@ -2,14 +2,13 @@
 """
 Plotter for gstlal_inspiral_calc_snr
 """
-import matplotlib
-matplotlib.use("Agg")
-from matplotlib import pyplot
 import os
 import sys
 from optparse import OptionParser
 
+
 from gstlal import plotsnr
+from gstlal import svd_bank_snr
 
 from lal.utils import CacheEntry
 
@@ -38,9 +37,27 @@ def parse_command_line():
 
 options = parse_command_line()
 
-with open(options.input) as f:
-	suffix = ".svg" if (options.format is None) else options.format
-	for snr_file in f:
-		figure = plotsnr.plot_snr(CacheEntry(snr_file).url, width = options.width, center = options.center, span = options.span, verbose = options.verbose)
-		figure.savefig(os.path.join(options.outdir, CacheEntry(snr_file).description+suffix))
-		pyplot.close(pyplot.gcf())
+suffix = ".svg" if (options.format is None) else options.format
+urls = []
+description = None
+segment = None
+with open(options.input) as cache:
+	for line in cache.readlines():
+		entry = CacheEntry(line)
+		urls.append(entry.url)
+		if description is None and segment is None:
+			description = entry.description
+			segment = "-" + str(entry.segment[0]) + "-" + str(entry.segment[1] - entry.segment[0])
+		else:
+			assert description + segment == entry.description + "-" + str(entry.segment[0]) + "-" + str(entry.segment[1] - entry.segment[0]), "Cannot plot snrs with different segments or for different template."
+
+SNRs_dict = {}
+for url in urls:
+	SNRs_dict.update(svd_bank_snr.read_xmldoc(svd_bank_snr.read_url(url, svd_bank_snr.SNRContentHandler, verbose = options.verbose)))
+
+for row, snrs_group in enumerate(zip(*SNRs_dict.values())):
+	figure = plotsnr.plot_snr(dict(zip(SNRs_dict.keys(), zip(snrs_group))), width = options.width, center = options.center, span = options.span, verbose = options.verbose)
+	if len(zip(*SNRs_dict.values())) == 1:
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(SNRs_dict.keys()) + description + segment + suffix))
+	else:
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(SNRs_dict.keys()) + description + "-"+ str(row) + segment + suffix))
