@@ -3,64 +3,117 @@
 """
 Typical Usages:
 
---mode 0 (calculate SNR using LLOID method):
-	1. GW options: also see datasource.GWDataSourceInfo()
-	--frame-cache
-	--data-source
-	--channel-name
-	--gps-start-time
-	--gps-end-time
-	--injection
+Re-calculating GraceDb gstlal candidates. This assumes you are login to LIGO-Caltech Computing Cluster and
+all data (svd banks, psd ...) are availible on the gracedb and the cluster. You also need obtain certificate
+via "ligo-proxy-init" before using this option. Use --save to save the svd banks and psd to disk.
 
-	2. SVD bank options:
-	--svd-bank (require)
-	--bank-id (require)
-	--row-number (optional, calculate all SNRs if not given)
+Example 1:
+$ ligo-proxy-init chiwai.chan
+$ export GSTLAL_FIR_WHITEN=0
+$ gstlal_inspiral_calc_snr \
+--gid G348519 \
+--observatory H \
+--observatory L \
+--type H1_HOFT_C00 \
+--type L1_HOFT_C00 \
+--track-psd \
+--outdir . \
+--verbose
 
-	3. PSD options:
-	--reference-psd (optional)
-	--track-psd (default = False. If --reference-psd is not given, this will be set to True)
-	--psd-fft-length (default = 32s)
+Example 2:
+$ echo "1250471617 1250472600" >> l1segs.txt
+$ echo "1250472615 1250473617" >> l1segs.txt
+$ ligolw_segments --name framesegments --insert-from-segwizard L1=l1segs.txt --output framesegments.xml
+$ ligo-proxy-init chiwai.chan
+$ export GSTLAL_FIR_WHITEN=0
+$ gstlal_inspiral_calc_snr \
+--gid G347846 \
+--observatory L \
+--frame-segments-file framesegments.xml \
+--frame-segments-name framesegments \
+--type L1_HOFT_C00 \
+--track-psd \
+--outdir . \
+--verbose
 
-	4. Output options:
-	--output-width (default = 32bits)
-	--instrument (require)
-	--outdir (require)
-	--start (default = None)
-	--end (default = None)
-	--verbose (default = False)
-	--complex (defaule = False)
+Calculate SNR using LLOID method. You should have access to svd banks and reference psd for this option. For
+filter particular template in the svd banks, you should know the --sub-bank-id and the --row-number of the template;
+Otherwise, if only --sub-bank-id is provided, SNRs for all templates in the sub-bank will be produced. To limit the
+output size, use --start and --end to specify the range of SNR in GPS time.
 
---mode 1 (calculate SNR using Finite Impulse Response):
-	1. GW options: also see datasource.GWDataSourceInfo()
-	--frame-cache
-	--data-source
-	--channel-name
-	--gps-start-time
-	--gps-end-time
-	--injection
+Example: G348519
 
-	2. Template options:
-	--table (require)
-	--approximant (require)
-	--sample-rate (default = 2048Hz)
-	--f-low (default = 10)
-	--f-high (optional)
-	--template-psd (require)
+Downloaded from /home/gstlalcbc/observing/3/online/svd/new-bank/4_bns/mario/
+> H1-GSTLAL_SVD_BANK_258-0-0.xml.gz
+> L1-GSTLAL_SVD_BANK_258-0-0.xml.gz
+> V1-GSTLAL_SVD_BANK_258-0-0.xml.gz
+Downloaded from gracedb candidate event G348519
+> psd.xml.gz
 
-	3. PSD / Whiten options:
-	--reference-psd (optional)
-	--track-psd (default = False. If --reference-psd is not given, this will be set to True)
-	--psd-fft-length (default = 32s)
+$ export GSTLAL_FIR_WHITEN=0
+$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory L --type L1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O L1_FRAME
+$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory H --type H1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O H1_FRAME
+$ cat *_FRAME > frame.cache
+$ gstlal_inspiral_calc_snr \
+--mode 0\
+--data-source frames \
+--channel-name H1=GDS-CALIB_STRAIN \
+--channel-name L1=GDS-CALIB_STRAIN \
+--frame-cache frame.cache \
+--gps-start-time 1251009527 \
+--gps-end-time 1251009527 \
+--reference-psd psd.xml.gz \
+--track-psd \
+--svd-bank H1:H1-GSTLAL_SVD_BANK_258-0-0.xml.gz,L1:L1-GSTLAL_SVD_BANK_258-0-0.xml.gz,V1:V1-GSTLAL_SVD_BANK_258-0-0.xml.gz \
+--sub-bank-id 0 \
+--row-number 203 \
+--instrument H1 \
+--instrument L1 \
+--outdir outputs \
+--start 1251010522 \
+--end 1251010532 \
+--verbose
 
-	4. Output options:
-	--output-width (default = 32bits)
-	--instrument (require)
-	--outdir (require)
-	--start (default = None)
-	--end (default = None)
-	--verbose (default = False)
-	--complex (default = False)
+
+Calculate SNR using Finite Impulse Response. Typically, you won't use this option unless you simply want to calculate SNR for one particular
+template and you don't have access to the corresponding svd bank which contains the template. To use this option, You should have a XML file
+containing one sngl_inspiral table, the backend of generating template is through cbc_template_fir, see cbc_template_fir to see what parameters
+are necessary to generate template. To limit the output size, use --start and --end to specify the range of SNR in GPS time.
+
+Example: G348519
+
+Downloaded from gracedb candidate event G348519
+> psd.xml.gz
+
+$ export GSTLAL_FIR_WHITEN=0
+$ cp /home/ryan.magee/observing/3/psds/190509/cleaned/H1L1V1psd_new.xml.gz .
+$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory L --type L1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O L1_FRAME
+$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory H --type H1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O H1_FRAME
+$ cat *_FRAME > frame.cache
+$ python
+>> from gstlal import svd_bank_snr
+>> svd_bank_snr.FIR_SNR.make_simplified_sngl_inspiral_table(30.383705, 12.924967, 0, 0, -0.24138632, 0, 0, 0.6948265)
+$ gstlal_inspiral_calc_snr \
+--mode 1\
+--data-source "frames" \
+--channel-name H1=GDS-CALIB_STRAIN \
+--channel-name L1=GDS-CALIB_STRAIN \
+--frame-cache frame.cache \
+--gps-start-time 1251009527 \
+--gps-end-time 1251011527 \
+--reference-psd ./psd.xml.gz \
+--track-psd \
+--table template.xml.gz \
+--approximant SEOBNRv4_ROM \
+--sample-rate 2048 \
+--template-psd ./H1L1V1psd_new.xml.gz \
+--f-low 15 \
+--instrument H1 \
+--instrument L1 \
+--start 1251010522 \
+--end 1251010532 \
+--outdir ./outputs \
+
 """
 import numpy
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
@@ -123,7 +176,7 @@ def parse_command_line():
 	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments (require)." )
 	group.add_option("--sub-bank-id", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (require).")
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
-	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template for each instrument only.")
+	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template only.")
 	group.add_option("--approximant", metavar = "name", type = "str", help = "Name of the Waveform model (require).")
 	group.add_option("--sample-rate", metavar = "Hz", default = 2048, type = "int", help = "Sampling rate of the template and SNR for mode 1")
 	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
@@ -139,20 +192,20 @@ def parse_command_line():
 
 	group = OptionGroup(parser, "GraceDb Event Options", "Produce SNR time series for gstlal gracedb event.")
 	group.add_option("--gid", metavar = "gracedb event id", type = "str", help = "The gracedb event id.")
-	group.add_option("--observatory", metavar = "OBS", type = "str", action = "append", help = "See gwdatafind.")
-	group.add_option("--type", metavar = "frame type", type = "str", action = "append", help = "See gwdatafind.")
-	group.add_option("--time-span", metavar = "seconds", type = "int", default = 1000, help = "The time span around the event's trigger time (default = 1000).")
+	group.add_option("--observatory", metavar = "OBS", type = "str", action = "append", help = "Name of the observatory (H,L,V ...), also see gwdatafind.")
+	group.add_option("--type", metavar = "frame type", type = "str", action = "append", help = "Name of the observatory (H,L,V ...), also see gwdatafind.")
+	group.add_option("--time-span", metavar = "seconds", type = "int", default = 1000, help = "The time span around the event's trigger time, must be larger or equal to 1000s (default = 1000).")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
 	group.add_option("--outdir", metavar = "directory", default = ".", type = "str", help = "Output directory for SNR(s) (default = .).")
-	group.add_option("--save", action = "store_true", default = False, help = "Save frame cache / svd bank / psd (default = True).")
+	group.add_option("--save", action = "store_true", default = False, help = "Save frame cache / svd bank / psd (default = False).")
 	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
 	group.add_option("--complex", action = "store_true", help = "Choose whether to output the complex snr or not.")
 	group.add_option("--start", metavar = "seconds", type = "float", help = "Start SNR time series at GPS time '--start' (require).")
 	group.add_option("--end", metavar = "seconds", type = "float", help = "End SNR time series at GPS time '--end' (require).")
 	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
-	group.add_option("--instrument", metavar = "name", type = "str", action = "append", help = "The detector from which the --reference-psd and --frame-cache are loaded (require).")
+	group.add_option("--instrument", metavar = "name", type = "str", action = "append", help = "The instrument(s) to be analyzed(require).")
 	parser.add_option_group(group)
 
 	parser.add_option("--verbose", action = "store_true", help = "Be verbsoe.")

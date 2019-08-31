@@ -290,6 +290,31 @@ class FIR_SNR(SNR_Pipeline):
 
 		return template, row[0].end
 
+	@staticmethod
+	def write_simplified_sngl_inspiral_table(m1, m2, s1x, s1y, s1z, s2x, s2y, s2z, outdir = ".", filename = "template.xml.gz"):
+		xmldoc = ligolw.Document()
+		root = xmldoc.appendChild(ligolw.LIGO_LW())
+
+		table = lsctables.New(lsctables.SnglInspiralTable)
+		rows = table.RowType()
+
+		for slot in rows.__slots__:
+			rows.__setattr__(slot, None)
+
+		rows.mass1 = m1
+		rows.mass2 = m2
+		rows.spin1x = s1x
+		rows.spin1y = s1y
+		rows.spin1z = s1z
+		rows.spin2x = s2x
+		rows.spin2y = s2y
+		rows.spin2z = s2z
+
+		table.append(rows)
+		root.appendChild(table)
+
+		ligolw_utils.write_filename(xmldoc, os.path.join(outdir, filename), gz = filename.endswith("gz"))
+
 	def __call__(self, COMPLEX = False):
 		return self.get_snr_series(COMPLEX)
 
