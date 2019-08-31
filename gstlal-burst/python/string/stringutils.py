@@ -188,24 +188,20 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 		pass
 
-	def __init__(self, instruments, snr_threshold, min_instruments=2):
+	def __init__(self, instruments=frozenset(("H1", "L1")), min_instruments=2):
 		self.triangulators = triangulators(dict.fromkeys(instruments, 8e-5))
-		self.numerator = string_lr_far.LnSignalDensity(instruments = instruments, min_instruments = min_instruments, snr_threshold = snr_threshold)
-		self.denominator = string_lr_far.LnNoiseDensity(instruments = instruments, min_instruments = min_instruments, snr_threshold = snr_threshold)
-		self.candidates = string_lr_far.LnLRDensity(instruments = instruments, min_instruments = min_instruments, snr_threshold = snr_threshold)
+		self.numerator = string_lr_far.LnSignalDensity(instruments = instruments, min_instruments = min_instruments)
+		self.denominator = string_lr_far.LnNoiseDensity(instruments = instruments, min_instruments = min_instruments)
+		self.candidates = string_lr_far.LnLRDensity(instruments = instruments, min_instruments = min_instruments)
+
+	@property
+	def instruments(self):
+		return self.denominator.instruments
 
 	@property
 	def min_instruments(self):
 		return self.denominator.min_instruments
 	
-	def __call__(self, **kwargs):
-		"""
-		Evaluate the ranking statistic.
-		"""
-		# Full lnL ranking stat, defined to be the largest lnL from
-		# all allowed subsets of trigges. Maximizes over 2+ IFO combos.
-		return max(super(StringCoincParamsDistribution, self).__call__(**kwargs) for kwargs in kwarggen(min_instruments = self.min_instruments, **kwargs))
-
 	def __iadd__(self, other):
 		if type(self) != type(other):
 			raise TypeError(other)
@@ -247,7 +243,7 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 
 		return dict(
 			snrs = dict((event.ifo, event.snr) for event in events),
-			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events),
+			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events)
 		)
 
 	def ln_lr_from_triggers(self, events, offsetvector):
@@ -270,7 +266,7 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
-		self = cls([])
+		self = cls.__new__(cls)
 		self.numerator = string_lr_far.LnSignalDensity.from_xml(xml, "numerator")
 		self.denominator = string_lr_far.LnNoiseDensity.from_xml(xml, "denominator")
 		self.candidates = string_lr_far.LnLRDensity.from_xml(xml, "candidates")

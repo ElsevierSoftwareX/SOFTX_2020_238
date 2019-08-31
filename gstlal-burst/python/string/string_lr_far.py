@@ -15,17 +15,18 @@
 
 import numpy
 import random
+import sys
 
 from lal import rate
 from lalburst import snglcoinc
 
 from ligo.lw import ligolw
+from ligo.lw import lsctables
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils 
 
-
+from gstlal import stats as gstlalstats
 from gstlal import string_extrinsics
-
 
 #
 # =============================================================================
@@ -42,22 +43,22 @@ from gstlal import string_extrinsics
 
 
 class LnLRDensity(snglcoinc.LnLRDensity):
+	# SNR threshold FIXME don't hardcode
+	snr_threshold = 3.75
 	# SNR, chi^2 binning definition
 	snr2_chi2_binning = rate.NDBins((rate.ATanLogarithmicBins(10, 1e7, 801), rate.ATanLogarithmicBins(.1, 1e4, 801)))
 	
-	def __init__(self, instruments, snr_threshold, min_instruments=2):
+	def __init__(self, instruments, min_instruments=2):
 		# check input
 		if min_instruments < 2:
 			raise ValueError("min_instruments=%d must be >=2" % min_instruments)
 		if min_instruments > len(instruments):
 			raise ValueError("not enough instruments (%s) to satisfy min_instruments=%d" % (", ".join(sorted(instruments)), min_instruments))
-		if snr_threshold <= 0.:
-			raise ValueError("SNR threshold = %g  must be >0" % snr_threshold)
 
 		self.min_instruments = min_instruments
-		self.snr_threshold = snr_threshold
 		self.densities = {}
-		for instrument in instruments:
+		self.instruments = frozenset(instruments)
+		for instrument in self.instruments:
 			self.densities["%s_snr2_chi2" % instrument] = rate.BinnedLnPDF(self.snr2_chi2_binning)
 
 	def __call__(self, **params):
@@ -80,9 +81,8 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		return self
 
 	def increment(self, weight = 1.0, **params):
-		instruments = params["snrs"].items()
-		for instrument in instrumets:
-			self.densities["%s_snr2_chi2" % instrument].count[params["snrs"][instrument], params["chi2s_over_snr2s"][instrument]] += weight
+		for instrument in self.instruments:
+			self.densities["%s_snr2_chi2" % instrument].count[params['snrs'][instrument], params['chi2s_over_snr2s'][instrument]] += weight
 
 	def copy(self):
 		new = type(self)([])
@@ -108,7 +108,6 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		instruments = set(key.split("_", 1)[0] for key in self.densities if key.endswith("_snr2_chi2"))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(instruments)))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
-		xml.appendChild(ligolw_param.Param.from_pyvalue(u"snr_threshold", self.snr_threshold))
 		for key, lnpdf in self.densities.items():
 			xml.appendChild(lnpdf.to_xml(key))
 		return xml
@@ -119,7 +118,6 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		self = cls(
 			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
 			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
-			snr_threshold = ligolw_param.get_pyvalue(xml, u"snr_threshold")
 			)
 		for key in self.densities:
 			self.densities[key] = rate.BinnedLnPDF.from_xml(xml, key)
@@ -132,11 +130,20 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 
 class LnSignalDensity(LnLRDensity):
+	def __call__(self, snrs, chi2s_over_snr2s):
+		if len(snrs) < self.min_instruments:
+			return NegInf
+		lnP = 0.0
+		# evalute the (snr, \chi^2 | snr) PDFs
+		interps = self.interps
+		return lnP + sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
+
 	def add_signal_model(self, prefactors_range = (0.001, 0.30), inv_snr_pow = 4.):
 		# normalize to 10 *mi*llion signals. This count makes the
 		# density estimation code choose a suitable kernel size
-		string_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["snr2_chi2"], 10000000., prefactors_range, inv_snr_pow = inv_snr_pow, snr_min = self.snr_threshold)
-		self.densities["snr2_chi2"].normalize()
+		for instrument in self.instruments:
+			string_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["%s_snr2_chi2" % instrument], 10000000., prefactors_range, inv_snr_pow = inv_snr_pow, snr_min = self.snr_threshold)
+			self.densities["%s_snr2_chi2" % instrument].normalize()
 
 	def to_xml(self, name):
 		xml = super(LnSignalDensity, self).to_xml(name)
@@ -206,15 +213,12 @@ class LnNoiseDensity(LnLRDensity):
 
 	def to_xml(self, name):
 		xml = super(LnNoiseDensity, self).to_xml(name)
-		xml.appendChild(self.triggerrates.to_xml(u"triggerrates"))
 		return xml
 
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
 		self = super(LnNoiseDensity, cls).from_xml(xml, name)
-		self.triggerrates = trigger_rate.triggerrates.from_xml(xml, u"triggerrates")
-		self.triggerrates.coalesce()    # just in case
 		return self
 
 
