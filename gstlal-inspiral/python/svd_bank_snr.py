@@ -397,7 +397,12 @@ def svd_banks_from_event(gid, outdir = ".", save = True, verbose = False):
 	assert len(set([row.template_id for row in eventid_trigger_dict.values()])) == 1, "Templates should have the same template_id."
 
 	try:
+		path = [row.value for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--gracedb-service-url"]
 		bank_urls = inspiral.parse_svdbank_string([row.value for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--svd-bank"].pop())
+		if path is not None:
+			path = path.pop()
+			for ifo, bank_url in bank_urls.items():
+				bank_urls[ifo] = os.path.join(path, bank_url)
 		banks_dict = inspiral.parse_bank_files(bank_urls, verbose = verbose)
 	except IOError:
 		sys.stderr.write("Files Not Found! Make sure you are on the LIGO-Caltech Computing Cluster or check if file exist.\nAbortting...\n")
