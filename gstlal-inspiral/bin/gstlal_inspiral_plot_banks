@@ -98,13 +98,13 @@ def mtotal(row):
 	return row.mass1 + row.mass2
 
 def eta(row):
-	return row.mass1 * row.mass2 / row.mtotal**2.
+	return row.mass1 * row.mass2 / mtotal(row)**2.
 
 def mchirp(row):
-	return row.mtotal * row.eta**0.6
+	return mtotal(row) * row.eta**0.6
 
 def chi(row):
-	return (row.mass1 * row.spin1z + row.mass2 * row.spin2z) / row.mtotal
+	return (row.mass1 * row.spin1z + row.mass2 * row.spin2z) / mtotal(row)
 
 def marker_and_size(n):
 	if n > 2000:
