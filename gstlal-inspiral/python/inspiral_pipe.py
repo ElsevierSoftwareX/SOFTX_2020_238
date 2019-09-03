@@ -620,7 +620,8 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 			svd_file = one_ifo_svd_nodes[bin_key].output_files["write-svd"]
 		else:
 			parent_nodes = model_node
-			svd_file = dagparts.T050017_filename(instrument_set[0], '%s_SVD' % bin_key, boundary_seg, '.xml.gz', path = jobs['svd'].output_path)
+			svd_path = os.path.join(options.analysis_path, jobs['svd'].output_path)
+			svd_file = dagparts.T050017_filename(instrument_set[0], '%s_SVD' % bin_key, boundary_seg, '.xml.gz', path = svd_path)
 
 		# FIXME we keep this here in case we someday want to have a
 		# mass bin dependent prior, but it really doesn't matter for
@@ -1046,12 +1047,9 @@ def load_analysis_output(options):
 
 	# load dist stats
 	lloid_diststats = {}
-	boundary_seg = None
 	for ce in map(CacheEntry, open(options.dist_stats_cache)):
-		if 'DIST_STATS' in ce.description:
-			lloid_diststats[ce.description.split("_")[0]] = [ce.path]
-			if not boundary_seg:
-				boundary_seg = ce.segment
+		if 'DIST_STATS' in ce.description and not 'CREATE_PRIOR' in ce.description:
+			lloid_diststats.setdefault(ce.description.split("_")[0], []).append(ce.path)
 
 	# load svd dtdphi map
 	svd_dtdphi_map = {}
@@ -1067,7 +1065,7 @@ def load_analysis_output(options):
 	# FIXME: don't do this, find a cleaner way of handling this generally
 	options.injections = [inj.split(':')[-1] for inj in options.injections]
 
-	return bgbin_lloid_map, lloid_diststats, svd_dtdphi_map, instrument_set, boundary_seg
+	return bgbin_lloid_map, lloid_diststats, svd_dtdphi_map, instrument_set
 
 
 def get_threshold_values(template_mchirp_dict, bgbin_indices, svd_bank_strings, options):
@@ -1217,7 +1215,7 @@ def get_svd_bank_params(svd_bank_cache, online = False):
 def sim_tag_from_inj_file(injections):
 	if injections is None:
 		return None
-	return injections.replace('.xml', '').replace('.gz', '').replace('-','_')
+	return os.path.basename(injections).replace('.xml', '').replace('.gz', '').replace('-','_')
 
 
 def load_bank_cache(options):
