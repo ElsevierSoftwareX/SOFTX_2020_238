@@ -43,6 +43,7 @@ import numpy
 
 from lal.utils import CacheEntry
 
+from ligo import segments
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 import ligo.lw.utils as ligolw_utils
@@ -66,9 +67,8 @@ lsctables.use_in(LIGOLWContentHandler)
 
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
-
-	# reference_psd
-	parser.add_option("--reference-psd", help = "Set the reference PSD. Required.")
+	parser.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
+	parser.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
 
 	# mass model options
 	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file.")
@@ -93,6 +93,8 @@ def parse_command_line():
 
 	# FIXME: uhhhhh... yeah
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.")
+
+	parser.add_option("--analysis-path", metavar = "path", help = "Set the path to the analysis you want to rerank.")
 
 	# caches
 	parser.add_option("--dist-stats-cache", metavar = "filename", help = "Set the cache file for dist stats")
@@ -171,14 +173,22 @@ def set_up_jobs(options):
 	inj_snr_condor_opts['+MemoryUsage'] = "( 2000 ) * 2 / 3"
 	inj_snr_condor_opts['request_cpus'] = "2"
 
+	marg_condor_opts = default_condor_opts.copy()
+	marg_condor_opts['+MemoryUsage'] = "( 2000 ) * 2 / 3"
+
 	# set condor commands
 	base_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, default_condor_opts)
 	calc_rank_pdf_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, calc_rank_pdf_condor_opts)
 	inj_snr_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, inj_snr_condor_opts)
+	marg_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, marg_condor_opts)
 	sh_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"})
 
-	# set up rest of jobs
+	# jobs only needed to find paths
+	# NOTE: find a better way to do this?
 	jobs['svd'] = dagparts.DAGJob("gstlal_svd_bank", condor_commands = base_condor_commands)
+	jobs['medianPSD'] = dagparts.DAGJob("gstlal_median_of_psds", condor_commands = base_condor_commands)
+
+	# set up rest of jobs
 	jobs['model'] = dagparts.DAGJob("gstlal_inspiral_mass_model", condor_commands = base_condor_commands)
 	jobs['modelAdd'] = dagparts.DAGJob("gstlal_inspiral_add_mass_models", condor_commands = base_condor_commands)
 	jobs['horizon'] = dagparts.DAGJob("gstlal_plot_psd_horizon", condor_commands = base_condor_commands)
@@ -186,7 +196,7 @@ def set_up_jobs(options):
 	jobs['calcRankPDFs'] = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", condor_commands = calc_rank_pdf_condor_commands)
 	jobs['calcRankPDFsWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_calc_rank_pdfs", tag_base="gstlal_inspiral_calc_rank_pdfs_with_zerolag", condor_commands=calc_rank_pdf_condor_commands)
 	jobs['calcLikelihood'] = dagparts.DAGJob("gstlal_inspiral_calc_likelihood", condor_commands = base_condor_commands)
-	jobs['marginalize'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = base_condor_commands)
+	jobs['marginalize'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", condor_commands = marg_condor_commands)
 	jobs['marginalizeWithZerolag'] = dagparts.DAGJob("gstlal_inspiral_marginalize_likelihood", tag_base="gstlal_inspiral_marginalize_likelihood_with_zerolag", condor_commands=base_condor_commands)
 
 	jobs['injSplitter'] = dagparts.DAGJob("gstlal_injsplitter", tag_base="gstlal_injsplitter", condor_commands = base_condor_commands)
@@ -217,10 +227,17 @@ def set_up_jobs(options):
 
 if __name__ == '__main__':
 	options, filenames = parse_command_line()
+	jobs = set_up_jobs(options)
 
 	# load analysis output from run
-	lloid_output, lloid_diststats, svd_dtdphi_map, instrument_set, boundary_seg = inspiral_pipe.load_analysis_output(options)
+	lloid_output, lloid_diststats, svd_dtdphi_map, instrument_set = inspiral_pipe.load_analysis_output(options)
 	instruments = "".join(sorted(instrument_set))
+
+	# load reference psd
+	boundary_seg = segments.segment(int(options.gps_start_time), int(options.gps_end_time))
+	gpsmod5 = str(int(boundary_seg[0]))[:5]
+	ref_psd_path = os.path.join(options.analysis_path, inspiral_pipe.subdir_path([jobs['medianPSD'].output_path, gpsmod5]))
+	reference_psd = dagparts.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = ref_psd_path)
 
 	# output directories
 	output_dir = "plots"
@@ -232,16 +249,15 @@ if __name__ == '__main__':
 	#
 
 	dag = dagparts.DAG("trigger_rerank_pipe")
-	jobs = set_up_jobs(options)
 
 	# generate xml integrity checker (if requested) and pre-script to back up data
 	#inspiral_pipe.set_up_scripts(options)
 
 	# mass model job
-	model_node, model_file = inspiral_pipe.mass_model_layer(dag, jobs, [], instruments, options, boundary_seg, options.reference_psd)
+	model_node, model_file = inspiral_pipe.mass_model_layer(dag, jobs, [], instruments, options, boundary_seg, reference_psd)
 
 	# marginalize jobs
-	marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, [], lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, options.reference_psd, svd_dtdphi_map)
+	marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, [], lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, reference_psd, svd_dtdphi_map)
 
 	# calc rank PDF jobs
 	rankpdf_nodes, rankpdf_zerolag_nodes = inspiral_pipe.calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set)
