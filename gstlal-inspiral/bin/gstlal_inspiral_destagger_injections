@@ -1,0 +1,234 @@
+#!/usr/bin/env python
+
+from ligo.lw import dbtables
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.ligolw import LIGOLWContentHandler
+from ligo.lw.utils import process as ligolw_process
+from ligo.lw.utils import segments as ligolw_segments
+
+from optparse import OptionParser
+from os import path
+import numpy
+import sqlite3
+import sys
+
+@lsctables.use_in
+class ligolwcontenthandler(LIGOLWContentHandler):
+	pass
+
+def parse_command_line():
+	parser = OptionParser(usage="%prog [options] database")
+
+	parser.add_option("--injection-file", "-i", metavar = "filename", action = "append", help = "An original injection file that was used as input to gstlal_inspiral_combine_injection_sets. Option can be provided multiple times. All of the injection files that were combined using gstlal_inspiral_combine_injection_sets must be provided.")
+	parser.add_option("--tmp-space", "-t", metavar = "path", default = None, help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option("--verbose", "-v", action = "store_true", help = "Be verbose.")
+
+
+	options, filenames = parser.parse_args()
+	if len(filenames) != 1:
+		raise ValueError("Must provide exactly one database, %d provided (%s)" % (len(filenames), ', '.join(filenames)))
+
+	return options, filenames[0]
+
+def read_inj_files(options):
+	inj_dict = {}
+	for inj in options.injection_file:
+		xmldoc = ligolw_utils.load_filename(inj, contenthandler = ligolwcontenthandler, verbose = options.verbose)
+		start_time = 0
+		dt = 0
+		for processparam in lsctables.ProcessParamsTable.get_table(xmldoc):
+			if processparam.param == "--gps-start-time":
+				if start_time != 0:
+					raise ValueError("injection file %s contains more than one --gps-start-time entry in ProcessParams table" % inj)
+				start_time = int(processparam.value)
+			elif processparam.param == "--time-step":
+				if dt != 0:
+					raise ValueError("injection file %s contains more than one --time-step entry in ProcessParams table" % inj)
+				# Have to call it a float first because int() cant take a string that contains sci notation
+				dt = int(float(processparam.value)) 
+		if start_time == 0:
+			raise ValueError("injection file %s does not contain --gps-start-time entry in ProcessParams table" % inj)
+		if dt == 0:
+			raise ValueError("injection file %s does not contain --time-step entry in ProcessParams table" % inj)
+		# FIXME Need a standardized naming convention, this could easily fail
+		inj_dict[path.basename(inj).split('.')[0].split('-')[0]] = (start_time, dt)
+		xmldoc.unlink()
+
+	return inj_dict
+
+def set_up(cursor, options):
+	inj_dict = read_inj_files(options)
+	# NOTE NOTE NOTE We only need the integer geocenter time because this
+	# is only used to associate injections with the original injection
+	# files. We need the nanoseconds for the detector times to determine
+	# which injection a coinc_inspiral that hasnt been associated with an
+	# injection already is closest to 
+	# FIXME Will need to modify this to include Kagra 
+	db_inj_times = set((t for t in cursor.execute('SELECT geocent_end_time, h_end_time+1e-9*h_end_time_ns, l_end_time+1e-9*l_end_time_ns, v_end_time+1e-9*v_end_time_ns, simulation_id FROM sim_inspiral ORDER BY geocent_end_time ASC').fetchall()))
+	sim_id_dict = {}
+
+	# files we care about have four types of coincidences, these are their descriptions
+	#sngl_inspiral<-->sngl_inspiral coincidences
+	#sim_inspiral<-->sngl_inspiral coincidences
+	#sim_inspiral<-->coinc_event coincidences (exact)
+	#sim_inspiral<-->coinc_event coincidences (nearby)
+	exact_inj_coinc_def_id = cursor.execute('SELECT coinc_def_id FROM coinc_definer WHERE description == "sim_inspiral<-->coinc_event coincidences (exact)"').fetchone()
+	nearby_inj_coinc_def_id = cursor.execute('SELECT coinc_def_id FROM coinc_definer WHERE description == "sim_inspiral<-->coinc_event coincidences (nearby)"').fetchone()
+	inj_trigger_coinc_def_id = cursor.execute('SELECT coinc_def_id FROM coinc_definer WHERE description == "sim_inspiral<-->sngl_inspiral coincidences"').fetchone()
+	coinc_inspiral_coinc_def_id = cursor.execute('SELECT coinc_def_id FROM coinc_definer WHERE description == "sngl_inspiral<-->sngl_inspiral coincidences"').fetchone()
+
+	# parse the sim_inspiral table into different injection sets
+	for inj_basename, (start_time, dt) in inj_dict.items():
+		for geocent_end_time, h_end_time, l_end_time, v_end_time, sim_id in db_inj_times:
+			tref = geocent_end_time - start_time
+			# Check if this injection is within 2 seconds of where an injection from this injection file would fall if every injection were spaced by dt
+			if tref % dt <= 2 or tref % dt == dt - 2 or tref % dt == dt - 1:
+				sim_id_dict.setdefault(inj_basename, []).append((geocent_end_time, h_end_time, l_end_time, v_end_time, sim_id))
+
+		if inj_basename in sim_id_dict.keys():
+			db_inj_times -= set(sim_id_dict[inj_basename])
+
+	return sim_id_dict, exact_inj_coinc_def_id, nearby_inj_coinc_def_id, inj_trigger_coinc_def_id, coinc_inspiral_coinc_def_id
+
+
+options, db = parse_command_line()
+
+split_db_name = path.basename(db).split('-')
+working_filename = dbtables.get_connection_filename(db, tmp_path = options.tmp_space, verbose = options.verbose)
+connection = sqlite3.connect(working_filename)
+cursor = connection.cursor()
+original_number_coinc_events = int(cursor.execute('SELECT count(*) FROM coinc_event').fetchone()[0])
+new_number_coinc_events = 0
+
+sim_id_dict, exact_inj_coinc_def_id, nearby_inj_coinc_def_id, inj_trigger_coinc_def_id, coinc_inspiral_coinc_def_id = set_up(cursor, options)
+
+for i, sim_key in enumerate(sim_id_dict.keys()):
+	if i != 0:
+		working_filename = dbtables.get_connection_filename(db, tmp_path = options.tmp_space, verbose = True)
+		connection = sqlite3.connect(working_filename)
+		cursor = connection.cursor()
+
+	# register program in process table
+	xmldoc = dbtables.get_xml(connection)
+	# FIXME Make this not ugly
+	process_params_dict = dict(("--injection-file", inj_file) for inj_file in options.injection_file)
+	process_params_dict["--verbose"] = options.verbose
+	process_params_dict["--tmp-space"] = options.tmp_space
+	process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_destagger_injections", process_params_dict)
+
+	relevant_sim_ids = [sim_id for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[sim_key]]
+	irrelevant_sim_ids = [sim_id for key in (set(sim_id_dict.keys()) - set((sim_key,))) for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[key]]
+	irrelevant_keys = set(sim_id_dict.keys()) - set((sim_key,))
+
+	sim_times_relevant_sim_ids = {"H1": numpy.array([h_end_time for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[sim_key]]), "L1": numpy.array([l_end_time for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[sim_key]]), "V1": numpy.array([v_end_time for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[sim_key]])}
+	sim_times_irrelevant_sim_ids = {"H1": numpy.array([h_end_time for key in irrelevant_keys for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[key]]), "L1": numpy.array([l_end_time for key in irrelevant_keys for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[key]]), "V1": numpy.array([v_end_time for key in irrelevant_keys for (g_end_time, h_end_time, l_end_time, v_end_time, sim_id) in sim_id_dict[key]])}
+
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up exact coincidences"
+
+
+	# clean up exact coincidences
+	for coinc_event_id, in cursor.execute('SELECT coinc_event_id FROM coinc_event WHERE coinc_def_id == ?', exact_inj_coinc_def_id).fetchall():
+		# each coinc_event_id is a tuple, so no need to put it in another tuple for the cursor.execute()
+		sim_id = cursor.execute('SELECT event_id FROM coinc_event_map WHERE coinc_event_id == ? AND table_name == "sim_inspiral"', (coinc_event_id,)).fetchall()
+		assert len(sim_id) == 1, "%d sim_ids coincident with coinc" % len(sim_id)
+		# FIXME this needs to be generalized to use all of the files
+		if sim_id[0][0] not in relevant_sim_ids:
+			cursor.execute('DELETE FROM coinc_event WHERE coinc_event_id == ?', (coinc_event_id,))
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up nearby coincidences"
+
+	# clean up nearby coincidences
+	for coinc_event_id, in cursor.execute('SELECT coinc_event_id FROM coinc_event WHERE coinc_def_id == ?', nearby_inj_coinc_def_id).fetchall():
+		sim_id = cursor.execute('SELECT event_id FROM coinc_event_map WHERE coinc_event_id == ? AND table_name == "sim_inspiral"', (coinc_event_id,)).fetchall()
+		assert len(sim_id) == 1, "multiple sim_ids coincident with coinc"
+		# FIXME this needs to be generalized to use all of the files
+		if sim_id[0][0] not in relevant_sim_ids:
+			cursor.execute('DELETE FROM coinc_event WHERE coinc_event_id == ?', (coinc_event_id,))
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up sim_inspiral sngl_inspiral coincidences"
+
+	# clean up sim_inspiral sngl_inspiral coincs
+	for coinc_event_id, in cursor.execute('SELECT coinc_event_id FROM coinc_event WHERE coinc_def_id == ?', inj_trigger_coinc_def_id).fetchall():
+		sim_id = cursor.execute('SELECT event_id FROM coinc_event_map WHERE coinc_event_id == ? AND table_name == "sim_inspiral"', (coinc_event_id,)).fetchall()
+		assert len(sim_id) == 1, "%d sim_ids coincident with coinc" % len(sim_id)
+		# FIXME this needs to be generalized to use all of the files
+		if sim_id[0][0] not in relevant_sim_ids:
+			cursor.execute('DELETE FROM coinc_event WHERE coinc_event_id == ?', (coinc_event_id,))
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up sim_inspiral coinc_inspiral coincidences"
+
+	# clean up coinc_inspirals
+	for coinc_event_id, in cursor.execute('SELECT coinc_event_id FROM coinc_event WHERE coinc_def_id == ?', coinc_inspiral_coinc_def_id).fetchall():
+		# first check if this is coincident with an injection
+		sim_coinc_event_id = cursor.execute('SELECT coinc_event_id FROM coinc_event_map WHERE table_name == "coinc_event" AND event_id == ?', (coinc_event_id,)).fetchall()
+		if len(sim_coinc_event_id) >= 1:
+			sim_ids = []
+			for sim_coinc_event_id in sim_coinc_event_id:
+				sim_ids.extend(cursor.execute('SELECT event_id FROM coinc_event_map WHERE coinc_event_id == ? AND table_name == "sim_inspiral"', sim_coinc_event_id).fetchall())
+			if len(sim_ids) > 1:
+				for sim_id in sim_ids[1:]:
+					# This should always be true, just putting this here to make sure I haven't missed some corner case I don't know about
+					assert sim_ids[0] == sim_id
+			if sim_ids[0][0] not in relevant_sim_ids:
+				cursor.execute('DELETE FROM coinc_event WHERE coinc_event_id == ?', (coinc_event_id,))
+
+		else:
+			# not coincident with any injections, we need to find the closest time
+			ifos = cursor.execute('SELECT ifos FROM coinc_inspiral WHERE coinc_event_id == ?', (coinc_event_id,)).fetchall()
+			assert len(ifos) == 1
+			# ifos should be a list of involved ifos separated by commas, e.g. H1,L1,V1, which would be returned as [(u"H1,L1,V1")]
+			first_ifo_alphabetically = sorted(ifos[0][0].split(','))[0]
+			end_time = cursor.execute('SELECT end_time+1e-9*end_time_ns FROM sngl_inspiral WHERE ifo == ? and event_id IN (SELECT event_id FROM coinc_event_map WHERE coinc_event_id == ? and table_name = "sngl_inspiral")', (first_ifo_alphabetically, coinc_event_id)).fetchall()
+			assert len(end_time) == 1
+			relevance_test = abs(sim_times_relevant_sim_ids[first_ifo_alphabetically] - end_time[0])
+			irrelevance_test = abs(sim_times_irrelevant_sim_ids[first_ifo_alphabetically] - end_time[0])
+			if min(irrelevance_test) < min(relevance_test):
+				# These coinc triggers are closer to an injection we dont care about than an injection we do care about
+				cursor.execute('DELETE FROM coinc_event WHERE coinc_event_id == ?', (coinc_event_id,))
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up coinc_inspiral table"
+	# now clean up coinc_inspiral and coinc_event_map tables
+	cursor.execute('DELETE FROM coinc_inspiral WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event)')
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up coinc_event_map table"
+	cursor.execute('DELETE FROM coinc_event_map WHERE coinc_event_id NOT IN (SELECT coinc_event_id FROM coinc_event)')
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up sngl_inspiral table"
+	# clean up sngl_inspiral table
+	cursor.execute('DELETE FROM sngl_inspiral WHERE event_id NOT IN (SELECT event_id FROM coinc_event_map WHERE table_name == "sngl_inspiral")')
+
+	if options.verbose:
+		print >>sys.stderr, "Cleaning up sim_inspiral table"
+	# finally, clean up the sim_inspiral table
+	cursor.executemany('DELETE FROM sim_inspiral WHERE simulation_id == ?', [(sim_id,) for sim_id in irrelevant_sim_ids])
+
+	if options.verbose:
+		print >>sys.stderr, "Vacuuming"
+	cursor.execute('VACUUM')
+
+	# Set process end time
+	ligolw_process.set_process_end_time(process)
+	cursor.execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
+
+	if options.verbose:
+		print >>sys.stderr, "Committing"
+	connection.commit()
+	new_number_coinc_events += int(connection.execute('SELECT count(*) FROM coinc_event').fetchone()[0])
+	connection.close()
+
+	# Write destaggered db to disk
+	new_db_name = '%s-ALL_LLOID_%s_%s-%s-%s' % (split_db_name[0], sim_key, split_db_name[1].split('_')[-1], split_db_name[2], split_db_name[3])
+	dbtables.put_connection_filename(new_db_name, working_filename, verbose = True)
+
+if original_number_coinc_events != new_number_coinc_events:
+	raise RuntimeError("Number of entries in coinc_event table in original document does not match the number of entries in the output coinc_event_tables. There were %d entries originally, and %d were output. Something has gone terribly wrong, and the output documents should not be trusted." % (original_number_coinc_events, new_number_coinc_events))
+else:
+	print >>sys.stderr, "Confirmed there were %d entries in the original coinc_event table, and %d entries were written to disk in the new coinc_event tables." % (original_number_coinc_events, new_number_coinc_events)
