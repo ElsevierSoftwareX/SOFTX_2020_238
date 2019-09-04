@@ -711,8 +711,12 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 				inputs = [o[0] for o in outputs]
 				parents = dagparts.flatten([o[1] for o in outputs])
 
-				parents.append(marg_nodes[bin_key])
-				likelihood_url = marg_nodes[bin_key].output_files["output"]
+				if bin_key in marg_nodes:
+					parents.append(marg_nodes[bin_key])
+					likelihood_url = marg_nodes[bin_key].output_files["output"]
+				else:
+					likelihood_url = lloid_diststats[bin_key][0]
+
 				likelihood_nodes[sim_tag_from_inj_file(inj), bin_key] = (inputs, likelihood_url, parents)
 
 	return likelihood_nodes
@@ -728,6 +732,7 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 		xml = inputs_to_db(jobs, inputs, job_type = 'ligolwAdd').replace(".sqlite", ".xml.gz")
 		snr_cluster_sql_file = options.snr_cluster_sql_file if sim_tag is None else options.injection_snr_cluster_sql_file
 		cluster_sql_file = options.cluster_sql_file if sim_tag is None else options.injection_sql_file
+		likelihood_job = jobs['calcLikelihood'] if sim_tag is None else jobs['calcLikelihoodInj']
 
 		# cluster sub banks
 		cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = parents,
@@ -748,9 +753,9 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 			)
 
 		# assign likelihoods
-		likelihood_node = dagparts.DAGNode(jobs['calcLikelihood'], dag,
+		likelihood_node = dagparts.DAGNode(likelihood_job, dag,
 			parent_nodes = [cluster_node],
-			opts = {"tmp-space":dagparts.condor_scratch_space()},
+			opts = {"tmp-space": dagparts.condor_scratch_space(), "force": ""},
 			input_files = {"likelihood-url":likelihood_url, "": xml}
 			)
 
@@ -952,12 +957,14 @@ def compute_far_layer(dag, jobs, margnodes, injdbs, noninjdb, final_sqlite_nodes
 	"""
 	margfiles = [options.marginalized_likelihood_file, options.marginalized_likelihood_file]
 	filesuffixs = ['', '_with_zerolag']
+	if options.marginalized_likelihood_file: ### injection-only run
+		assert not margnodes, "no marg nodes should be produced in an injection-only DAG"
+		margnodes = [None, None]
 
 	for margnode, margfile, filesuffix in zip(margnodes, margfiles, filesuffixs):
 		if options.marginalized_likelihood_file: ### injection-only run
 			parents = final_sqlite_nodes
 			marginalized_likelihood_file = margfile
-
 		else:
 			parents = [margnode] + final_sqlite_nodes
 			marginalized_likelihood_file = margnode.output_files["output"]
@@ -1052,6 +1059,16 @@ def load_analysis_output(options):
 			lloid_diststats.setdefault(ce.description.split("_")[0], []).append(ce.path)
 
 	# load svd dtdphi map
+	svd_dtdphi_map, instrument_set = load_svd_dtdphi_map(options)
+
+	# modify injections option, as is done in 'adapt_inspiral_output'
+	# FIXME: don't do this, find a cleaner way of handling this generally
+	options.injections = [inj.split(':')[-1] for inj in options.injections]
+
+	return bgbin_lloid_map, lloid_diststats, svd_dtdphi_map, instrument_set
+
+
+def load_svd_dtdphi_map(options):
 	svd_dtdphi_map = {}
 	bank_cache = load_bank_cache(options)
 	instrument_set = bank_cache.keys()
@@ -1061,11 +1078,7 @@ def load_analysis_output(options):
 			for i, individual_svd_cache in enumerate(ce.path for ce in map(CacheEntry, open(svd_caches))):
 				svd_dtdphi_map["%04d" % (i+bin_offset)] = options.dtdphi_file[j]
 
-	# modify injections option, as is done in 'adapt_inspiral_output'
-	# FIXME: don't do this, find a cleaner way of handling this generally
-	options.injections = [inj.split(':')[-1] for inj in options.injections]
-
-	return bgbin_lloid_map, lloid_diststats, svd_dtdphi_map, instrument_set
+	return svd_dtdphi_map, instrument_set
 
 
 def get_threshold_values(template_mchirp_dict, bgbin_indices, svd_bank_strings, options):
