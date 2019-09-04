@@ -603,7 +603,7 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 	# lloid_output.  svd nodes should be made into a dictionary much
 	# earlier in the code to prevent a mishap
 	if svd_nodes:
-		one_ifo_svd_nodes = dict(("%04d" % n, [node]) for n, node in enumerate( svd_nodes.values()[0]))
+		one_ifo_svd_nodes = dict(("%04d" % n, node) for n, node in enumerate( svd_nodes.values()[0]))
 
 	# Here n counts the bins
 	# FIXME - this is broken for injection dags right now because of marg nodes
