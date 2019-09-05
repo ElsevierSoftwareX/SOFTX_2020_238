@@ -389,12 +389,27 @@ def read_url(filename, contenthandler = SNRContentHandler, verbose = False):
 #
 #=============================================================================================
 
-def svd_banks_from_event(gid, outdir = ".", save = True, verbose = False):
-	gracedb_client = gracedb.GraceDb()
-	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
+def scan_svd_banks_for_row(coinc_xmldoc, banks_dict):
 	eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 
 	assert len(set([row.template_id for row in eventid_trigger_dict.values()])) == 1, "Templates should have the same template_id."
+
+	sub_bank_id = None
+	row_number = None
+        for i, bank in enumerate(banks_dict.values()[0]):
+                for j, row in enumerate(bank.sngl_inspiral_table):
+                        if row.template_id == eventid_trigger_dict.values()[0].template_id:
+                                sub_bank_id = i
+                                row_number = j
+                                break
+                if sub_bank_id is not None:
+                        break
+	assert sub_bank_id is not None, "Cannot find the template listed in the coinc.xml."
+	return sub_bank_id, row_number
+
+def svd_banks_from_event(gid, outdir = ".", save = True, verbose = False):
+	gracedb_client = gracedb.GraceDb()
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
 
 	try:
 		path = [row.value for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--gracedb-service-url"]
@@ -421,15 +436,7 @@ def svd_banks_from_event(gid, outdir = ".", save = True, verbose = False):
 
 	# Just get one of the template bank from any instrument,
 	# the templates should all have the same template_id because they are exact-matched.
-	sub_bank_id = None
-        for i, bank in enumerate(banks_dict.values()[0]):
-                for j, row in enumerate(bank.sngl_inspiral_table):
-                        if row.template_id == eventid_trigger_dict.values()[0].template_id:
-                                sub_bank_id = i
-                                row_number = j
-                                break
-                if sub_bank_id is not None:
-                        break
+	sub_bank_id, row_number = scan_svd_banks_for_row(coinc_xmldoc, banks_dict)
 
 	return banks_dict, sub_bank_id, row_number
 
