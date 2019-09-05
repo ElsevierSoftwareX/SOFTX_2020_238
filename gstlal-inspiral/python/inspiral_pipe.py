@@ -431,7 +431,7 @@ def expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_s
 
 		addnode = dagparts.DAGNode(jobs['ligolwAdd'], dag, parent_nodes=inj_snr_nodes,
 			input_files = {"": ' '.join(injection_files)},
-			output_files = {"output": inj.split(":")[-1]}
+			output_files = {"output": os.path.basename(inj.split(":")[-1])}
 		)
 
 		ligolw_add_nodes.append(dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [addnode],
