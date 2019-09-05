@@ -63,6 +63,6 @@ for url in urls:
 for row, snrs_group in enumerate(zip(*SNRs_dict.values())):
 	figure = plotsnr.plot_snr(dict(zip(SNRs_dict.keys(), zip(snrs_group))), width = options.width, center = options.center, span = options.span, verbose = options.verbose)
 	if len(zip(*SNRs_dict.values())) == 1:
-		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(SNRs_dict.keys()) + description + segment + suffix))
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + segment + suffix))
 	else:
-		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(SNRs_dict.keys()) + description + "-"+ str(row) + segment + suffix))
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + "-"+ str(row) + segment + suffix))
