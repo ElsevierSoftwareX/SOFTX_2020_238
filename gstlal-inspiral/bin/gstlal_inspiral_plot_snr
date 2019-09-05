@@ -29,15 +29,16 @@ def parse_command_line():
 		raise ValueError("Missing --input.")
 	if options.outdir is None:
 		raise ValueError("Missing --outdir.")
-	if options.format is not None:
-		if options.format != ".png" and options.format != ".svg":
-			raise ValueError("--format can only be '.png' or '.svg'.")
+	if options.center is not None and options.span is None:
+		raise ValueError("--span should also be provided if --center is provided.")
+	if options.span is not None and options.center is None:
+		raise ValueError("--center should also be provided if --span is provided.")
 
 	return options
 
 options = parse_command_line()
 
-suffix = ".svg" if (options.format is None) else options.format
+suffix = ".png" if (options.format is None) else options.format
 urls = []
 description = None
 segment = None
@@ -50,6 +51,10 @@ with open(options.input) as cache:
 			segment = "-" + str(entry.segment[0]) + "-" + str(entry.segment[1] - entry.segment[0])
 		else:
 			assert description + segment == entry.description + "-" + str(entry.segment[0]) + "-" + str(entry.segment[1] - entry.segment[0]), "Cannot plot snrs with different segments or for different template."
+
+# done checking file consistency, overwrite output name with customized segment
+if options.center and options.span:
+	segment = "-" + str(int(options.center - options.span)) + "-" + str(int(options.span * 2))
 
 SNRs_dict = {}
 for url in urls:
