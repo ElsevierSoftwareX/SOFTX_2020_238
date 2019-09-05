@@ -17,7 +17,7 @@ def parse_command_line():
 
 	parser.add_option("-o", "--outdir", metavar = "directory", help = "The output directory for the SNR plot (require).")
 	parser.add_option("-i", "--input", metavar = "cache", help = "The input cache containing SNR urls (require).")
-	parser.add_option("-f", "--format", metavar = "file_type", help = "The format of the output plot, can only be '.png' or '.svg' (default = .svg).")
+	parser.add_option("-f", "--format", metavar = "file_type", help = "The format of the output plot (default = .png).")
 	parser.add_option("--center", metavar = "gpsSeconds", type = "float", help = "Center the plot to --center (optional).")
 	parser.add_option("--width", metavar = "inch", default = 8, type = "int", help = "The output width of the figure.")
 	parser.add_option("--span", metavar = "seconds", type = "float", help = "The time span around --center (optional).")
