@@ -268,9 +268,9 @@ def parse_command_line():
         elif options.start >= options.end:
                 raise ValueError("--start must less than --end.")
         # Extra handle for SNRs output because SNRs are not stable initially and have padding at the end
-        # FIXME: the 650s is hardcoded (~BNS waveforms duration) and only used as a lower bound to avoid having a frame file that is too short
-        if options.start - gw_data_source_info.seg[0] <= 650 or gw_data_source_info.seg[1] - options.end <= 650:
-                raise ValueError("Check your inputted --start / --end or your frame file. You should have a long enough data such that, the --start/--end is larger/less than the start/end of your data at least 650s. ")
+        # FIXME: the 50s is hardcoded and only use to avoid snr being unstable due to edge effect when doing convoluion
+        if options.start - gw_data_source_info.seg[0] <= 50 or gw_data_source_info.seg[1] - options.end <= 50:
+                raise ValueError("Check your inputted --start / --end or your frame file. You should have a long enough data such that, the --start/--end is larger/less than the start/end of your data at least 50s. ")
 
 	# Setting up PSD
 	if options.reference_psd:
