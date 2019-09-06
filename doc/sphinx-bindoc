@@ -58,10 +58,13 @@ for prog in sorted(os.listdir(indir)):
 	# write the output of --help
 	f.write("%s\n%s\n\n" % ("Command line options", "".join(["-"] * len("Command line options"))))
 	f.write("\n\n.. code-block:: none\n\n")
-	proc = subprocess.Popen([path_to_prog, "--help"], stdout = subprocess.PIPE)
-	helpmessage = proc.communicate()[0]
-	helpmessage = "\n".join(["   %s" % l for l in helpmessage.split("\n")])
-	f.write(helpmessage)
+	try:
+		proc = subprocess.Popen([path_to_prog, "--help"], stdout = subprocess.PIPE)
+		helpmessage = proc.communicate()[0]
+		helpmessage = "\n".join(["   %s" % l for l in helpmessage.split("\n")])
+		f.write(helpmessage)
+	except OSError:
+		pass
 
 	# close the file
 	f.close()
