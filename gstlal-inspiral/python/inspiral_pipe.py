@@ -113,6 +113,7 @@ def ref_psd_layer(dag, jobs, parent_nodes, segsdict, channel_dict, options):
 
 	return psd_nodes
 
+
 def median_psd_layer(dag, jobs, parent_nodes, options, boundary_seg, instruments):
 	gpsmod5 = str(int(boundary_seg[0]))[:5]
 	median_psd_path = subdir_path([jobs['medianPSD'].output_path, gpsmod5])
@@ -120,21 +121,20 @@ def median_psd_layer(dag, jobs, parent_nodes, options, boundary_seg, instruments
 	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_nodes = []
 	for chunk, nodes in enumerate(dagparts.groups(parent_nodes.values(), 50)):
-		median_psd_node = \
-			dagparts.DAGNode(jobs['medianPSD'], dag,
-				parent_nodes = parent_nodes.values(),
-				input_files = {"": [node.output_files["write-psd"] for node in nodes]},
-				output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD_CHUNK_%04d" % chunk, boundary_seg, '.xml.gz', path = median_psd_path)}
-			)
+		median_psd_node = dagparts.DAGNode(jobs['medianPSD'], dag,
+			parent_nodes = parent_nodes.values(),
+			input_files = {"": [node.output_files["write-psd"] for node in nodes]},
+			output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD_CHUNK_%04d" % chunk, boundary_seg, '.xml.gz', path = median_psd_path)}
+		)
 		median_psd_nodes.append(median_psd_node)
 
-	median_psd_node = \
-		dagparts.DAGNode(jobs['medianPSD'], dag,
-			parent_nodes = median_psd_nodes,
-			input_files = {"": [node.output_files["output-name"] for node in median_psd_nodes]},
-			output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([jobs['medianPSD'].output_path, gpsmod5]))}
-		)
+	median_psd_node = dagparts.DAGNode(jobs['medianPSD'], dag,
+		parent_nodes = median_psd_nodes,
+		input_files = {"": [node.output_files["output-name"] for node in median_psd_nodes]},
+		output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD", boundary_seg, '.xml.gz', path = subdir_path([jobs['medianPSD'].output_path, gpsmod5]))}
+	)
 	return median_psd_node
+
 
 def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir, template_mchirp_dict):
 	svd_nodes = {}
@@ -1378,7 +1378,6 @@ def load_reference_psd(options):
 		output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(options.reference_psd)))
 
 	return ref_psd
-
 
 
 if __name__ == "__main__":
