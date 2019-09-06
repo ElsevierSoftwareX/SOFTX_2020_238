@@ -227,6 +227,7 @@ def set_up_jobs(options):
 	ref_psd_condor_opts['request_cpus'] = "2"
 
 	calc_rank_pdf_condor_opts = default_condor_opts.copy()
+	calc_rank_pdf_condor_opts['+MemoryUsage'] = "( 3000 ) * 2 / 3"
 	calc_rank_pdf_condor_opts['request_cpus'] = "4"
 
 	svd_condor_opts = default_condor_opts.copy()
