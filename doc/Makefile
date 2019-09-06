@@ -26,7 +26,7 @@ gstlal-bin :
 	sed -i "1s/bin/\`\`gstlal\`\`/" source/gstlal/bin/bin.rst
 
 gstlal-inspiral-bin :
-	./sphinx-bindoc source/gstlal-inspiral/bin ../gstlal-inspiral/bin gstlal_inspiral_flopulator gstlal_inspiral_lvalert_omegascan gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_daily_page_online gstlal_iir_inspiral gstlal_inspiral_iir_bank_pipe gstlal_ll_inspiral_save_state gstlal_inspiral_marginalize_likelihoods_online gstlal_inspiral_plot_extrinsic_params gstlal_ll_inspiral_get_urls gstlal_inspiral_plot_svd_bank gstlal_inspiral_lvalert_background_plotter 
+	./sphinx-bindoc source/gstlal-inspiral/bin ../gstlal-inspiral/bin gstlal_inspiral_flopulator gstlal_inspiral_lvalert_omegascan gstlal_ll_inspiral_calculate_range gstlal_ll_inspiral_daily_page_online gstlal_iir_inspiral gstlal_inspiral_iir_bank_pipe gstlal_ll_inspiral_save_state gstlal_inspiral_marginalize_likelihoods_online gstlal_inspiral_plot_extrinsic_params gstlal_ll_inspiral_get_urls gstlal_inspiral_plot_svd_bank gstlal_inspiral_lvalert_background_plotter gstlal_inspiral_add_p_of_ifos_given_horizon gstlal_inspiral_add_dt_dphi_snr_ratio_pdfs 
 	sed -i "1s/bin/\`\`gstlal-inspiral\`\`/" source/gstlal-inspiral/bin/bin.rst
 
 gstlal-calibration-bin :
