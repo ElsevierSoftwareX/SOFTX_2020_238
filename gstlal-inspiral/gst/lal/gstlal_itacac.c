@@ -963,7 +963,12 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// trigger window, thus we know there must be a gap sample after these, and can ditch them, though we 
 					// need to make sure we aren't flushing any samples from the next trigger window
 					g_assert(availablesamps > nongapsamps || itacacpad->EOS);
-					g_assert(itacacpad->samples_available_for_padding == 0);
+					// We must either be just starting up or have just come off a gap. In the former case, we'll be at the
+					// start of the trigger window and have no samples for padding from the previous trigger window; in
+					// the latter case, we'll either be at the start of the trigger window with some samples available for
+					// padding from the previous window or we'll be in the middle of the trigger window and have no
+					// samples available for padding
+					g_assert(itacacpad->samples_available_for_padding == 0 || samples_left_in_window == itacacpad->n);
 					outsamps = nongapsamps > samples_left_in_window ? samples_left_in_window : nongapsamps;
 					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 					samples_left_in_window -= outsamps;
