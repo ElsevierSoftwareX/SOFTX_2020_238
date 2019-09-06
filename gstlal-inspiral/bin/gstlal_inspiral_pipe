@@ -369,7 +369,12 @@ if __name__ == '__main__':
 		psd_nodes, ref_psd_parent_nodes = inspiral_pipe.inj_psd_layer(segsdict, options)
 		ref_psd = inspiral_pipe.load_reference_psd(options)
 
-	elif options.reference_psd is None:
+	elif options.reference_psd:
+		# load reference PSD
+		ref_psd = inspiral_pipe.load_reference_psd(options)
+		ref_psd_parent_nodes = []
+
+	else:
 		# Compute the PSDs for each segment
 		psd_nodes = inspiral_pipe.ref_psd_layer(dag, jobs, [], segsdict, channel_dict, options)
 
@@ -381,27 +386,22 @@ if __name__ == '__main__':
 		ref_psd = median_psd_node.output_files["output-name"]
 		ref_psd_parent_nodes = [median_psd_node]
 
-	else:
-		# load reference PSD
-		ref_psd = inspiral_pipe.load_reference_psd(options)
-		ref_psd_parent_nodes = []
-
 	# Calculate Expected SNR jobs
 	if not options.disable_calc_inj_snr:
 		ligolw_add_nodes = inspiral_pipe.expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_snr_jobs = 100)
 	else:
 		ligolw_add_nodes = []
 
-	if not options.injection_only:
+	if options.injection_only:
+		model_node = None
+		model_file = options.mass_model_file
+		svd_dtdphi_map, _ = inspiral_pipe.load_svd_dtdphi_map(options)
+	else:
 		# Compute SVD banks
 		svd_nodes, template_mchirp_dict, svd_dtdphi_map = inspiral_pipe.svd_layer(dag, jobs, ref_psd_parent_nodes, ref_psd, bank_cache, options, boundary_seg, output_dir, template_mchirp_dict)
 
 		# mass model
 		model_node, model_file = inspiral_pipe.mass_model_layer(dag, jobs, ref_psd_parent_nodes, instruments, options, boundary_seg, ref_psd)
-	else:
-		model_node = None
-		model_file = options.mass_model_file
-		svd_dtdphi_map, _ = inspiral_pipe.load_svd_dtdphi_map(options)
 
 	# Inspiral jobs by segment
 	inspiral_nodes, lloid_output, lloid_diststats = inspiral_pipe.inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)

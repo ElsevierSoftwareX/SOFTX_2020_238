@@ -91,9 +91,7 @@ def parse_command_line():
 	parser.add_option("--frame-segments-file", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load frame segments.  Optional iff --data-source=frames")
 	parser.add_option("--frame-segments-name", metavar = "name", help = "Set the name of the segments to extract from the segment tables.  Required iff --frame-segments-file is given")
 
-	# FIXME: uhhhhh... yeah
 	parser.add_option("--injections", action = "append", help = "append injection files to analyze. Must prepend filename with X:Y:, where X and Y are floats, e.g. 1.2:3.1:filename, so that the injections are only searched for in regions of the template bank with X <= chirp mass < Y.")
-
 	parser.add_option("--analysis-path", metavar = "path", help = "Set the path to the analysis you want to rerank.")
 
 	# caches
@@ -128,15 +126,6 @@ def parse_command_line():
 
 	if len(options.dtdphi_file) != len(options.bank_cache):
 		raise ValueError("You must provide as many dtdphi files as banks")
-
-	#missing_injection_options = []
-	#for option in ("dist_stats_cache", "svd_bank_cache", "psd_cache", "non_injection_db", "marginalized_likelihood_file", "marginalized_likelihood_with_zerolag_file"):
-	#	if getattr(options, option) is None:
-	#		missing_injection_options.append(option)
-	#if len(missing_injection_options) > 0 and len(missing_injection_options) < 6:
-	#	raise ValueError("missing injection-only options %s." % ", ".join([option for option in missing_injection_options]))
-	#if len(missing_injection_options) == 0 and options.num_banks:
-	#	raise ValueError("cant specify --num-banks in injection-only run")
 
 	#FIXME a hack to find the sql paths
 	share_path = os.path.split(dagparts.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')
