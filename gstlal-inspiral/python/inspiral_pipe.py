@@ -1077,6 +1077,7 @@ def load_svd_dtdphi_map(options):
 		for j, svd_caches in enumerate(list_of_svd_caches):
 			for i, individual_svd_cache in enumerate(ce.path for ce in map(CacheEntry, open(svd_caches))):
 				svd_dtdphi_map["%04d" % (i+bin_offset)] = options.dtdphi_file[j]
+			bin_offset += i+1
 
 	return svd_dtdphi_map, instrument_set
 
