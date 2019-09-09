@@ -338,6 +338,12 @@ def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m"
 		return roman(i, arabics[1:], romans[1:])
 	return romans[0] + roman(i - arabics[0], arabics, romans)
 
+def truncate(f, digits, si=True):
+	assert digits > 0, 'number of digits must be positive'
+	if si:
+		return float(('%10.' + str(digits) + 'e') % f)
+	else:
+		return float(('%10.' + str(digits) + 'f') % f)
 
 #
 # width is in mm, default aspect ratio is the golden ratio
@@ -643,12 +649,12 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 				# being out of sync.
 				#
 				continue
-			row = [rank] + [float(v) for v in values[:7]] + list(values[7:9])
+			row = [rank] + [truncate(float(v), 3) for v in values[:4]] + [truncate(float(values[4]), 6, si=False)] + [truncate(float(v), 3) for v in values[5:7]] + list(values[7:9])
 			# values[9] is a string that is e.g., H1:4.8993754:1.0139208:2.061641:1.145543 L1:8.2582664:1.1890973:2.061641:1.145543
 			ifodict = {"H1": [-1,-1,-1,-1,-1,-1], "L1": [-1,-1,-1,-1,-1,-1], "V1": [-1,-1,-1,-1,-1,-1]}
 			for ifo_row in values[9].split():
 				ifodata = ifo_row.split(":")
-				ifodict[ifodata[0]] = [float(v) for v in ifodata[1:]]
+				ifodict[ifodata[0]] = [truncate(float(v), 3) for v in ifodata[1:]]
 			row.extend(ifodict["H1"])
 			row.extend(ifodict["L1"])
 			row.extend(ifodict["V1"])
