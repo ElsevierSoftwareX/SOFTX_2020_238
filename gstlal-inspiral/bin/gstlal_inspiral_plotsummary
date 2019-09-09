@@ -836,18 +836,29 @@ FROM
 
 				fig, axes = create_plot(x_label, y_label)
 				legend = []
+				ifo_count_summary = {''.join(sorted(combo)): '---' for num_ifos in range(1, len(self.missed_found_plots.instruments)+1) for combo in sorted(list(itertools.combinations(self.missed_found_plots.instruments, num_ifos)), reverse=True)}
+				ifo_count_summary['missed'] = '---'
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 					if cnt == 0:
-						self.missed_found_plots.injection_summary_data.append(["Found", "".join(sorted(self.on_instruments)), "".join(sorted(participating_instruments)), len(sims)])
+						ifo_count_summary["".join(sorted(participating_instruments))] = len(sims)
 					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
 					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
 				if missed:
 					if cnt == 0:
-						self.missed_found_plots.injection_summary_data.append(["Missed", "".join(sorted(self.on_instruments)), "---", len(missed)])
+						ifo_count_summary["missed"] = len(missed)
 						for rank, sim in enumerate(missed):
 							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), float(sim.time_at_instrument("V1", {"V1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, self.on_instruments), sim.inclination, sim.alpha4, sim.alpha5, sim.alpha6, decisive_charsnr(sim, self.on_instruments)])
 					legend.append("Missed")
 					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
+				if cnt == 0:
+					total_count = 0
+					for ifos in ifo_count_summary.keys():
+						if ifo_count_summary[ifos] != '---':
+							total_count += ifo_count_summary[ifos]
+					ifo_count_summary['total'] = total_count
+					ifo_columns = sorted([key for key in ifo_count_summary.keys() if 'missed' not in key and 'total' not in key], key=lambda item: (-len(item), item)) + ['missed', 'total']
+					missed_found_row = ["".join(sorted(self.on_instruments))] + [ifo_count_summary[ifo_col] for ifo_col in ifo_columns]
+					self.missed_found_plots.injection_summary_data.append(missed_found_row)
 
 
 				if legend:
@@ -886,6 +897,7 @@ FROM
 		self.remove_precession = remove_precession
 		self.isolate_precession = isolate_precession
 		self.snr_segments = snr_segments
+		self.instruments = set()
 
 	def add_contents(self, contents):
 		self.base = contents.base
@@ -893,16 +905,21 @@ FROM
 			# no injections
 			return
 		for on_instruments in contents.on_instruments_combos:
+			self.instruments.update(on_instruments)
+		for on_instruments in contents.on_instruments_combos:
 			if on_instruments not in self.plots:
 				self.plots[on_instruments] = self.MissedFound(on_instruments, self.far_thresh, self, self.remove_precession, self.isolate_precession, self.snr_segments)
 			self.plots[on_instruments].add_contents(contents)
 
 	def finish(self):
-		for on_instruments, plot in self.plots.items():
+		for on_instruments in sorted(self.plots.keys(), key=lambda item: (-len(item), item)):
+			plot = self.plots[on_instruments]
 			for fig, filename_fragment, is_open_box in plot.finish():
 				yield fig, "%s_%s" % (filename_fragment, "".join(sorted(on_instruments))), is_open_box
 
-		save_table(self.base + "_injection_summary.json", ["Found || Missed", "On Instruments", "Participating IFOs", "count"], self.injection_summary_data)
+		ifo_columns = [''.join(sorted(combo)) for num_ifos in range(1, len(self.instruments)+1) for combo in sorted(list(itertools.combinations(self.instruments, num_ifos)), reverse=True)]
+		ifo_columns.sort(key=lambda item: (-len(item), item))
+		save_table(self.base + "_injection_summary.json", ["On Instruments"] + ifo_columns + ['Missed', 'Total'], self.injection_summary_data)
 		save_table(self.base + "_missed_summary.json", ["On Instruments", "Waveform", "H1 time", "L1 time", "V1 time", "m1", "m2", "S_1x", "S_1y", "S_1z", "S_2x", "S_2y", "S_2z", "D (Mpc)", "Decisive D chirp,eff (Mpc)" , "Inclination", "H1 SNR", "L1 SNR", "V1 SNR", "Decisive SNR"], self.missed_summary_data)
 
 
