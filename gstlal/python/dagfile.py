@@ -914,8 +914,8 @@ class DAG(object):
 
 	def dot_source(self, title = "DAG", rename = False, colour = "black", bgcolour = "#a3a3a3", statecolours = {'wait': 'yellow', 'idle': 'yellow', 'run': 'lightblue', 'abort': 'red', 'stop': 'red', 'success': 'green', 'fail': 'red'}):
 		"""
-		Return a string containing DOT code to generate a
-		visualization of the DAG graph.  See
+		Generator yielding a sequence of strings containing DOT
+		code to generate a visualization of the DAG graph.  See
 		http://www.graphviz.org for more information.
 
 		title provides a title for the graph.  If rename is True,
@@ -934,7 +934,8 @@ class DAG(object):
 
 		Example:
 
-		>>> print(dag.dot_source(statecolours = None))
+		>>> import sys
+		>>> sys.stdout.writelines(dag.dot_source(statecolours = None))
 
 		BUGS:  the JOB class does not implement the ability to
 		retrieve the job state at this time, therefore it is always
@@ -950,14 +951,12 @@ class DAG(object):
 
 		# generate dot code
 
-		code = 'digraph "%s" {\nnode [color="%s", href="\\N"];\ngraph [bgcolor="%s"];\n' % (title, colour, bgcolour)
+		yield 'digraph "%s" {\nnode [color="%s", href="\\N"];\ngraph [bgcolor="%s"];\n' % (title, colour, bgcolour)
 		for node in self.nodes.values():
 			if statecolours is not None:
-				code += '"%s"[color="%s"];\n' % (namemap[node.name], statecolours[node.state])
+				yield '"%s"[color="%s"];\n' % (namemap[node.name], statecolours[node.state])
 			for child in node.children:
-				code += '"%s" -> "%s";\n' % (namemap[node.name], namemap[child.name])
-		code += '}\n'
+				yield '"%s" -> "%s";\n' % (namemap[node.name], namemap[child.name])
+		yield '}\n'
 
 		# done
-
-		return code
