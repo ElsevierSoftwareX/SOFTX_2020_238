@@ -659,7 +659,7 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 	return margnodes
 
 
-def calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set):
+def calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set, with_zero_lag = False):
 	rankpdf_nodes = []
 	rankpdf_zerolag_nodes = []
 	instruments = "".join(sorted(instrument_set))
@@ -674,16 +674,16 @@ def calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument
 			input_files = {"": marg_nodes[bin_key].output_files["output"]},
 			output_files = {"output": rankfile('CALC_RANK_PDFS', job=jobs['calcRankPDFs'])},
 		)
-
-		calcrankzerolagnode = dagparts.DAGNode(jobs['calcRankPDFsWithZerolag'], dag,
-			parent_nodes = [marg_nodes[bin_key]],
-			opts = {"add-zerolag-to-background": "", "ranking-stat-samples": options.ranking_stat_samples},
-			input_files = {"": marg_nodes[bin_key].output_files["output"]},
-			output_files = {"output": rankfile('CALC_RANK_PDFS_WZL', job=jobs['calcRankPDFsWithZerolag'])},
-		)
-
 		rankpdf_nodes.append(calcranknode)
-		rankpdf_zerolag_nodes.append(calcrankzerolagnode)
+
+		if with_zero_lag:
+			calcrankzerolagnode = dagparts.DAGNode(jobs['calcRankPDFsWithZerolag'], dag,
+				parent_nodes = [marg_nodes[bin_key]],
+				opts = {"add-zerolag-to-background": "", "ranking-stat-samples": options.ranking_stat_samples},
+				input_files = {"": marg_nodes[bin_key].output_files["output"]},
+				output_files = {"output": rankfile('CALC_RANK_PDFS_WZL', job=jobs['calcRankPDFsWithZerolag'])},
+			)
+			rankpdf_zerolag_nodes.append(calcrankzerolagnode)
 
 	return rankpdf_nodes, rankpdf_zerolag_nodes
 
@@ -722,7 +722,7 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 	return likelihood_nodes
 
 
-def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, options, boundary_seg, instruments):
+def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, options, boundary_seg, instruments, with_zero_lag = False):
 	num_chunks = 100
 	innodes = {}
 
@@ -822,11 +822,13 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 		noninjdb = dagparts.T050017_filename(instruments, 'ALL_LLOID', boundary_seg, '.sqlite')
 		noninjsqlitenode = merge_cluster_layer(dag, jobs, final_nodes, noninjdb, input_cache_files, options.cluster_sql_file, input_files=input_files)
 
-		cpnode = dagparts.DAGNode(jobs['cp'], dag, parent_nodes = [noninjsqlitenode],
-			input_files = {"":"%s %s" % (noninjdb, noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
-		)
-
-		outnodes.append(cpnode)
+		if with_zero_lag:
+			cpnode = dagparts.DAGNode(jobs['cp'], dag, parent_nodes = [noninjsqlitenode],
+				input_files = {"":"%s %s" % (noninjdb, noninjdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
+			)
+			outnodes.append(cpnode)
+		else:
+			outnodes.append(noninjsqlitenode)
 
 	if options.injections:
 		iterable_injections = options.injections
@@ -894,21 +896,25 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 			input_files = {"":xml_input}
 		)
 
-		cpnode = dagparts.DAGNode(jobs['cp'], dag, parent_nodes = [sqlitenode],
-			input_files = {"":"%s %s" % (injdb, injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
-		)
-
-		outnodes.append(cpnode)
+		if with_zero_lag:
+			cpnode = dagparts.DAGNode(jobs['cp'], dag, parent_nodes = [sqlitenode],
+				input_files = {"":"%s %s" % (injdb, injdb.replace('ALL_LLOID', 'ALL_LLOID_WZL'))}
+			)
+			outnodes.append(cpnode)
+		else:
+			outnodes.append(sqlitenode)
 
 	return injdbs, noninjdb, outnodes, dbs_to_delete
 
 
-def final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, options):
+def final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, options, with_zero_lag = False):
 	ranknodes = [rankpdf_nodes, rankpdf_zerolag_nodes]
 	margjobs = [jobs['marginalize'], jobs['marginalizeWithZerolag']]
 	margfiles = [options.marginalized_likelihood_file, options.marginalized_likelihood_file]
-	filesuffixs = ['', '_with_zerolag']
-
+	if with_zero_lag:
+		filesuffixs = ['', '_with_zerolag']
+	else:
+		filesuffixs = ['']
 	margnum = 16
 	all_margcache = []
 	all_margnodes = []
@@ -952,11 +958,14 @@ def final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, opt
 	return final_margnodes, dagparts.flatten(all_margcache)
 
 
-def compute_far_layer(dag, jobs, margnodes, injdbs, noninjdb, final_sqlite_nodes, options):
+def compute_far_layer(dag, jobs, margnodes, injdbs, noninjdb, final_sqlite_nodes, options, with_zero_lag = False):
 	"""compute FAPs and FARs
 	"""
 	margfiles = [options.marginalized_likelihood_file, options.marginalized_likelihood_file]
-	filesuffixs = ['', '_with_zerolag']
+	if with_zero_lag:
+		filesuffixs = ['', '_with_zerolag']
+	else:
+		filesuffixs = ['']
 	if options.marginalized_likelihood_file: ### injection-only run
 		assert not margnodes, "no marg nodes should be produced in an injection-only DAG"
 		margnodes = [None, None]
