@@ -73,6 +73,7 @@ the DAG object.
 
 
 import copy
+import itertools
 import re
 
 
@@ -861,8 +862,6 @@ class DAG(object):
 		# initialize proegress report wrapper
 		progress = progress_wrapper(f, progress)
 
-		counter = 0
-
 		# if needed, create a dummy object to allow .write() method
 		# calls
 		if f is None and rescue is not None:
@@ -926,13 +925,7 @@ class DAG(object):
 			parents_of.setdefault(frozenset(child.name for child in node.children) & names, set()).add(node.name)
 		for children, parents in parents_of.items():
 			if children:
-				if len(parents) * len(children) > 25:
-					counter += 1
-					f.write("JOB NOOP_NODE%s noop.submit NOOP\n" % str(counter))
-					f.write("PARENT %s CHILD NOOP_NODE%s\n" % (" ".join(sorted(parents)), str(counter)))
-					f.write("PARENT NOOP_NODE%s CHILD %s\n" % (str(counter), " ".join(sorted(children))))
-				else:
-					f.write("PARENT %s CHILD %s\n" % (" ".join(sorted(parents)), " ".join(sorted(children))))
+				f.write("PARENT %s CHILD %s\n" % (" ".join(sorted(parents)), " ".join(sorted(children))))
 				progress += 1
 
 		# progress
@@ -986,3 +979,53 @@ class DAG(object):
 		yield '}\n'
 
 		# done
+
+
+def optimize(dag):
+	# validate graph edges
+	dag.check_edges()
+
+	# generate no-op jobs
+	def noopgen(dag, submit_filename):
+		used = frozenset(name for name in dag.nodes if name.startswith("NOOP"))
+		for i in itertools.count():
+			name = "NOOP%d" % i
+			if name in used:
+				continue
+			noop = JOB(
+				name = name,
+				filename = submit_filename,
+				noop = True
+			)
+			dag.nodes[noop.name] = noop
+			yield noop
+	noops = iter(noopgen(dag, "noop.submit"))
+
+	# visit each node, construct a set of each node's children, and
+	# construct a look-up table mapping each unique such set to the set
+	# of parents possessing that set of children.  these are the
+	# many-to-many parent-child relationships that become PARENT ...
+	# CHILD ... lines in the .dag.  internally dagman represents each
+	# of these as a collection of parents*children objects (graph
+	# edges), so what is one line of text in the .dag file requires a
+	# quadratically large amount of ram in dagman.
+	parents_of = {}
+	for name, node in dag.nodes.items():
+		parents_of.setdefault(frozenset(node.children), set()).add(node)
+
+	# to work-around this scaling problem we insert no-op jobs bewteen
+	# the parents and children to replace the n*m edges with n+m edges
+	# plus one new node.
+	for children, parents in parents_of.items():
+		if len(parents) < 3 or len(children) < 3 or len(parents) * len(children) < 25:
+			# below this number of edges we don't bother
+			continue
+		noop = noops.next()
+		noop.parents |= parents
+		noop.children |= children
+		for node in parents:
+			node.children.clear()
+			node.children.add(noop)
+		for node in children:
+			node.parents.clear()
+			node.parents.add(noop)
