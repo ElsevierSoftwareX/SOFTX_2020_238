@@ -72,6 +72,7 @@ the DAG object.
 #
 
 
+import copy
 import re
 
 
@@ -385,30 +386,61 @@ class DAG(object):
 	# methods
 	#
 
-	def __init__(self):
-		# node name --> JOB object mapping
-		self.nodes = {}
-		# category name --> integer max jobs value mapping.  all
-		# categories are listed, that is it is an error for a JOB
-		# in the DAG to claim to be in a category that cannot be
-		# found in this dictionary.  categories that don't have a
-		# MAXJOBS set for them use None as their max jobs value in
-		# this dictionary.
-		self.maxjobs = {}
-		# filename or None
-		self.config = None
-		# filename or None
-		self.dot = None
-		# booleans, defaults match Condor's
-		self.dotupdate = False
-		self.dotoverwrite = True
-		# filename or None
-		self.dotinclude = None
-		# filename and update time or None
-		self.node_status_file = None
-		self.node_status_file_updatetime = None
-		# filename or None
-		self.jobstate_log = None
+	def __init__(self, *args, nodes = {}, maxjobs = {}, config = None, dot = None, dotupdate = False, dotoverwrite = True, dotinclude = None, node_status_file = None, node_status_file_updatetime = None, jobstate_log = None):
+		"""
+		nodes:
+			name --> JOB object mapping
+		maxjobs:
+			category name --> integer max jobs value mapping.  all
+			categories are listed, that is it is an error for a JOB
+			in the DAG to claim to be in a category that cannot be
+			found in this dictionary.  categories that don't have a
+			MAXJOBS set for them use None as their max jobs value
+			in this dictionary.
+		config:
+			filename or None
+		dot:
+			filename or None
+		dotupdate:
+		dotoverwrite:
+			booleans, defaults match Condor's
+		dotinclude:
+			filename or None
+		node_status_file:
+		node_status_file_updatetime:
+			filename and update time or None for both
+		jobstate_log:
+			filename or None
+		"""
+		if not args:
+			self.nodes = nodes
+			self.maxjobs = maxjobs
+			self.config = config
+			self.dot = dot
+			self.dotupdate = dotupdate
+			self.dotoverwrite = dotoverwrite
+			self.dotinclude = dotinclude
+			self.node_status_file = node_status_file
+			self.node_status_file_updatetime = node_status_file_updatetime
+			self.jobstate_log = jobstate_log
+		elif len(args) == 1:
+			# initialize ourselves from another DAG(-like)
+			# object
+			dag, = args
+			# FIXME:  maybe the JOB class can be taught to
+			# duplicate itself
+			self.nodes = dict((name, copy.copy(node)) for name, node in dag.nodes.items())
+			self.maxjobs = dict(dag.maxjobs)
+			self.config = dag.config
+			self.dot = dag.dot
+			self.dotupdate = dag.dotupdate
+			self.dotoverwrite = dag.dotoverwrite
+			self.dotinclude = dag.dotinclude
+			self.node_status_file = dag.node_status_file
+			self.node_status_file_updatetime = dag.node_status_file_updatetime
+			self.jobstate_log = dag.jobstate_log
+		else:
+			raise ValueError("invalid arguments")
 
 	def reindex(self):
 		"""
@@ -649,17 +681,9 @@ class DAG(object):
 		>>> import copy
 		>>> dag = copy.deepcopy(DAG.select_nodes_by_name(dag, names_to_rerun | dag.get_all_parent_names(names_to_rerun)))
 		"""
-		self = cls()
+		self = cls(dag)
 		self.nodes = dict((name, node) for name, node in dag.nodes.items() if name in nodenames)
 		self.maxjobs = dict((category, dag.maxjobs[category]) for category in set(node.category for node in self.nodes.values() if node.category is not None))
-		self.config = dag.config
-		self.node_status_file = dag.node_status_file
-		self.node_status_file_updatetime = dag.node_status_file_updatetime
-		self.jobstate_log = dag.jobstate_log
-		self.dot = dag.dot
-		self.dotupdate = dag.dotupdate
-		self.dotoverwrite = dag.dotoverwrite
-		self.dotinclude = dag.dotinclude
 		return self
 
 	def get_all_parent_names(self, names):
