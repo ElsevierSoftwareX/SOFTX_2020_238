@@ -612,9 +612,11 @@ class DAG(object):
 		# progress
 		del progress
 		# populate parent and child sets
+		getnode = self.nodes.__getitem__
+		arcs = (getnode(parent), getnode(child) for parent, child in arcs)
 		for parent, child in arcs:
-			self.nodes[parent].children.add(self.nodes[child])
-			self.nodes[child].parents.add(self.nodes[parent])
+			parent.children.add(child)
+			child.parents.add(parent)
 		# make sure all categories are known
 		for node in self.nodes.values():
 			if node.category is not None and node.category not in self.maxjobs:
