@@ -28,7 +28,6 @@ Build-Depends:
  pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
- python-glue-ligolw-tools,
  python-numpy (>= @MIN_NUMPY_VERSION@)
 
 Package: gstlal-ugly
