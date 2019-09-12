@@ -24,7 +24,6 @@ Build-Depends:
  pkg-config (>= 0.18.0),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
- python-glue-ligolw-tools,
  python-gobject-dev,
  python-lal (>= @MIN_LAL_VERSION@),
  python-lalinspiral (>= @MIN_LALINSPIRAL_VERSION@)
