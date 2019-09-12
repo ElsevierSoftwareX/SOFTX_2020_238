@@ -367,7 +367,7 @@ pages:
   stage: nightly-pages
   script:
     - echo "Building Documentation"
-    - yum -y install python2-pip texlive*
+    - yum -y install python2-pip texlive* graphviz python-matplotlib
     - pip install setuptools sphinx==1.7 sphinx_rtd_theme
     - export GSTLAL_FIR_WHITEN=0
     - export TMPDIR=tmp/ 
