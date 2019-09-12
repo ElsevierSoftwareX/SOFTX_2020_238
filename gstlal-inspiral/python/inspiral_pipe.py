@@ -593,7 +593,7 @@ def merge_cluster_layer(dag, jobs, parent_nodes, db, db_cache, sqlfile, input_fi
 	)
 
 
-def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, ref_psd, svd_dtdphi_map):
+def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, ref_psd, svd_dtdphi_map, idq_file = None):
 	instruments = "".join(sorted(instrument_set))
 	margnodes = {}
 
@@ -626,6 +626,14 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 		# FIXME we keep this here in case we someday want to have a
 		# mass bin dependent prior, but it really doesn't matter for
 		# the time being.
+		prior_input_files = {
+			"svd-file": svd_file,
+			"mass-model-file": model_file,
+			"dtdphi-file": svd_dtdphi_map[bin_key],
+			"psd-xml": ref_psd
+		}
+		if idq_file is not None:
+			prior_input_files["idq-file"] = idq_file
 		priornode = dagparts.DAGNode(jobs['createPriorDistStats'], dag,
 			parent_nodes = parent_nodes,
 			opts = {
@@ -635,12 +643,7 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 				"coincidence-threshold":options.coincidence_threshold,
 				"df": "bandwidth"
 			},
-			input_files = {
-				"svd-file": svd_file,
-				"mass-model-file": model_file,
-				"dtdphi-file": svd_dtdphi_map[bin_key],
-				"psd-xml": ref_psd
-			},
+			input_files = prior_input_files,
 			output_files = {"write-likelihood": rankfile('CREATE_PRIOR_DIST_STATS', job=jobs['createPriorDistStats'])}
 		)
 		# Create a file that has the priors *and* all of the diststats
