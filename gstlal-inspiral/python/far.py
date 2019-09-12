@@ -132,8 +132,8 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	# network SNR threshold
 	network_snrsq_threshold = 49.0
 
-	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), population_model_file = None, dtdphi_file = None, min_instruments = 1, delta_t = 0.005, horizon_factors = None):
-		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, population_model_file = population_model_file, dtdphi_file = dtdphi_file, min_instruments = min_instruments, horizon_factors = horizon_factors)
+	def __init__(self, template_ids = None, instruments = frozenset(("H1", "L1", "V1")), population_model_file = None, dtdphi_file = None, min_instruments = 1, delta_t = 0.005, horizon_factors = None, idq_file = None):
+		self.numerator = inspiral_lr.LnSignalDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, population_model_file = population_model_file, dtdphi_file = dtdphi_file, min_instruments = min_instruments, horizon_factors = horizon_factors, idq_file = idq_file)
 		self.denominator = inspiral_lr.LnNoiseDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 		self.zerolag = inspiral_lr.LnLRDensity(template_ids = template_ids, instruments = instruments, delta_t = delta_t, min_instruments = min_instruments)
 
@@ -211,8 +211,16 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		return self.numerator.population_model_file
 
 	@property
-	def dtdphi_file(self, **kwargs):
+	def dtdphi_file(self):
 		return self.numerator.dtdphi_file
+
+	@property
+	def idq_file(self):
+		return self.numerator.idq_file
+
+	@property
+	def horizon_factors(self):
+		return self.numerator.horizon_factors
 
 	@property
 	def segmentlists(self):
@@ -403,6 +411,7 @@ class DatalessRankingStat(RankingStat):
 		self.numerator = inspiral_lr.DatalessLnSignalDensity(*args, **kwargs)
 		kwargs.pop("population_model_file", None)
 		kwargs.pop("dtdphi_file", None)
+		kwargs.pop("idq_file", None)
 		self.denominator = inspiral_lr.DatalessLnNoiseDensity(*args, **kwargs)
 
 	def finish(self):

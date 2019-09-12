@@ -82,6 +82,7 @@ def parse_command_line():
 	parser.add_option("--svd-file", metavar = "filename", help = "The SVD file to read the template ids from")
 	parser.add_option("--mass-model-file", metavar = "filename", help = "The mass model file to read from (hdf5 format)")
 	parser.add_option("--dtdphi-file", metavar = "filename", help = "dtdphi snr ratio pdfs to read from (hdf5 format). Default passed by gstlal_inspiral_pipe, but not when run as a standalone program.")
+	parser.add_option("--idq-file", metavar = "filename", help = "idq glitch file (hdf5 format)")
 	parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required if df is bandwidth")
 	options, filenames = parser.parse_args()
 
@@ -157,7 +158,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_create_pri
 #
 
 
-rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, population_model_file = options.mass_model_file, dtdphi_file = options.dtdphi_file, horizon_factors = horizon_factors)
+rankingstat = far.RankingStat(template_ids = template_ids, instruments = options.instrument, delta_t = options.coincidence_threshold, min_instruments = options.min_instruments, population_model_file = options.mass_model_file, dtdphi_file = options.dtdphi_file, horizon_factors = horizon_factors, idq_file = options.idq_file)
 
 if options.background_prior > 0:
 	rankingstat.denominator.add_noise_model(number_of_events = options.background_prior)

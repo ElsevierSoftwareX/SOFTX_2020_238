@@ -80,6 +80,24 @@ __all__ = [
 TYPICAL_HORIZON_DISTANCE = 150.
 
 
+# utility function to make an idq interpolator from an h5 file
+def idq_interp(idq_file):
+	# set a default function to simply return 0
+	out = {}
+	for ifo in ("H1", "L1", "V1", "K1"):
+		out[ifo] = lambda x: numpy.zeros(len(x))
+	if idq_file is not None:
+		import h5py
+		from scipy.interpolate import interp1d
+		f = h5py.File(idq_file, "r")
+		for ifo in f:
+			# Pad the boundaries - FIXME remove
+			t = [0.] + list(numpy.array(f[ifo]["time"])) + [2000000000.]
+			d = [0.] + list(numpy.array(f[  ifo]["data"])) + [0.]
+			out[ifo] = interp1d(t, d)
+	return out
+
+
 #
 # =============================================================================
 #
@@ -292,9 +310,10 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 class LnSignalDensity(LnLRDensity):
 	def __init__(self, *args, **kwargs):
-		population_model_file = kwargs.pop("population_model_file", None)
-		dtdphi_file = kwargs.pop("dtdphi_file", None)
+		self.population_model_file = kwargs.pop("population_model_file", None)
+		self.dtdphi_file = kwargs.pop("dtdphi_file", None)
 		self.horizon_factors = kwargs.pop("horizon_factors", None)
+		self.idq_file = kwargs.pop("idq_file", None)
 		super(LnSignalDensity, self).__init__(*args, **kwargs)
 		# install SNR, chi^2 PDF (one for all instruments)
 		self.densities = {
@@ -304,13 +323,14 @@ class LnSignalDensity(LnLRDensity):
 		# record of horizon distances for all instruments in the
 		# network
 		self.horizon_history = horizonhistory.HorizonHistories((instrument, horizonhistory.NearestLeafTree()) for instrument in self.instruments)
-		self.population_model_file = population_model_file
-		self.dtdphi_file = dtdphi_file
 		# source population model
 		# FIXME:  introduce a mechanism for selecting the file
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 		if self.dtdphi_file is not None:
 			self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments, self.dtdphi_file)
+
+		# initialize an IDQ likelihood of glitch interpolator
+		self.idq_glitch_lnl = idq_interp(self.idq_file)
 
 	def set_horizon_factors(self, horizon_factors):
 		self.horizon_factors = horizon_factors
@@ -374,6 +394,14 @@ class LnSignalDensity(LnLRDensity):
 		# evalute the (snr, \chi^2 | snr) PDFs (same for all
 		# instruments)
 		interp = self.interps["snr_chi"]
+
+		# Evaluate the IDQ glitch probability # FIXME put in denominator
+		for ifo, seg in segments.items():
+			# FIXME don't just use the last segment, somehow include whole template duration?
+			t = float(seg[1])
+			# NOTE choose max over +-1 seconds because the sampling is only at 1 Hz.
+			lnP -= max(self.idq_glitch_lnl[ifo]([t-1., t, t+1.]))
+
 		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def __iadd__(self, other):
@@ -387,6 +415,10 @@ class LnSignalDensity(LnLRDensity):
 			raise ValueError("incompatible dtdphi files")
 		if self.dtdphi_file is None and other.dtdphi_file is not None:
 			self.dtdphi_file = other.dtdphi_file
+		if self.idq_file is not None and other.idq_file is not None and other.idq_file != self.idq_file:
+			raise ValueError("incompatible idq files")
+		if self.idq_file is None and other.idq_file is not None:
+			self.idq_file = other.idq_file
 		if self.horizon_factors is not None and other.horizon_factors is not None and other.horizon_factors != self.horizon_factors:
 			# require that the horizon factors be the same within 1%
 			for k in self.horizon_factors:
@@ -405,10 +437,12 @@ class LnSignalDensity(LnLRDensity):
 		new.horizon_history = self.horizon_history.copy()
 		new.population_model_file = self.population_model_file
 		new.dtdphi_file = self.dtdphi_file
+		new.idq_file = self.idq_file
 		# okay to use references because read-only data
 		new.population_model = self.population_model
 		new.InspiralExtrinsics = self.InspiralExtrinsics
 		new.horizon_factors = self.horizon_factors
+		new.idq_glitch_lnl = self.idq_glitch_lnl
 		return new
 
 	def local_mean_horizon_distance(self, gps, window = segments.segment(-32., +2.)):
@@ -554,6 +588,7 @@ class LnSignalDensity(LnLRDensity):
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"population_model_file", self.population_model_file))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"horizon_factors", json.dumps(self.horizon_factors) if self.horizon_factors is not None else None))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"dtdphi_file", self.dtdphi_file))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"idq_file", self.idq_file))
 		return xml
 
 	@classmethod
@@ -563,6 +598,12 @@ class LnSignalDensity(LnLRDensity):
 		self.horizon_history = horizonhistory.HorizonHistories.from_xml(xml, u"horizon_history")
 		self.population_model_file = ligolw_param.get_pyvalue(xml, u"population_model_file")
 		self.dtdphi_file = ligolw_param.get_pyvalue(xml, u"dtdphi_file")
+		# FIXME this should be removed once there are not legacy files
+		try:
+			self.idq_file = ligolw_param.get_pyvalue(xml, u"idq_file")
+		except ValueError as e:
+			print >> sys.stderr, "idq file not found", e
+			self.idq_file = None
 		self.horizon_factors = ligolw_param.get_pyvalue(xml, u"horizon_factors")
 		if self.horizon_factors is not None:
 			# FIXME, how do we properly decode the json, I assume something in ligolw can do this?
@@ -573,6 +614,7 @@ class LnSignalDensity(LnLRDensity):
 		self.population_model = inspiral_intrinsics.SourcePopulationModel(self.template_ids, filename = self.population_model_file)
 		if self.dtdphi_file is not None:
 			self.InspiralExtrinsics = inspiral_extrinsics.InspiralExtrinsics(self.min_instruments, self.dtdphi_file)
+		self.idq_glitch_lnl = idq_interp(self.idq_file)
 		return self
 
 
