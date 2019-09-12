@@ -89,6 +89,9 @@ def parse_command_line():
 	# dtdphi option
 	parser.add_option("--dtdphi-file", metavar = "filename", action = "append", help = "dtdphi snr ratio pdfs to read from (hdf5 format)")
 
+	# idq option
+	parser.add_option("--idq-file", metavar = "filename", action = "append", help = "idq glitch file (hdf5 format)")
+
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", action = "append", help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
@@ -407,7 +410,7 @@ if __name__ == '__main__':
 	inspiral_nodes, lloid_output, lloid_diststats = inspiral_pipe.inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict)
 
 	# marginalize jobs
-	marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, ref_psd, svd_dtdphi_map)
+	marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, ref_psd, svd_dtdphi_map, options.idq_file)
 
 	# calc rank PDF jobs
 	rankpdf_nodes, rankpdf_zerolag_nodes = inspiral_pipe.calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set)
