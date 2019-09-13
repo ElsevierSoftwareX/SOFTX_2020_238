@@ -1,0 +1,164 @@
+### configuration file for monitoring
+
+#--------------------------------------------------------------
+### navbar configuration
+
+navbar:
+  title: GstLAL Calibration Monitoring
+  image: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/static/gstlal.png
+  pages:
+    - index
+    - L1
+
+  tabs:
+    - name: Docs
+      url: https://lscsoft.docs.ligo.org/gstlal
+    - name: Git
+      url: https://git.ligo.org/lscsoft/gstlal
+
+
+#--------------------------------------------------------------
+### page configuration
+
+pages:
+  index:
+    title: H1
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: H1_latency_timeseries
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: H1_statevector
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+  L1:
+    title: L1
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: L1_latency_timeseries
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: L1_statevector
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+
+#--------------------------------------------------------------
+### schema configuration
+
+schemas:
+  H1_latency:
+    measurement: H1_latency
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  L1_latency:
+    measurement: L1_latency
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  H1_statevector_bit_check:
+    measurement: H1_statevector_bit_check
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  L1_statevector_bit_check:
+    measurement: L1_statevector_bit_check
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+
+#--------------------------------------------------------------
+### plot configuration
+
+plots:
+  H1_latency_timeseries:
+    title: Latency at various stages for H1 h(t) data production
+    type: TimeSeries
+    schema: H1_latency
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  L1_latency_timeseries:
+    title: Latency at various stages for L1 h(t) data production
+    type: TimeSeries
+    schema: L1_latency
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  # state vector checks
+  H1_statevector:
+    title: 'H1 state vector check'
+    type: TimeSeries
+    schema: H1_statevector_bit_check
+
+  L1_statevector:
+    title: 'L1 state vector check'
+    type: TimeSeries
+    schema: L1_statevector_bit_check
+
+
+#--------------------------------------------------------------
+### default plot settings
+
+plotly:
+  default:
+    layout:
+      font:
+        family: "'Nunito', sans-serif"
+        size: 12
+        color: '#666'
+      plot_bgcolor: 'rgba(0,0,0,0)'
+      paper_bgcolor: 'rgba(0,0,0,0)'
+
+  TimeSeries:
+    layout:
+      margin: {l: 60, r: 0, t: 10, b: 20}
+
+
+#--------------------------------------------------------------
+### data backend configuration
+
+backends:
+  default:
+    backend: influxdb
+    db: gstlal_calibration
+    hostname: influxdb.ligo.caltech.edu
+    port: 8086
