@@ -5,6 +5,7 @@ plugin_LTLIBRARIES = lib@GSTPLUGINPREFIX@gstlalugly.la
 lib@GSTPLUGINPREFIX@gstlalugly_la_SOURCES = \
 	gstlalugly.c \
 	audioratefaker.h audioratefaker.c \
+	gstlal_aggregator.h gstlal_aggregator.c \
 	gstlal_bitvectorgen.h gstlal_bitvectorgen.c \
 	gstlaldeglitchfilter.h gstlaldeglitchfilter.c \
 	gstlal_iirbank.h gstlal_iirbank.c \
