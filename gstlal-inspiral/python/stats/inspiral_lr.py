@@ -857,7 +857,9 @@ class LnNoiseDensity(LnLRDensity):
 
 		prcoss = numpy.ones(len(rcoss))
 		# This adds a faint power law that falls off faster than GWs
-		psnr = snr**-12
+		# but not exponential (to avoid numerical errors). It has
+		# approximately the same value at SNR 8 as does exp(-8**2 / 2.)
+		psnr = snr**-15
 		psnr = numpy.outer(psnr, numpy.ones(len(rcoss)))
 		arr[snrindices, rcossindices] = psnr
 
