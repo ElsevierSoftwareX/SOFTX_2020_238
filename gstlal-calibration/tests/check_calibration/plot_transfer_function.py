@@ -213,12 +213,19 @@ if options.denominator_correction is not None:
 			after = corr[1][after_idx] + 1j * corr[2][after_idx]
 			before_weight = after_idx - cadence * index
 			after_weight = cadence * index - before_idx
+			if("PCALX" in options.denominator_channel_name):
+				denom_corr.append(-1.0 * (before_weight * before + after_weight * after))
+			else:
+				denom_corr.append(before_weight * before + after_weight * after)
 			denom_corr.append(before_weight * before + after_weight * after)
 			index += 1
 		# Check if we can add the last value
 		before_idx = numpy.floor(cadence * index)
 		if numpy.floor(cadence * index) == cadence * index:
-			denom_corr.append(corr[1][before_idx] + 1j * corr[2][before_idx])
+			if("PCALX" in options.denominator_channel_name):
+				denom_corr.append(-1.0 * (corr[1][before_idx] + 1j * corr[2][before_idx]))
+			else:
+				denom_corr.append(corr[1][before_idx] + 1j * corr[2][before_idx])
 
 # 
 # =============================================================================

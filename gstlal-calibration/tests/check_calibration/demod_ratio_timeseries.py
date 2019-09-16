@@ -79,6 +79,7 @@ parser.add_option("--average-time", metavar = "seconds", type = int, default = 1
 parser.add_option("--magnitude-ranges", metavar = "list", type = str, help = "List of limits for magnitude plots. Semicolons separate ranges for different plots, and commas separate the min and max of a single plot.")
 parser.add_option("--phase-ranges", metavar = "list", type = str, help = "List of limits for phase plots. Semicolons separate ranges for different plots, and commas separate the min and max of a single plot.")
 parser.add_option("--plot-titles", metavar = "names", type = str, help = "Semicolon-separated list of titles for plots")
+parser.add_option("--show-stats", action = "store_true", help = "If set, averages and standard deviations will be shown in the plot legends.")
 
 options, filenames = parser.parse_args()
 
@@ -202,8 +203,10 @@ for i in range(0, len(freq_list)):
 	# Make plots
 	plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	#plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.4f, \sigma = %0.4f]$' % (freq_list[i][0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
-	plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][0]))
+	if options.show_stats:
+		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.4f, \sigma = %0.4f]$' % (freq_list[i][0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+	else:
+		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][0]))
 	#plt.title(options.plot_titles.split(';')[i])
 	plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
@@ -212,8 +215,10 @@ for i in range(0, len(freq_list)):
 	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 	leg.get_frame().set_alpha(0.8)
 	plt.subplot(212)
-	plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.',  markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][0]))
-	#plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.',  markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.1f^{\circ}, \sigma = %0.1f^{\circ}]$' % (freq_list[i][0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	if options.show_stats:
+		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.',  markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.1f^{\circ}, \sigma = %0.1f^{\circ}]$' % (freq_list[i][0], numpy.mean(phases[0]), numpy.std(phases[0])))
+	else:
+		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.',  markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][0]))
 	plt.ylabel(r'${\rm Phase \ [deg]}$')
 	plt.xlabel(r'${\rm Time \ in \ %s \ since \ %s \ UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
@@ -229,13 +234,17 @@ for i in range(0, len(freq_list)):
 			magnitudes[j].append(data[(filter_time + average_time) * k][1])
 			phases[j].append(data[(filter_time + average_time) * k][2])
 		plt.subplot(211)
-		plt.plot(times, magnitudes[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][j]))
-		#plt.plot(times, magnitudes[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.4f, \sigma = %0.4f]$' % (freq_list[i][j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		if options.show_stats:
+			plt.plot(times, magnitudes[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.4f, \sigma = %0.4f]$' % (freq_list[i][j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+		else:
+			plt.plot(times, magnitudes[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][j]))
 		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.8)
 		plt.subplot(212)
-		#plt.plot(times, phases[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.1f^{\circ}, \sigma = %0.1f^{\circ}]$' % (freq_list[i][j], numpy.mean(phases[j]), numpy.std(phases[j])))
-		plt.plot(times, phases[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][j]))
+		if options.show_stats:
+			plt.plot(times, phases[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz} \ [\mu = %0.1f^{\circ}, \sigma = %0.1f^{\circ}]$' % (freq_list[i][j], numpy.mean(phases[j]), numpy.std(phases[j])))
+		else:
+			plt.plot(times, phases[j], colors[j], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %0.1f \ Hz}$' % (freq_list[i][j]))
 		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
 		leg.get_frame().set_alpha(0.8)
 	plt.savefig('%s_%d-%d.png' % (options.plot_titles.split(';')[i].replace(' ', '_'), int(t_start), int(dur)))
