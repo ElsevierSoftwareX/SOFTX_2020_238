@@ -47,6 +47,7 @@ struct gstlal_peak_state {
 	/* Interpolator */
 	LanczosTriggerInterpolant *interp;
 
+	/* FIXME I think is_gap is unused, we should delete it */
 	gboolean is_gap;
 	gboolean no_peaks_past_threshold;
 };
