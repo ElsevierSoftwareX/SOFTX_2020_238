@@ -294,7 +294,7 @@ if options.poles is not None:
 	for i in range(0, len(real_poles) / 2):
 		poles.append(float(real_poles[2 * i]) + 1j * float(real_poles[2 * i + 1]))
 
-colors = ['blue', 'limegreen', 'y', 'c', 'm', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['blue', 'limegreen', 'maroon', 'orchid', 'red', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
 	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")

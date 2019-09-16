@@ -80,7 +80,14 @@ filename_suffix = options.filename_suffix
 ASDs = []
 ratios = []
 for i in range(0, len(frame_cache_list)):
-	ASDs.append(TimeSeries.read(frame_cache_list[i], '%s:%s' % (ifo, channel_list[i]), start = start_time, end = end_time).asd(4, 2, method = 'lal_median'))
+	cache = open(frame_cache_list[i], 'r').readlines()
+	new_cache = []
+	for gwf_file in cache:
+		gwf_file = str(gwf_file).split("localhost", 1)[1].strip()
+		new_cache.append(gwf_file)
+	data = TimeSeries.read(new_cache, '%s:%s' % (ifo, channel_list[i]), start = start_time, end = end_time)
+	ASDs.append(data.asd(16, 8, method = 'lal_median'))
+	#ASDs.append(TimeSeries.read(frame_cache_list[i], '%s:%s' % (ifo, channel_list[i]), start = start_time, end = end_time).asd(4, 2, method = 'lal_median'))
 	if i > 0:
 		ratios.append(ASDs[i] / ASDs[0])
 

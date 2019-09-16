@@ -523,6 +523,10 @@ else:
 	print("Warning: Could not find expected fs in filters file or config file.  Setting to zero.")
 	fs_squared_default = 0
 
+# fs_squared_default cannot be exactly zero, as it is later the deniminator of a division
+if fs_squared_default == 0:
+	fs_squared_default = 0.01
+
 fs_default = numpy.sqrt(complex(fs_squared_default))
 
 if "srcQ" in filters:
