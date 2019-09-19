@@ -79,9 +79,9 @@ ligo_alpha = -1.5
 ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
 bbh_min = 3
-bbh_max = 30
-bbh_peak = 30
-bbh_alpha = -1
+bbh_max = 100
+bbh_peak = 100
+bbh_alpha = -1.5
 bbhnorm = schechter_norm(bbh_min, bbh_max, bbh_peak, bbh_alpha)
 
 for row in sngl_inspiral_table:
