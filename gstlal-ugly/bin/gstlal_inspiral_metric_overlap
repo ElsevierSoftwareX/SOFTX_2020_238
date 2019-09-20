@@ -1,0 +1,73 @@
+#!/usr/bin/python
+import sys
+from gstlal import metric as metric_module
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
+from glue.text_progress_bar import ProgressBar
+from ligo.lw import lsctables
+import numpy
+import argparse
+import h5py
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+      pass
+lsctables.use_in(LIGOLWContentHandler)
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--psd-xml-file", help = "provide a psd xml file")
+parser.add_argument("--bank-file", help = "provide the bank file for which overlaps will be calculated")
+parser.add_argument("--out-h5-file", required = True, help = "provide the output hdf5 file name")
+parser.add_argument("--start-row", type=int, help = "The starting row to calculate overlaps")
+parser.add_argument("--num-rows", type=int, help = "The number of rows to calculate overlaps")
+parser.add_argument("--approximant", default="IMRPhenomD", help = "Waveform model.")
+
+args = parser.parse_args()
+
+g_ij = metric_module.Metric(
+     args.psd_xml_file,
+     coord_func = metric_module.x_y_z_zn_func,
+     duration = 1.0, # FIXME!!!!!
+     flow = 10,
+     fhigh = 1024,
+     approximant = args.approximant
+)
+
+xmldoc = ligolw_utils.load_filename(args.bank_file, verbose = True, contenthandler = LIGOLWContentHandler)
+sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+def id_x_y_z_zn_from_row(row):
+    return numpy.array([row.template_id,
+            metric_module.x_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+            metric_module.y_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+            metric_module.z_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+            metric_module.zn_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z)])
+
+vec1s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table[args.start_row:args.start_row+args.num_rows]])
+vec2s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table])
+
+output = numpy.zeros((len(vec1s), len(vec2s)))
+
+progress = ProgressBar(max=len(vec1s))
+
+for n, vec1, in enumerate(vec1s):
+      progress.increment(text="%s / %s" %(n+1, len(vec1s)))
+      g, det = g_ij(vec1[1:])
+      def match(vec2, vec1 = vec1, g = g):
+            return (vec1[0], vec2[0], g_ij.pseudo_match(g, vec1[1:], vec2[1:]))
+      thisoutput = numpy.array([[i, row[1], row[2]] for i, row in enumerate(map(match, vec2s)) if row[2] > 0.25])
+
+      output[n, thisoutput[:,0].astype(int)] = thisoutput[:,2]
+      #thisoutput = [row for row in map(match, vec2s) if row[2] > 0.25]
+
+mask = (output==0).all(0)
+stop = min(numpy.where(mask)[0])
+id2 = vec2s[:,0]
+
+output = numpy.array(output)
+h5f = h5py.File(args.out_h5_file, 'w')
+olapdata = h5f.create_group("%s_metric" %(args.approximant))
+dset = olapdata.create_dataset("id", data = vec1s[:,0])
+dset = olapdata.create_dataset("id2", data = id2[:stop])
+dset = olapdata.create_dataset('overlaps', data = output[:,:stop])
+
+h5f.close()

@@ -28,8 +28,8 @@ from lal import LIGOTimeGPS
 import sys
 import math
 
-DELTA = 2.5e-7#2.0e-7
-EIGEN_DELTA_DET = DELTA
+DELTA = 2e-7
+EIGEN_DELTA_DET = 2e-7
 
 # Round a number up to the nearest power of 2
 def ceil_pow_2(x):
@@ -141,6 +141,70 @@ def m1_from_mc_m2(mc, m2):
 def mc_from_m1_m2(m1, m2):
 	return (m1 * m2)**(.6) / (m1 + m2)**.2
 
+# inspired by arXiv:gr-qc/9808076v1 27 Aug 1998
+
+def x_y_z_zn_func(coords):
+	s1y = s2y = s1x = s2x = 0.
+	m1 = m1_from_x_y_z_zn(*coords)
+	m2 = m2_from_x_y_z_zn(*coords)
+	s1z = s1_from_x_y_z_zn(*coords)
+	s2z = s2_from_x_y_z_zn(*coords)
+	q = m1 / m2
+	if False:#q < 1.05 and q > 0.95:
+		M = m1 + m2
+		q = 1.05
+		m2 = (M / q) / 2.
+		m1 = m2 * q
+	return [m1, m2, s1x, s1y, s1z, s2x, s2y, s2z]
+
+def x_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	eta = m1*m2/(m1+m2)**2
+	return M**(-5/3.) / eta
+
+def y_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	eta = m1*m2/(m1+m2)**2
+	return M**(-2/3.) / eta
+
+def z_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	return (s1 * m1 + s2 * m2) / M
+
+def zn_from_m1_m2_s1_s2(m1, m2, s1, s2):
+	m1 = float(m1); m2 = float(m2); s1 = float(s1); s2 = float(s2)
+	M = m1 + m2
+	return (s1 * m1 - s2 * m2) / M
+
+def m1_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y)
+	M = y / x
+	eta = min((x**2 / y**5)**(1./3), 0.25)
+	m1 = (M + (M**2 * (1 - 4 * eta))**.5) / 2.
+	return m1
+
+def m2_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y)
+	M = y / x
+	eta = min((x**2 / y**5)**(1./3), 0.25)
+	m2 = M - (M + (M**2 * (1 - 4 * eta))**.5) / 2.
+	return m2
+
+def s1_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y); z = float(z); zn = float(zn)
+	M = y / x
+	m1 = m1_from_x_y_z_zn(x, y, z, zn)
+	return (z + zn) * M / m1 / 2.
+
+def s2_from_x_y_z_zn(x, y, z, zn):
+	x = float(x); y = float(y); z = float(z); zn = float(zn)
+	M = y / x
+	m2 = m1_from_x_y_z_zn(x, y, z, zn)
+	return (z - zn) * M / m2 / 2.
+
 #
 # Metric object that numerically evaluates the waveform metric
 #
@@ -156,10 +220,7 @@ class Metric(object):
 		self.flow = flow
 		self.fhigh = fhigh
 		self.working_length = int(round(self.duration * 2 * self.fhigh)) + 1
-		print self.working_length
 		self.psd = reference_psd.interpolate_psd(series.read_psd_xmldoc(ligolw_utils.load_filename(psd_xml, verbose = True, contenthandler = series.PSDContentHandler)).values()[0], self.df)
-		self.metric_tensor = None
-		self.metric_is_valid = False
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		self.delta_t = DELTA
 		self.t_factor = numpy.exp(-2j * numpy.pi * (numpy.arange(self.working_length) * self.df - self.fhigh) * self.delta_t)
@@ -225,10 +286,8 @@ class Metric(object):
 	def match_minus_1(self, w1, w2, t_factor = 1.0):
 		def norm(w):
 			n = numpy.abs(integrate.romb(numpy.conj(w) * w))**.5
-			#n = numpy.abs((numpy.conj(w) * w).sum())**.5
 			return n
 		def ip(w1, w2):
-			#return numpy.abs((numpy.conj(w1) * w2).sum())
 			return numpy.abs(integrate.romb(numpy.conj(w1) * w2))
 
 		try:
@@ -241,20 +300,14 @@ class Metric(object):
 			if m < 1. -  1e-15:
 				return m - 1.0
 			d1 = x - y
-			#m = ip(x,y)
 			mm2 = ip(d1, d1)
 			return -0.5 * mm2
-			#return min(-0.5 * mm2, -0.5 * 4e-16)
 
 		except AttributeError:
 			return None
 
 
 	def __set_diagonal_metric_tensor_component(self, i, wp, wm, deltas, g, w1):
-		#print "diag ", i
-		#plus_match = self.match(w1, wp[i,i])
-		#minus_match = self.match(w1, wp[i,i])
-		#d2mbydx2 = (plus_match + minus_match - 2.) / deltas[i]**2
 		plus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
 		minus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
 		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / deltas[i]**2
@@ -262,11 +315,6 @@ class Metric(object):
 		g[i,i] = -0.5 * d2mbydx2
 
 	def __set_tt_metric_tensor_component(self, center, w1):
-
-		#print "tt "
-		#minus_match = self.match(w1, w1, t_factor = self.neg_t_factor)
-		#plus_match = self.match(w1, w1, t_factor = self.t_factor)
-		#d2mbydx2 = (plus_match + minus_match - 2.0) / self.delta_t**2
 		minus_match_minus_1 = self.match_minus_1(w1, w1, t_factor = self.neg_t_factor)
 		plus_match_minus_1 = self.match_minus_1(w1, w1, t_factor = self.t_factor)
 		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / self.delta_t**2
@@ -274,12 +322,8 @@ class Metric(object):
 
 	def __set_offdiagonal_metric_tensor_component(self, (i,j), wp, wm, deltas, g, w1):
 		# evaluate symmetrically
-		#print "off diag ", i, j
 		if j <= i:
 			return None
-		#fii = -2 * g[i,i] * deltas[i]**2 + 2
-		#fjj = -2 * g[j,j] * deltas[j]**2 + 2
-		#d2mbydxdy = (self.match(w1, wp[i,j]) + self.match(w1, wm[i,j]) - fii - fjj + 2.) / 2. / deltas[i] / deltas[j]
 		fii = -2 * g[i,i] * deltas[i]**2
 		fjj = -2 * g[j,j] * deltas[j]**2
 		d2mbydxdy = (self.match_minus_1(w1, wp[i,j]) + self.match_minus_1(w1, wm[i,j]) - fii - fjj) / 2. / deltas[i] / deltas[j]
@@ -287,13 +331,6 @@ class Metric(object):
 		return None
 
 	def __set_offdiagonal_time_metric_tensor_component(self, j, wp, wm, deltas, g, g_tt, delta_t, w1):
-		#print "t i ", j
-		#fjj = -2 * g[j,j] * deltas[j]**2 + 2.0
-		#ftt = -2 * g_tt * delta_t**2 + 2.0
-		# Second order
-		#plus_match = self.match(w1, wp[j,j], t_factor = self.t_factor)
-		#minus_match = self.match(w1, wm[j,j], t_factor = self.neg_t_factor)
-		#return -0.5 * (plus_match + minus_match - ftt - fjj + 2.0) / 2 / delta_t / deltas[j]
 		fjj = -2 * g[j,j] * deltas[j]**2
 		ftt = -2 * g_tt * delta_t**2
 		# Second order
@@ -301,12 +338,19 @@ class Metric(object):
 		minus_match_minus_1 = self.match_minus_1(w1, wm[j,j], t_factor = self.neg_t_factor)
 		return -0.5 * (plus_match_minus_1 + minus_match_minus_1 - ftt - fjj) / 2 / delta_t / deltas[j]
 
-	def __call__(self, center, deltas = None):
-
+	def __call__(self, center):#, deltas = None):
+		center = numpy.array(center)
 		g = numpy.zeros((len(center), len(center)), dtype=numpy.double)
 		w1 = self.waveform(center)
 		wp = {}
 		wm = {}
+		# FIXME assumes m1,m2,spins... as the coordinates
+		deltas = numpy.zeros(len(center))
+		deltas[0:2] = abs(center[0:2]) * DELTA
+		deltas[2:] += DELTA
+		#deltas = numpy.ones(len(center), dtype=float) * DELTA
+		#deltas = abs(center)**.5 * DELTA + DELTA
+		#deltas = abs(center) * DELTA + DELTA
 		for i, x in enumerate(deltas):
 			for j, y in enumerate(deltas):
 				dx = numpy.zeros(len(deltas))
@@ -335,43 +379,13 @@ class Metric(object):
 		for i, j in itertools.product(range(len(deltas)), range(len(deltas))):
 			g[i,j] = g[i,j] -  g_tj[i] * g_tj[j] / g_tt
 
-		#print "before ", g
-		#g = numpy.array(nearPD(g, nit=3))
-		try:
-			U, S, V = numpy.linalg.svd(g)
-		except numpy.linalg.linalg.LinAlgError:
-			newc = center.copy()
-			newc[0:2] *=0.99
-			return self.__call__(newc, deltas)
+		U, S, V = numpy.linalg.svd(g)
 		condition = S < max(S) * EIGEN_DELTA_DET
-		S[condition] = 0.0
+		S[condition] = EIGEN_DELTA_DET * max(S)
 		g = numpy.dot(U, numpy.dot(numpy.diag(S), V))
 		det = numpy.product(S[S>0])
-		eff_dimension = len(S[S>0])
-		w = S
-		#try:
-		#	w, v = numpy.linalg.eigh(g)
-		#except numpy.linalg.linalg.LinAlgError:
-		#	newc = center.copy()
-		#	newc[0:2] -= deltas[0:2]
-		#	return self.__call__(newc, deltas)
-		#mxw = numpy.max(w)
-		#assert numpy.all(w > 0)
-		#if numpy.any(w < 0):
-		#	print w
-		#	return self.__call__(center - deltas, deltas)
-		self.metric_is_valid = True
-		#w[w<EIGEN_DELTA_DET * mxw] = EIGEN_DELTA_DET * mxw
-		#det = numpy.product(w)
 
-		#eff_dimension = len(w[w >= EIGEN_DELTA_DET * mxw])
-		#w[w<EIGEN_DELTA_METRIC * mxw] = EIGEN_DELTA_METRIC * mxw
-		#g = numpy.dot(numpy.dot(v, numpy.abs(numpy.diag(w))), v.T)
-
-		#return g, eff_dimension, numpy.product(S[S>0])
-		#print "after ", g
-
-		return g, eff_dimension, det, self.metric_is_valid, w
+		return g, det
 
 
 	def distance(self, metric_tensor, x, y):
@@ -386,6 +400,8 @@ class Metric(object):
 		delta = x-y
 		return (dot(delta, delta, metric_tensor))**.5
 
+	def volume_element(self, metric_tensor):
+		return abs(numpy.linalg.det(metric_tensor))**.5
 
 	def metric_match(self, metric_tensor, c1, c2):
 		d2 = self.distance(metric_tensor, c1, c2)**2
@@ -393,6 +409,11 @@ class Metric(object):
 			return 1 - d2
 		else:
 			return 0.
+
+	def pseudo_match(self, metric_tensor, c1, c2):
+		d2 = self.distance(metric_tensor, c1, c2)**2
+		d2 = (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
+		return 1. - d2
 
 
 	def explicit_match(self, c1, c2):
