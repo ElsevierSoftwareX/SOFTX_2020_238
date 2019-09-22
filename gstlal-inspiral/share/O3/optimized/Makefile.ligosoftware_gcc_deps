@@ -25,11 +25,11 @@ LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
 INSTALL_DIR:=${DEPS_PATH}
 ifeq ($(findstring debian,$(shell cat /etc/os-release | grep ID=)),debian)
-	PYTHON_LIB_DIR:=/usr/lib/python2.7/config-x86_64-linux-gnu
-	PYTHON_DIR:=${DEPS_PATH}/lib/python2.7/site-packages
+PYTHON_LIB_DIR:=/usr/lib/python2.7/config-x86_64-linux-gnu
+PYTHON_DIR:=${DEPS_PATH}/lib/python2.7/site-packages
 else
-	PYTHON_LIB_DIR:=/usr/lib64
-	PYTHON_DIR:=${DEPS_PATH}/lib64/python2.7/site-packages
+PYTHON_LIB_DIR:=/usr/lib64
+PYTHON_DIR:=${DEPS_PATH}/lib64/python2.7/site-packages
 endif
 
 # Set package release versions
@@ -40,9 +40,9 @@ SWIG=swig-3.0.7
 METAIO=metaio-8.5.1
 LIBFRAME=libframe-8.30
 GSTPYTHON=gst-python-1.14.3
-GSTPLUGINSGOOD=gst-plugins-good-1.14.3
-GSTPLUGINSBASE=gst-plugins-base-1.14.3
-GSTREAMER=gstreamer-1.14.3
+GSTPLUGINSGOOD=gst-plugins-good-1.14.5
+GSTPLUGINSBASE=gst-plugins-base-1.14.5
+GSTREAMER=gstreamer-1.14.5
 GSL=gsl-1.16
 ORC=orc-0.4.26
 FFTW=fftw-3.3.8
