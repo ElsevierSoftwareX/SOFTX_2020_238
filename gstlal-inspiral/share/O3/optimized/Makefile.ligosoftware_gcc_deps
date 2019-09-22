@@ -125,7 +125,7 @@ deps_env.sh :
 		echo "source ${ICC_UWM} intel64" >> $@ ; \
 		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
     elif [[ ${CLUSTER} == *"psu.edu" ]] ; then \
-        echo "source /opt/rh/devtoolset-7/enable" >> $@ ; \
+		echo "source /opt/rh/devtoolset-7/enable" >> $@ ; \
 		echo "source ${ICC_PSU} intel64" >> $@ ; \
 		echo 'export LIBRARY_PATH=$${LD_LIBRARY_PATH}' >> $@ ; \
 		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
