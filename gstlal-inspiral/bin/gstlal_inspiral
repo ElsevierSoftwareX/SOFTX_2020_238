@@ -258,7 +258,7 @@ def parse_command_line():
 
 	group = OptionGroup(parser, "Ranking Statistic Options", "Adjust ranking statistic behaviour")
 	group.add_option("--cap-singles", action = "store_true", help = "Cap singles to 1 / livetime if computing FAR. No effect otherwise")
-	group.add_option("--FAR-trialsfactor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb")
+	group.add_option("--far-trials-factor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb")
 	group.add_option("--chisq-type", metavar = "type", default = "autochisq", help = "Choose the type of chisq computation to perform. Must be one of (autochisq|timeslicechisq). The default is autochisq.")
 	group.add_option("--coincidence-threshold", metavar = "seconds", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.")
 	group.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
@@ -848,7 +848,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		kafka_server = options.output_kafka_server,
 		cluster = True,#options.data_source in ("lvshm", "framexmit"),# If uncommented, we only cluster when running online
 		cap_singles = options.cap_singles,
-		FAR_trialsfactor = options.FAR_trialsfactor,
+		FAR_trialsfactor = options.far_trials_factor,
 		verbose = options.verbose
 	)
 	if options.verbose:
