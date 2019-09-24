@@ -13,8 +13,6 @@ variables:
   PATCHFLAGS: -c $COMP -k --nocheck -f
 
 before_script:
-  # Set up directory structure and copy over built-dependencies from container:
-  - mkdir public
   # Enable gcc-devtoolset-7
   - source /opt/rh/devtoolset-7/enable
   # Set up Intel Dev Environment:
@@ -336,7 +334,8 @@ test:offline:
     - level2:rpm:gstlal-inspiral
     - level2:rpm:gstlal-burst
   script:
-
+    # Set up directory structure and copy over built-dependencies from container:
+    - mkdir public
     # Install RPMs and set up the test environment:
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
     - gst-inspect-1.0
