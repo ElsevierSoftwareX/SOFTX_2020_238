@@ -87,7 +87,6 @@ class PSDHandler(simplehandler.Handler):
 		self.horizon_distance_func = reference_psd.HorizonDistance(15., 900., 1./16., 1.4, 1.4)
 
 		self.routes = ("noise", "range_history")
-		self.datatypes = (("min", min), ("median", aggregator.median), ("max", max))
 		self.timedeq = deque(maxlen = 10000)
 		self.datadeq = {route: deque(maxlen = 10000) for route in self.routes}
 		self.last_reduce_time = None
