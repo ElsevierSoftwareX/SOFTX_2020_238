@@ -992,36 +992,36 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 		//
 		if(GST_ELEMENT(itacac)->numsinkpads == 3) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// L1H1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "H1") == 0) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// L1V1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "V1") == 0) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), NULL, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), NULL, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// L1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 1) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), NULL, NULL, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacacpad->snr_matrix_view), NULL, NULL, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		}
 
@@ -1031,36 +1031,36 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 		//
 		if(GST_ELEMENT(itacac)->numsinkpads == 3) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// L1H1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "L1") == 0) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// H1V1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "V1") == 0) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(itacacpad->snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// H1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 1) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(itacacpad->snr_matrix_view), NULL, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(itacacpad->snr_matrix_view), NULL, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		}
 	} else if(strcmp(itacacpad->instrument, "V1") == 0) {
@@ -1069,36 +1069,36 @@ static GstBuffer* hardcoded_srcbuf_crap(GSTLALItacac *itacac, GSTLALItacacPad *i
 		//
 		if(GST_ELEMENT(itacac)->numsinkpads == 3) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->next->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// L1V1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "L1") == 0) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL, &(itacacpad->snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), NULL, &(itacacpad->snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// H1V1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 2 && strcmp(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->instrument, "H1") == 0) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, &(GSTLAL_ITACAC_PAD(itacacpad->next_in_coinc_order->data)->tmp_snr_matrix_view), &(itacacpad->snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		//
 		// V1
 		//
 		} else if(GST_ELEMENT(itacac)->numsinkpads == 1) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, &(itacacpad->snr_matrix_view), NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, &(itacacpad->snr_matrix_view), NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
 			}
 		}
 	}
