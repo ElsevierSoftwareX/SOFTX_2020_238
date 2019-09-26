@@ -332,7 +332,6 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 {
 	guint channel;
 	guint L1_snr_timeseries_length, H1_snr_timeseries_length, V1_snr_timeseries_length, K1_snr_timeseries_length;
-	gboolean provided_empty_trigger = FALSE;
 	for(channel = 0; channel < input->channels; channel++) {
 		struct GSTLALSnglInspiral *event;
 		SnglInspiralTable *parent;
@@ -417,14 +416,8 @@ int populate_snglinspiral_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *in
 				/* Use BLAS to do the copy */
 				gsl_blas_ccopy (&(K1_snr_vector_view.vector), &(K1_snr_series_view.vector));
 			}
-		} else {
-			if(!provided_empty_trigger) {
-				//fprintf(stderr, "allocating snglinspiral with 0 length for %s event\n", bankarray[channel].ifo);
-				provided_empty_trigger = TRUE;
-				event = gstlal_snglinspiral_new(0,0,0,0);
-			} else
-				return 0;
-		}
+		} else
+			event = gstlal_snglinspiral_new(0,0,0,0);
 
 		if (!event) {
 			/* FIXME handle error */
