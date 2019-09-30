@@ -163,6 +163,10 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 				svd_bank_name = dagparts.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = jobs['svd'].output_path)
 				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
 					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
+				if new_template_mchirp_dict['%04d' % (i+bin_offset,)][1] >= 10.0:
+					options.autocorrelation_length = 351
+				else:
+					options.autocorrelation_length = 701
 
 				svdnode = dagparts.DAGNode(
 					jobs['svd'],
