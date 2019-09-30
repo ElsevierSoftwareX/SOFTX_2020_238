@@ -45,7 +45,7 @@ def id_x_y_z_zn_from_row(row):
 vec1s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table[args.start_row:args.start_row+args.num_rows]])
 vec2s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table])
 
-output = numpy.zeros((len(vec1s), len(vec2s)))
+output = numpy.zeros((len(vec1s), len(vec2s)/2))
 
 progress = ProgressBar(max=len(vec1s))
 
