@@ -124,6 +124,7 @@ typedef struct {
 	guint rate;
 	guint channels;
 	gstlal_peak_type_specifier peak_type;
+	unsigned autocorrelation_length;
 	GstClockTime initial_output_timestamp;
 	guint64 next_output_offset;
 	GstClockTime next_output_timestamp;
@@ -131,7 +132,6 @@ typedef struct {
 	gboolean EOS;
 	GSTLALItacacPad *H1_itacacpad, *K1_itacacpad, *L1_itacacpad, *V1_itacacpad;
 	GMutex caps_lock;
-
 } GSTLALItacac;
 
 GType gstlal_itacac_get_type(void);

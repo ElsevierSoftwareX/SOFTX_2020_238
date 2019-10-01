@@ -414,6 +414,12 @@ static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id,
 
 		itacacpad->autocorrelation_matrix = gstlal_gsl_matrix_complex_from_g_value_array(g_value_get_boxed(value)); 
 
+		g_assert(itacac != NULL);
+		if(itacac->autocorrelation_length == 0)
+			itacac->autocorrelation_length = autocorrelation_length(itacacpad);
+		else
+			g_assert(itacac->autocorrelation_length = autocorrelation_length(itacacpad));
+
 		// This should be called any time caps change too
 		update_peak_info_from_autocorrelation_properties(itacacpad);
 
@@ -662,17 +668,17 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 		if(!itacacpad->autocorrelation_norm)
 			itacacpad->autocorrelation_norm = gstlal_autocorrelation_chi2_compute_norms(itacacpad->autocorrelation_matrix, NULL);
 
-		g_assert(autocorrelation_length(itacacpad) & 1);  // must be odd 
+		g_assert(itacac->autocorrelation_length & 1);  // must be odd 
 
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			// extract data around peak for chisq calculation
 			gstlal_double_complex_series_around_peak(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (double complex *) this_snr_mat, this_maxdata->pad);
-			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
+			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, itacac->autocorrelation_length, -((int) itacac->autocorrelation_length) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 
 		} else if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			// extract data around peak for chisq calculation
 			gstlal_float_complex_series_around_peak(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (float complex *) this_snr_mat, this_maxdata->pad);
-			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
+			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, itacac->autocorrelation_length, -((int) itacac->autocorrelation_length) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 		} else
 			g_assert_not_reached();
 	} 
@@ -840,13 +846,13 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 
 	// First zero the tmp_snr_mat objects in the other pads
 	if(strcmp(itacacpad->instrument, "H1") != 0 && itacac->H1_itacacpad != NULL && !itacac->H1_itacacpad->waiting)
-		memset(itacac->H1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad) * itacacpad->maxdata->unit);
+		memset(itacac->H1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "K1") != 0 && itacac->K1_itacacpad != NULL && !itacac->K1_itacacpad->waiting)
-		memset(itacac->K1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad) * itacacpad->maxdata->unit);
+		memset(itacac->K1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "L1") != 0 && itacac->L1_itacacpad != NULL && !itacac->L1_itacacpad->waiting)
-		memset(itacac->L1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad) * itacacpad->maxdata->unit);
+		memset(itacac->L1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "V1") != 0 && itacac->V1_itacacpad != NULL && !itacac->V1_itacacpad->waiting)
-		memset(itacac->V1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * autocorrelation_length(itacacpad) * itacacpad->maxdata->unit);
+		memset(itacac->V1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 
 	for(channel = 0; channel < itacacpad->maxdata->channels; channel++) {
 		// Identify which sample was the peak
@@ -1518,6 +1524,7 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 {
 	itacac->rate = 0;
 	itacac->channels = 0;
+	itacac->autocorrelation_length = 0;
 
 	itacac->difftime = 0;
 	
