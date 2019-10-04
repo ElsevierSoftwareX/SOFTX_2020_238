@@ -217,7 +217,6 @@ if options.denominator_correction is not None:
 				denom_corr.append(-1.0 * (before_weight * before + after_weight * after))
 			else:
 				denom_corr.append(before_weight * before + after_weight * after)
-			denom_corr.append(before_weight * before + after_weight * after)
 			index += 1
 		# Check if we can add the last value
 		before_idx = numpy.floor(cadence * index)
