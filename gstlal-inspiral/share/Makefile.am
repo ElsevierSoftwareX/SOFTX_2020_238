@@ -6,10 +6,6 @@ endif
 
 dist_pkgdata_DATA = \
 	de_calc_likelihood.sql \
-	H1K1_p_of_instruments_given_H_d.h5 \
-	H1K1L1_p_of_instruments_given_H_d.h5 \
-	H1K1V1_p_of_instruments_given_H_d.h5 \
-	H1K1L1V1_p_of_instruments_given_H_d.h5 \
 	H1L1_p_of_instruments_given_H_d.h5 \
 	H1L1V1_p_of_instruments_given_H_d.h5 \
 	H1V1_p_of_instruments_given_H_d.h5 \
@@ -18,9 +14,6 @@ dist_pkgdata_DATA = \
 	inspiral_datalesslndensity.xml.gz \
 	inspiral_dtdphi_pdf.h5 \
 	inspiral_snr_pdf.xml.gz \
-	K1L1_p_of_instruments_given_H_d.h5 \
-	K1L1V1_p_of_instruments_given_H_d.h5 \
-	K1V1_p_of_instruments_given_H_d.h5 \
 	L1V1_p_of_instruments_given_H_d.h5 \
 	ll_simplify.sql \
 	ll_simplify_and_cluster.sql \

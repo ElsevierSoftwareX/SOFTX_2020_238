@@ -865,7 +865,7 @@ class SNRPDF(object):
 	def load(cls, fileobj = None, verbose = False):
 		if fileobj is None:
 			fileobj = open(cls.DEFAULT_FILENAME)
-		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler))
+		return cls.from_xml(ligolw_utils.load_fileobj(fileobj, gz = True, contenthandler = cls.LIGOLWContentHandler)[0])
 
 
 #
@@ -1183,11 +1183,11 @@ class TimePhaseSNR(object):
 	"""
 	# NOTE to save a couple hundred megs of ram we do not
 	# include kagra for now...
-	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
-	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
+	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
+	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location}#, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 	numchunks = 20
 
-	def __init__(self, transtt = None, transtp = None, transpt = None, transpp = None, transdd = None, norm = None, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None, SNR=None, psd_fname=None):
+	def __init__(self, transtt = None, transtp = None, transpt = None, transpp = None, transdd = None, norm = None, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None):
 		"""
 		Initialize a new class from scratch via explicit computation
 		of the tree data and marginalized probability distributions or by providing
@@ -1270,9 +1270,6 @@ class TimePhaseSNR(object):
 		self.tree_data = tree_data
 		self.margsky = margsky
 
-		self.snr = SNR
-		self.psd_fname = psd_fname
-
 		if self.tree_data is None:
 			time, phase, deff = TimePhaseSNR.tile(verbose = verbose)
 			self.tree_data = self.dtdphideffpoints(time, phase, deff, self.slices)
@@ -1327,11 +1324,6 @@ class TimePhaseSNR(object):
 		for group, mat in zip((h5_transtt, h5_transtp, h5_transpt, h5_transpp, h5_transdd, h5_norm), (self.transtt, self.transtp, self.transpt, self.transpp, self.transdd, self.norm)):
 			for k,v in mat.items():
 				group.create_dataset(",".join(sorted(k)), data = float(v))
-
-		f.create_dataset("psd", data=self.psd_fname)
-		h5_snr = f.create_group("SNR")
-		for ifo in self.snr:
-			h5_snr.create_dataset(ifo, data=self.snr[ifo].value)
 
 		f.close()
 
@@ -1648,7 +1640,7 @@ class p_of_instruments_given_horizons(object):
 
 	Note, linear interpolation is used over the bins
 	"""
-	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None, bin_start = 0, bin_stop = None):
+	def __init__(self, instruments = ("H1", "L1", "V1"), snr_thresh = 4., nbins = 41, hmin = 0.05, hmax = 20.0, histograms = None):
 		"""
 		for each sub-combintation of the "on" instruments, e.g.,
 		"H1","L1" out of "H1","L1","V1", the probability of getting a trigger above the
@@ -1674,12 +1666,6 @@ class p_of_instruments_given_horizons(object):
 
 		# The number of bins in the histogram of horizond distance ratios.
 		self.nbins = nbins
-
-		# Set the stop bin number and make sure that start/stop bin numbers are the multiple of nbins
-		if bin_stop is not None and bin_stop % self.nbins:
-			raise ValueError("stop bin indexd must be multiple of nbins=%d" % self.nbins)
-		elif bin_start % self.nbins:
-			raise ValueError("start bin index must be multiple of nbins=%d" % self.nbins)
 
 		# The minimum and maximum horizon distance ratio to consider
 		# for the binning.  Anything outside this range will be
@@ -1732,8 +1718,8 @@ class p_of_instruments_given_horizons(object):
 			# NOTE we end up clipping any value outside of our
 			# histogram to just be the value in the last(first)
 			# bin, so we track those center values here.
-			self.first_center = self.histograms.values()[0].centres()[0][0]
-			self.last_center = self.histograms.values()[0].centres()[0][-1]
+			self.first_center = histograms.values()[0].centres()[0][0]
+			self.last_center = histograms.values()[0].centres()[0][-1]
 
 			# Now we start the monte carlo simulation of a bunch of
 			# signals distributed uniformly in the volume of space
@@ -1756,7 +1742,7 @@ class p_of_instruments_given_horizons(object):
 			# Iterate over the (# of instruments - 1) horizon
 			# distance ratios for all of the instruments that could
 			# have produced coincs
-			for horizontuple in list(itertools.product(*[b.centres() for b in bins]))[bin_start:bin_stop]:
+			for horizontuple in itertools.product(*[b.centres() for b in bins]):
 				horizondict = {}
 				# Calculate horizon distances for each of the
 				# instruments based on these ratios NOTE by
@@ -1857,10 +1843,9 @@ class p_of_instruments_given_horizons(object):
 					# record this probability in the histograms
 					self.histograms[combo][horizontuple] += count
 					total += count
-				if bin_stop is None:
-					# normalize the result so that the sum at this horizon ratio is one over all the combinations
-					for I in self.histograms:
-						self.histograms[I][horizontuple] /= total
+				# normalize the result so that the sum at this horizon ratio is one over all the combinations
+				for I in self.histograms:
+					self.histograms[I][horizontuple] /= total
 		self.mkinterp()
 
 	def mkinterp(self):
@@ -1898,7 +1883,7 @@ class p_of_instruments_given_horizons(object):
 		f.close()
 
 	@staticmethod
-	def from_hdf5(fname, other_fnames=[], **kwargs):
+	def from_hdf5(fname):
 		"""
 		Read data from a file so that you don't have to remake it from scratch
 		"""
@@ -1911,26 +1896,13 @@ class p_of_instruments_given_horizons(object):
 		instruments = tuple(sorted(grp.attrs["instruments"].split(",")))
 		histograms = {}
 		bins = []
-		combos = TimePhaseSNR.instrument_combos(instruments, min_instruments = 1)
 		for i in range(len(instruments) - 1):
 			bins.append(rate.LogarithmicBins(hmin, hmax, nbins))
-		for combo in combos:
+		for combo in TimePhaseSNR.instrument_combos(instruments, min_instruments = 1):
 			histograms[combo] = rate.BinnedArray(rate.NDBins(bins))
 			histograms[combo].array[:] = numpy.array(grp[",".join(combo)])[:]
 		f.close()
-
-		if len(other_fnames) > 0:
-			for fn in other_fnames:
-				f = h5py.File(fn, "r")
-				grp = f['gstlal_p_of_instruments']
-				for combo in combos:
-					histograms[combo].array[:] += numpy.array(grp[",".join(combo)])[:]
-				f.close()
-		norm = numpy.sum([BinnedArray.array[:] for BinnedArray in histograms.values()], axis=0)
-		for combo in combos:
-			histograms[combo].array[:][norm!=0] /= norm[norm!=0]
-
-		return p_of_instruments_given_horizons(instruments = instruments, snr_thresh = snr_thresh, nbins = nbins, hmin = hmin, hmax = hmax, histograms = histograms, **kwargs)
+		return p_of_instruments_given_horizons(instruments = instruments, snr_thresh = snr_thresh, nbins = nbins, hmin = hmin, hmax = hmax, histograms = histograms)
 
 
 #
@@ -1982,17 +1954,10 @@ class InspiralExtrinsics(object):
 	"""
 	p_of_ifos = {}
 	# FIXME add Kagra
-	p_of_ifos[("H1", "K1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1L1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1V1_p_of_instruments_given_H_d.h5"))
-	p_of_ifos[("H1", "K1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1V1_p_of_instruments_given_H_d.h5"))
-	p_of_ifos[("H1", "K1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1L1_p_of_instruments_given_H_d.h5"))
-	p_of_ifos[("K1", "L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1L1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1L1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("H1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1V1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("L1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "L1V1_p_of_instruments_given_H_d.h5"))
-	p_of_ifos[("H1", "K1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1_p_of_instruments_given_H_d.h5"))
-	p_of_ifos[("K1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1L1_p_of_instruments_given_H_d.h5"))
-	p_of_ifos[("K1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1V1_p_of_instruments_given_H_d.h5"))
 
 	def __init__(self, min_instruments = 1, filename = None):
 		#

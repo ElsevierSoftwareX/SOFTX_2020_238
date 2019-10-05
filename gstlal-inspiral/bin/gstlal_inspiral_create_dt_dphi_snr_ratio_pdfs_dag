@@ -21,11 +21,10 @@ from gstlal import dagparts
 import argparse
 
 parser = argparse.ArgumentParser(description = 'generate a dt dphi covariance matrix and tree data to replace share/inspiral_dtdphi_pdf.h5')
-parser.add_argument('--psd-xml', help = 'XML containing HLVK psd')
+parser.add_argument('--psd-xml', help = 'XML containing HLV psd')
 parser.add_argument('--H-snr', type = float, help = 'H characteristic SNR')
 parser.add_argument('--L-snr', type = float, help = 'L characteristic SNR')
 parser.add_argument('--V-snr', type = float, help = 'V characteristic SNR')
-parser.add_argument('--K-snr', type = float, help = 'K characteristic SNR')
 parser.add_argument('--m1', type = float, default = 1.4, help = 'primary component mass')
 parser.add_argument('--m2', type = float, default = 1.4, help = 'secondary component mass')
 parser.add_argument('--s1', type = float, default = 0., help = 'primary (z) spin')
@@ -47,7 +46,7 @@ covJob = dagparts.DAGJob("gstlal_inspiral_compute_dtdphideff_cov_matrix", condor
 margJob = dagparts.DAGJob("gstlal_inspiral_create_dt_dphi_snr_ratio_pdfs", condor_commands = {"request_memory":"7GB", "want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
 addJob = dagparts.DAGJob("gstlal_inspiral_add_dt_dphi_snr_ratio_pdfs", condor_commands = {"request_memory":"4GB", "want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
 
-covnode =  dagparts.DAGNode(covJob, dag, parent_nodes = [], opts = {"H-snr": args.H_snr, "L-snr": args.L_snr, "V-snr": args.V_snr, "K-snr": args.K_snr, "flow": args.flow, "fhigh": args.fhigh, "m1": args.m1, "m2": args.m2, "s1": args.s1, "s2": args.s2}, input_files = {"psd-xml": args.psd_xml}, output_files = {"output":"covmat.h5"})
+covnode =  dagparts.DAGNode(covJob, dag, parent_nodes = [], opts = {"H-snr": args.H_snr, "L-snr": args.L_snr, "V-snr": args.V_snr, "flow": args.flow, "fhigh": args.fhigh, "m1": args.m1, "m2": args.m2, "s1": args.s1, "s2": args.s2}, input_files = {"psd-xml": args.psd_xml}, output_files = {"output":"covmat.h5"})
 
 num = 1000
 margnodes = []
@@ -56,9 +55,7 @@ for start in range(0, 3345408, num):
 	stop = start + num
 	margnodes.append(dagparts.DAGNode(margJob, dag, parent_nodes = [covnode], opts = {"start":str(start), "stop":str(stop)}, input_files = {"cov-mat": "covmat.h5"}, output_files = {"output":"%s/inspiral_dtdphi_pdf_%d_%d.h5" % (margJob.output_path, start, stop)}))
 
-addJob_input = ["covmat.h5"]
-addJob_input.extend([n.output_files["output"] for n in margnodes])
-addnode = dagparts.DAGNode(addJob, dag, parent_nodes = margnodes, input_files = {"": addJob_input})
+addnode = dagparts.DAGNode(addJob, dag, parent_nodes = margnodes, input_files = {"": [n.output_files["output"] for n in margnodes]})
 
 dag.write_sub_files()
 dag.write_dag()
