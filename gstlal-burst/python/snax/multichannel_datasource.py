@@ -669,7 +669,7 @@ def mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False):
 	elif data_source_info.data_source == "white_live":
 		head = {channel : pipeparts.mkfakesrc(pipeline, instrument = data_source_info.instrument, channel_name = channel, volume = 1.0, is_live = True, rate = data_source_info.channel_dict[channel]['fsamp'], timestamp_offset = int(data_source_info.seg[0]) * Gst.SECOND) for channel in channels}
 	elif data_source_info.data_source == "frames":
-		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = data_source_info.instrument[0], cache_dsc_regex = data_source_info.instrument)
+		src = pipeparts.mklalcachesrc(pipeline, location = data_source_info.frame_cache, cache_src_regex = data_source_info.instrument[0], cache_dsc_regex = data_source_info.instrument, blocksize = 1048576)
 		demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = channels)
 		# allow frame reading and decoding to occur in a different
 		# thread
