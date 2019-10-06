@@ -42,7 +42,7 @@ from glue import markup
 
 from gstlal import plotutil
 from gstlal import aggregator
-from gstlal.fxtools import utils
+from gstlal.snax import utils
 
 import matplotlib
 matplotlib.use('Agg')

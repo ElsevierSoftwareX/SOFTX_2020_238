@@ -40,7 +40,7 @@ from confluent_kafka import Consumer, KafkaError
 from ligo.scald import aggregator
 from ligo.scald import io
 
-from gstlal.fxtools import utils
+from gstlal.snax import utils
 
 #-------------------------------------------------
 #                  Functions

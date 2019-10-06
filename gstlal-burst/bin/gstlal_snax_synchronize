@@ -40,7 +40,7 @@ from lal import gpstime
 
 from confluent_kafka import Producer, Consumer, KafkaError
 
-from gstlal.fxtools import utils
+from gstlal.snax import utils
 
 #-------------------------------------------------
 #                  Functions

@@ -54,8 +54,8 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
 
-from gstlal.fxtools import sngltriggertable
-from gstlal.fxtools import utils
+from gstlal.snax import sngltriggertable
+from gstlal.snax import utils
 
 # set up confluent_kafka as an optional library
 try:

@@ -25,11 +25,11 @@ SHELL := /bin/bash # Use bash syntax
 #
 # To get the full list of commands, run:
 #
-#   $ make help -f Makefile.gstlal_feature_extractor_online
+#   $ make help -f Makefile.online
 #
 # For example, to generate the DAG needed to start an analysis, run:
 #
-#   $ make dag -f Makefile.gstlal_feature_extractor_online
+#   $ make dag -f Makefile.online
 
 #################################################################################
 # CONFIGURATION                                                                 #
@@ -184,7 +184,7 @@ MAX_STREAMS = 100
 
 ## Generate online analysis DAG
 dag : kafka_broker_$(TAG).dag $(CHANNEL_LIST)
-	gstlal_ll_feature_extractor_pipe \
+	gstlal_snax_dag_online \
 		--data-source $(DATA_SOURCE) \
 		--shared-memory-partition $(IFO)=$(SHM_PARTITION) \
 		--shared-memory-assumed-duration 1 \
@@ -263,7 +263,7 @@ clean :
 
 ## Clean directory of all files, including data products.
 clean-all :
-	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt monitor aggregator features snapshots synchronizer gstlal_feature_* kafka* zookeeper*
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.ini *.txt monitor aggregator features snapshots synchronizer gstlal_snax_* kafka* zookeeper*
 
 #################################################################################
 # SELF DOCUMENTING COMMANDS                                                     #

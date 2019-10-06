@@ -17,11 +17,11 @@ SHELL := /bin/bash # Use bash syntax
 #
 # To get the full list of commands, run:
 #
-#   $ make help -f Makefile.gstlal_feature_extractor_offline
+#   $ make help -f Makefile.offline
 #
 # To generate the DAG needed to start an analysis, run:
 #
-#   $ make dag -f Makefile.gstlal_feature_extractor_offline
+#   $ make dag -f Makefile.offline
 #
 
 #################################################################################
@@ -178,7 +178,7 @@ CONCURRENCY = 1
 
 ## Generate offline analysis DAG
 dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
-	gstlal_feature_extractor_pipe \
+	gstlal_snax_dag_offline \
 		--data-source frames \
 		--gps-start-time $(START) \
 		--gps-end-time $(STOP) \

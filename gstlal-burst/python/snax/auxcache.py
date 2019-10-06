@@ -42,7 +42,7 @@ Gst.init(None)
 from gstlal import datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
-from gstlal.fxtools import multichannel_datasource
+from gstlal.snax import multichannel_datasource
 
 #
 # =============================================================================
