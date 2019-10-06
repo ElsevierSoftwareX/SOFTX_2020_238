@@ -221,12 +221,12 @@ dag = dagparts.DAG("feature_extractor_pipe")
 
 condor_options = {"request_memory": options.request_memory, "request_cpus": options.request_cpu, "want_graceful_removal": "True", "kill_sig": "15"}
 condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, condor_options)
-feature_extractor_job = dagparts.DAGJob("gstlal_feature_extractor", condor_commands = condor_commands)
+feature_extractor_job = dagparts.DAGJob("gstlal_snax_extract", condor_commands = condor_commands)
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, data_source_info.seg, options.segment_length, options.psd_drop_time, max_template_length=max_template_length)
 
 combiner_condor_options = {"request_memory": "4GB", "request_cpus": 1, "want_graceful_removal": "True", "kill_sig": "15"}
 combiner_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, combiner_condor_options)
-feature_combiner_job = dagparts.DAGJob("gstlal_feature_combiner", condor_commands = combiner_condor_commands)
+feature_combiner_job = dagparts.DAGJob("gstlal_snax_combine", condor_commands = combiner_condor_commands)
 
 #
 # set up jobs
@@ -236,7 +236,7 @@ feature_extractor_nodes = feature_extractor_node_gen(feature_extractor_job, dag,
 
 feature_combiner_options = {
 	"verbose": options.verbose,
-	"rootdir": os.path.join(options.out_path, "gstlal_feature_extractor"),
+	"rootdir": os.path.join(options.out_path, "gstlal_snax_extract"),
 	"basename": options.description,
 	"instrument": ifo,
 	"tag": "offline",
