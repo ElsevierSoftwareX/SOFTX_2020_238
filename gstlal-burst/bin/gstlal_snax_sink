@@ -53,7 +53,8 @@ def parse_command_line():
     group = optparse.OptionGroup(parser, "File Sink Options", "General settings for configuring the file sink.")
     group.add_option("-v","--verbose", default=False, action="store_true", help = "Print to stdout in addition to writing to automatically generated log.")
     group.add_option("--log-level", type = "int", default = 10, help = "Sets the verbosity of logging. Default = 10.")
-    group.add_option("--rootdir", metavar = "path", default = ".", help = "Sets the root directory where features, logs, and metadata are stored.")
+    group.add_option("--rootdir", metavar = "path", default = ".", help = "Sets the root directory where logs and metadata are stored.")
+    group.add_option("--features-path", metavar = "path", default = ".", help = "Write features to this path. Default = .")
     group.add_option("--basename", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Sets the basename for files written to disk. Default = GSTLAL_IDQ_FEATURES")
     group.add_option("--instrument", metavar = "string", default = "H1", help = "Sets the instrument for files written to disk. Default = H1")
     group.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
@@ -123,6 +124,7 @@ class HDF5StreamSink(object):
         self.last_save_time = None
         self.last_persist_time = None
         self.rootdir = options.rootdir
+		self.base_features_path = options.features_path
         self.sample_rate = options.sample_rate
         self.write_cadence = options.write_cadence
         self.persist_cadence = options.persist_cadence
@@ -151,7 +153,7 @@ class HDF5StreamSink(object):
         """
         # set/update file names and directories with new gps time and duration
         self.feature_name = os.path.splitext(utils.to_trigger_filename(self.basename, start_time, duration, 'h5'))[0]
-        self.feature_path = utils.to_trigger_path(os.path.abspath(self.rootdir), self.basename, start_time)
+        self.feature_path = utils.to_trigger_path(os.path.abspath(self.base_features_path), self.basename, start_time)
         self.tmp_path = utils.to_trigger_path(self.tmp_dir, self.basename, start_time)
 
         # create temp and output directories if they don't exist
