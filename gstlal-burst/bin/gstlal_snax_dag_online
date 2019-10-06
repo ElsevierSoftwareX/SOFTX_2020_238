@@ -229,7 +229,7 @@ if options.condor_universe == 'local':
 else:
 	condor_options = {"request_memory":options.request_memory, "request_cpus":options.request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
 condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, condor_options)
-feature_extractor_job = dagparts.DAGJob("gstlal_feature_extractor", condor_commands = condor_commands, universe = options.condor_universe)
+feature_extractor_job = dagparts.DAGJob("gstlal_snax_extract", condor_commands = condor_commands, universe = options.condor_universe)
 feature_extractor_nodes, num_channels = feature_extractor_node_gen(feature_extractor_job, dag, [], ifo, options, data_source_info)
 
 # auxiliary jobs
@@ -239,13 +239,13 @@ if options.save_format == 'kafka':
 	else:
 		auxiliary_condor_options = {"request_memory":options.auxiliary_request_memory, "request_cpus":options.auxiliary_request_cpu, "want_graceful_removal":"True", "kill_sig":"15"}
 	auxiliary_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, auxiliary_condor_options)
-	synchronizer_job = dagparts.DAGJob("gstlal_feature_synchronizer", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
-	hdf5_sink_job = dagparts.DAGJob("gstlal_feature_hdf5_sink", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
-	monitor_job = dagparts.DAGJob("gstlal_feature_monitor", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+	synchronizer_job = dagparts.DAGJob("gstlal_snax_synchronize", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+	hdf5_sink_job = dagparts.DAGJob("gstlal_snax_sink", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+	monitor_job = dagparts.DAGJob("gstlal_snax_monitor", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
 
 	# aggregator jobs
 	if not options.disable_agg_jobs:
-		aggregator_job = dagparts.DAGJob("gstlal_feature_aggregator", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
+		aggregator_job = dagparts.DAGJob("gstlal_snax_aggregate", condor_commands = auxiliary_condor_commands, universe = options.condor_universe)
 
 	#
 	# set up options for auxiliary jobs
