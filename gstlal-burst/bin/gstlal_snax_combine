@@ -39,7 +39,7 @@ import numpy
 from ligo.segments import infinity, segment, segmentlist
 
 from gstlal import aggregator
-from gstlal.fxtools import utils
+from gstlal.snax import utils
 
 # =============================================================================
 #

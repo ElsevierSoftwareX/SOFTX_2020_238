@@ -5,9 +5,9 @@ AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 # which prevents the module from getting spread across lib and lib64
 # on e.g. CentOS.
 pkgpythondir = $(pkgpyexecdir)
-fxtoolsdir = $(pkgpythondir)/fxtools
+snaxdir = $(pkgpythondir)/snax
 
-fxtools_PYTHON = \
+snax_PYTHON = \
 	__init__.py \
 	auxcache.py \
 	utils.py \

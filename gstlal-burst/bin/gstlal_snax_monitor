@@ -37,8 +37,8 @@ from confluent_kafka import Consumer, KafkaError
 
 from ligo.scald import io
 
-from gstlal.fxtools import multichannel_datasource
-from gstlal.fxtools import utils
+from gstlal.snax import multichannel_datasource
+from gstlal.snax import utils
 
 #-------------------------------------------------
 #                  Functions

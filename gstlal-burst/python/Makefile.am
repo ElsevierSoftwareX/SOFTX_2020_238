@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib -I$(top_builddir)/lib
 
-SUBDIRS = excesspower fxtools
+SUBDIRS = excesspower snax
 
 pkgpythondir = $(pkgpyexecdir)
 
