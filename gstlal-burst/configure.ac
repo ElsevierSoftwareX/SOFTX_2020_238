@@ -24,7 +24,8 @@ AC_CONFIG_FILES([ \
 	debian/Makefile \
 	python/Makefile \
 	python/excesspower/Makefile \
-	python/fxtools/Makefile
+	python/snax/Makefile \
+	share/Makefile
 ])
 
 

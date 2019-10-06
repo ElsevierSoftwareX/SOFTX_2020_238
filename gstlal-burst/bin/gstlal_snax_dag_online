@@ -34,10 +34,10 @@ import os
 from gstlal import aggregator
 from gstlal import dagparts
 
-from gstlal.fxtools import feature_extractor
-from gstlal.fxtools import multichannel_datasource
-from gstlal.fxtools import multirate_datasource
-from gstlal.fxtools import utils
+from gstlal.snax import feature_extractor
+from gstlal.snax import multichannel_datasource
+from gstlal.snax import multirate_datasource
+from gstlal.snax import utils
 
 # =============================
 #

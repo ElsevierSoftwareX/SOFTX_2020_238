@@ -156,13 +156,13 @@ from gstlal import httpinterface
 from gstlal import pipeparts
 from gstlal import simplehandler
 
-from gstlal.fxtools import auxcache
-from gstlal.fxtools import feature_extractor
-from gstlal.fxtools import multichannel_datasource
-from gstlal.fxtools import multirate_datasource
-from gstlal.fxtools import sngltriggertable
-from gstlal.fxtools import utils
-from gstlal.fxtools import waveforms as fxwaveforms
+from gstlal.snax import auxcache
+from gstlal.snax import feature_extractor
+from gstlal.snax import multichannel_datasource
+from gstlal.snax import multirate_datasource
+from gstlal.snax import sngltriggertable
+from gstlal.snax import utils
+from gstlal.snax import waveforms as fxwaveforms
 
 #
 # Make sure we have sufficient resources

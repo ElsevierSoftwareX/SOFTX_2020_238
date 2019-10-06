@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-A program that allows diagnosis of the whitening stage of gstlal_feature_extractor
+A program that whitens timeseries
 """
 
 
@@ -49,7 +49,7 @@ from gstlal import reference_psd
 from gstlal import pipeparts
 from gstlal import simplehandler
 
-from gstlal.fxtools import multichannel_datasource
+from gstlal.snax import multichannel_datasource
 
 # global settings for whitening properties
 PSD_FFT_LENGTH = 32
