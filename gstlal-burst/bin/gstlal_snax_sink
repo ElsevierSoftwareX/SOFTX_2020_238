@@ -16,7 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-__usage__ = "gstlal_feature_hdf5_sink [--options]"
+__usage__ = "gstlal_snax_sink [--options]"
 __description__ = "an executable to dump streaming data to disk via hdf5"
 __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
@@ -124,7 +124,7 @@ class HDF5StreamSink(object):
         self.last_save_time = None
         self.last_persist_time = None
         self.rootdir = options.rootdir
-		self.base_features_path = options.features_path
+        self.base_features_path = options.features_path
         self.sample_rate = options.sample_rate
         self.write_cadence = options.write_cadence
         self.persist_cadence = options.persist_cadence

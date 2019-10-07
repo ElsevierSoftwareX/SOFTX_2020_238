@@ -16,7 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-__usage__ = "gstlal_feature_aggregator [--options]"
+__usage__ = "gstlal_snax_aggregate [--options]"
 __description__ = "an executable to aggregate and generate job metrics for streaming features"
 __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
@@ -37,8 +37,8 @@ import numpy
 
 from confluent_kafka import Consumer, KafkaError
 
-from ligo.scald import aggregator
-from ligo.scald import io
+from ligo.scald import utils as scald_utils
+from ligo.scald.io import hdf5, influx
 
 from gstlal.snax import utils
 
@@ -99,7 +99,7 @@ class StreamAggregator(object):
 
         ### other aggregator options
         self.data_type = options.data_type
-        self.last_save = aggregator.now()
+        self.last_save = scald_utils.gps_now()
 
         ### initialize consumers
         self.jobs = options.jobs
@@ -114,7 +114,7 @@ class StreamAggregator(object):
         ### set up aggregator 
         logger.info("setting up aggregator with backend: %s"%options.data_backend)
         if options.data_backend == 'influx':
-            self.agg_sink = io.influx.Aggregator(
+            self.agg_sink = influx.Aggregator(
                 hostname=options.influx_hostname,
                 port=options.influx_port,
                 db=options.influx_database_name,
@@ -123,7 +123,7 @@ class StreamAggregator(object):
                 reduce_across_tags=False,
             )
         else: ### hdf5 data backend
-            self.agg_sink = io.hdf5.Aggregator(
+            self.agg_sink = hdf5.Aggregator(
                 rootdir=options.rootdir,
                 num_processes=options.num_processes,
                 reduce_across_tags=False,
@@ -162,8 +162,8 @@ class StreamAggregator(object):
         """
         process and aggregate features from feature extraction jobs on a regular cadence
         """
-        if utils.in_new_epoch(aggregator.now(), self.last_save, 1):
-            self.last_save = aggregator.now()
+        if utils.in_new_epoch(scald_utils.gps_now(), self.last_save, 1):
+            self.last_save = scald_utils.gps_now()
 
             ### format incoming packets into metrics and timeseries
             feature_packets = [(job, self.feature_queue[job].pop()) for job in self.jobs for i in range(len(self.feature_queue[job]))]

@@ -16,7 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-__usage__ = "gstlal_feature_combiner [--options]"
+__usage__ = "gstlal_snax_combine [--options]"
 __description__ = "an executable to combine features from the batch pipeline to provide a more user-friendly output"
 __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 

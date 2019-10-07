@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-This program makes a dag to run offline gstlal_feature_extractor batch jobs
+This program makes a dag to run offline gstlal_snax_extract batch jobs
 """
 
 __author__ = 'Duncan Meacher <duncan.meacher@ligo.org>, Patrick Godwin <patrick.godwin@ligo.org>'
@@ -76,7 +76,7 @@ def analysis_segments(ifo, allsegs, boundary_seg, segment_length, psd_drop_time,
 
 def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdict, ifo, options, data_source_info, max_template_length = 30):
 	"""
-	get a dictionary of all the channels per gstlal_feature_extractor job
+	get a dictionary of all the channels per gstlal_snax_extract job
 	"""
 	feature_extractor_nodes = {}
 
@@ -106,7 +106,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 			# FIXME: hacky way of getting options to get passed correctly for channels
 			channels[0] = channels[0].split('=')[1]
 
-			outpath = os.path.join(options.out_path, "gstlal_feature_extractor")
+			outpath = os.path.join(options.out_path, "gstlal_snax_extract")
 
 			# define analysis times
 			gps_start_time = int(seg[0])
@@ -209,7 +209,7 @@ max_template_length = 30
 # create directories if needed
 #
 
-listdir = os.path.join(options.out_path, "gstlal_feature_extractor/channel_lists")
+listdir = os.path.join(options.out_path, "gstlal_snax_extract/channel_lists")
 aggregator.makedir(listdir)
 aggregator.makedir("logs")
 
