@@ -16,8 +16,8 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-__usage__ = "gstlal_feature_synchronizer [--options]"
-__description__ = "an executable to synchronize incoming gstlal feature extractor streams and send downstream"
+__usage__ = "gstlal_snax_synchronize [--options]"
+__description__ = "an executable to synchronize incoming feature streams and send downstream"
 __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
 #-------------------------------------------------

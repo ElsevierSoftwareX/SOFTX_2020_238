@@ -18,7 +18,7 @@
 
 """
 A program that measures template overlaps and how templates are spread out in the parameter space
-for gstlal_feature_extractor
+for gstlal_snax_extract
 """
 
 ####################

@@ -30,7 +30,7 @@ A program to extract features from auxiliary channel data in real time or in off
 ###
 ###    digraph llpipe {
 ###    	labeljust = "r";
-###    	label="gstlal_feature_extractor"
+###    	label="gstlal_snax_extract"
 ###    	rankdir=LR;
 ###    	graph [fontname="Roman", fontsize=24];
 ###    	edge [ fontname="Roman", fontsize=10 ];
