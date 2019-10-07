@@ -513,7 +513,7 @@ def append_options(parser):
 
 	group = optparse.OptionGroup(parser, "Data Saving Options", "Adjust parameters used for saving/persisting features to disk as well as directories specified")
 	group.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
-	group.add_option("--description", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Set the filename description in which to save the output.")
+	group.add_option("--description", metavar = "string", default = "SNAX_FEATURES", help = "Set the filename description in which to save the output.")
 	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (hdf5/kafka/bottle) of features written to disk. Default = hdf5")
 	group.add_option("--feature-mode", metavar = "string", default = "timeseries", help = "Specifies the mode for which features are generated (timeseries/etg). Default = timeseries")
 	group.add_option("--data-transfer", metavar = "string", default = "table", help = "Specifies the format of features transferred over-the-wire (table/row). Default = table")

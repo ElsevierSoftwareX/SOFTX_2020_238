@@ -169,6 +169,9 @@ def parse_command_line():
 	parser.add_option("--request-disk", default = "50GB", metavar = "integer", help = "set the requested node local scratch space size needed, default = 50GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 
+	# Feature saving options
+	parser.add_option("--features-path", metavar = "path", help = "If set, chooses an alternate directory to save the features to. Default = --out-path")
+
 	options, filenames = parser.parse_args()
 
 	# set max parallel streams to options.max_streams for use in data_source_info for splitting up channel lists to process in parallel
@@ -241,6 +244,9 @@ feature_combiner_options = {
 	"instrument": ifo,
 	"tag": "offline",
 }
+
+if options.features_path:
+	feature_combiner_options.update({"outdir": options.features_path})
 
 for seg in seglist_range(data_source_info.seg[0], data_source_info.seg[1], 50000):
 	parent_nodes = [node for (i, job_seg), node in feature_extractor_nodes.items() if seg.intersects(job_seg)]
