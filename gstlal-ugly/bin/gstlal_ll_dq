@@ -36,8 +36,8 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-from ligo.scald import aggregator
-from ligo.scald import io
+from ligo.scald import utils
+from ligo.scald.io import core, hdf5, influx
 
 from gstlal import pipeparts, datasource, simplehandler, pipeio, reference_psd
 
@@ -126,7 +126,7 @@ class PSDHandler(simplehandler.Handler):
 		# Only reduce every 100s
 		if (buftime - self.last_reduce_time) >= 100:
 			self.last_reduce_time = int(round(buftime,-2))
-			logging.info("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(aggregator.now())))
+			logging.info("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(utils.gps_now())))
 
 			data = {route: {self.instrument: {'time': list(self.timedeq), 'fields': {'data': list(self.datadeq[route])}}} for route in self.routes}
 
@@ -141,8 +141,8 @@ class PSDHandler(simplehandler.Handler):
 
 			# Save a "latest" psd
 			# NOTE: The PSD is special, we just record it. No min/median/max
-			thisdir = os.path.join(self.out_path, io.common.gps_to_leaf_directory(buftime))
-			aggregator.makedir(thisdir)
+			thisdir = os.path.join(self.out_path, core.gps_to_leaf_directory(buftime))
+			core.makedir(thisdir)
 			psd_name = "%s-PSD-%d-100.hdf5" % (self.instrument, int(round(buftime,-2)))
 			self.to_hdf5(os.path.join(thisdir, psd_name), {"freq": psd_freq, "asd": psd_data, "time": numpy.array([buftime])})
 
@@ -179,9 +179,9 @@ if __name__ == '__main__':
 
 	# set up aggregator sink
 	if options.data_backend == 'influx':
-		agg_sink = io.influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name, auth=options.enable_auth, https=options.enable_https)
+		agg_sink = influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name, auth=options.enable_auth, https=options.enable_https)
 	else: ### hdf5 data backend
-		agg_sink = io.hdf5.Aggregator(rootdir=options.out_path, num_processes=options.num_threads)
+		agg_sink = hdf5.Aggregator(rootdir=options.out_path, num_processes=options.num_threads)
 
 	# register measurement schemas for aggregators
 	for route in ('noise', 'range_history'):
