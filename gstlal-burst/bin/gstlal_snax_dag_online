@@ -17,7 +17,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 """
-This program makes a dag to run a series of gstlal_feature_extractor jobs online
+This program makes a dag to run a series of gstlal_snax_extract jobs online
 """
 
 __author__ = 'Duncan Meacher <duncan.meacher@ligo.org>, Patrick Godwin <patrick.godwin@ligo.org>'
@@ -131,7 +131,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, ifo, op
 		feature_extractor_nodes[ii] = \
 			dagparts.DAGNode(feature_extractor_job, dag, parent_nodes = parent_nodes,
 				opts = subset_options,
-				output_files = {"out-path": os.path.join(options.out_path, "gstlal_feature_extractor")}
+				output_files = {"out-path": os.path.join(options.out_path, "gstlal_snax_extract")}
 			)
 
 	num_channels = len(channel_list)

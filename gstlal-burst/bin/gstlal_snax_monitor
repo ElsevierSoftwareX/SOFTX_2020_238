@@ -16,7 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-__usage__ = "gstlal_feature_monitor [--options]"
+__usage__ = "gstlal_snax_monitor [--options]"
 __description__ = "an executable to collect and monitor streaming features"
 __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
@@ -35,7 +35,7 @@ import time
 
 from confluent_kafka import Consumer, KafkaError
 
-from ligo.scald import io
+from ligo.scald.io import hdf5, influx
 
 from gstlal.snax import multichannel_datasource
 from gstlal.snax import utils
@@ -119,7 +119,7 @@ class StreamMonitor(object):
         ### set up aggregator 
         logger.info("setting up monitor with backend: %s"%options.data_backend)
         if options.data_backend == 'influx':
-            self.agg_sink = io.influx.Aggregator(
+            self.agg_sink = influx.Aggregator(
                 hostname=options.influx_hostname,
                 port=options.influx_port,
                 db=options.influx_database_name,
@@ -128,7 +128,7 @@ class StreamMonitor(object):
                 reduce_across_tags=False,
             )
         else: ### hdf5 data backend
-            self.agg_sink = io.hdf5.Aggregator(
+            self.agg_sink = hdf5.Aggregator(
                 rootdir=options.rootdir,
                 num_processes=options.num_processes,
                 reduce_across_tags=False,
