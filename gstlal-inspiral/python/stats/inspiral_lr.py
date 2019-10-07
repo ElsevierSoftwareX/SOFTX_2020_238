@@ -112,7 +112,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	snr_min = 4.0
 
 	# SNR, \chi^2 binning definition
-	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
+	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.00001, 10, 500)))
 
 	def __init__(self, template_ids, instruments, delta_t, min_instruments = 2):
 		#
