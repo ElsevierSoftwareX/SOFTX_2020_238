@@ -55,7 +55,7 @@ def parse_command_line():
     group.add_option("--log-level", type = "int", default = 10, help = "Sets the verbosity of logging. Default = 10.")
     group.add_option("--rootdir", metavar = "path", default = ".", help = "Sets the root directory where logs and metadata are stored.")
     group.add_option("--features-path", metavar = "path", default = ".", help = "Write features to this path. Default = .")
-    group.add_option("--basename", metavar = "string", default = "GSTLAL_IDQ_FEATURES", help = "Sets the basename for files written to disk. Default = GSTLAL_IDQ_FEATURES")
+    group.add_option("--basename", metavar = "string", default = "SNAX_FEATURES", help = "Sets the basename for files written to disk. Default = SNAX_FEATURES")
     group.add_option("--instrument", metavar = "string", default = "H1", help = "Sets the instrument for files written to disk. Default = H1")
     group.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
     group.add_option("--waveform", type="string", default = "sine_gaussian", help = "Set the waveform used for producing features. Default = sine_gaussian.")
