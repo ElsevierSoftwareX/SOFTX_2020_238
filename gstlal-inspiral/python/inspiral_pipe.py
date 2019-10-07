@@ -291,6 +291,8 @@ def aggregator_layer(dag, jobs, options, job_tags):
 
 def dq_monitor_layer(dag, jobs, options):
 	outpath = 'aggregator'
+	ll_dq_jobs = []
+
 	for ifo in options.channel_dict:
 		# Data source dag options
 		if (options.data_source == "framexmit"):
@@ -331,7 +333,9 @@ def dq_monitor_layer(dag, jobs, options):
 			if options.enable_https:
 				common_opts.update({"enable-https": ""})
 
-		return dagparts.DAGNode(jobs['dq'], dag, [], opts = common_opts)
+		ll_dq_jobs.append(dagparts.DAGNode(jobs['dq'], dag, [], opts = common_opts))
+
+	return ll_dq_jobs
 
 
 def ref_psd_layer(dag, jobs, parent_nodes, segsdict, channel_dict, options):
