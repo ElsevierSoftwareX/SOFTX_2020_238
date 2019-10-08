@@ -774,12 +774,12 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 		if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_double_complex_series_around_peak(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (double complex *) this_snr_mat, this_maxdata->pad);
-			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
+			gstlal_autocorrelation_chi2((double *) this_chi2, (double complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, 0.0, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 
 		} else if (itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
 			/* extract data around peak for chisq calculation */
 			gstlal_float_complex_series_around_peak(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, (float complex *) this_snr_mat, this_maxdata->pad);
-			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, itacacpad->snr_thresh, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
+			gstlal_autocorrelation_chi2_float((float *) this_chi2, (float complex *) this_snr_mat, autocorrelation_length(itacacpad), -((int) autocorrelation_length(itacacpad)) / 2, 0.0, itacacpad->autocorrelation_matrix, itacacpad->autocorrelation_mask, itacacpad->autocorrelation_norm);
 		} else
 			g_assert_not_reached();
 	} 
@@ -1249,7 +1249,7 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// copysamps = nongapsamps
 					// outsamps = itacacpad->n + itacacpad->adjust_window
 					// peak_finding_length = itacacpad->n + itacacpad->adjust_window - 2 * itacacpad->maxdata->pad = outsamps - 2 * itacacpad->maxdata->pad
-					g_assert(availablesamps > nongapsamps || (itacacpad->EOS && availablesamps == nongapsamps));
+					g_assert(availablesamps > nongapsamps);
 					outsamps = itacacpad->n + itacacpad->adjust_window;
 					copy_nongapsamps(itacac, itacacpad, copysamps, outsamps - 2 * itacacpad->maxdata->pad, 0, -1 * (gint) itacacpad->adjust_window);
 					itacacpad->last_gap = TRUE;
@@ -1656,7 +1656,7 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 			guint num_samples_behind = (guint) ((itacac->next_output_timestamp - itacacpad->initial_timestamp) / (1000000000 / itacacpad->rate));
 			//fprintf(stderr, "itacac->next_output_timestamp = %lu, itacacpad->initial_timestamp = %lu, %u num_samples_behind, gapsamps = %u, available_samps = %u, %s\n", (guint64) itacac->next_output_timestamp, (guint64) itacacpad->initial_timestamp, num_samples_behind, gst_audioadapter_head_gap_length(itacacpad->adapter), gst_audioadapter_available_samples(itacacpad->adapter), itacacpad->instrument);
 			if(num_samples_behind > itacacpad->maxdata->pad) {
-				gst_audioadapter_flush_samples(itacacpad->adapter, MIN(num_samples_behind - itacacpad->maxdata->pad, gst_audioadapter_available_samples(itacacpad->adapter)));
+				gst_audioadapter_flush_samples(itacacpad->adapter, num_samples_behind - itacacpad->maxdata->pad);
 			} else if(num_samples_behind < itacacpad->maxdata->pad)
 				itacacpad->adjust_window = num_samples_behind;
 
