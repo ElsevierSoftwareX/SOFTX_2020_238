@@ -1,0 +1,108 @@
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=ligo.dev.o3.cbc.uber.gstlaloffline
+GROUP_USER=patrick.godwin
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+#########################
+# Triggering parameters #
+#########################
+
+# The detectors to analyze
+IFOS = H1 L1
+# Minimum number of detecors working to use
+MIN_IFOS = 1
+# The GPS start time for analysis
+START = 1187312718
+# The GPS end time for analysis
+STOP = 1187740818
+# A user tag for the run
+TAG = tag
+# Run number
+RUN=run_1
+# A web directory for output
+# cit & uwm
+WEBDIR = ~/public_html/O3a/rerank_runs/$(TAG)/$(START)-$(STOP)-$(RUN)
+# Atlas
+#WEBDIR = ~/WWW/LSC/testing/$(TAG)/$(START)-$(STOP)-test_dag-$(RUN)
+# The number of sub banks in each SVD bank file
+NUMBANKS = 2
+# the analysis directory to rerank
+ANALYSIS_DIR = /path/to/analysis
+
+##############
+# Injections #
+##############
+
+# Change as appropriate, whitespace is important
+MCHIRP_INJECTIONS := 0.78:1.67:$(ANALYSIS_DIR)/1_injections.xml 2.29:129.51:$(ANALYSIS_DIR)/2_injections.xml
+
+###################################################################################
+# Get some basic definitions.  NOTE this comes from the share directory probably. #
+###################################################################################
+
+include ${LAL_PATH}/../git/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
+
+# FIXME Is there a way to put this back in offline analysis rules?
+BANK_CACHE_STRING:=H1=$(ANALYSIS_DIR)/H1_split_bank.cache,L1=$(ANALYSIS_DIR)/L1_split_bank.cache
+#BANK_CACHE_FILES:=$(ANALYSIS_DIR)/H1_split_bank.cache $(ANALYSIS_DIR)/L1_split_bank.cache
+#BANK_CACHE_STRING:=H1=H1_split_bank.cache,L1=L1_split_bank.cache,V1=V1_split_bank.cache
+#BANK_CACHE_FILES:=$(ANALYSIS_DIR)/H1_split_bank.cache $(ANALYSIS_DIR)/L1_split_bank.cache# $(ANALYSIS_DIR)/V1_split_bank.cache
+# the point of this is to build the string e.g. H1=../bank/H1_bank.cache,L1=../bank/L1_bank.cache
+
+############
+# Workflow #
+############
+
+all : dag
+	@echo "Submit with: condor_submit_dag -maxjobs 3000 -maxidle 50 trigger_rerank_pipe.dag"
+	@echo "Monitor with: tail -f trigger_rerank_pipe.dag.dagman.out | grep -v -e ULOG -e monitoring"
+	@echo ""
+
+# Run inspiral pipe to produce dag
+dag : plots $(WEBDIR) lloid.cache dist_stats.cache $(ANALYSIS_DIR)/segments.xml.gz $(ANALYSIS_DIR)/vetoes.xml.gz
+	gstlal_inspiral_rerank_pipe \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--template-bank $(ANALYSIS_DIR)/SBANK_COMBINED-SBANK.xml.gz \
+		--web-dir $(WEBDIR) \
+		$(INJECTION_LIST) \
+		$(CONDOR_COMMANDS) \
+		--vetoes $(ANALYSIS_DIR)/vetoes.xml.gz \
+		--frame-segments-file $(ANALYSIS_DIR)/segments.xml.gz \
+		--frame-segments-name datasegments  \
+		--lloid-cache lloid.cache \
+		--dist-stats-cache dist_stats.cache \
+		--dtdphi-file /ligo/home/ligo.org/chad.hanna/code/opt/share/gstlal/inspiral_dtdphi_pdf.h5 \
+		--bank-cache $(BANK_CACHE_STRING) \
+		--analysis-path $(ANALYSIS_DIR) \
+		--min-instruments $(MIN_IFOS) \
+		--ranking-stat-samples 4194304 \
+		--mass-model=ligo
+	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_rerank_pipe.dag
+	@echo ""
+
+lloid.cache :
+	cp -r $(ANALYSIS_DIR)/ligolw_add .
+	ls ligolw_add/*/*.xml.gz | lalapps_path2cache > $@
+
+dist_stats.cache :
+	awk 1 $(ANALYSIS_DIR)/gstlal_inspiral_marginalize_likelihood/cache/*MARG_DIST_STATS*.cache > $@
+
+# Make webpage directory and copy files across
+$(WEBDIR) : $(MAKEFILE_LIST)
+	mkdir -p $(WEBDIR)/OPEN-BOX
+	cp $(MAKEFILE_LIST) $@
+	@echo ""
+
+# Makes local plots directory
+plots :
+	mkdir plots
+	@echo ""
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -rf *_split_bank*
+	@echo ""

@@ -1,0 +1,172 @@
+# main directory containing required files
+MAIN_DIR=/path/to/analysis
+
+# condor commands
+# Set the accounting tag from https://ldas-gridmon.ligo.caltech.edu/ldg_accounting/user
+ACCOUNTING_TAG=ligo.dev.o2.cbc.bbh.gstlaloffline
+GROUP_USER=patrick.godwin
+CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-command=accounting_group_user=$(GROUP_USER)
+
+#########################
+# Triggering parameters #
+#########################
+
+# The detectors to analyze
+IFOS = H1 L1
+# Minimum number of detecors working to use
+MIN_IFOS = 1
+# The GPS start time for analysis
+START = 1187312718
+# The GPS end time for analysis
+STOP = 1187740818
+# A user tag for the run
+TAG = reorg3
+# Run number
+RUN = injection_rerun_1
+# A web directory for output
+WEBDIR = ~/public_html/inj_test/$(TAG)/$(START)-$(STOP)-$(RUN)
+# The number of sub banks to process in parallel for each gstlal_inspiral job
+NUMBANKS = 2
+# The control peak time for the composite detection statistic.  If set to 0 the
+# statistic is disabled
+PEAK = 0
+# The length of autocorrelation chi-squared in sample points
+AC_LENGTH = 351
+# The minimum number of samples to include in a given time slice
+SAMPLES_MIN = 2048
+# The maximum number of samples to include in the 256 Hz or above time slices
+SAMPLES_MAX_256 = 2048
+# Low frequency cut off for the template bank placement
+LOW_FREQUENCY_CUTOFF = 15.0
+# Controls the overlap from sub bank to sub bank - helps mitigate edge effects
+# in the SVD.  Redundant templates will be removed
+OVERLAP = 30
+
+#############################
+# additional options, e.g., #
+#############################
+
+ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256)
+
+ZERO_LAG_DIR:=$(MAIN_DIR)/reorg4
+##############
+# Injections #
+##############
+
+# The seed is the string before the suffix _injections.xml
+# Change as appropriate, whitespace is important
+MCHIRP_INJECTIONS := 0.78:1.67:$(ZERO_LAG_DIR)/1_injections.xml 2.29:129.51:$(ZERO_LAG_DIR)/2_injections.xml
+# The Channel names. FIXME sadly you have to change the CHANNEL_NAMES string if
+# you want to analyze a different set of IFOS
+H1_CHANNEL=DCH-CLEAN_STRAIN_C02
+L1_CHANNEL=DCH-CLEAN_STRAIN_C02
+CHANNEL_NAMES:=--channel-name=H1=$(H1_CHANNEL) --channel-name=L1=$(L1_CHANNEL)
+
+# Set to original run directory and and zero lag database.
+# Zero lag run
+ZERO_LAG_DB:=$(ZERO_LAG_DIR)/H1L1-ALL_LLOID-1187312718-428100.sqlite
+MASS_MODEL:=gstlal_inspiral_mass_model/H1L1-ALL_MASS_MODEL-1187312718-428100.h5
+
+# These shouldn't need to be changed.
+PSD_CACHE:=$(ZERO_LAG_DIR)/reference_psd.cache
+REF_PSD:=$(ZERO_LAG_DIR)/gstlal_median_of_psds/11873/H1L1-REFERENCE_PSD-1187312718-428100.xml.gz
+SEGMENTS:=$(ZERO_LAG_DIR)/segments.xml.gz
+VETOES:=$(ZERO_LAG_DIR)/vetoes.xml.gz
+FRAME_CACHE:=$(ZERO_LAG_DIR)/frame.cache
+TISI:=$(ZERO_LAG_DIR)/tisi.xml
+TISI_INJ:=$(ZERO_LAG_DIR)/inj_tisi.xml
+MARG:=$(ZERO_LAG_DIR)/marginalized_likelihood.xml.gz
+MARG_ZL:=$(ZERO_LAG_DIR)/marginalized_likelihood_with_zerolag.xml.gz
+POSTMARG:=$(ZERO_LAG_DIR)/post_marginalized_likelihood.xml.gz
+
+WORK_DIR:=$(PWD)
+
+#
+# Get some basic definitions.  NOTE this comes from the share directory probably.
+#
+
+include ${LAL_PATH}../git/gstlal/gstlal-inspiral/share/Makefile.offline_analysis_rules
+#include $(MAIN_DIR)/Makefile.offline_analysis_rules
+
+# FIXME Is there a way to put this back in offline analysis rules?
+#BANK_CACHE_STRING:=H1=H1_split_bank.cache,L1=L1_split_bank.cache
+BANK_CACHE_FILES:=H1_split_bank.cache L1_split_bank.cache
+
+#
+# Workflow
+#
+
+all : dag SNR_sed
+
+SNR_sed : gstlal_inspiral_injection_snr.sub
+	sed -i 's@environment = GST_REGISTRY_UPDATE=no;@environment = "GST_REGISTRY_UPDATE=no LD_PRELOAD=$(MKLROOT)/lib/intel64/libmkl_core.so"@g' gstlal_inspiral_injection_snr.sub
+
+dag : svd_bank.cache dist_stats.cache $(BANK_CACHE_FILES) $(PSD_CACHE) $(REF_PSD) $(ZERO_LAG_DB) $(SEGMENTS) $(VETOES) $(FRAME_CACHE) $(TISI) $(TISI_INJ) plots $(WEBDIR) $(INJECTIONS) $(MARG) $(MARG_LZ) $(POSTMARG) $(MASS_MODEL)
+	cp $(MARG) .
+	cp $(POSTMARG) .
+	cp $(MARG_ZL) .
+	cp $(REF_PSD) .
+	cp $(PSD_CACHE) .
+	gstlal_inspiral_pipe \
+		--injection-only \
+		--data-source frames \
+		--gps-start-time $(START) \
+		--gps-end-time $(STOP) \
+		--frame-cache $(FRAME_CACHE) \
+		--frame-segments-file $(SEGMENTS) \
+		--vetoes $(VETOES) \
+		--frame-segments-name datasegments  \
+		--control-peak-time $(PEAK) \
+		--fir-stride 1 \
+		--web-dir $(WEBDIR) \
+		--time-slide-file $(TISI) \
+		--inj-time-slide-file $(TISI_INJ) \
+		$(INJECTION_LIST) \
+		$(CHANNEL_NAMES) \
+		$(CONDOR_COMMANDS) \
+		--tolerance 0.9999 \
+		--flow $(LOW_FREQUENCY_CUTOFF) \
+		--autocorrelation-length $(AC_LENGTH) \
+		--overlap $(OVERLAP) \
+		--bank-cache $(BANK_CACHE_STRING) \
+		--svd-bank-cache svd_bank.cache \
+		--dist-stats-cache dist_stats.cache \
+		--non-injection-db $(ZERO_LAG_DB) \
+		--psd-cache reference_psd.cache \
+		--reference-psd $(REF_PSD) \
+		--mass-model=ligo \
+		--marginalized-likelihood-file marginalized_likelihood.xml.gz \
+		--marginalized-likelihood-with-zerolag-file marginalized_likelihood_with_zerolag.xml.gz \
+		--min-instruments $(MIN_IFOS) \
+		$(ADDITIONAL_DAG_OPTIONS) \
+		--ranking-stat-samples 4194304
+	sed -i '1s/^/JOBSTATE_LOG logs\/trigger_pipe.jobstate.log\n/' trigger_pipe.dag
+
+$(WEBDIR) : $(MAKEFILE_LIST)
+	mkdir -p $(WEBDIR)/OPEN-BOX
+
+plots :
+	mkdir plots
+
+$(MASS_MODEL) :
+	mkdir -p gstlal_inspiral_mass_model
+	cp $(ZERO_LAG_DIR)/$(MASS_MODEL) $@
+
+%_split_bank.cache :
+	cp $(ZERO_LAG_DIR)/$@ .
+
+dist_stats.cache :
+	cd $(ZERO_LAG_DIR)/gstlal_inspiral_marginalize_likelihood && ls | grep "MARG_DIST_STATS" | lalapps_path2cache | sort > $(WORK_DIR)/dist_stats.cache
+
+svd_bank.cache :
+	cd $(ZERO_LAG_DIR)/gstlal_svd_bank && ls | grep "SVD" | lalapps_path2cache | sort > $(WORK_DIR)/svd_bank.cache
+
+clean :
+	-rm -rvf *.sub *.dag* *.cache *.sh logs *.sqlite plots *.html Images *.css *.js
+	-rm -rvf lalapps_run_sqlite/ ligolw_* gstlal_*
+	-rm -vf segments.xml.gz tisi.xml H1-*.xml H1_*.xml L1-*.xml L1_*xml V1-*.xml V1_*xml ?_injections.xml ????-*_split_bank-*.xml vetoes.xml.gz
+	-rm -vf *marginalized*.xml.gz *-ALL_LLOID*.xml.gz
+	-rm -vf tisi0.xml tisi1.xml
+	-rm -rf *_split_bank*
+	-rm -rf nogaps.xml segdb.xml
+	-rm -rf bank_aligned_spin.xml.gz
