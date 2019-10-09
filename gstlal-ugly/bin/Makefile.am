@@ -33,8 +33,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inj_frames \
 	gstlal_cache_to_segments \
 	gstlal_ligolw_add_without_reassign \
-	gstlal_ll_inspiral_aggregator \
-	gstlal_ll_inspiral_trigger_aggregator \
 	gstlal_ll_dq \
 	gstlal_condor_top \
 	gstlal_injsplitter \
