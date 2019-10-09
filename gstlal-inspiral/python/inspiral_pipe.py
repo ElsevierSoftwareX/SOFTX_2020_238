@@ -519,7 +519,7 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 					ignore[injections].append(int(bgbin_index))
 
 		# FIXME choose better splitting?
-		numchunks = 50
+		numchunks = 10
 
 		# only use a channel dict with the relevant channels
 		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
