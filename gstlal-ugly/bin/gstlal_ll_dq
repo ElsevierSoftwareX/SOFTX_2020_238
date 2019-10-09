@@ -126,7 +126,7 @@ class PSDHandler(simplehandler.Handler):
 		# Only reduce every 100s
 		if (buftime - self.last_reduce_time) >= 100:
 			self.last_reduce_time = int(round(buftime,-2))
-			logging.info("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(utils.gps_now())))
+			logging.debug("reducing data and writing PSD snapshot for %d @ %d" % (buftime, int(utils.gps_now())))
 
 			data = {route: {self.instrument: {'time': list(self.timedeq), 'fields': {'data': list(self.datadeq[route])}}} for route in self.routes}
 
@@ -175,7 +175,8 @@ class PSDHandler(simplehandler.Handler):
 if __name__ == '__main__':
 	options, filenames = parse_command_line()
 
-	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
+	log_level = logging.DEBUG if options.verbose else logging.INFO
+	logging.basicConfig(level = log_level, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
 
 	# set up aggregator sink
 	if options.data_backend == 'influx':
