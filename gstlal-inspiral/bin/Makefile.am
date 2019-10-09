@@ -55,6 +55,8 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_reset_likelihood \
 	gstlal_inspiral_combine_injection_sets \
 	gstlal_inspiral_svd_bank_pipe \
+	gstlal_ll_inspiral_aggregator \
+	gstlal_ll_inspiral_trigger_aggregator \
 	gstlal_ll_inspiral_calculate_range \
 	gstlal_ll_inspiral_daily_page \
 	gstlal_ll_inspiral_daily_page_online \
