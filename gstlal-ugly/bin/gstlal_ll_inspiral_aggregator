@@ -62,6 +62,7 @@ def parse_command_line():
 	parser.add_argument("--enable-auth", action = "store_true", help = "If set, enables authentication for the influx aggregator.")
 	parser.add_argument("--enable-https", action = "store_true", help = "If set, enables HTTPS connections for the influx aggregator.")
 	parser.add_argument("--across-jobs", action = "store_true", help = "If set, aggregate data across jobs as well.")
+	parser.add_argument("-v","--verbose", default=False, action="store_true", help = "Print to stdout in addition to writing to automatically generated log.")
 
 	args = parser.parse_args()
 
@@ -89,7 +90,9 @@ if __name__ == '__main__':
 	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
 	routes = options.route
 
-	logging.basicConfig(level = logging.INFO, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
+	log_level = logging.DEBUG if options.verbose else logging.INFO
+	logging.basicConfig(format = '%(asctime)s | ll_inspiral_aggregator : %(levelname)s : %(message)s')
+	logging.getLogger().setLevel(log_level)
 
 	# We instantiate multiple consumers (based on --num-threads) to subscribe to all of our topics, i.e., jobs
 	if options.kafka_server:
@@ -111,6 +114,7 @@ if __name__ == '__main__':
 		consumer = None
 
 	# set up aggregator sink
+	logging.info("setting up aggregator...")
 	if options.data_backend == 'influx':
 		agg_sink = io.influx.Aggregator(
 			hostname=options.influx_hostname,
@@ -128,32 +132,34 @@ if __name__ == '__main__':
 		agg_sink.register_schema(route, columns='data', column_key='data', tags='job', tag_key='job')
 
 	# start an infinite loop to keep updating and aggregating data
+	logging.info("starting up...")
 	while True:
-		logging.info("sleeping for %.1f s" % options.dump_period)
+		logging.debug("sleeping for %.1f s" % options.dump_period)
 		time.sleep(options.dump_period)
 
 		if consumer:
 			# this is not threadsafe!
-			logging.info("retrieving data from kafka")
+			logging.debug("retrieving data from kafka")
 			start = timeit.default_timer()
 			datadata = io.kafka.retrieve_timeseries(consumer, routes, max_records = 2 * len(jobs) * len(routes))
 			elapsed = timeit.default_timer() - start
-			logging.info("time to retrieve data: %.1f s" % elapsed)
+			logging.debug("time to retrieve data: %.1f s" % elapsed)
 		else:
-			logging.info("retrieving data from bottle routes")
+			logging.debug("retrieving data from bottle routes")
 			datadata = io.http.retrieve_timeseries(options.base_dir, jobs, routes, options.job_tag, num_threads=options.num_threads)
 
 		# store and reduce data for each job
 		start = timeit.default_timer()
 		for route in routes:
-			logging.info("storing and reducing timeseries for measurement: %s" % route)
+			logging.debug("storing and reducing timeseries for measurement: %s" % route)
 			for aggregate in options.data_type:
 				agg_sink.store_columns(route, datadata[route], aggregate=aggregate)
 		elapsed = timeit.default_timer() - start
-		logging.info("time to store/reduce timeseries: %.1f s" % elapsed)
+		logging.debug("time to store/reduce timeseries: %.1f s" % elapsed)
 
 	# close connection to consumer if using kafka
 	if consumer:
+		logging.info("shutting down consumer...")
 		consumer.close()
 
 	#
