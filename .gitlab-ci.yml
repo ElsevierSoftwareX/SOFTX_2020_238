@@ -319,7 +319,7 @@ test:gstlal-burst:
     - gst-inspect-1.0
 
     - cd gstlal-burst
-    - python -m pytest -v --doctest-modules --ignore python/excesspower --ignore tests/trigger_test_01.py
+    - python -m pytest -v --doctest-modules --ignore python/excesspower --ignore python/string --ignore tests/trigger_test_01.py
   only:
     - schedules
   allow_failure: true
