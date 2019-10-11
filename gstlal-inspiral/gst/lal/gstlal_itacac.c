@@ -1614,8 +1614,6 @@ static GstFlowReturn aggregate(GstAggregator *aggregator, gboolean timeout)
 		// timestamp
 		for(padlist = GST_ELEMENT(aggregator)->sinkpads; padlist != NULL; padlist = padlist->next) {
 			GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
-			if(gst_audioadapter_available_samples(itacacpad->adapter) == 0)
-				continue;
 
 			if(padlist == GST_ELEMENT(aggregator)->sinkpads)
 				itacac->next_output_timestamp = itacacpad->initial_timestamp;
