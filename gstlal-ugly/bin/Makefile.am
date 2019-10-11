@@ -11,6 +11,7 @@ dist_bin_SCRIPTS = \
 	gstlal_harmonic_mean_psd \
 	gstlal_mock_data_server \
 	gstlal_ilwdify \
+	gstlal_inspiral_activation_counts \
 	gstlal_inspiral_add_metric_overlaps \
 	gstlal_inspiral_best_coinc_file \
 	gstlal_inspiral_calc_likelihood_by_bin \

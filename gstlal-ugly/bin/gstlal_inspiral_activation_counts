@@ -1,0 +1,111 @@
+#!/usr/bin/python
+import sys
+import itertools
+from gstlal import metric as metric_module
+from ligo.lw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw import lsctables, param, array
+import numpy
+import argparse
+import h5py
+from gstlal import svd_bank
+
+@array.use_in
+@param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+def mchirp(m1, m2):
+	return (m1*m2)**.6 / (m1+m2)**.2
+
+# Cody's injection cutting scheme
+def mchirp_bounds(ml, mh):
+	if mh < 10:
+		return 0.65*m1, 1.35*mh
+	elif mh < 20:
+		return 0.5*m1, 1.5*mh
+	else:
+		return 0.5*m1, 2.0*mh
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--output", help = "provide the output file")
+parser.add_argument("--psd-xml-file", help = "provide a psd xml file")
+parser.add_argument("--svd-file", help = "provide the bank file for which overlaps will be calculated")
+parser.add_argument("--m1", action = "append", help = "provide the start:stop:num parameters for mass 1, e.g., 1:3:100")
+parser.add_argument("--m2", action = "append", help = "provide the start:stop:num parameters for mass 2, e.g., 1:3:100")
+
+args = parser.parse_args()
+
+outfile = open(args.output, "w")
+
+g_ij = metric_module.Metric(
+	args.psd_xml_file,
+	coord_func = metric_module.x_y_z_zn_func,
+	duration = 1.0, # FIXME!!!!!
+	flow = 10,
+	fhigh = 1024,
+	approximant = "IMRPhenomD"
+)
+
+sngl_inspiral_table = []
+for n, bank in enumerate(svd_bank.read_banks(args.svd_file, contenthandler = LIGOLWContentHandler, verbose = True)):
+	sngl_inspiral_table.extend([row for row in bank.sngl_inspiral_table])
+
+min_mchirp = min(row.mchirp for row in sngl_inspiral_table)
+max_mchirp = max(row.mchirp for row in sngl_inspiral_table)
+
+def x_y_z_zn_from_row(row):
+	return [metric_module.x_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+		metric_module.y_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+		metric_module.z_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
+		metric_module.zn_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z)
+		]
+
+print >> outfile, "m1 start, m1 stop, m2 start, m2 stop, activation counts"
+
+# compute template match functions:
+
+# put the templates in a useful form
+tmps = numpy.array([x_y_z_zn_from_row(row) for row in sngl_inspiral_table])
+
+print "computing metrics"
+metrics = [(tmp, g_ij(tmp)[0]) for tmp in tmps]
+	
+
+for m1, m2 in zip(args.m1, args.m2):
+
+	print m1, m2
+
+	m1s,m1e,m1n = [float(x) for x in m1.split(":")]
+	m2s,m2e,m2n = [float(x) for x in m2.split(":")]
+
+
+	# uniform population in m1 / m2 space
+	signals = []
+	weights = []
+	len_signals = 0
+	print "calculating signal pop"
+	for m1,m2 in itertools.product(numpy.logspace(numpy.log10(m1s), numpy.log10(m1e), m1n), numpy.logspace(numpy.log10(m2s), numpy.log10(m2e), m2n)):
+		# assume zero spin
+		len_signals += 1
+		if mchirp(m1, m2) <= max_mchirp and mchirp(m1, m2) >= min_mchirp:
+			signals.append(numpy.array([metric_module.x_from_m1_m2_s1_s2(m1, m2, 0, 0), metric_module.y_from_m1_m2_s1_s2(m1, m2, 0, 0), 0, 0]))
+			# Correct for the logarithmic distribution
+			weights.append(m1*m2)
+
+	count = 0
+	print "computing counts for %d signals" % len(signals)
+		
+	for n, (tmp, g) in enumerate(metrics):
+		print "tmp %d/%d" % (n, len(metrics))
+		def match(vec2, vec1 = tmp, g = g):
+			return  g_ij.pseudo_match(g, vec1, vec2)
+		# Assume an SNR 10 signal...What should this be?? Some function like this?
+		matches =  map(match, signals)
+		snrs = numpy.linspace(8., 20., 13)
+		for rho in snrs:
+			count += rho**-4 * sum(numpy.exp(-rho**2*(1.0 - x)**2/2.) * w for x, w in zip(matches, weights) if x <= 1.0) / len_signals / sum(snrs**-4)
+
+	print >> outfile, "%f, %f, %f, %f, %e" % (m1s, m1e, m2s, m2e, count)
