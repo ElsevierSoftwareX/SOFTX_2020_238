@@ -58,6 +58,7 @@ from lal import series
 from gstlal import far
 from gstlal import lvalert_helper
 from gstlal import plotfar
+from gstlal import plotpsd
 
 import matplotlib
 matplotlib.rcParams.update({
@@ -164,7 +165,7 @@ def plot_snrchisq(instrument, rankingstat, plot_type, max_snr, snrchisq = None):
 #
 # =============================================================================
 #
-	
+
 
 def main(client=None):
 	#
@@ -191,15 +192,15 @@ def main(client=None):
 		lvnodes = ['test_gstlal_allsky']
 	else:
 		lvnodes = ['cbc_gstlal_allsky']
-	
+
 	#
 	# start LVAlert listener loop:
 	#
 	try:
 		logging.info("connecting to %s" % options.lvalert_server_url)
-		if client.connect(): 
+		if client.connect():
 			logging.info("connected to %s" % options.lvalert_server_url)
-		else: 
+		else:
 			logging.info("could not connect to %s, exiting" % options.lvalert_server_url)
 			exit()
 
@@ -219,7 +220,7 @@ def main(client=None):
 
 	except (KeyboardInterrupt, SystemExit):
 		logging.info("exit signal received, disconnecting from lvalert")
-		client.abort() 
+		client.abort()
 
 #
 # the uber plotter class that responds to alerts:
@@ -240,7 +241,7 @@ class uber_plotter(object):
 		logging.info("Alert Contents: %s" % lvalert_data)
 
 		gid = None
-		
+
 		# check for the right filenames:
         	if "filename" in lvalert_data["data"]:
                 	filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
@@ -250,14 +251,14 @@ class uber_plotter(object):
         			logging.info("generating ranking plots for %s" % gid)
 				try:
         				self.generate_ranking_plots(gid)
-				except Exception, err: 
+				except Exception, err:
 					logging.info(traceback.print_exc())
                 	elif filename in (u"psd.xml.gz",):
                         	logging.info("psd.xml.gz available for %s" % gid)
         			logging.info("generating psd plots for %s" % gid)
 				try:
         				self.generate_psd_plots(gid)
-				except Exception, err: 
+				except Exception, err:
 					logging.info(traceback.print_exc())
         		else:
                         	logging.info("filename is not 'ranking_data.xml.gz' or 'psd.xml.gz'.  skipping")
@@ -265,118 +266,118 @@ class uber_plotter(object):
                 	logging.info("json key filename not in lvalert data, skipping")
 
 
-#						#
-#---- Generate plots from ranking stat file ----#
-#						#
+	#						#
+	#---- Generate plots from ranking stat file ----#
+	#						#
 
-        def generate_ranking_plots(self, gid=None):
-        	#
-        	# download candidate's data
-        	#
-        	coinc_xmldoc, rankingstat, rankingstatpdf, fapfar = get_files(gracedb_client=self.gracedb, graceid=gid)
-        	coinc_event_table = lsctables.CoincTable.get_table(coinc_xmldoc)
-        	coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
-        	try:
-        		coinc_event, = coinc_event_table
-        		coinc_inspiral, = coinc_inspiral_table
-        	except ValueError:
-        		raise ValueError("document does not contain exactly one candidate")
-        	if [(row.search, row.search_coinc_type) for row in lsctables.CoincDefTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_event.coinc_def_id] != [(InspiralCoincDef.search, InspiralCoincDef.search_coinc_type)]:
-        		raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
-        	offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
-        	sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
-
-
-
-        	for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
-        		for instrument in rankingstat.instruments:
-        			if instrument in sngl_inspirals:
-        				# place marker on plot
-        				fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
-        			else:
-        				# no sngl for this instrument
-        				fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr)
-        			filename = "%s_%s_%s_snrchi.png" % (gid, instrument, plot_type)
-        			if not self.opts.no_upload:
-        				lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
-        			if self.opts.output_path is not None:
-        				filename = os.path.join(self.opts.output_path, filename)
-        				logging.info("writing %s ..." % filename)
-        				fig.savefig(filename)
+	def generate_ranking_plots(self, gid=None):
+		#
+		# download candidate's data
+		#
+		coinc_xmldoc, rankingstat, rankingstatpdf, fapfar = get_files(gracedb_client=self.gracedb, graceid=gid)
+		coinc_event_table = lsctables.CoincTable.get_table(coinc_xmldoc)
+		coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+		try:
+			coinc_event, = coinc_event_table
+			coinc_inspiral, = coinc_inspiral_table
+		except ValueError:
+			raise ValueError("document does not contain exactly one candidate")
+		if [(row.search, row.search_coinc_type) for row in lsctables.CoincDefTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_event.coinc_def_id] != [(InspiralCoincDef.search, InspiralCoincDef.search_coinc_type)]:
+			raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
+		offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
+		sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 
 
-        	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
-        	filename = "%s_likehoodratio_ccdf.png" % gid
-        	if not self.opts.no_upload:
-        		lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
-        	if self.opts.output_path is not None:
-        		filename = os.path.join(self.opts.output_path, filename)
-        		logging.info("writing %s ..." % filename)
-        		fig.savefig(filename)
+
+		for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
+			for instrument in rankingstat.instruments:
+				if instrument in sngl_inspirals:
+					# place marker on plot
+					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
+				else:
+					# no sngl for this instrument
+					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr)
+				filename = "%s_%s_%s_snrchi.png" % (gid, instrument, plot_type)
+				if not self.opts.no_upload:
+					lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
+				if self.opts.output_path is not None:
+					filename = os.path.join(self.opts.output_path, filename)
+					logging.info("writing %s ..." % filename)
+					fig.savefig(filename)
 
 
-        	fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
-        	filename = "%s_horizon_distances.png" % gid
-        	if not self.opts.no_upload:
-        		lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
-        	if self.opts.output_path is not None:
-        		filename = os.path.join(self.opts.output_path, filename)
-        		logging.info("writing %s ..." % filename)
-        		fig.savefig(filename)
+		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
+		filename = "%s_likehoodratio_ccdf.png" % gid
+		if not self.opts.no_upload:
+			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
+		if self.opts.output_path is not None:
+			filename = os.path.join(self.opts.output_path, filename)
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
 
 
-        	fig = plotfar.plot_rates(rankingstat)
-        	filename = "%s_rates.png" % gid
-        	if not self.opts.no_upload:
-        		lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Instrument combo rates", tagname = "background")
-        	if self.opts.output_path is not None:
-        		filename = os.path.join(self.opts.output_path, filename)
-        		logging.info("writing %s ..." % filename)
-        		fig.savefig(filename)
+		fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
+		filename = "%s_horizon_distances.png" % gid
+		if not self.opts.no_upload:
+			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
+		if self.opts.output_path is not None:
+			filename = os.path.join(self.opts.output_path, filename)
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
 
 
-#						#
-#--------  Generate plots from psd file --------#
-#						#
+		fig = plotfar.plot_rates(rankingstat)
+		filename = "%s_rates.png" % gid
+		if not self.opts.no_upload:
+			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Instrument combo rates", tagname = "background")
+		if self.opts.output_path is not None:
+			filename = os.path.join(self.opts.output_path, filename)
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
+
+
+	#						#
+	#--------  Generate plots from psd file --------#
+	#						#
 
 	def generate_psd_plots(self, gid=None):
-        	psds = get_psds(gracedb_client=self.gracedb, 
+		psds = get_psds(gracedb_client=self.gracedb,
 				graceid=gid, ignore_404 = self.opts.skip_404)
-        	if psds is None: 
+		if psds is None:
 			logging.info("Could not get_psds, exiting loop")
 			return
 
-        	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(self.gracedb, gid)
+		coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(self.gracedb, gid)
 
-        	#
-        	# PSD plot
-        	#
+		#
+		# PSD plot
+		#
 
-        	fig = plotpsd.plot_psds(psds, coinc_xmldoc, plot_width = 800)
-        	fig.tight_layout()
+		fig = plotpsd.plot_psds(psds, coinc_xmldoc, plot_width = 800)
+		fig.tight_layout()
 
-        	filename = "%s_psd.%s" % (gid, self.opts.format)
-       		if options.no_upload:
-                	logging.info("writing %s ..." % filename)
-                	fig.savefig(filename)
-        	else:
-                	lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "strain spectral density plot", tagname = "psd")
+		filename = "%s_psd.%s" % (gid, self.opts.format)
+		if self.opts.no_upload:
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
+		else:
+			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "strain spectral density plot", tagname = "psd")
 
-        	#
-        	# Cumulative SNRs plot
-        	#
+		#
+		# Cumulative SNRs plot
+		#
 
-        	fig = plotpsd.plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 800)
-        	fig.tight_layout()
+		fig = plotpsd.plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 800)
+		fig.tight_layout()
 
-        	filename = "%s_cumulative_snrs.%s" % (gid, self.opts.format)
-        	if self.opts.no_upload:
-                	logging.info("writing %s ..." % filename)
-                	fig.savefig(filename)
-        	else:
-                	lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
+		filename = "%s_cumulative_snrs.%s" % (gid, self.opts.format)
+		if self.opts.no_upload:
+			logging.info("writing %s ..." % filename)
+			fig.savefig(filename)
+		else:
+			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
 
-        	logging.info("finished processing psd plot for %s" % gid)
+		logging.info("finished processing psd plot for %s" % gid)
 
 
 
