@@ -8,9 +8,9 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1239984018 + 10000 | bc)
-#1239984018
-END = $(shell echo 1240048818 | bc)
+START = $(shell echo 1239984268 - 256 | bc)
+#1239997514 roaming line change
+END = $(shell echo 1239984268 + 64542 + 256 | bc)
 #1240048818
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
@@ -91,7 +91,7 @@ $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS-*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_realKappas_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
-	#GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSREALKAPPASCONFIGS)
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSREALKAPPASCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_REALKAPPASTEST-12520884*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_hoft_DCS_realKappasSRC_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir

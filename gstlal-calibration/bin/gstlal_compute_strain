@@ -1868,15 +1868,15 @@ if not compute_exact_kappas and (compute_fs or compute_srcq):
 		smooth_fs_squared_almost_nogate = pipeparts.mkaudioamplify(pipeline, smooth_XiR_nogate, src_pcal_line_freq)
 		smooth_fs_squared_nogate = pipeparts.mkaudioamplify(pipeline, smooth_fs_squared_almost_nogate, src_pcal_line_freq)
 		if src_pcal_line_freq == act_pcal_line_freq and "pcal1_linefreq" in head_dict:
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification", 1)
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification", 1)
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification", 1)
-			head_dict["pcal1_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared_almost, "timestamped_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared, "timestamped_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared_almost_nogate, "timestamped_average", "amplification", 1)
+			head_dict["pcal1_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared_nogate, "timestamped_average", "amplification", 1)
 		elif src_pcal_line_freq != act_pcal_line_freq and "pcal4_linefreq" in head_dict:
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost, "current_average", "amplification", 1)
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared, "current_average", "amplification", 1)
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_almost_nogate, "current_average", "amplification", 1)
-			head_dict["pcal4_linefreq"].connect("notify::current-average", calibration_parts.update_property_simple, smooth_fs_squared_nogate, "current_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared_almost, "timestamped_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared, "timestamped_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared_almost_nogate, "timestamped_average", "amplification", 1)
+			head_dict["pcal4_linefreq"].connect("notify::timestamped-average", calibration_parts.update_timestamped_property, smooth_fs_squared_nogate, "timestamped_average", "amplification", 1)
 
 		smooth_fs_squared = pipeparts.mktee(pipeline, smooth_fs_squared)
 

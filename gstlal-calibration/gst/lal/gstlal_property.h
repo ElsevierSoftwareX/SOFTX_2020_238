@@ -76,6 +76,7 @@ struct _GSTLALProperty {
 	gint64 average_samples;
 	gboolean update_when_change;
 	double current_average;
+	guint64 timestamp;
 };
 
 

@@ -86,6 +86,7 @@ enum property {
 	ARG_SHIFT_SAMPLES,
 	ARG_UPDATE_WHEN_CHANGE,
 	ARG_CURRENT_AVERAGE,
+	ARG_TIMESTAMPED_AVERAGE,
 	ARG_FAKE
 };
 
@@ -108,7 +109,7 @@ static void rebuild_workspace_and_reset(GObject *object) {
 
 
 #define DEFINE_AVERAGE_INPUT_DATA(DTYPE) \
-static void average_input_data_ ## DTYPE(GSTLALProperty *element, DTYPE *src, guint64 src_size, guint64 pts) { \
+static void average_input_data_ ## DTYPE(GSTLALProperty *element, DTYPE *src, guint64 src_size) { \
  \
 	gint64 i; \
 	if(element->update_when_change) { \
@@ -117,6 +118,10 @@ static void average_input_data_ ## DTYPE(GSTLALProperty *element, DTYPE *src, gu
 			if((double) src[i] != element->current_average) { \
 				element->current_average = (double) src[i]; \
 				GST_LOG_OBJECT(element, "Just computed new property"); \
+				/* When exactly did this change occur? */ \
+				element->timestamp += gst_util_uint64_scale_int_round((guint64) i, GST_SECOND, element->rate); \
+				/* Let other elements know when the change occurred */ \
+				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TIMESTAMPED_AVERAGE]); \
 				/* Let other elements know about the update */ \
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_CURRENT_AVERAGE]); \
 			} \
@@ -127,7 +132,7 @@ static void average_input_data_ ## DTYPE(GSTLALProperty *element, DTYPE *src, gu
 		if(element->num_in_avg) \
 			start_sample = 0; \
 		else \
-			start_sample = (gint64) (element->update_samples - (gst_util_uint64_scale_int_round(pts, element->rate, GST_SECOND) + element->average_samples - element->shift_samples) % element->update_samples) % element->update_samples; \
+			start_sample = (gint64) (element->update_samples - (gst_util_uint64_scale_int_round(element->timestamp, element->rate, GST_SECOND) + element->average_samples - element->shift_samples) % element->update_samples) % element->update_samples; \
  \
 		/* How many samples from this buffer will we need to add into this average? */ \
 		samples_to_add = element->average_samples - element->num_in_avg < (gint64) src_size - start_sample ? element->average_samples - element->num_in_avg : (gint64) src_size - start_sample; \
@@ -145,8 +150,13 @@ static void average_input_data_ ## DTYPE(GSTLALProperty *element, DTYPE *src, gu
 				/* We still need to divide by n to get the average */ \
 				element->current_average /= element->num_in_avg; \
  \
+				/* When exactly did this change occur? */ \
+				element->timestamp += gst_util_uint64_scale_int_round((guint64) samples_to_add, GST_SECOND, element->rate); \
+ \
 				GST_LOG_OBJECT(element, "Just computed new property"); \
  \
+				/* Let other elements know when the change occurred */ \
+				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_TIMESTAMPED_AVERAGE]); \
 				/* Let other elements know about the update */ \
 				g_object_notify_by_pspec(G_OBJECT(element), properties[ARG_CURRENT_AVERAGE]); \
  \
@@ -258,6 +268,7 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		if(!element->update_when_change)
 			element->current_average = 0.0;
 	}
+	element->timestamp = GST_BUFFER_PTS(buffer);
 	element->next_in_offset = GST_BUFFER_OFFSET_END(buffer);
 	GST_DEBUG_OBJECT(element, "have buffer spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(buffer));
 
@@ -271,13 +282,13 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		case GSTLAL_PROPERTY_SIGNED:
 			switch(element->unit_size) {
 			case 1:
-				average_input_data_gint8(element, (gint8 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_gint8(element, (gint8 *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			case 2:
-				average_input_data_gint16(element, (gint16 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_gint16(element, (gint16 *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			case 4:
-				average_input_data_gint32(element, (gint32 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_gint32(element, (gint32 *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			default:
 				g_assert_not_reached();
@@ -287,13 +298,13 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		case GSTLAL_PROPERTY_UNSIGNED:
 			switch(element->unit_size) {
 			case 1:
-				average_input_data_guint8(element, (guint8 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_guint8(element, (guint8 *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			case 2:
-				average_input_data_guint16(element, (guint16 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_guint16(element, (guint16 *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			case 4:
-				average_input_data_guint32(element, (guint32 *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_guint32(element, (guint32 *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			default:
 				g_assert_not_reached();
@@ -303,10 +314,10 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 		case GSTLAL_PROPERTY_FLOAT:
 			switch(element->unit_size) {
 			case 4:
-				average_input_data_float(element, (float *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_float(element, (float *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			case 8:
-				average_input_data_double(element, (double *) mapinfo.data, mapinfo.size / element->unit_size, GST_BUFFER_PTS(buffer));
+				average_input_data_double(element, (double *) mapinfo.data, mapinfo.size / element->unit_size);
 				break;
 			default:
 				g_assert_not_reached();
@@ -402,6 +413,23 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_double(value, element->current_average);
 		break;
 
+	case ARG_TIMESTAMPED_AVERAGE: ;
+		GValue varray = G_VALUE_INIT;
+		g_value_init(&varray, GST_TYPE_ARRAY);
+		GValue t = G_VALUE_INIT;
+		GValue avg = G_VALUE_INIT;
+		g_value_init(&t, G_TYPE_DOUBLE);
+		g_value_init(&avg, G_TYPE_DOUBLE);
+		g_value_set_double(&t, (double) element->timestamp / GST_SECOND);
+		g_value_set_double(&avg, element->current_average);
+		gst_value_array_append_value(&varray, &t);
+		gst_value_array_append_value(&varray, &avg);
+		g_value_copy(&varray, value);
+		g_value_unset(&t);
+		g_value_unset(&avg);
+		g_value_unset(&varray);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -495,6 +523,20 @@ static void gstlal_property_class_init(GSTLALPropertyClass *klass) {
 		-G_MAXDOUBLE, G_MAXDOUBLE, -G_MAXDOUBLE,
 		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
+	properties[ARG_TIMESTAMPED_AVERAGE] = gst_param_spec_array(
+		"timestamped-average",
+		"Timestamped Average",
+		"A GstArray containing the timestamp in seconds and the current average.  The\n\t\t\t"
+		"timestamp is first, then the average.  Both are double-precision floats.",
+		g_param_spec_double(
+			"sample",
+			"Sample",
+			"Either the timestamp or the average value",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+		),
+		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
+	);
 
 
 	g_object_class_install_property(
@@ -521,6 +563,11 @@ static void gstlal_property_class_init(GSTLALPropertyClass *klass) {
 		gobject_class,
 		ARG_CURRENT_AVERAGE,
 		properties[ARG_CURRENT_AVERAGE]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_TIMESTAMPED_AVERAGE,
+		properties[ARG_TIMESTAMPED_AVERAGE]
 	);
 }
 
