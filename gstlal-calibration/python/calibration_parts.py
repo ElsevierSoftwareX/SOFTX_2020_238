@@ -25,6 +25,8 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject
 from gi.repository import Gst
+gi.require_version('GstController', '1.0')
+from gi.repository import GstController
 GObject.threads_init()
 Gst.init(None)
 
@@ -258,11 +260,11 @@ def demodulate(pipeline, head, freq, td, rate, filter_time, filter_latency, pref
 
 	head = pipeparts.mkgeneric(pipeline, head, "lal_demodulate", line_frequency = freq, prefactor_real = prefactor_real, prefactor_imag = prefactor_imag)
 	if type(freq_update) is list:
-		freq_update[0].connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency", 1)
-		freq_update[1].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_real", 1)
-		freq_update[2].connect("notify::current-average", update_property_simple, head, "current_average", "prefactor_imag", 1)
+		freq_update[0].connect("notify::timestamped-average", update_timestamped_property, head, "timestamped_average", "line_frequency", 1)
+		freq_update[1].connect("notify::timestamped-average", update_timestamped_property, head, "timestamped_average", "prefactor_real", 1)
+		freq_update[2].connect("notify::timestamped-average", update_timestamped_property, head, "timestamped_average", "prefactor_imag", 1)
 	elif freq_update is not None:
-		freq_update.connect("notify::current-average", update_property_simple, head, "current_average", "line_frequency", 1)
+		freq_update.connect("notify::timestamped-average", update_timestamped_property, head, "timestamped_average", "line_frequency", 1)
 	head = mkresample(pipeline, head, 4, filter_latency == 0.0, rate)
 	if filter_latency != 0:
 		# Remove the first several seconds of output, which depend on start time
@@ -372,10 +374,10 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 			if freq_channels[m][n] is not None:
 				if type(freq_channels[m][n]) is float:
 					# It's a harmonic of the frequency in freq_channels[m][0]
-					freq_channels[m][0].connect("notify::current-average", update_property_simple, line_in_signal, "current_average", "line_frequency", freq_channels[m][n])
+					freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, line_in_signal, "timestamped_average", "line_frequency", freq_channels[m][n])
 				else:
 					# The channel carries the correct frequency
-					freq_channels[m][n].connect("notify::current-average", update_property_simple, line_in_signal, "current_average", "line_frequency", 1)
+					freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, line_in_signal, "timestamped_average", "line_frequency", 1)
 			line_in_signal = mkresample(pipeline, line_in_signal, downsample_quality, zero_latency, compute_rate)
 			line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 			line_in_signal = pipeparts.mktee(pipeline, line_in_signal)
@@ -393,10 +395,10 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				if freq_channels[m][n] is not None:
 					if type(freq_channels[m][n]) is float:
 						# It's a harmonic of the frequency in freq_channels[m][0]
-						freq_channels[m][0].connect("notify::current-average", update_property_simple, line_in_witness, "current_average", "line_frequency", freq_channels[m][n])
+						freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, line_in_witness, "timestamped_average", "line_frequency", freq_channels[m][n])
 					else:
 						# The channel carries the correct frequency
-						freq_channels[m][n].connect("notify::current-average", update_property_simple, line_in_witness, "current_average", "line_frequency", 1)
+						freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, line_in_witness, "timestamped_average", "line_frequency", 1)
 				line_in_witness = mkresample(pipeline, line_in_witness, downsample_quality, zero_latency, compute_rate)
 				line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 				line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
@@ -438,10 +440,10 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				if freq_channels[m][n] is not None:
 					if type(freq_channels[m][n]) is float:
 						# It's a harmonic of the frequency in freq_channels[m][0]
-						freq_channels[m][0].connect("notify::current-average", update_property_simple, reconstructed_line_in_signal, "current_average", "line_frequency", -1.0 * freq_channels[m][n])
+						freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, reconstructed_line_in_signal, "timestamped_average", "line_frequency", -1.0 * freq_channels[m][n])
 					else:
 						# The channel carries the correct frequency
-						freq_channels[m][n].connect("notify::current-average", update_property_simple, reconstructed_line_in_signal, "current_average", "line_frequency", -1.0)
+						freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, reconstructed_line_in_signal, "timestamped_average", "line_frequency", -1.0)
 				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")
 
 				signal_minus_lines.append(reconstructed_line_in_signal)
@@ -1177,7 +1179,7 @@ def compute_fcc(pipeline, SR, SI, fpcal2, freq_update = None):
 	fcc = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, SR, -1.0), mkpow(pipeline, SI, exponent=-1.0)))
 	fcc = pipeparts.mkaudioamplify(pipeline, fcc, fpcal2)
 	if freq_update is not None:
-		freq_update.connect("notify::current-average", update_property_simple, fcc, "current_average", "amplification", 1)
+		freq_update.connect("notify::timestamped-average", update_timestamped_property, fcc, "timestamped_average", "amplification", 1)
 	return fcc
 
 def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_real, EP11_imag, EP12_real, EP12_imag, EP13_real, EP13_imag, EP14_real, EP14_imag, ktst, kpu, kc, fcc):
@@ -1273,6 +1275,14 @@ def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, E
 def update_property_simple(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name, prefactor):
 	prop = prop_maker.get_property(maker_prop_name)
 	prop_taker.set_property(taker_prop_name, prefactor * prop)
+
+def update_timestamped_property(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name, prefactor):
+	prop = prop_maker.get_property(maker_prop_name)
+	cs = GstController.InterpolationControlSource.new()
+	binding = GstController.DirectControlBinding.new_absolute(prop_taker, taker_prop_name, cs)
+	prop_taker.add_control_binding(binding)
+	cs.set_property('mode', GstController.InterpolationMode.NONE) # no interpolation
+	cs.set(int(prop[0] * Gst.SECOND), prefactor * prop[1])
 
 def update_filter(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_name):
 	firfilter = filter_maker.get_property(maker_prop_name)[::-1]

@@ -517,6 +517,12 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
 	/*
+	 * Sync timestamps for properties that we want to be controlled
+	 */
+
+	gst_object_sync_values(GST_OBJECT(trans), GST_BUFFER_PTS(inbuf));
+
+	/*
 	 * process buffer
 	 */
 
@@ -664,7 +670,7 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 			"The frequency of the calibration line corresponding to the calibration\n\t\t\t"
 			"factor 'kappa' we wish to extract from incoming stream",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 300.,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT | GST_PARAM_CONTROLLABLE
 		)
 	);
 	g_object_class_install_property(
@@ -675,7 +681,7 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 			"Real part of prefactor",
 			"The real part of a prefactor by which to multiply the outputs",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT | GST_PARAM_CONTROLLABLE
 		)
 	);
 	g_object_class_install_property(
@@ -686,7 +692,7 @@ static void gstlal_demodulate_class_init(GSTLALDemodulateClass *klass)
 			"Imaginary part of prefactor",
 			"The imaginary part of a prefactor by which to multiply the outputs",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
-			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT | GST_PARAM_CONTROLLABLE
 		)
 	);
 }
