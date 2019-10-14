@@ -191,6 +191,12 @@ def mkwhitened_multirate_src(pipeline, src, rates, native_rate, instrument, psd 
 	whiten.connect_after("notify::mean-psd", set_fir_psd, head, reference_psd.PSDFirKernel())
 
 	#
+	# extra queue to deal with gaps produced by segmentsrc
+	#
+
+	head = pipeparts.mkqueue(pipeline, head, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * (psd_fft_length + 2))
+
+	#
 	# Drop initial data to let the PSD settle
 	#
 
