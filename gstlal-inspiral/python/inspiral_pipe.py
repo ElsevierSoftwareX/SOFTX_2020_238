@@ -150,6 +150,14 @@ def online_inspiral_layer(dag, jobs, options):
 		}
 		common_opts.update(datasource_opts)
 
+		# add ranking stat compression options, if requested
+		if options.compress_ranking_stat:
+			compress_opts = {
+				"compress-ranking-stat": "",
+				"compress-ranking-stat-threshold": options.compress_ranking_stat_threshold
+			}
+			common_opts.update(compress_opts)
+
 		inspNode = dagparts.DAGNode(jobs['gstlalInspiral'], dag, [],
 			opts = common_opts,
 			input_files = {
