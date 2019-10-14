@@ -241,14 +241,13 @@ def aggregator_layer(dag, jobs, options, job_tags):
 	# define routes used for aggregation jobs
 	snr_routes = ["%s_snr_history" % ifo for ifo in options.channel_dict]
 	network_routes = ["likelihood_history", "snr_history", "latency_history"]
+	state_routes = ["%s_strain_dropped" % ifo for ifo in options.channel_dict]
 	usage_routes = ["ram_history"]
 
-	state_routes = []
-	for ifo in options.channel_dict.keys():
-	    state_routes.extend(["%s_dqvector_%s" % (ifo, state) for state in ["on", "off", "gap"]])
-	    state_routes.extend(["%s_statevector_%s" % (ifo, state) for state in ["on", "off", "gap"]])
-	    state_routes.append("%s_strain_dropped" % ifo)
 	agg_routes = list(itertools.chain(snr_routes, network_routes, usage_routes, state_routes))
+
+	gates = ["%ssegments" % gate for gate in ("statevector", "dqvector", "whiteht")]
+	seg_routes = ["%s_%s" % (ifo, gate) for ifo in options.channel_dict for gate in gates]
 
 	# analysis-based aggregation jobs
 	# FIXME don't hard code the 1000
@@ -262,6 +261,22 @@ def aggregator_layer(dag, jobs, options, job_tags):
 			these_options["data-type"] = "min"
 		else:
 			these_options["data-type"] = "max"
+
+		for ii, (aggstart, aggend) in enumerate(zip(agg_job_bounds[:-1], agg_job_bounds[1:])):
+			these_options["job-start"] = aggstart
+			these_options["num-jobs"] = aggend - aggstart
+			if ii == 0: ### elect first aggregator per route as leader
+				these_options["across-jobs"] = ""
+				aggNode = dagparts.DAGNode(jobs['aggLeader'], dag, [], opts = these_options)
+			else:
+				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], opts = these_options)
+
+	# segment-based jobs
+	seg_routes = list(dagparts.groups(seg_routes, max(max_agg_jobs // (4 * len(job_tags)), 1)))
+	for routes in seg_routes:
+		these_options = dict(agg_options)
+		these_options["route"] = routes
+		these_options["data-type"] = "min"
 
 		for ii, (aggstart, aggend) in enumerate(zip(agg_job_bounds[:-1], agg_job_bounds[1:])):
 			these_options["job-start"] = aggstart
