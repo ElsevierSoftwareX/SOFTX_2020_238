@@ -274,6 +274,9 @@ class EyeCandy(object):
 			# collect gate segments
 			for gate in self.gate_history.keys():
 				for instrument, seg_history in self.gate_history[gate].items():
+					if not seg_history:
+						continue
+
 					# get on/off points, add point at +inf
 					gate_interp_times, gate_interp_onoff = zip(*seg_history)
 					gate_interp_times = list(gate_interp_times)
@@ -395,6 +398,7 @@ class SegmentsTracker(object):
 			# online analysis has a frame segments gate
 			#"framesegments": "frame_segments_gate",
 			"statevectorsegments": "state_vector_gate",
+			"dqvectorsegments": "dq_vector_gate",
 			"whitehtsegments": "ht_gate"
 		}
 
@@ -407,7 +411,7 @@ class SegmentsTracker(object):
 		self.segment_history_duration = segment_history_duration
 
 		# recent gate history encoded in on/off bits
-		self.gate_history = {segtype: {instrument: deque(maxlen = 30) for instrument in instruments} for segtype in gate_suffix}
+		self.gate_history = {segtype: {instrument: deque(maxlen = 20) for instrument in instruments} for segtype in gate_suffix}
 
 		# iterate over segment types and instruments, look for the
 		# gate element that should provide those segments, and
