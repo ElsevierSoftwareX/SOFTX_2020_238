@@ -33,21 +33,21 @@
 import math
 import numpy
 import re
+from matplotlib.colors import hex2color
 
 
 golden_ratio = (1. + math.sqrt(5.)) / 2.
 
 
 def colour_from_instruments(instruments, colours = {
-	"G1": numpy.array((0.0, 1.0, 1.0)),
-	"H1": numpy.array((1.0, 0.0, 0.0)),
-	"H2": numpy.array((0.0, 0.0, 1.0)),
-	"L1": numpy.array((0.0, 0.7, 0.0)),
+	"G1": numpy.array(hex2color('#222222')),
+	"H1": numpy.array(hex2color('#ee0000')),
+	"L1": numpy.array(hex2color('#4ba6ff')),
+	"V1": numpy.array(hex2color('#9b59b6')),
+	"K1": numpy.array(hex2color('#ffb200')),
 	"E1": numpy.array((1.0, 0.0, 0.0)),
 	"E2": numpy.array((0.0, 0.8, 0.0)),
 	"E3": numpy.array((1.0, 0.0, 1.0)),
-	"V1": numpy.array((1.0, 0.0, 1.0)),
-	"K1": numpy.array((0.0, 0.0, 1.0)),
 }):
 	# mix colours additively
 	colour = sum(map(colours.__getitem__, instruments))
