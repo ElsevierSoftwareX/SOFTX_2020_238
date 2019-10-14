@@ -575,6 +575,50 @@ class HorizonHistories(dict):
 		"""
 		return dict((key, value.weighted_mean(*args, **kwargs)) for key, value in self.items())
 
+	def compress(self, threshold = 0.03, remove_deviations = False, deviation_percent = 0.50, verbose = False):
+		"""
+		Remove distances that are non-zero and differ
+		fractionally from both neighbours by less than
+		the selected threshold.
+
+		Also allows removal of uncharacteristic horizon
+		distance values.
+		"""
+		abs_ln_thresh = math.log1p(threshold)
+		for instrument, horizon_history in list(self.items()):
+			# GPS time / distance pairs
+			items = horizon_history.items()
+			if remove_deviations:
+				values = numpy.array(items)[:,1]
+				mean_horizon = values[values!=0].mean()
+				items = [item for item in items if item[1] < (mean_horizon * (1. + deviation_percent))]
+
+			# compress array
+			j = 1
+			for i in range(1, len(items) - 1):
+				values = items[j - 1][1], items[i][1], items[i + 1][1]
+				# remove distances that are non-zero and differ
+				# fractionally from both neighbours by less than
+				# the selected threshold.  always keep the first
+				# and last values
+				if (values[0] > 0. and values[1] > 0. and values[2] > 0. and
+				    abs(math.log(values[1] / values[0])) < abs_ln_thresh and
+				    abs(math.log(values[1] / values[2])) < abs_ln_thresh):
+					continue
+				# remove distances that are 0 and surrounded by 0
+				# on both sides (basically the same as the last
+				# test, but we can't take log(0)).
+				if values == (0., 0., 0.):
+					continue
+				items[j] = items[i]
+				j += 1
+			del items[j:]
+			if verbose:
+				print >>sys.stderr, "\"%s\":  %s horizon history reduced to %.3g%% of original size" % (filename, instrument, 100. * j / (i + 1.))
+
+			# replace
+			self[instrument] = type(horizon_history)(items)
+
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == u"%s:horizonhistories" % name]
