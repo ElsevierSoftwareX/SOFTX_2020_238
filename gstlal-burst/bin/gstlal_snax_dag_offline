@@ -88,10 +88,16 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 		# parallelize jobs by segments
 		for seg in segsdict[ifo]:
 
+			# define analysis times
+			gps_start_time = int(seg[0])
+			feature_start_time = gps_start_time + options.psd_drop_time + max_template_length
+			feature_end_time = min(int(seg[1]), options.gps_end_time)
+			feature_seg = segments.segment(feature_start_time, feature_end_time)
+
 			# only produce jobs where the analysis runtime after applying segments is nonzero
-			if not data_source_info.frame_segments[ifo].intersects_segment(seg):
+			if not data_source_info.frame_segments[ifo].intersects_segment(feature_seg):
 				if options.verbose:
-					print "    Skipping segment (%d, %d) for channel subset %d since there is no analyzable data here" % (int(seg[0]), int(seg[1]), ii)
+					print "    Skipping segment (%d, %d) for channel subset %d since there is no analyzable data here" % (int(feature_seg[0]), int(feature_seg[1]), ii)
 				continue
 
 			# set maximum number of jobs reading concurrently from the same frame file to prevent I/O locks
@@ -108,36 +114,35 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 
 			outpath = os.path.join(options.out_path, "gstlal_snax_extract")
 
-			# define analysis times
-			gps_start_time = int(seg[0])
-			feature_start_time = gps_start_time + options.psd_drop_time + max_template_length
-			feature_end_time = min(int(seg[1]), options.gps_end_time)
-
 			feature_extractor_nodes[(ii, seg)] = \
 				dagparts.DAGNode(feature_extractor_job, dag, parent_nodes = dep_nodes,
-					opts = {"gps-start-time":gps_start_time,
-						"gps-end-time":feature_end_time,
-						"feature-start-time":feature_start_time,
-						"feature-end-time":feature_end_time,
-						"data-source":"frames",
+					opts = {
+						"gps-start-time": gps_start_time,
+						"gps-end-time": feature_end_time,
+						"feature-start-time": feature_start_time,
+						"feature-end-time": feature_end_time,
+						"data-source": "frames",
 						"sample-rate": options.sample_rate,
-						"mismatch":options.mismatch,
-						"waveform":options.waveform,
-						"qhigh":options.qhigh,
-						"channel-name":' '.join(channels),
-						"job-id":str(ii + 1).zfill(4),
-						"cadence":options.cadence,
-						"persist-cadence":options.persist_cadence,
-						"max-streams":options.max_serial_streams,
-						"disable-web-service":options.disable_web_service,
-						"local-frame-caching":options.local_frame_caching,
+						"mismatch": options.mismatch,
+						"waveform": options.waveform,
+						"qhigh": options.qhigh,
+						"psd-fft-length": options.psd_fft_length,
+						"channel-name": ' '.join(channels),
+						"job-id": str(ii + 1).zfill(4),
+						"cadence": options.cadence,
+						"persist-cadence": options.persist_cadence,
+						"max-streams": options.max_serial_streams,
+						"disable-web-service": options.disable_web_service,
+						"local-frame-caching": options.local_frame_caching,
 						"frame-segments-name": options.frame_segments_name,
 						"save-format": options.save_format,
-						"verbose":options.verbose
+						"verbose": options.verbose
 					},
-					input_files = {"frame-cache":options.frame_cache,
-						"frame-segments-file":options.frame_segments_file},
-					output_files = {"out-path":outpath}
+					input_files = {
+						"frame-cache": options.frame_cache,
+						"frame-segments-file": options.frame_segments_file
+					},
+					output_files = {"out-path": outpath}
 				)
 			if options.verbose:
 				print "    Creating node for channel subset %d, gps range %d - %d" % (ii, feature_start_time, feature_end_time)
