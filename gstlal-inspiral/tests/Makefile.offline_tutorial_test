@@ -9,7 +9,7 @@ SHELL := /bin/bash # Use bash syntax
 # workflow, as well as being a test script for continuous integration as part
 # of gitlab. The steps of this Makefile are:
 #
-# 1. Produce 2048s of fake data data that contains a single BNS injection with
+# 1. Produce 4096 of fake data data that contains a single BNS injection with
 # an early aLIGO PSD.
 # 2. A simple frames.cache, segments.xml.gz, vetoes.xml.gz, and tisi.xml files
 # are produced, which are required for running gstlal_insiral.
@@ -92,7 +92,7 @@ MIN_IFOS = 2
 # The GPS start time for analysis
 START = 1000000000
 # The GPS end time for analysis
-STOP = 1000002048
+STOP = 1000004096
 # analysis dureation
 DURATION = $(shell echo $(STOP)-$(START) | bc)
 # A user tag for the run
@@ -236,7 +236,7 @@ L1_psd.xml.gz:
 	@echo ""
 
 H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
-	# Generate 2048s of H1 FAKE data with a single injection included
+	# Generate 4096s of H1 FAKE data with a single injection included
 	# gstlal_fake_frames_0001
 	$(TIME) gstlal_fake_frames \
 		--data-source white \
@@ -253,7 +253,7 @@ H-H1_FAKE-10000/H-H1_FAKE-1000000000-512.gwf: H1_psd.xml.gz injections.xml
 	@echo ""
 
 L-L1_FAKE-10000/L-L1_FAKE-1000000000-512.gwf: L1_psd.xml.gz injections.xml
-	# Generate 2048s of L1 FAKE data with a single injection included
+	# Generate 4096s of L1 FAKE data with a single injection included
 	# gstlal_fake_frames_0002
 	$(TIME) gstlal_fake_frames \
 		--data-source white \
@@ -364,7 +364,7 @@ gstlal_bank.xml.gz: frames.cache
 		--max-eta 0.25 \
 		--min-eta 0.18 \
 		--gps-start-time 1000000000 \
-		--gps-end-time 1000002048 \
+		--gps-end-time 1000004096 \
 		--calibrated-data real_8 \
 		--channel-name H1:FAKE \
 		--space Tau0Tau3 \
@@ -387,7 +387,7 @@ gstlal_bank.xml.gz: frames.cache
 		--spectrum-type median \
 		--write-compress \
 		--verbose
-	mv H1-TMPLTBANK-1000000000-2048.xml.gz $@
+	mv H1-TMPLTBANK-1000000000-4096.xml.gz $@
 	ligolw_no_ilwdchar $@
 	gstlal_inspiral_add_template_ids $@
 	@echo ""
