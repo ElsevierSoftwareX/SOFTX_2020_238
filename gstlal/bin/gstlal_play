@@ -167,7 +167,7 @@ def parse_command_line():
 		if options.low_pass_filter <= options.high_pass_filter:
 			raise ValueError("--low-pass-filter must be > --high-pass-filter")
 
-	if options.reference_psd or options.veto_segments_file and not options.whiten:
+	if (options.reference_psd or options.veto_segments_file) and not options.whiten:
 		raise ValueError("--reference-psd and --veto-segments-file requires --whiten")
 
 	if len(options.channel_name) > 1:
