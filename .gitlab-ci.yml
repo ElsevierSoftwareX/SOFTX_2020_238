@@ -413,9 +413,20 @@ docker:el7:
   script:
     # add RPMs to directory to pass to docker
     - mkdir rpms 
+
+    # Copy over patch that will be used to disable servicediscovery.
+    # In the dockerfile, first install the rpms, and then apply the 
+    # patch to /usr/bin/gstlal-inspiral. Just put it in the same 
+    # directory as where the rpms are going to get copied. 
+
+    - cp gstlal-inspiral/tests/disable_service_discovery.patch rpms/
+
+    # Copy rpms to new container.
     - mv rpmbuild/RPMS/x86_64/*.rpm rpms
-    # copy over spec file patching script
+
+    # Clear out the old rpmbuild directory
     - rm -rf rpmbuild*
+
     # Build the container:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker build --pull -t $CI_REGISTRY_IMAGE/gstlal:el7 --file .gitlab-ci.Dockerfile.e7 .
