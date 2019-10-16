@@ -6,7 +6,7 @@ FROM containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7
 # Labeling/packaging stuff:
 LABEL name="GstLAL Runtime Package, EL7" \
       maintainer="Alexander Pace <alexander.pace@ligo.org>" \
-      date="2019-09-19" \
+      date="2019-10-16" \
       support="Reference Platform, EL7"
 
 USER root
@@ -18,6 +18,8 @@ COPY rpms /rpms
 RUN yum makecache && \
       yum -y localinstall /rpms/*.rpm 
 
+# Patch /usr/bin/gstlal-inspiral to disable servicediscovery
+RUN patch /usr/bin/gstlal_inspiral /rpms/disable_service_discovery.patch
 
 # Update gstreamer registry cache:
 ENV GST_REGISTRY_1_0=/usr/share/gstreamer-1.0/.registry.bin
@@ -27,8 +29,6 @@ RUN gst-inspect-1.0
 
 #RUN rm -rf /rpms && \
 RUN yum clean all
-
-
 
 # Export MKL environment variables: 
 
