@@ -34,7 +34,7 @@ import subprocess, socket, tempfile
 
 ##############################################################################
 # import the modules we need to build the pipeline
-from glue import pipeline
+from gstlal import pipeline
 from ligo import segments
 import glue.ligolw.utils as ligolw_utils
 import glue.ligolw.utils.segments as ligolw_segments
