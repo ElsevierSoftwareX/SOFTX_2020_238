@@ -373,7 +373,7 @@ DEFINE_DQ_TO_TUKEY(uint, 32, double)
  */
 
 
-static void set_metadata(GSTLALDQTukey *element, GstBuffer *buf, guint64 outsamples, gboolean gap) {
+static void set_metadata(GSTLALDQTukey *element, GstBuffer *buf, guint64 outsamples) {
 
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
@@ -384,10 +384,6 @@ static void set_metadata(GSTLALDQTukey *element, GstBuffer *buf, guint64 outsamp
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
-	if(gap)
-		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_GAP);
-	else
-		GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
 
 
@@ -835,7 +831,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		g_assert_not_reached();
 	}
 
-	set_metadata(element, outbuf, outmap.size / element->unit_size_out, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP));
+	set_metadata(element, outbuf, outmap.size / element->unit_size_out);
 	gst_buffer_unmap(outbuf, &outmap);
 	gst_buffer_unmap(inbuf, &inmap);
 
