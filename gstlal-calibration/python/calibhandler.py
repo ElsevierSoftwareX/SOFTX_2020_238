@@ -35,7 +35,6 @@ Gst.init(None)
 
 from gstlal import simplehandler
 from lal import LIGOTimeGPS
-from kafka import errors
 
 #
 # =============================================================================
@@ -74,6 +73,7 @@ class Handler(simplehandler.Handler):
 		self.kafka_server = kafka_server
 		if self.kafka_server is not None:
 			from kafka import KafkaProducer
+			from kafka import errors
 			try:
 				self.producer = KafkaProducer(
 						bootstrap_servers = [self.kafka_server],
