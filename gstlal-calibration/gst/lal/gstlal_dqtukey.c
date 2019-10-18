@@ -384,6 +384,7 @@ static void set_metadata(GSTLALDQTukey *element, GstBuffer *buf, guint64 outsamp
 		GST_BUFFER_FLAG_SET(buf, GST_BUFFER_FLAG_DISCONT);
 		element->need_discont = FALSE;
 	}
+	GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
 }
 
 
