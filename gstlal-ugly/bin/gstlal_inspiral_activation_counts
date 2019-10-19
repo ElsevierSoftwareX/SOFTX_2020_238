@@ -33,9 +33,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--output", help = "provide the output file")
 parser.add_argument("--psd-xml-file", help = "provide a psd xml file")
 parser.add_argument("--svd-file", help = "provide the bank file for which overlaps will be calculated")
+parser.add_argument("--name", action = "append", help = "provide the name of the source category, e.g., NSBH")
 parser.add_argument("--m1", action = "append", help = "provide the num:start:stop parameters for mass 1, e.g., 100:1:3")
 parser.add_argument("--m2", action = "append", help = "provide the num:start:stop parameters for mass 2, e.g., 100:1:3")
-parser.add_argument("--s1", action = "append", help = "provide the num:start:stop parameters for spin 1, e.g., 11:-1:1")
+parser.add_argument("--chi-eff", action = "append", help = "provide the num:start:stop parameters for chi effective, e.g., 11:-1:1")
 
 args = parser.parse_args()
 
@@ -56,6 +57,9 @@ for n, bank in enumerate(svd_bank.read_banks(args.svd_file, contenthandler = LIG
 
 min_mchirp = min(row.mchirp for row in sngl_inspiral_table)
 max_mchirp = max(row.mchirp for row in sngl_inspiral_table)
+chieff = [(row.mass1 * row.spin1z + row.mass2 * row.spin2z) / (row.mass1 + row.mass2) for row in sngl_inspiral_table]
+min_chi = min(chieff)
+max_chi = max(chieff)
 
 def x_y_z_zn_from_row(row):
 	return [metric_module.x_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
@@ -64,7 +68,8 @@ def x_y_z_zn_from_row(row):
 		metric_module.zn_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z)
 		]
 
-print >> outfile, "m1 start, m1 stop, m2 start, m2 stop, activation counts"
+print >> outfile, "mchirp (%f,%f) chieff (%f,%f)" % (min_mchirp, max_mchirp, min_chi, max_chi)
+print >> outfile, "name, m1 start, m1 stop, m2 start, m2 stop, activation counts"
 
 # compute template match functions:
 print "computing metrics"
@@ -74,29 +79,30 @@ for tmp in (x_y_z_zn_from_row(row) for row in sngl_inspiral_table):
 		return  g_ij.pseudo_match(g, vec1, vec2)
 	match_funcs.append(match)
 
-snrs = numpy.linspace(8., 20., 13)
+snrs = numpy.linspace(6., 20., 15)
 snrnorm = sum(snrs**-4)
 
-for m1, m2, s1 in zip(args.m1, args.m2, args.s1):
+for M1, M2, S1, name in zip(args.m1, args.m2, args.chi_eff, args.name):
 
-	print m1, m2
+	print M1, M2
 
-	m1n,m1s,m1e = [float(x) for x in m1.split(":")]
-	m2n,m2s,m2e = [float(x) for x in m2.split(":")]
-	s1n,s1s,s1e = [float(x) for x in s1.split(":")]
+	m1n,m1s,m1e = [float(x) for x in M1.split(":")]
+	m2n,m2s,m2e = [float(x) for x in M2.split(":")]
+	chin,chis,chie = [float(x) for x in S1.split(":")]
 
 	# uniform population in m1 / m2 space
 	signals = []
-	weights = []
-	len_signals = 0
-	for m1,m2,s1 in itertools.product(numpy.logspace(numpy.log10(m1s), numpy.log10(m1e), m1n), numpy.logspace(numpy.log10(m2s), numpy.log10(m2e), m2n), numpy.linspace(s1s, s1e, s1n)):
-		# assume zero spin
-		len_signals += 1
+	for m1,m2,chi in itertools.product(numpy.logspace(numpy.log10(m1s), numpy.log10(m1e), m1n), numpy.logspace(numpy.log10(m2s), numpy.log10(m2e), m2n), numpy.linspace(chis, chie, chin)):
 		if mchirp(m1, m2) <= max_mchirp and mchirp(m1, m2) >= min_mchirp:
-			signals.append(numpy.array([metric_module.x_from_m1_m2_s1_s2(m1, m2, s1, 0), metric_module.y_from_m1_m2_s1_s2(m1, m2, s1, 0), metric_module.z_from_m1_m2_s1_s2(m1, m2, s1, 0), 0]))
-			# Correct for the logarithmic distribution
-			weights.append(m1*m2)
-	weights = numpy.array(weights)
+			signals.append(
+				numpy.array(
+				[metric_module.x_from_m1_m2_s1_s2(m1, m2, chi, chi),
+				metric_module.y_from_m1_m2_s1_s2(m1, m2, chi, chi),
+				metric_module.z_from_m1_m2_s1_s2(m1, m2, chi, chi),
+				metric_module.zn_from_m1_m2_s1_s2(m1, m2, chi, chi)]
+				)
+			)
+
 	signals = numpy.array(signals)
 
 	count = 0
@@ -105,7 +111,9 @@ for m1, m2, s1 in zip(args.m1, args.m2, args.s1):
 	if len(signals) > 0:		
 		for n, match_func in enumerate(match_funcs):
 			matches = numpy.apply_along_axis(match_func, 1, signals)
-			for rho in snrs:
-				count += rho**-4 / snrnorm / len_signals * (numpy.exp(-rho**2*(1.0 - matches)**2/2.) * weights).sum()
-
-	print >> outfile, "%f, %f, %f, %f, %e" % (m1s, m1e, m2s, m2e, count)
+			# Only consider matches greater than 0.70
+			matches = matches[matches > 0.70]
+			if len(matches) > 0:
+				for rho in snrs:
+					count += rho**-4 / snrnorm * (numpy.exp(-rho**2*(1.0 - matches)**2/2.)).sum() / len(matches)
+	print >> outfile, "%s, %f, %f, %f, %f, %e" % (name, m1s, m1e, m2s, m2e, count)
