@@ -405,15 +405,18 @@ class Metric(object):
 
 	def metric_match(self, metric_tensor, c1, c2):
 		d2 = self.distance(metric_tensor, c1, c2)**2
-		if d2 < 1:
+		if d2 < 1 and d2 >= 0:
 			return 1 - d2
 		else:
 			return 0.
 
 	def pseudo_match(self, metric_tensor, c1, c2):
 		d2 = self.distance(metric_tensor, c1, c2)**2
-		d2 = (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
-		return 1. - d2
+		if d2 < 1 and d2 >= 0:
+			d2 = (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
+			return 1. - d2
+		else:
+			return 0.
 
 
 	def explicit_match(self, c1, c2):
