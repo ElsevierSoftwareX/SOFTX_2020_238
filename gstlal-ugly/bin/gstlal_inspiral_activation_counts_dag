@@ -8,9 +8,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--output", help = "provide the output file")
 parser.add_argument("--psd-xml-file", help = "provide a psd xml file")
 parser.add_argument("--svd-cache", help = "provide the svd bank cache.")
+parser.add_argument("--name", action = "append", help = "provide the name of the source category, e.g., NSBH")
 parser.add_argument("--m1", action = "append", help = "provide the num:start:stop parameters for mass 1, e.g., 100:1:3")
 parser.add_argument("--m2", action = "append", help = "provide the num:start:stop parameters for mass 2, e.g., 100:1:3")
-parser.add_argument("--s1", action = "append", help = "provide the num:start:stop parameters for spin 1, e.g., 11:-1:1")
+parser.add_argument("--chi-eff", action = "append", help = "provide the num:start:stop parameters for chi effective, e.g., 11:-1:1")
 parser.add_argument("--accounting-group", help = "set accounting group")
 parser.add_argument("--accounting-group-user", help = "set accounting group user")
 
@@ -29,7 +30,7 @@ for bin, line in enumerate(open(args.svd_cache)):
 	dagparts.DAGNode(acJob,
 		dag,
 		parent_nodes = [],
-		opts = {"m1": args.m1, "m2": args.m2, "s1":args.s1},
+		opts = {"m1": args.m1, "m2": args.m2, "chi-eff":args.chi_eff, "name":args.name},
 		input_files = {"psd-xml-file": args.psd_xml_file, "svd-file": CacheEntry(line).path},
 		output_files = {"output": "%04d-COUNTS.txt" % bin}
 		)
