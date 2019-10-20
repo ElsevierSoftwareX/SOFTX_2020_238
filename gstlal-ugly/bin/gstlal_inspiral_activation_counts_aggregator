@@ -1,4 +1,5 @@
 #!/usr/bin/python
+import numpy
 import h5py
 import sys, os
 
@@ -20,11 +21,12 @@ class AcCounts(object):
 				for line in f.readlines()[1:]:
 					name, _, _, _, _, count = line.split(",")
 					try:
-						self.counts[binnum][name] = float(count)
-					except:
 						self.counts[binnum][name] += float(count)
+					except:
+						self.counts[binnum][name] = float(count)
 		except ValueError, IOError:
 			print "%s could not be processed" % fname
+			raise
 
 	def __str__(self):
 		total_counts = sorted([(sum(self.counts[b].values()), b, self.counts[b].values()) for b in self.counts])
@@ -44,12 +46,14 @@ class AcCounts(object):
 			
 
 h5 = h5py.File("activation_counts.h5", "w")
-counts = AcCounts()
+ac_counts = AcCounts()
 for fname in sys.argv[1:]:
 	binnum = os.path.split(fname)[1].split("-")[0]
-	counts.insert(fname, binnum)
-counts.normalize()
-#print counts.counts['0212']
-print counts
-		
+	ac_counts.insert(fname, binnum)
+ac_counts.normalize()
 
+for b, counts in sorted(ac_counts.counts.items()):
+	grp = h5.create_group(b)
+	for cat, count in counts.items():
+		grp.create_dataset(cat, data = numpy.array(count))
+h5.close()
