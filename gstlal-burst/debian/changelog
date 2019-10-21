@@ -1,3 +1,22 @@
+gstlal-burst (0.2.0-1) unstable; urgency=low
+
+  * Rename fxtools submodule to snax to reflect new name from
+    gstlal feature extractor to SNAX
+  * Expose --psd-fft-length option for finer whitener control
+  * Fix in whitener zero-padding
+  * Update tags in monitoring to include subsystem info
+  * Change trigger_time -> time column, remove NaN rows for gwdatafind
+    compatibility
+  * Call smrepair upon startup if reading data from /dev/shm
+  * Add feature combiner job for offline to combine features from distinct
+    jobs to match online format
+  * Add option for monitor, aggregator to connect to Influx with auth/HTTPS
+  * Increase blocksize in reading frames for improved performance with NFS
+  * Fix issue with pipeline hanging in offline jobs in some edge cases
+  * Switch to single Kafka consumer in synchronizer for improved performance
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Mon, 21 Oct 2019 11:11:13 -0700
+
 gstlal-burst (0.1.1) unstable; urgency=low
 
   * Updated gstlal_feature_aggregator, gstlal_feature_monitor to deal with
