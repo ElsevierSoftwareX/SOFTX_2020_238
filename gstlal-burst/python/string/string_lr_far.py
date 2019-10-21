@@ -13,20 +13,23 @@
 #
 
 
+import itertools
+import math
 import numpy
 import random
 import sys
 
 from lal import rate
-from lalburst import snglcoinc
+from . import snglcoinc
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils 
 
-from gstlal import stats as gstlalstats
-from gstlal import string_extrinsics
+# FIXME don't import gstlal modules in lalsuite
+from gstlal.stats import trigger_rate
+from . import string_extrinsics
 
 #
 # =============================================================================
@@ -43,31 +46,32 @@ from gstlal import string_extrinsics
 
 
 class LnLRDensity(snglcoinc.LnLRDensity):
-	# SNR threshold FIXME don't hardcode
-	snr_threshold = 3.75
 	# SNR, chi^2 binning definition
 	snr2_chi2_binning = rate.NDBins((rate.ATanLogarithmicBins(10, 1e7, 801), rate.ATanLogarithmicBins(.1, 1e4, 801)))
-	
-	def __init__(self, instruments, min_instruments=2):
+
+	def __init__(self, instruments, delta_t, snr_threshold, min_instruments = 2):
 		# check input
 		if min_instruments < 2:
 			raise ValueError("min_instruments=%d must be >=2" % min_instruments)
 		if min_instruments > len(instruments):
 			raise ValueError("not enough instruments (%s) to satisfy min_instruments=%d" % (", ".join(sorted(instruments)), min_instruments))
+		assert delta_t > 0 and snr_threshold > 0
 
+		self.instruments = frozenset(instruments)
+		self.delta_t = delta_t
+		self.snr_threshold = snr_threshold
 		self.min_instruments = min_instruments
 		self.densities = {}
-		self.instruments = frozenset(instruments)
 		for instrument in self.instruments:
 			self.densities["%s_snr2_chi2" % instrument] = rate.BinnedLnPDF(self.snr2_chi2_binning)
 
-	def __call__(self, **params):
+	def __call__(self):
 		try:
 			interps = self.interps
 		except AttributeError:
 			self.mkinterps()
 			interps = self.interps
-		return sum(interps[param](*value) for param, value in params.items()) if params else NegInf
+		#return sum(interps[param](*value) for param, value in params.items())
 
 	def __iadd__(self, other):
 		if type(self) != type(other) or set(self.densities) != set(other.densities):
@@ -80,12 +84,12 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 			pass
 		return self
 
-	def increment(self, weight = 1.0, **params):
-		for instrument in self.instruments:
-			self.densities["%s_snr2_chi2" % instrument].count[params['snrs'][instrument], params['chi2s_over_snr2s'][instrument]] += weight
+	def increment(self, event):
+		#self.densities["%s_snr2_chi2" % event.ifo].count[event.snr, event.chisq / event.chisq_dof / event.snr**2.] += 1.0
+		self.densities["%s_snr2_chi2" % event.ifo].count[event.snr**2, event.chisq / event.chisq_dof] += 1.0
 
 	def copy(self):
-		new = type(self)([])
+		new = type(self)(self.instruments, min_instruments = self.min_instruments)
 		for key, lnpdf in self.densities.items():
 			new.densities[key] = lnpdf.copy()
 		return new
@@ -105,8 +109,9 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 	def to_xml(self, name):
 		xml = super(LnLRDensity, self).to_xml(name)
-		instruments = set(key.split("_", 1)[0] for key in self.densities if key.endswith("_snr2_chi2"))
-		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(instruments)))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"instruments", lsctables.instrumentsproperty.set(self.instruments)))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"delta_t", self.delta_t))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"snr_threshold", self.snr_threshold))
 		xml.appendChild(ligolw_param.Param.from_pyvalue(u"min_instruments", self.min_instruments))
 		for key, lnpdf in self.densities.items():
 			xml.appendChild(lnpdf.to_xml(key))
@@ -117,7 +122,9 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		xml = cls.get_xml_root(xml, name)
 		self = cls(
 			instruments = lsctables.instrumentsproperty.get(ligolw_param.get_pyvalue(xml, u"instruments")),
-			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments"),
+			delta_t = ligolw_param.get_pyvalue(xml, u"delta_t"),
+			snr_threshold = ligolw_param.get_pyvalue(xml, u"snr_threshold"),
+			min_instruments = ligolw_param.get_pyvalue(xml, u"min_instruments")
 			)
 		for key in self.densities:
 			self.densities[key] = rate.BinnedLnPDF.from_xml(xml, key)
@@ -130,13 +137,14 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 
 
 class LnSignalDensity(LnLRDensity):
-	def __call__(self, snrs, chi2s_over_snr2s):
-		if len(snrs) < self.min_instruments:
-			return NegInf
-		lnP = 0.0
-		# evalute the (snr, \chi^2 | snr) PDFs
+	def __init__(self, *args, **kwargs):
+		super(LnSignalDensity, self).__init__(*args, **kwargs)
+
+	def __call__(self, snr2s, chi2s):
+		super(LnSignalDensity, self).__call__()
 		interps = self.interps
-		return lnP + sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
+		return sum(interps["%s_snr2_chi2" % instrument](snr2s[instrument], chi2) for instrument, chi2 in chi2s.items())
+		#return sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def add_signal_model(self, prefactors_range = (0.001, 0.30), inv_snr_pow = 4.):
 		# normalize to 10 *mi*llion signals. This count makes the
@@ -162,18 +170,40 @@ class LnSignalDensity(LnLRDensity):
 
 
 class LnNoiseDensity(LnLRDensity):
-	def __call__(self, snrs, chi2s_over_snr2s):
-		lnP = 0.0
+	def __init__(self, *args, **kwargs):
+		super(LnNoiseDensity, self).__init__(*args, **kwargs)
+		# record of trigger counts vs time for all instruments in
+		# the network
+		self.triggerrates = trigger_rate.triggerrates((instrument, trigger_rate.ratebinlist()) for instrument in self.instruments)
+		# initialize a CoincRates object
+		self.coinc_rates = snglcoinc.CoincRates(
+			instruments = self.instruments,
+			delta_t = self.delta_t,
+			min_instruments = self.min_instruments
+		)
 
-		# Evaluate P(snrs, chi2s | noise)
-		# It is assumed that SNR and chi^2 values are
-		# independent between detectors, and furthermore
-		# independent from their sensitivities.
+	def __call__(self, snr2s, chi2s):
+		# FIXME evaluate P(t|noise), P(ifos|t,noise) using the 
+		# triggerrate record (cf inspiral_lr)
+		super(LnNoiseDensity, self).__call__()
 		interps = self.interps
-		return lnP + sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
+		return sum(interps["%s_snr2_chi2" % instrument](snr2s[instrument], chi2) for instrument, chi2 in chi2s.items())
 
-	def candidate_count_model(self):
-		pass
+		#return sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
+
+	def __iadd__(self, other):
+		super(LnNoiseDensity, self).__iadd__(other)
+		self.triggerrates += other.triggerrates
+		return self
+
+	def copy(self):
+		new = super(LnNoiseDensity, self).copy()
+		new.triggerrates = self.triggerrates.copy()
+		# NOTE:  lnzerolagdensity in the copy is reset to None by
+		# this operation.  it is left as an exercise to the calling
+		# code to re-connect it to the appropriate object if
+		# desired.
+		return new
 
 	def random_params(self):
 		"""
@@ -200,431 +230,46 @@ class LnNoiseDensity(LnLRDensity):
 		snr_slope = 0.8 / len(self.instruments)**3
 
 		snr2chi2gens = dict((instrument, iter(self.densities["%s_snr2_chi2" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_threshold, None), slice(None, None)))).next) for instrument in self.instruments)
+		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
 		def nCk(n, k):
 			return math.factorial(n) // math.factorial(k) // math.factorial(n - k)
 		while 1:
+			# choose a t (not needed for params, but used to
+			# choose detector combo with the correct
+			# distribution).
+			t, rates, lnP_t = t_and_rate_gen()
+			# choose a set of instruments from among those that
+			# were generating triggers at t.
 			instruments = tuple(instrument for instrument, rate in rates.items() if rate > 0)
-			assert len(instruments) < self.min_instruments, "number of instruments smaller than min_instruments"
+			if len(instruments) < self.min_instruments:
+				# FIXME doing this biases lnP_t to lower values,
+				# but the error is merely an overall normalization
+				# error that won't hurt. t_and_rate_gen() can be
+				# fixed to exclude from the sampling times that not 
+				# enough detectors were generating triggers.
+				continue
+			k = random.randint(self.min_instruments, len(instruments))
+			lnP_instruments = -math.log((len(instruments) - self.min_instruments + 1) * nCk(len(instruments), k))
+			instruments = frozenset(random.sample(self.instruments, k))
+			# ((snr, chisq2/snr2), ln P, (snr, chisq2/snr2), ln P, ...)
 			seq = sum((snr2chi2gens[instrument]() for instrument in instruments), ())
-			# set params
-			for instrument, value in zip(instruments, seq[0::2]):
-				params["%s_snr2_chi2" % instrument] = (value[0], value[1])
-			yield (), params, seq[1::2]
+			# set kwargs
+			kwargs = dict(
+				snr2s = dict((instrument, value[0]) for instrument, value in zip(instruments, seq[0::2])),
+				chi2s = dict((instrument, value[1]) for instrument, value in zip(instruments, seq[0::2]))
+				#chi2s_over_snr2s = dict((instrument, value[1]) for instrument, value in zip(instruments, seq[0::2]))
+			)
+			yield (), kwargs, sum(seq[1::2], lnP_t + lnP_instruments)
 
 	def to_xml(self, name):
 		xml = super(LnNoiseDensity, self).to_xml(name)
+		xml.appendChild(self.triggerrates.to_xml(u"triggerrates"))
 		return xml
 
 	@classmethod
 	def from_xml(cls, xml, name):
 		xml = cls.get_xml_root(xml, name)
 		self = super(LnNoiseDensity, cls).from_xml(xml, name)
+		self.triggerrates = trigger_rate.triggerrates.from_xml(xml, u"triggerrates")
+		self.triggerrates.coalesce()    # just in case
 		return self
-
-
-#
-# =============================================================================
-#
-#                             Ranking Statistic PDF
-#
-# =============================================================================
-#
-
-
-#
-# Class to compute ranking statistic PDFs for background-like and
-# signal-like populations
-#
-
-class RankingStatPDF(object):
-	ligo_lw_name_suffix = u"gstlal_string_rankingstatpdf"
-
-	@staticmethod
-	def density_estimate(lnpdf, name, kernel = rate.gaussian_window(4.)):
-		"""
-		For internal use only.
-		"""
-		assert not numpy.isnan(lnpdf.array).any(), "%s log likelihood ratio PDF contain NaNs" % name
-		rate.filter_array(lnpdf.array, kernel)
-
-	@staticmethod
-	def binned_log_likelihood_ratio_rates_from_samples_wrapper(signal_lr_lnpdf, noise_lr_lnpdf, samples, nsamples):
-		"""
-		For internal use only.
-		"""
-		try:
-			# want the forked processes to use different random
-			# number sequences, so we re-seed Python and
-			# numpy's random number generators here in the
-			# wrapper in the hope that that takes care of it
-			random.seed()
-			numpy.random.seed()
-			binned_log_likelihood_ratio_rates_from_samples(signal_lr_lnpdf, noise_lr_lnpdf, samples, nsamples)
-			return signal_lr_lnpdf.array, noise_lr_lnpdf.array
-		except:
-			raise
-
-	def __init__(self, rankingstat, signal_noise_pdfs = None, nsamples = 2**24, verbose = False):
-		#
-		# bailout used by .from_xml() class method to get an
-		# uninitialized instance
-		#
-
-		if rankingstat is None:
-			return
-
-		#
-		# initialize binnings
-		#
-
-		self.noise_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 6000),)))
-		self.signal_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 6000),)))
-		self.zero_lag_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(0., 110., 6000),)))
-
-		#
-		# bailout used by codes that want all-zeros histograms
-		#
-
-		if not nsamples:
-			return
-
-		#
-		# run importance-weighted random sampling to populate binnings.
-		#
-
-		if signal_noise_pdfs is None:
-			signal_noise_pdfs = rankingstat
-
-		self.signal_lr_lnpdf.array, self.noise_lr_lnpdf.array = self.binned_log_likelihood_ratio_rates_from_samples_wrapper(
-			self.signal_lr_lnpdf, 
-			self.noise_lr_lnpdf,
-			rankingstat.ln_lr_samples(rankingstat.denominator.random_params(), signal_noise_pdfs), 
-			nsamples = nsamples)
-
-		if verbose:
-			print >> sys.stderr, "done computing ranking statistic PDFs"
-
-		#
-		# apply density estimation kernels to counts
-		#
-
-		self.density_estimate(self.noise_lr_lnpdf, "noise model")
-		self.density_estimate(self.signal_lr_lnpdf, "signal model")
-
-		#
-		# set the total sample count in the noise and signal
-		# ranking statistic histogram equal to the total expected
-		# count of the respective events from the experiment. This
-		# information is required so that when adding ranking
-		# statistic PDFs in our .__iadd__() method they are
-		# combined with the correct relative weights, so that
-		# .__iadd__() has the effect of marginalizing the
-		# distribution over the experients being combined.
-		#
-
-		self.noise_lr_lnpdf.array /= self.noise_lr_lnpdf.array.sum()
-		self.noise_lr_lnpdf.normalize()
-		self.signal_lr_lnpdf.array /= self.signal_lr_lnpdf_array.sum()
-		self.signal_lr_lnpdf.normalize()
-
-
-	def copy(self):
-		new = self.__class__(None)
-		new.noise_lr_lnpdf = self.noise_lr_lnpdf.copy()
-		new.signal_lr_lnpdf = self.signal_lr_lnpdf.copy()
-		new.zero_lag_lr_lnpdf = self.zero_lag_lr_lnpdf.copy()
-		return new
-
-	def collect_zero_lag_rates(self, connection, coinc_def_id):
-		for ln_likelihood_ratio in connection.cursor().execute("""
-SELECT
-	likelihood,
-FROM
-	coinc_event
-WHERE
-	coinc_def_id == ?
-	AND NOT EXISTS (
-		SELECT
-			*
-		FROM
-			time_slide
-		WHERE
-			time_slide.time_slide_id == coinc_event.time_slide_id
-			AND time_slide.offset != 0
-	)
-""", (coinc_def_id,)):
-			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
-			self.zero_lag_lr_lnpdf.count[ln_likelihood_ratio,] += 1.
-		self.zero_lag_lr_lnpdf.normalize()
-
-	
-	def density_estimate_zero_lag_rates(self):
-		# apply density estimation preserving total count, then
-		# normalize PDF
-		count_before = self.zero_lag_lr_lnpdf.array.sum()
-		# FIXME: should .normalize() be able to handle NaN?
-		if count_before:
-			self.density_estimate(self.zero_lag_lr_lnpdf, "zero lag")
-			self.zero_lag_lr_lnpdf.array *= count_before / self.zero_lag_lr_lnpdf.array.sum()
-		self.zero_lag_lr_lnpdf.normalize()
-	
-
-	def __iadd__(self, other):
-		self.noise_lr_lnpdf += other.noise_lr_lnpdf
-		self.noise_lr_lnpdf.normalize()
-		self.signal_lr_lnpdf += other.signal_lr_lnpdf
-		self.signal_lr_lnpdf.normalize()
-		self.zero_lag_lr_lnpdf += other.zero_lag_lr_lnpdf
-		self.zero_lag_lr_lnpdf.normalize()
-		return self
-
-	@classmethod
-	def get_xml_root(cls, xml, name):
-		"""
-		Sub-classes can use this in their overrides of the
-		.from_xml() method to find the root element of the XML
-		serialization.
-		"""
-		name = u"%s:%s" % (name, cls.ligo_lw_name_suffix)
-		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == name]
-		if len(xml) != 1:
-			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
-		return xml[0]
-
-
-	@classmethod
-	def from_xml(cls, xml, name):
-		# find the root of the XML tree containing the
-		# serialization of this object
-		xml = xls.get_xml_root(xml, name)
-		# create a mostly uninitialized instance
-		self = cls(None)
-		# popuate from XML
-		self.noise_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"noise_lr_lnpdf")
-		self.signal_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"signal_lr_lnpdf")
-		self.zero_lag_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"zero_lag_lr_lnpdf")
-		return self
-	
-	def to_xml(self, name):
-		# do not allow ourselves to be written to disk without our
-		# PDF's internal normalization metadata being up to date
-		self.noise_lr_lnpdf.normalize()
-		self.signal_lr_lnpdf.normalize()
-		self.zero_lag_lr_lnpdf.normalize()
-
-		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
-		xml.appendChild(self.noise_lr_lnpdf.to_xml(u"noise_lr_lnpdf"))
-		xml.appendChild(self.signal_lr_lnpdf.to_xml(u"signal_lr_lnpdf"))
-		xml.appendChild(self.zero_lag_lr_lnpdf.to_xml(u"zero_lag_lr_lnpdf"))
-		return xml
-
-
-#
-# =============================================================================
-#
-#                       False alarm rates/probabilities 
-#
-# =============================================================================
-#
-
-
-#
-# Class to compute false-alarm probabilities and false-alarm rates from
-# ranking statistic PDFs
-#
-
-class FAPFAR(object):
-	def __init__(self, rankingstatpdf, livetime):
-		# input checks
-		if not rankingstatpdf.zero_lag_lr_lnpdf.array.any():
-			raise ValueError("RankingStatPDF's zero-lag counts are all zero")
-
-		self.livetime = livetime 
-		
-		# set the rate normalization LR threshold to the mode of
-		# the zero-lag LR distribution.
-		zl = rankingstat.zero_lag_lr_lnpdf.copy()
-		rate_normalization_lr_threshold, = zl.argmax()
-
-		# record trials factor, with safety checks
-		counts = rankingstatpdf.zero_lag_lr_lnpdf.count()
-		assert not numpy.isnan(counts.array).any(), "zero lag log likelihood ratio counts contain NaNs"
-		assert (counts.array >= 0.).all(), "zero lag log likelihood ratio rates contain negative values"
-		self.count_above_threshold = counts[rate_normalization_lr_threshold:,].sum()
-
-		# get noise model ranking stat values and event counts from
-		# bins
-		threshold_index = rankingstatpdf.noise_lr_lnpdf.bins[0][rate_normalization_lr_threshold]
-		ranks = rankingstatpdf.noise_lr_lnpdf.bins[0].lower()[threshold_index:]
-		counts = rankingstatpdf.noise_lr_lnpdf.array[threshold_index:]
-		assert not numpy.isnan(counts).any(), "background log likelihood ratio rates contain NaNs"
-		assert (counts >= 0.).all(), "background log likelihood ratio rates contain negative values"
-
-		# complementary cumulative distribution function
-		ccdf = counts[::-1].cumsum()[::-1]
-		ccdf /= ccdf[0]
-
-		# ccdf is P(ranking statistic > threshold | a candidate).
-		# we need P(rankins statistic > threshold), i.e. need to
-		# correct for the possibility that no candidate is present.
-		# specifically, the ccdf needs to =1-1/e at the candidate
-		# identification threshold, and cdf=1/e at the candidate
-		# threshold, in order for FAR(threshold) * livetime to
-		# equal the actual observed number of candidates.
-		ccdf = gstlalstats.poisson_p_not_0(ccdf)
-
-		# safety checks
-		assert not numpy.isnan(ranks).any(), "log likelihood ratio co-ordinates contain NaNs"
-		assert not numpy.isinf(ranks).any(), "log likelihood ratio co-ordinates are not all finite"
-		assert not numpy.isnan(ccdf).any(), "log likelihood ratio CCDF contains NaNs"
-		assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "log likelihood ratio CCDF failed to be normalized"
-
-		# build interpolator.
-		self.ccdf_interpolator = interpolate.interp1d(ranks, ccdf)
-
-		# record min and max ranks so we know which end of the ccdf
-		# to use when we're out of bounds
-		self.minrank = ranks[0]
-		self.maxrank = ranks[-1]
-
-	@gstlalstats.assert_probability
-	def ccdf_from_rank(self, rank):
-		return self.ccdf_interpolator(numpy.clip(rank, self.minrank, self.maxrank))
-
-	def fap_from_rank(self, rank):
-		# implements equation (8) from Phys. Rev. D 88, 024025.
-		# arXiv: 1209.0718
-		return gstlalstats.fap_after_trials(self.ccdf_from_rank(rank), self.count_above_threshold)
-	
-	def far_from_rank(self, rank):
-		# implements equation (B4) of Phys. Rev. D 88, 024025.
-		# arXiv: 1209.0718. the return value is divided by T to
-		# convert events/experiment to events/second. "tdp" =
-		# true-dismissal probability = 1 - single-event FAP, the
-		# integral in equation (B4)
-		log_tdp = numpy.log1p(-self.ccdf_from_rank(rank))
-		return self.count_above_threshold * -log_tdp / self.livetime
-	
-	# NOTE do we need rank_from_fap and rank_from_far?
-
-	def assign_fapfars(self, connection):
-		# assign false-alarm probabilities and false-alarm rates
-		# FIXME we should fix whether we use coinc_burst or multi_burst,
-		# whichever is less work.
-		def as_float(f):
-			def g(x):
-				return float(f(x))
-			return g
-		connection.create_function("fap_from_rankingstat", 1, as_float(self.fap_from_rank))
-		connection.create_function("far_from_rankingstat", 1, as_float(self.far_from_rank))
-		connection.cursor().execute("""
-UPDATE
-	coinc_burst
-SET
-	false_alarm_probability = (
-		SELECT
-			fap_from_rankingstat(coinc_event.likelihood)
-		FROM
-			coinc_event
-		WHERE
-			coinc_event.coinc_event_id == coinc_burst.coinc_event_id
-	),
-	false_alarm_rate = (
-		SELECT
-			fap_from_rankingstat(coinc_event.likelihood)
-		FROM
-			coinc_event
-		WHERE
-			coinc_event.coinc_event_id == coinc_burst.coinc_event_id
-	)
-""")
-
-
-#
-# =============================================================================
-#
-#                                     I/O
-#
-# =============================================================================
-#
-
-
-def gen_likelihood_control_doc(xmldoc, rankingstat, rankingstatpdf):
-	name = u"gstlal_string_likelihood"
-	node = xmldoc.childNodes[-1]
-	assert node.tagName == ligolw.LIGO_LW.tagName
-
-	if rankingstat is not None:
-		node.appendChild(rankingstat.to_xml(name))
-
-	if rankingstatpdf is not None:
-		node.appendChild(rankingstatpdf.to_xml(name))
-
-	return xmldoc
-
-
-def parse_likelihood_control_doc(xmldoc):
-	name = u"gstlal_string_likelihood"
-	try:
-		rankingstat = RankingStat.from_xml(xmldoc, name)
-	except ValueError:
-		rankingstat = None
-	try:
-		rankingstatpdf = RankingStatPDF.from_xml(xmldoc, name)
-	except ValueError:
-		rankingstatpdf = None
-	if rankingstat is None and rankingstatpdf is None:
-		raise ValueError("document does not contain likelihood ratio data")
-	return rankingstat, rankingstatpdf
-
-
-def marginalize_pdf_urls(urls, which, ignore_missing_files = False, verbose = False):
-	"""
-	Implements marginalization of PDFs in ranking statistic data files.
-	The marginalization is over the degree of freedom represented by
-	the file collection.  One or both of the candidate parameter PDFs
-	and ranking statistic PDFs can be processed, with errors thrown if
-	one or more files is missing the required component.
-	"""
-	name = u"gstlal_string_likelihood"
-	data = None
-	for n, url in enumerate(urls, start = 1):
-		#
-		# load input document
-		#
-
-		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(urls)),
-		try:
-			xmldoc = ligolw_utils.load_url(url, verbose = verbose, contenthandler = RankingStat.LIGOLWContentHandler)
-		except IOError:
-			# IOError is raised when an on-disk file is
-			# missing.  urllib2.URLError is raised when a URL
-			# cannot be loaded, but this is subclassed from
-			# IOError so IOError will catch those, too.
-			if not ignore_missing_files:
-				raise
-			if verbose:
-				print >>sys.stderr, "Could not load \"%s\" ... skipping as requested" % url
-			continue
-
-		#
-		# extract PDF objects compute weighted sum of ranking data
-		# PDFs
-		#
-
-		if which == "RankingStat":
-			if data is None:
-				data = RankingStat.from_xml(xmldoc, name)
-			else:
-				data += RankingStat.from_xml(xmldoc, name)
-		elif which == "RankingStatPDF":
-			if data is None:
-				data = RankingStatPDF.from_xml(xmldoc, name)
-			else:
-				data += RankingStatPDF.from_xml(xmldoc, name)
-		else:
-			raise ValueError("invalid which (%s)" % which)
-		xmldoc.unlink()
-
-	return data

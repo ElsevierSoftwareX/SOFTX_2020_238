@@ -28,11 +28,21 @@
 
 import numpy
 
-from ligo.lw import ligolw
 from ligo.lw import array as ligolw_array
-from glue.text_progress_bar import ProgressBar
 from gstlal import stats as gstlalstats
+import lal
 from lal import rate
+
+
+__doc__ = """
+
+The goal of this module is to implement the probability of getting a given set
+of extrinsic parameters for a set of detectors parameterized by n-tuples of
+trigger parameters: (snr, chi2) assuming that the event is a gravitational wave
+signal, *s*, coming from an isotropic distribution in location, orientation and
+the volume of space.  The implementation of this in the calling code can be 
+found in :py:mod:`string_lr_far`.
+"""
 
 
 #
@@ -88,7 +98,7 @@ class NumeratorSNRCHIPDF(rate.BinnedLnPDF):
 		self.norm.shape = (len(self.norm), 1)
 
 	@staticmethod
-	def add_signal_model(lnpdf, n, prefactors_range, df = 100, inv_snr_pow = 4., snr_min = 3.5, progressbar = None):
+	def add_signal_model(lnpdf, n, prefactors_range, df, inv_snr_pow = 4., snr_min = 3.5, progressbar = None):
 		if df <= 0.:
 			raise ValueError("require df >= 0: %s" % repr(df))
 		pfs = numpy.linspace(prefactors_range[0], prefactors_range[1], 100)
