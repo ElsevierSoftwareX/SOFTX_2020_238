@@ -33,6 +33,8 @@
 from ligo.lw import lsctables
 from lalburst import snglcoinc
 from lalburst import burca
+from ligo import segments
+from ligo.segments import utils as segmentsUtils
 
 
 #
@@ -42,6 +44,30 @@ from lalburst import burca
 #
 # =============================================================================
 #
+
+
+class backgroundcollector(object):
+	def __init__(self):
+		self.zerolag_singles = set()
+		self.timeshifted_coincs = set()
+
+	# Used at snglcoinc
+	def push(self, event_ids, offset_vector):
+		# time shifted data?
+		if any(offset_vector.values()):
+			if len(event_ids) > 1:
+				self.timeshifted_coincs.update(event_ids)
+		elif len(event_ids) == 1:
+			self.zerolag_singles.update(event_ids)
+
+	def pull(self, two_or_more_instruments, flushed_events):
+		index = dict((id(event), event) for event in flushed_events)
+		flushed_ids = set(index)
+		background_ids = self.timeshifted_coincs & flushed_ids
+		self.timeshifted_coincs -= flushed_ids
+		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if float(index[event_id].peak_time) in two_or_more_instruments)
+		self.zerolag_singles -= flushed_ids
+		return [event for event in map(index.__getitem__, background_ids)]
 
 
 class StreamBurca(object):
@@ -63,6 +89,7 @@ class StreamBurca(object):
 			min_instruments = self.min_instruments,
 			verbose = self.verbose
 		)
+		self.backgroundcollector = backgroundcollector()
 
 
 	def push(self, instrument, events, t_complete):
@@ -75,22 +102,34 @@ class StreamBurca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, coinc_sieve = None, flush = False):
+	def pull(self, rankingstat, snr_segments, coinc_sieve = None, flush = False):
 		#
 		# iterate over coincidences
 		#
 
 		newly_reported = []
-		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, coinc_sieve = coinc_sieve, flush = flush, verbose = False):
+		flushed = []
+		flushed_unused = []
+		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, event_collector = self.backgroundcollector, flush = flush, verbose = False):
 			# for exact template match
 			if not burca.StringCuspCoincTables.ntuple_comparefunc(events, node.offset_vector):
 				# construct row objects for coinc tables
 
-				coinc, coincmaps = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, u"sngl_burst")
+				coinc, coincmaps, coinc_burst = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, u"sngl_burst")
 
 				# finally, append coinc to tables
 
-				self.coinc_tables.append_coinc(coinc, coincmaps)
+				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_burst)
+
+		# add singles into the noise model
+		if flushed:
+			# times when at least 2 instruments were generating SNR.
+			# Used to select zero-lag singles for inclusion in the
+			# denominator.
+			two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
+
+			for event in self.backgroundcollector.pull(two_or_more_instruments, flushed):
+				rankingstat.denominator.increment(event)
 
 		# add any triggers that have been used in coincidences for
 		# the first time to the sngl_burst table
