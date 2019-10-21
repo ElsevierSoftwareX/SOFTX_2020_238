@@ -145,7 +145,7 @@ class ContentHandler(ligolw.LIGOLWContentHandler):
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-        pass
+	pass
 
 # disable mkchecktimestamps()
 # FIXME:  python plugin broken until we switch to Python 3
@@ -265,13 +265,13 @@ def parse_command_line():
 
 	# Check SNRs series output
 	if options.start is None or options.end is None:
-                raise ValueError("Must have --start and --end.")
-        elif options.start >= options.end:
-                raise ValueError("--start must less than --end.")
-        # Extra handle for SNRs output because SNRs are not stable initially and have padding at the end
-        # FIXME: the 50s is hardcoded and only use to avoid snr being unstable due to edge effect when doing convoluion
-        if options.start - gw_data_source_info.seg[0] <= 50 or gw_data_source_info.seg[1] - options.end <= 50:
-                raise ValueError("Check your inputted --start / --end or your frame file. You should have a long enough data such that, the --start/--end is larger/less than the start/end of your data at least 50s. ")
+		raise ValueError("Must have --start and --end.")
+	elif options.start >= options.end:
+		raise ValueError("--start must less than --end.")
+	# Extra handle for SNRs output because SNRs are not stable initially and have padding at the end
+	# FIXME: the 50s is hardcoded and only use to avoid snr being unstable due to edge effect when doing convoluion
+	if options.start - gw_data_source_info.seg[0] <= 50 or gw_data_source_info.seg[1] - options.end <= 50:
+		raise ValueError("Check your inputted --start / --end or your frame file. You should have a long enough data such that, the --start/--end is larger/less than the start/end of your data at least 50s. ")
 
 	# Setting up PSD
 	if options.reference_psd:
@@ -298,9 +298,9 @@ def parse_command_line():
 		# Setting up SVD bank
 		bank_urls = inspiral.parse_svdbank_string(options.svd_bank)
 		# Check if --svd-bank contains svd banks from --instrument
-                for instrument in options.instrument:
-                        if instrument not in set(bank_urls):
-                                raise ValueError("No SVD Banks for --instrument=%s." % instrument)
+		for instrument in options.instrument:
+			if instrument not in set(bank_urls):
+				raise ValueError("No SVD Banks for --instrument=%s." % instrument)
 
 		banks_dict = dict([(ifo, svd_bank.read_banks(svdbanks, svd_bank.DefaultContentHandler)) for ifo, svdbanks in bank_urls.items()])
 
@@ -343,9 +343,9 @@ def parse_command_line():
 options, gw_data_source_info, template, psds_dict  = parse_command_line()
 
 if options.veto_segments_file is not None:
-        veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
+	veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
-        veto_segments = None
+	veto_segments = None
 
 #====================================================================================================
 #

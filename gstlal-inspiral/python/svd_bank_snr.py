@@ -54,17 +54,17 @@ class SNR_Pipeline(object):
 		self.handler = simplehandler.Handler(self.mainloop, self.pipeline)
 		self.verbose = verbose
 		self.lock = threading.Lock()
-                self.row_number = row_number
-                self.start = start
-                self.end = end
+		self.row_number = row_number
+		self.start = start
+		self.end = end
 		self.snr_info = {
 			"epoch": None,
 			"instrument": None,
 			"deltaT": None,
 			"data": [],
 		}
-                if self.start >= self.end:
-                        raise ValueError("Start time must be less than end time.")
+		if self.start >= self.end:
+			raise ValueError("Start time must be less than end time.")
 
 	def run(self, segments):
 		if self.verbose:
@@ -89,12 +89,12 @@ class SNR_Pipeline(object):
 			raise RuntimeError("pipeline could not be set to NULL.")
 
 	def make_series(self, data):
-                para = {"name" : self.snr_info["instrument"],
-                        "epoch" : self.snr_info["epoch"],
-                        "deltaT" : self.snr_info["deltaT"],
-                        "f0": 0,
-                        "sampleUnits" : lal.DimensionlessUnit,
-                        "length" : len(data)}
+		para = {"name" : self.snr_info["instrument"],
+			"epoch" : self.snr_info["epoch"],
+			"deltaT" : self.snr_info["deltaT"],
+			"f0": 0,
+			"sampleUnits" : lal.DimensionlessUnit,
+			"length" : len(data)}
 		if data.dtype == numpy.float32:
 			tseries = lal.CreateREAL4TimeSeries(**para)
 		elif data.dtype == numpy.float64:
@@ -110,18 +110,18 @@ class SNR_Pipeline(object):
 		return tseries
 
 	def get_snr_series(self, COMPLEX = False):
-                assert self.snr_info["epoch"] is not None, "No SNRs are obtained, check your start time."
+		assert self.snr_info["epoch"] is not None, "No SNRs are obtained, check your start time."
 		gps_start = self.snr_info["epoch"].gpsSeconds + self.snr_info["epoch"].gpsNanoSeconds * 10.**-9
 		gps = gps_start + numpy.arange(len(self.snr_info["data"])) * self.snr_info["deltaT"]
 
-                if self.start - gps[0] < 0 or self.end - gps[-1] > 0:
-                        raise ValueError("Invalid choice of start time or end time. The data spans from %f to %f." % (gps[0], gps[-1]))
-                else:
-                        s = abs(gps - self.start).argmin()
-                        e = abs(gps - self.end).argmin()
+		if self.start - gps[0] < 0 or self.end - gps[-1] > 0:
+			raise ValueError("Invalid choice of start time or end time. The data spans from %f to %f." % (gps[0], gps[-1]))
+		else:
+			s = abs(gps - self.start).argmin()
+			e = abs(gps - self.end).argmin()
 
-                self.snr_info["epoch"] = gps[s]
-                self.snr_info["data"] = self.snr_info["data"][s:e].T
+		self.snr_info["epoch"] = gps[s]
+		self.snr_info["data"] = self.snr_info["data"][s:e].T
 
 		if self.row_number is None:
 			temp = []
@@ -141,17 +141,17 @@ class SNR_Pipeline(object):
 				return [self.make_series(numpy.abs(self.snr_info["data"]))]
 
 
-        def new_preroll_handler(self, elem):
-                with self.lock:
-                        # ignore preroll buffers
-                        elem.emit("pull-preroll")
-                        return Gst.FlowReturn.OK
+	def new_preroll_handler(self, elem):
+		with self.lock:
+			# ignore preroll buffers
+			elem.emit("pull-preroll")
+			return Gst.FlowReturn.OK
 
-        def pull_snr_buffer(self, elem):
-                with self.lock:
-                        sample = elem.emit("pull-sample")
-                        if sample is None:
-                                return Gst.FlowReturn.OK
+	def pull_snr_buffer(self, elem):
+		with self.lock:
+			sample = elem.emit("pull-sample")
+			if sample is None:
+				return Gst.FlowReturn.OK
 
 			success, rate = sample.get_caps().get_structure(0).get_int("rate")
 
@@ -162,21 +162,21 @@ class SNR_Pipeline(object):
 			else:
 				assert self.snr_info["deltaT"] == 1. / rate, "data have different sampling rate."
 
-                        buf = sample.get_buffer()
-                        if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
-                                return Gst.FlowReturn.OK
+			buf = sample.get_buffer()
+			if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
+				return Gst.FlowReturn.OK
 
-                        # drop snrs that are irrelevant
-                        cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts)
-                        if self.start >= cur_time_stamp and self.end > cur_time_stamp:
-                                # record the first timestamp closet to start time
-                                self.snr_info["epoch"] = cur_time_stamp
-                                # FIXME: check timestamps
-                                self.snr_info["data"] = [pipeio.array_from_audio_sample(sample)]
-                        elif self.start <= cur_time_stamp < self.end:
+			# drop snrs that are irrelevant
+			cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts)
+			if self.start >= cur_time_stamp and self.end > cur_time_stamp:
+				# record the first timestamp closet to start time
+				self.snr_info["epoch"] = cur_time_stamp
+				# FIXME: check timestamps
+				self.snr_info["data"] = [pipeio.array_from_audio_sample(sample)]
+			elif self.start <= cur_time_stamp < self.end:
 				self.snr_info["data"].append(pipeio.array_from_audio_sample(sample))
-                        else:
-                                Gst.FlowReturn.OK
+			else:
+				Gst.FlowReturn.OK
 
 			return Gst.FlowReturn.OK
 
@@ -226,7 +226,7 @@ class LLOID_SNR(SNR_Pipeline):
 		assert handler_id > 0
 
 		self.run(gw_data_source_info.seg)
-                self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
+		self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
 
 	def __call__(self, COMPLEX = False):
 		return self.get_snr_series(COMPLEX)
@@ -268,7 +268,7 @@ class FIR_SNR(SNR_Pipeline):
 		assert handler_id > 0
 
 		self.run(gw_data_source_info.seg)
-                self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
+		self.snr_info["data"] = numpy.concatenate(numpy.array(self.snr_info["data"]), axis = 0)
 		self.snr_info["data"] = numpy.vectorize(complex)(self.snr_info["data"][:,0], self.snr_info["data"][:,1])
 		self.snr_info["data"].shape = len(self.snr_info["data"]), 1
 
@@ -320,7 +320,7 @@ class FIR_SNR(SNR_Pipeline):
 
 #=============================================================================================
 #
-# 					Output Utilities
+#					Output Utilities
 #
 #=============================================================================================
 
@@ -385,7 +385,7 @@ def read_url(filename, contenthandler = SNRContentHandler, verbose = False):
 
 #=============================================================================================
 #
-# 					Gracedb Events Utilities
+#					Gracedb Events Utilities
 #
 #=============================================================================================
 
@@ -396,14 +396,14 @@ def scan_svd_banks_for_row(coinc_xmldoc, banks_dict):
 
 	sub_bank_id = None
 	row_number = None
-        for i, bank in enumerate(banks_dict.values()[0]):
-                for j, row in enumerate(bank.sngl_inspiral_table):
-                        if row.template_id == eventid_trigger_dict.values()[0].template_id:
-                                sub_bank_id = i
-                                row_number = j
-                                break
-                if sub_bank_id is not None:
-                        break
+	for i, bank in enumerate(banks_dict.values()[0]):
+		for j, row in enumerate(bank.sngl_inspiral_table):
+			if row.template_id == eventid_trigger_dict.values()[0].template_id:
+				sub_bank_id = i
+				row_number = j
+				break
+		if sub_bank_id is not None:
+			break
 	assert sub_bank_id is not None, "Cannot find the template listed in the coinc.xml."
 	return sub_bank_id, row_number
 
@@ -453,19 +453,19 @@ def framecache_from_event(gid, observatories, frame_types, time_span = 1000, out
 	# FIXME: This is not reliable, have a better way to map frame_type to observatory?
 	obs_type_dict = dict([(obs, frame_type) for obs in observatories for frame_type in frame_types if obs == frame_type[0]])
 
-        gracedb_client = gracedb.GraceDb()
-        coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
-        eventid_trigger_dict = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+	gracedb_client = gracedb.GraceDb()
+	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, gid)
+	eventid_trigger_dict = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 	channel_names_dict = dict([(row.value.split("=")[0], row.value) for row in lsctables.ProcessParamsTable.get_table(coinc_xmldoc) if row.param == "--channel-name"])
 
 	gwdata_metavar_headers = ["instruments", "trigger_times", "gps_start_time", "gps_end_time", "channels_name"]
 	gwdata_metavar_values = []
 	urls = []
-        for observatory, frame_type in obs_type_dict.items():
+	for observatory, frame_type in obs_type_dict.items():
 		trigger_time = eventid_trigger_dict[obs2ifo[observatory]].end
 		gps_start_time = int(trigger_time - time_span)
 		gps_end_time = int(trigger_time + time_span)
-                gwdata_metavar_values.append((obs2ifo[observatory], trigger_time, gps_start_time, gps_end_time, channel_names_dict[obs2ifo[observatory]]))
+		gwdata_metavar_values.append((obs2ifo[observatory], trigger_time, gps_start_time, gps_end_time, channel_names_dict[obs2ifo[observatory]]))
 
 		urls += gwdatafind.find_urls(observatory, frame_type, gps_start_time, gps_end_time)
 
