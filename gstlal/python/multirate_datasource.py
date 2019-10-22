@@ -66,7 +66,7 @@ except KeyError as e:
 	raise
 
 
-def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_fft_length = 32, ht_gate_threshold = float("inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = None, width = 64, unit_normalize = True, statevector = None, dqvector = None, fir_whiten_reference_psd = None):
+def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, native_rate = 16384, psd_fft_length = 32, ht_gate_threshold = float("+inf"), veto_segments = None, nxydump_segment = None, track_psd = False, block_duration = 1 * Gst.SECOND, zero_pad = None, width = 64, unit_normalize = True, statevector = None, dqvector = None, fir_whiten_reference_psd = None):
 	"""
 	Build pipeline stage to whiten and downsample h(t).
 
@@ -75,6 +75,7 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	* rates: a list of the requested sample rates, e.g., [512,1024].
 	* instrument: the instrument to process
 	* psd: a psd frequency series
+	* native_rate: the sampling rate of the source
 	* psd_fft_length: length of fft used for whitening
 	* ht_gate_threshold: gate h(t) if it crosses this value
 	* veto_segments: segments to mark as gaps after whitening
@@ -168,6 +169,19 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 			raise ValueError("default whitener zero-padding requires psd_fft_length to be multiple of 4")
 		else:
 			zero_pad = psd_fft_length // 4
+
+	#
+	# optionally apply vetoes pre-whitening by marking samples as gaps
+	#
+
+	# optional gate on whitened h(t) amplitude.  attack and hold are
+	# made to be 1/2 second or 1 sample, whichever is larger
+	# FIXME:  this could be omitted if ht_gate_threshold is None, but
+	# we need to collect whitened h(t) segments, however something
+	# could be done to collect those if these gates aren't here.
+	ht_gate_window = max(native_rate // 2, 1) # samples
+
+	src = mkcleandata(pipeline, src, psd, block_duration, instrument, native_rate, ht_gate_threshold, ht_gate_window, veto_segments = veto_segments)
 
 	#
 	# down-sample to highest of target sample rates.  we include a caps
@@ -286,7 +300,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 		# make the buffers going downstream smaller, this can
 		# really help with RAM
 		head = pipeparts.mkreblock(pipeline, head, block_duration = block_duration)
-
 	#
 	# enable/disable PSD tracking
 	#
@@ -328,27 +341,6 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 	else:
 		raise ValueError("invalid width: %d" % width)
 	head = pipeparts.mkchecktimestamps(pipeline, head, "%s_timestamps_%d_whitehoft" % (instrument, max(rates)))
-
-	#
-	# optionally add vetoes
-	#
-
-	if veto_segments is not None:
-		long_veto_segments = segments.segmentlist(veto_segments).protract(0.25).coalesce()
-		head = pipeparts.mkdeglitcher(pipeline, head, long_veto_segments)
-
-	#
-	# optional gate on whitened h(t) amplitude.  attack and hold are
-	# made to be 1/2 second or 1 sample, whichever is larger
-	#
-
-	# FIXME:  this could be omitted if ht_gate_threshold is None, but
-	# we need to collect whitened h(t) segments, however something
-	# could be done to collect those if these gates aren't here.
-	ht_gate_window = max(max(rates) // 2, 1)	# samples
-	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
-	# emit signals so that a user can latch on to them
-	head.set_property("emit-signals", True)
 
 	#
 	# tee for highest sample rate stream
@@ -403,3 +395,29 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, psd_f
 
 	return head
 
+
+def mkcleandata(pipeline, src, psd, block_duration, instrument, max_rate, ht_gate_threshold, ht_gate_window, veto_segments = None):
+	block_stride = block_duration * max_rate // Gst.SECOND
+
+	# tee off
+	raw = pipeparts.mktee(pipeline, src)
+
+	# set up whitening kernel
+	psd_fir = reference_psd.PSDFirKernel()
+	kernel, latency, _ = psd_fir.psd_to_linear_phase_whitening_fir_kernel(psd)
+
+	# whiten data
+	white = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, raw, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = latency)
+
+	# apply vetoes
+	if veto_segments is not None:
+		veto_segments = segments.segmentlist(veto_segments).protract(0.25).coalesce()
+		white = datasource.mksegmentsrcgate(pipeline, white, veto_segments, invert_output = True)
+
+	# h(t) gate
+	clean = datasource.mkhtgate(pipeline, pipeparts.mkqueue(pipeline, raw, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), control = pipeparts.mkqueue(pipeline, white, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), threshold = ht_gate_threshold, hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
+
+	# emit signals so that a user can latch on to them
+	clean.set_property("emit-signals", True)
+
+	return clean
