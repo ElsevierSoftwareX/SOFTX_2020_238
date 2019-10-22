@@ -78,6 +78,7 @@ def generate_options(options):
 		}
 	elif options.save_format == 'hdf5':
 		save_options = {
+			"description": options.description,
 			"save-format": options.save_format,
 			"sample-rate": options.sample_rate,
 			"cadence": options.cadence,
@@ -281,6 +282,7 @@ if options.save_format == 'kafka':
 		"instrument": ifo,
 		"channel-list": options.channel_list,
 		"features-path": options.features_path,
+		"basename": options.description,
 		"waveform": options.waveform,
 		"sample-rate": options.sample_rate,
 		"write-cadence": options.cadence,
