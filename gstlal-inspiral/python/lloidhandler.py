@@ -647,7 +647,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", cluster = False, cap_singles = False, FAR_trialsfactor = 1.0, verbose = False):
+	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", cluster = False, cap_singles = False, FAR_trialsfactor = 1.0, activation_counts = None, verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being
@@ -674,6 +674,7 @@ class Handler(simplehandler.Handler):
 		self.cluster = cluster
 		self.cap_singles = cap_singles
 		self.FAR_trialsfactor = FAR_trialsfactor
+		self.activation_counts = activation_counts
 
 		self.gracedbwrapper = gracedbwrapper
 		# FIXME:   detangle this
@@ -1314,7 +1315,7 @@ class Handler(simplehandler.Handler):
 		return xmldoc
 
 	def __get_p_astro_json(self, lr, m1, m2, snr, far):
-		return p_astro_gstlal.compute_p_astro(lr, m1, m2, snr, far, self.rankingstatpdf.copy())
+		return p_astro_gstlal.compute_p_astro(lr, m1, m2, snr, far, self.rankingstatpdf.copy(), activation_counts = self.activation_counts)
 
 	def __get_rankingstat_xmldoc_for_gracedb(self):
 		# FIXME:  remove this wrapper when the horizon history
