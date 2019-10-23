@@ -47,9 +47,6 @@ def evaluate_p_astro_from_bayesfac(astro_bayesfac,
                                    mean_values_dict,
                                    mass1,
                                    mass2,
-                                   spin1z=None,
-                                   spin2z=None,
-                                   num_bins=None,
                                    activation_counts=None):
     """
     Evaluates `p_astro` for a new event using Bayes factor, masses, and number
@@ -65,12 +62,8 @@ def evaluate_p_astro_from_bayesfac(astro_bayesfac,
         event mass1
     mass2 : float
         event mass2
-    spin1z : float
-        event spin1z
-    spin2z : float
-        event spin2z
-    url_weights_key: str
-        url config key pointing to weights file
+    activation_counts: dictionary
+        array of activation counts keyed on source type and bin number
 
     Returns
     -------
@@ -81,9 +74,6 @@ def evaluate_p_astro_from_bayesfac(astro_bayesfac,
     a_hat_bns, a_hat_bbh, a_hat_nsbh, a_hat_mg, num_bins = \
         make_weights_from_histograms(mass1,
                                      mass2,
-                                     spin1z,
-                                     spin2z,
-                                     num_bins,
                                      activation_counts)
 
     # Compute category-wise Bayes factors
@@ -141,39 +131,12 @@ def make_weights_from_hardcuts(mass1, mass2):
     return a_hat_bns, a_hat_bbh, a_hat_nsbh, a_hat_mg, num_bins
 
 
-def closest_template(params, params_array):
-    """
-    Associate event's template to a template in the template bank. The assumed
-    bank is the one used by Gstlal. Hence, for Gstlal events, the association
-    should be exact, up to rounding errors.
-
-    Parameters
-    ----------
-    params : tuple of floats
-        intrinsic params of event template
-    params_array: array of arrays
-        array of template bank's template params
-
-    Returns
-    -------
-    idx : int
-        index pertaining to params_array
-        for matching template
-    """
-    idx = np.argmin(np.sum((params_array-params)**2,axis=1))
-
-    return idx
-
-
 def make_weights_from_histograms(mass1,
                                  mass2,
-                                 spin1z,
-                                 spin2z,
-                                 num_bins=None,
                                  activation_counts=None):
     """
     Construct binary weights from bin number provided by GstLAL, and a weights
-    matrix pre-constructed and stored in a file, to be read from a url. The
+    matrix pre-constructed and stored in a file, to be read from ???. The
     weights are keyed on template parameters of Gstlal's template bank. If that
     doesn't work, construct binary weights.
 
@@ -187,10 +150,8 @@ def make_weights_from_histograms(mass1,
         z component spin of heavier mass
     spin2z : float
         z component spin of lighter mass
-    num_bins : int
-        number of bins for template weighting
-    activation_counts : pandas dataframe
-        data frame for template weights
+    activation_counts : hdf5 object/ dictionary
+        dictionary of activation counts keyed on bin number and source category
 
     Returns
     -------
@@ -198,19 +159,15 @@ def make_weights_from_histograms(mass1,
         mass-based template weights
     """
 
-    if activation_counts is None or num_bins is None:
+    if activation_counts is None:
         a_hat_bns, a_hat_bbh, a_hat_nsbh, a_hat_mg, num_bins = \
             make_weights_from_hardcuts(mass1, mass2)
     else:
-        params = (mass1, mass2, spin1z, spin2z)
-        params_names = ['mass1', 'mass2', 'spin1z', 'spin2z']
-        params_array = \
-            np.array([activation_counts[key][:] for key in params_names]).T
-        idx = closest_template(params, params_array)
-        a_hat_bns = activation_counts['bns'][:][idx]
-        a_hat_mg = activation_counts['mg'][:][idx]
-        a_hat_nsbh = activation_counts['nsbh'][:][idx]
-        a_hat_bbh = activation_counts['bbh'][:][idx]
+        a_hat_bns = activation_counts['BNS']
+        a_hat_mg = activation_counts['MassGap']
+        a_hat_nsbh = activation_counts['NSBH']
+        a_hat_bbh = activation_counts['BBH']
+	num_bins = activation_counts['num_bins']
 
     return a_hat_bns, a_hat_bbh, a_hat_nsbh, a_hat_mg, num_bins
 
@@ -282,6 +239,7 @@ def _get_ln_f_over_b(rankingstatpdf,
     ln_f_over_b = \
         np.array([f[ln_lr, ] - b[ln_lr, ] for ln_lr in ln_likelihood_ratios])
     if np.isnan(ln_f_over_b).any():
+        lnlr = ln_likelihood_ratios[0]
         raise ValueError("NaN encountered in ranking statistic PDF ratios")
     if np.isinf(np.exp(ln_f_over_b)).any():
         raise ValueError(
@@ -300,7 +258,8 @@ def compute_p_astro(event_ln_likelihood_ratio,
                             "counts_NSBH": 1.56679410666,
                             "counts_BBH": 9.26042350393,
                             "counts_MassGap": 2.40800240248,
-                            "counts_Terrestrial": 3923}
+                            "counts_Terrestrial": 3923},
+                    activation_counts = None
                     ):
     """
     Task to compute `p_astro` by source category.
@@ -323,6 +282,9 @@ def compute_p_astro(event_ln_likelihood_ratio,
         livetime in seconds.
     mean_values_dict : dictionary
         dictionary of source specific FGMC Poisson counts
+    activation_counts : dictionary
+        (optional) dictionary of activation counts keyed on 
+        bin number and source category
 
     Returns
     -------
@@ -346,7 +308,7 @@ def compute_p_astro(event_ln_likelihood_ratio,
             _get_ln_f_over_b(rankingstatpdf,
                              zerolag_ln_likelihood_ratios,
                              livetime)
-    except ValueError:
+    except ValueError as e:
         return compute_p_astro_approx(snr,
                                       far,
                                       event_mass1,
@@ -362,10 +324,12 @@ def compute_p_astro(event_ln_likelihood_ratio,
         evaluate_p_astro_from_bayesfac(np.exp(ln_f_over_b[0]),
                                        mean_values_dict,
                                        event_mass1,
-                                       event_mass2)
+                                       event_mass2,
+                                       activation_counts=activation_counts)
 
     # Dump values in json file
     return json.dumps(p_astro_values)
+
 
 def compute_p_astro_approx(snr, far, mass1, mass2, livetime, mean_values_dict):
     """

@@ -271,6 +271,7 @@ def parse_command_line():
 	group.add_option("--ranking-stat-pdf", metavar = "url", help = "Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources)")
 	group.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (required).")
 	group.add_option("--zerolag-rankingstat-pdf", metavar = "url", action = "append", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file.  This is used to construct the extinction model and set the overall false-alarm rate normalization during online running.  If it does not exist at start-up, a new file will be initialized, otherwise the counts will be added to the file's contents.  Required when --data-source is lvshm or framexmit;  optional otherwise.  If given, exactly as many must be provided as there are --svd-bank options and they will be used in order.")
+	group.add_option("--activation-counts-file", metavar = "filename", help = "Set the name of the h5 file containing activation counts for multicomponent p-astro.")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "GracedB Options", "Adjust GracedB interaction")
@@ -423,6 +424,22 @@ def parse_command_line():
 			import subprocess
 			for partition in detectors.shm_part_dict.values():
 				subprocess.call(["smrepair", partition])
+
+		# FIXME REMOVE THIS. We need to get a better way of passing
+		# configuration information like this around.  Putting file
+		# links into the prior dist stats is an options but it is also
+		# becoming cumbersome since it is easy to not then have the
+		# files it refers to...
+		if options.activation_counts_file is not None:
+			import h5py
+			import numpy
+			ac_file = h5py.File(options.activation_counts_file)
+			options.activation_counts = dict((k, float(numpy.array(v))) for k, v in ac_file[options.job_tag].items())
+			# record the total number of bins
+			options.activation_counts['num_bins'] = len(ac_file)
+		else:
+			options.activation_counts = None
+
 	else:
 		bad_options = []
 		for option in ["job_tag"]:
@@ -430,6 +447,7 @@ def parse_command_line():
 				bad_options.append("--%s" % option.replace("_","-"))
 		if bad_options:
 			raise ValueError("cannot set %s when --data-source is not lvshm or framexmit " % ", ".join(bad_options))
+		options.activation_counts = None
 
 	if options.reference_psd is None:
 		options.track_psd = True
@@ -859,6 +877,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		cluster = True,#options.data_source in ("lvshm", "framexmit"),# If uncommented, we only cluster when running online
 		cap_singles = options.cap_singles,
 		FAR_trialsfactor = options.far_trials_factor,
+		activation_counts = options.activation_counts,
 		verbose = options.verbose
 	)
 	if options.verbose:
