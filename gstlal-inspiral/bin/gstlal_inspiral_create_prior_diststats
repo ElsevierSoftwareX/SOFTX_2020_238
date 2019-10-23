@@ -121,7 +121,7 @@ def parse_command_line():
 		horizon_factors.update(bank.horizon_factors)
 	if options.df == "bandwidth":
 		# don't let the bandwidth get too small
-		options.df = max(int(min(bandwidths)) + 1, 10)
+		options.df = max(int(min(bandwidths)) + 1, 10) * 3
 
 	return options, process_params, filenames, template_ids, horizon_factors
 
