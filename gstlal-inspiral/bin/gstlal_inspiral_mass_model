@@ -47,14 +47,14 @@ parser = argparse.ArgumentParser(description = "Create analytic mass models for 
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, broad-bns, bbh, detected-logm, uniform-template. If you want another one, submit a patch.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, ligo-bns, bbh, uniform-template. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
 # Read the template bank file
 xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-if options.model in ("detected-logm", "uniform-template"):
+if options.model in ("uniform-template"):
 	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.getColumnByName("mass1").asarray(), sngl_inspiral_table.getColumnByName("mass2").asarray())
@@ -91,24 +91,19 @@ for row in sngl_inspiral_table:
 	mchirps[row.template_id] = mchirp
 
 	if options.model == "narrow-bns":
-		sigma = 0.04
-		mean = 1.20
+	    # comes from component mass mean 1.33, std 0.09, and redshift 0.02
+		sigma = 0.055
+		mean = 1.18
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 		# Divide out the template density
 		prob[row.template_id] /= TEMPDENS(mchirp)
 
-	elif options.model == "broad-bns":
-		sigma = 0.155
-		# comes from mean of 1.25444859344 at z = 0.02
-		mean = 1.28
+	elif options.model == "ligo-bns":
+		sigma = 0.25
+		mean = 1.33
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 		# Divide out the template density
 		prob[row.template_id] /= TEMPDENS(mchirp)
-
-	elif options.model == "detected-logm":
-		# FIXME should this be **3 or **2?  The term in LR is here: https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/python/stats/inspiral_lr.py#L354
-		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
-		prob[row.template_id] = numpy.log(mchirp) / hdist**3
 
 	elif options.model == "uniform-template":
 		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
@@ -131,8 +126,9 @@ for row in sngl_inspiral_table:
 		#
 
 		# assume a 0.25 solar mass std deviation, this should capture both population distribution and snr effects
+		# motivated by LIGO detections
 		sigma = 0.25
-		mean = 1.3
+		mean = 1.33
 		bnsprob = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 
 		#
