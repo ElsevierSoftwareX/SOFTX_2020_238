@@ -47,34 +47,34 @@ parser = argparse.ArgumentParser(description = "Create analytic mass models for 
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, broad-bns, bbh, detected-logm, uniform-template. If you want another one, submit a patch.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, ligo-bns, bbh, uniform-template. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
 # Read the template bank file
 xmldoc = ligolw_utils.load_filename(options.template_bank, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
-print options.model
-if options.model in ("detected-logm", "uniform-template"):
+if options.model in ("uniform-template"):
 	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.getColumnByName("mass1").asarray(), sngl_inspiral_table.getColumnByName("mass2").asarray())
 
-# NOTE this next block of code isn't used since we don't actuall have a  PDF in mass space. Maybe some day?
-# num_templates = len(mchirps_of_tmps)
-# num_bins = max(5, num_templates / 500)
-# massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min(mchirps_of_tmps)-1e-6, max(mchirps_of_tmps)+1e-6, num_bins),)))
-# for m in mchirps_of_tmps:
-#	massBA.count[(m,)] += 1
-# rate.filter_array(massBA.array, rate.gaussian_window(num_bins / 50., sigma = 5))
+num_templates = len(mchirps_of_tmps)
+num_bins = max(10, num_templates / 10000)
+massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min(mchirps_of_tmps)-1e-6, max(mchirps_of_tmps)+1e-6, num_bins),)))
+for m in mchirps_of_tmps:
+      massBA.count[(m,)] += 1
+# Does weird stuff at edges :(
+#TEMPDENS = rate.InterpBinnedArray(massBA)
+TEMPDENS = lambda x: massBA[x,]
 
 # Assign the proper mass probabilities
 prob = {}
 mchirps = {}
 
 ligo_min = 3
-ligo_max = 50
-ligo_peak = 50
+ligo_max = 60
+ligo_peak = 60
 ligo_alpha = -1.5
 ligonorm = schechter_norm(ligo_min, ligo_max, ligo_peak, ligo_alpha)
 
@@ -95,17 +95,16 @@ for row in sngl_inspiral_table:
 		sigma = 0.055
 		mean = 1.18
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
+		# Divide out the template density
+		prob[row.template_id] /= TEMPDENS(mchirp)
 
-	elif options.model == "broad-bns":
-		sigma = 0.155
-		# comes from mean of 1.25444859344 at z = 0.02
-		mean = 1.28
+	elif options.model == "ligo-bns":
+		sigma = 0.25
+		mean = 1.33
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
+		# Divide out the template density
+		prob[row.template_id] /= TEMPDENS(mchirp)
 
-	elif options.model == "detected-logm":
-		# FIXME should this be **3 or **2?  The term in LR is here: https://git.ligo.org/lscsoft/gstlal/blob/master/gstlal-inspiral/python/stats/inspiral_lr.py#L354
-		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
-		prob[row.template_id] = numpy.log(mchirp) / hdist**3
 	elif options.model == "uniform-template":
 		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
 		prob[row.template_id] = 1.0 / hdist**3
@@ -117,6 +116,8 @@ for row in sngl_inspiral_table:
 
 		# From: https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/RatesAndSignificance/O1O2CatalogRates
 		prob[row.template_id] = schechter(mchirp, bbh_peak, bbh_alpha) / bbhnorm 
+		# Divide out the template density
+		prob[row.template_id] /= TEMPDENS(mchirp)
 
 	elif options.model == "ligo":
 
@@ -124,10 +125,10 @@ for row in sngl_inspiral_table:
 		# BNS portion
 		#
 
-		# assume a 0.35 solar mass std deviation in component masses to make it very broad, this should capture both population distribution and snr effects. This gives mean-mchirp = 1.179 and sigma-mchirp =0.186. Taking z = 0.02, and making std extra broad, we use:
-
+		# assume a 0.25 solar mass std deviation, this should capture both population distribution and snr effects
+		# motivated by LIGO detections
 		sigma = 0.25
-		mean = 1.2
+		mean = 1.33
 		bnsprob = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
 
 		#
@@ -143,11 +144,12 @@ for row in sngl_inspiral_table:
 		# make intrinsic BNS rate 7 times higher (it is actually probably 20 times higher)
 		bns_rate = 7.
 		bbh_rate = 1.
-		# FIXME if the noise is ever normalized over mass then we would need the following, but it isn't
-		#prob[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob) / massBA[(mchirp,)] / (bns_rate + bbh_rate)
 		prob[row.template_id] = (bns_rate * bnsprob + bbh_rate * bbhprob) / (bns_rate + bbh_rate)
+		# Divide out the template density
+		prob[row.template_id] /= TEMPDENS(mchirp)
 	else:
 		raise ValueError("Invalid mass model")
+
 
 ids = sorted(prob.keys())
 norm = numpy.sum(prob.values())
@@ -159,8 +161,8 @@ for idx, tid in enumerate(ids):
 #import matplotlib
 #matplotlib.use('agg')
 #from matplotlib import pyplot
-##pyplot.semilogx(chirpmasses, coefficients[0,0,:] + numpy.log((chirpmasses)**(15./6.)), "*")
-#pyplot.semilogx(chirpmasses, coefficients[0,0,:], "*")
+#print len(chirpmasses), coefficients.shape
+#pyplot.semilogx(chirpmasses, coefficients[0,0,:-1], "*")
 #pyplot.grid()
 #pyplot.ylim([-20, 0])
 #pyplot.savefig("blah.png")
