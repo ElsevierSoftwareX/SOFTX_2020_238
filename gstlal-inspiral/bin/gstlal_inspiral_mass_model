@@ -91,7 +91,7 @@ for row in sngl_inspiral_table:
 	mchirps[row.template_id] = mchirp
 
 	if options.model == "narrow-bns":
-        # comes from component mass mean 1.33, std 0.09, and redshift 0.02
+		# comes from component mass mean 1.33, std 0.09, and redshift 0.02
 		sigma = 0.055
 		mean = 1.18
 		prob[row.template_id] = 1. / (2 * numpy.pi * sigma**2)**.5 * numpy.exp(-(mchirp - mean)**2 / 2. / sigma**2)
