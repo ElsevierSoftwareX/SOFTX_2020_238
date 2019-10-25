@@ -23,6 +23,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_grid_bank \
 	gstlal_inspiral_iir_bank_pipe \
 	gstlal_inspiral_injection_snr \
+	gstlal_inspiral_lnlrcdf_signal \
 	gstlal_inspiral_lvalert_background_plotter \
 	gstlal_inspiral_lvalert_generic_plot_uploader \
 	gstlal_inspiral_lvalert_omegascan \
@@ -32,6 +33,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_lvalert_sngls_plotter \
 	gstlal_inspiral_lvalert_snrtimeseries_plotter \
 	gstlal_inspiral_lvalert_uberplotter \
+	gstlal_inspiral_make_mc_vtplot \
 	gstlal_inspiral_make_snr_pdf \
 	gstlal_inspiral_marginalize_likelihood \
 	gstlal_inspiral_marginalize_likelihoods_online \
@@ -74,3 +76,4 @@ dist_bin_SCRIPTS = \
 	gstlalcbcnode \
 	gstlalcbcsummary \
 	gstlal_svd_bank
+
