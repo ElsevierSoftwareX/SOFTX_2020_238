@@ -26,6 +26,7 @@
 #
 
 
+import cmath
 try:
 	from fpconst import NegInf
 except ImportError:
@@ -48,6 +49,7 @@ from ligo.lw import array as ligolw_array
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils
 from ligo import segments
+from gstlal import chirptime
 from gstlal.stats import horizonhistory
 from gstlal.stats import inspiral_extrinsics
 from gstlal.stats import inspiral_intrinsics
@@ -482,7 +484,7 @@ class LnSignalDensity(LnLRDensity):
 		V_times_t *= 1e-9 / (86400. * 365.25)
 		return V_times_t * rate * len(self.template_ids)
 
-	def random_sim_params(self, sim, horizon_distance = None, snr_efficiency = 1.0, coinc_only = True):
+	def random_sim_params(self, sim, template_id = None, snr_efficiency = 1.0, f_low = 15.):
 		"""
 		Generator that yields an endless sequence of randomly
 		generated parameter dictionaries drawn from the
@@ -497,8 +499,16 @@ class LnSignalDensity(LnLRDensity):
 
 		LnNoiseDensity.random_params()
 
-		The sequence is suitable for input to the .ln_lr_samples()
-		log likelihood ratio generator.
+		The parameters do not necessarily represent valid
+		candidates, for example the number of detectors reporting a
+		trigger might be less than the .min_instruments parameter
+		configured for the ranking statistic.  It is the job of the
+		calling code to check the parameters for validity before
+		using them to compute ranking statistic values.  This is
+		done to allow the calling code to measure the frequency
+		with which the injection is expected to be undetectable.
+		Otherwise, the sequence is suitable for input to the
+		.ln_lr_samples() log likelihood ratio generator.
 
 		Bugs:
 
@@ -513,57 +523,93 @@ class LnSignalDensity(LnLRDensity):
 		in parameter space.  They cannot be used to form an
 		importance weighted sampler of the log likelihood ratios.
 		"""
-		# FIXME:  this is still busted since the rewrite
-
-		# FIXME need to add dt and dphi
 		#
-		# retrieve horizon distance from history if not given
-		# explicitly.  retrieve SNR threshold from class attribute
-		# if not given explicitly
+		# retrieve horizon distances from history.  NOTE:  some
+		# might be zero.  FIXME:  apply template-specific
+		# correction factor
 		#
 
-		if horizon_distance is None:
-			horizon_distance = self.local_mean_horizon_distance(sim.time_geocent)
+		horizon_distance = self.local_mean_horizon_distance(sim.time_geocent)
+		instruments = set(horizon_distance)
 
 		#
-		# compute nominal SNRs
+		# compute nominal SNRs.  NOTE:  some might be below
+		# threshold, or even 0.
 		#
 
-		cosi2 = math.cos(sim.inclination)**2.
+		cosi = math.cos(sim.inclination)
 		gmst = lal.GreenwichMeanSiderealTime(sim.time_geocent)
 		snr_0 = {}
+		phase_0 = {}
+		# FIXME:  use horizon distance from above instead of this
+		params = {u"H1":"alpha4", u"L1":"alpha5", u"V1":"alpha6"}
 		for instrument, DH in horizon_distance.items():
 			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)
-			snr_0[instrument] = snr_efficiency * 8. * DH * math.sqrt(fp**2. * (1. + cosi2)**2. / 4. + fc**2. * cosi2) / sim.distance
+			snr_0[instrument] = getattr(sim, params[instrument])
+			phase_0[instrument] = math.atan2(fc * cosi, fp * (1. + cosi**2.)/2.) - 2*sim.coa_phase + numpy.pi/2.
+			phase_0[instrument] = phase_0[instrument] - math.floor((phase_0[instrument] + numpy.pi)/numpy.pi/2.)*numpy.pi*2
+
+		#
+		# compute template duration and retrieve valid template IDs
+		#
+
+		template_duration = chirptime.imr_time(f_low, sim.mass1*lal.MSUN_SI, sim.mass2*lal.MSUN_SI, numpy.sqrt(numpy.dot(sim.spin1, sim.spin1)), numpy.sqrt(numpy.dot(sim.spin2, sim.spin2)))
+
+		template_ids = tuple(self.template_ids)
 
 		#
 		# construct SNR generators, and approximating the SNRs to
 		# be fixed at the nominal SNRs construct \chi^2 generators
 		#
 
-		def snr_gen(snr):
-			rvs = stats.ncx2(2., snr**2.).rvs
-			math_sqrt = math.sqrt
-			while 1:
-				yield math_sqrt(rvs())
-
-		def chi2_over_snr2_gen(instrument, snr):
-			rates_lnx = numpy.log(self.injection_rates["%s_snr_chi" % instrument].bins[1].centres())
+		def snr_phase_gen(snr0, phase):
+			if snr0 == 0.:
+				# if the expected SNR is identically 0,
+				# that indicates the instrument was off at
+				# the time so the observed SNR must always
+				# be 0
+				while 1:
+					yield 0., phase
+			else:
+				snr0 = cmath.rect(snr0, phase)
+				randn = numpy.random.randn
+				while 1:
+					yield cmath.polar(snr0 + complex(*randn(2)))
+		def chi2_over_snr2_gen(snr):
+			# rates_lnx = ln(chi^2/snr^2)
+			rates_lnx = numpy.log(self.densities["snr_chi"].bins[1].centres())
 			# FIXME:  kinda broken for SNRs below self.snr_min
-			rates_cdf = self.injection_rates["%s_snr_chi" % instrument][max(snr, self.snr_min),:].cumsum()
-			# add a small tilt to break degeneracies then
+			# (right_hand) = lnP(chi^2/snr^2|snr)*const
+			rates_cdf = self.densities["snr_chi"][max(snr, self.snr_min),:]
+			assert not numpy.isnan(rates_cdf).any()
+			# (right_hand) = P(<=chi^2/snr^2|snr)*const
+			drcoss = self.densities["snr_chi"].bins[1].upper() - self.densities["snr_chi"].bins[1].lower()
+			rates_cdf =(numpy.exp(rates_cdf)[:-1]*drcoss[:-1]).cumsum()
+			assert not numpy.isnan(rates_cdf).any()
+			# add a small tilt to break degeneracies so the
+			# inverse function is defined everywhere then
 			# normalize
-			rates_cdf += numpy.linspace(0., 0.001 * rates_cdf[-1], len(rates_cdf))
+			rates_cdf += numpy.linspace(0., 0.00001 * rates_cdf[-1], len(rates_cdf))
 			rates_cdf /= rates_cdf[-1]
 			assert not numpy.isnan(rates_cdf).any()
-
-			interp = interpolate.interp1d(rates_cdf, rates_lnx)
+			# construct an interpolator for the inverse CDF
+			interp = interpolate.interp1d(rates_cdf, rates_lnx[:-1])
+			# draw endless random values of chi^2/snr^2 from
+			# P(chi^2/snr^2|snr)
 			math_exp = math.exp
 			random_random = random.random
 			while 1:
-				yield math_exp(float(interp(random_random())))
+				yield math_exp(interp(random_random()))
 
-		gens = dict(((instrument, "%s_snr_chi" % instrument), (iter(snr_gen(snr)).next, iter(chi2_over_snr2_gen(instrument, snr)).next)) for instrument, snr in snr_0.items())
+		def time_gen(time):
+			rvs = stats.norm(loc=time, scale = 0.002).rvs
+			#rvs = stats.norm(loc=time-1.7e-3, scale = 4e-4).rvs #more accurate for BNS
+			while 1:
+				yield rvs()
+
+		snr_phase = dict((instrument, iter(snr_phase_gen(snr, phase_0[instrument])).next) for instrument, snr in snr_0.items())
+		#chi2s_over_snr2s = dict((instrument, iter(chi2_over_snr2_gen(instrument, snr)).next) for instrument, snr in snr_0.items())
+		gens_t = dict((instrument, iter(time_gen(sim.time_at_instrument(instrument, {instrument: 0.0}))).next) for instrument in instruments)
 
 		#
 		# yield a sequence of randomly generated parameters for
@@ -571,19 +617,21 @@ class LnSignalDensity(LnLRDensity):
 		#
 
 		while 1:
-			params = {"snrs": {}}
-			instruments = []
-			for (instrument, key), (snr, chi2_over_snr2) in gens.items():
-				snr = snr()
-				if snr < self.snr_min:
-					continue
-				params[key] = snr, chi2_over_snr2()
-				params["snrs"][instrument] = snr
-				instruments.append(instrument)
-			if coinc_only and len(instruments) < self.denominator.min_instruments:
-				continue
-			params.horizons = horizon_distance
-			yield params, 0.
+			kwargs = {
+				"segments":{},
+				"snrs": {},
+				"chi2s_over_snr2s": {},
+				"phase": {},
+				"dt": dict((instrument, time()) for instrument, time in gens_t.items()),
+				"template_id": template_id if template_id else random.choice(template_ids)
+			}
+			ref_end = kwargs["dt"][min(kwargs["dt"])]
+			for instrument, time in list(kwargs["dt"].items()):
+				kwargs["segments"][instrument] = segments.segment(time - template_duration, time)
+				kwargs["snrs"][instrument], kwargs["phase"][instrument] = snr_phase[instrument]()
+				kwargs["chi2s_over_snr2s"][instrument] = chi2_over_snr2_gen(kwargs["snrs"][instrument]).next()
+				kwargs["dt"][instrument] = time - ref_end
+			yield kwargs
 
 	def to_xml(self, name):
 		xml = super(LnSignalDensity, self).to_xml(name)
