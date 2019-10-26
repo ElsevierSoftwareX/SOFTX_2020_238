@@ -399,6 +399,9 @@ def mkwhitened_multirate_src(pipeline, src, rates, instrument, psd = None, nativ
 def mkcleandata(pipeline, src, psd, block_duration, instrument, max_rate, ht_gate_threshold, ht_gate_window, veto_segments = None):
 	block_stride = block_duration * max_rate // Gst.SECOND
 
+	# reblock to make it smaller
+	src = pipeparts.mkreblock(pipeline, src, block_duration = block_duration)
+
 	# tee off
 	raw = pipeparts.mktee(pipeline, src)
 
@@ -407,7 +410,7 @@ def mkcleandata(pipeline, src, psd, block_duration, instrument, max_rate, ht_gat
 	kernel, latency, _ = psd_fir.psd_to_linear_phase_whitening_fir_kernel(psd)
 
 	# whiten data
-	white = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, raw, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = latency)
+	white = pipeparts.mkfirbank(pipeline, pipeparts.mkqueue(pipeline, raw, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0), fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = latency)
 
 	# apply vetoes
 	if veto_segments is not None:
@@ -415,7 +418,7 @@ def mkcleandata(pipeline, src, psd, block_duration, instrument, max_rate, ht_gat
 		white = datasource.mksegmentsrcgate(pipeline, white, veto_segments, invert_output = True)
 
 	# h(t) gate
-	clean = datasource.mkhtgate(pipeline, pipeparts.mkqueue(pipeline, raw, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), control = pipeparts.mkqueue(pipeline, white, max_size_buffers = 0, max_size_bytes = 0, max_size_time = 0), threshold = ht_gate_threshold, hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
+	clean = datasource.mkhtgate(pipeline, pipeparts.mkqueue(pipeline, raw, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0), control = pipeparts.mkqueue(pipeline, white, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0), threshold = ht_gate_threshold, hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
 
 	# emit signals so that a user can latch on to them
 	clean.set_property("emit-signals", True)
