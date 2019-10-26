@@ -940,12 +940,13 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	#
 
 
-	if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
-		raise RuntimeError("pipeline could not be set to NULL")
+	del triggersrc
 	del handler.pipeline
 	del handler
 	del bank
 	del banks
+	if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+		raise RuntimeError("pipeline could not be set to NULL")
 
 
 #
