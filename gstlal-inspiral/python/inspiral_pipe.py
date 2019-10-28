@@ -150,6 +150,10 @@ def online_inspiral_layer(dag, jobs, options):
 		}
 		common_opts.update(datasource_opts)
 
+		# If providing an activation counts file provide it.
+		if options.activation_counts_file:
+			common_opts.update({"activation-counts-file": options.activation_counts_file})
+
 		# add ranking stat compression options, if requested
 		if options.compress_ranking_stat:
 			compress_opts = {

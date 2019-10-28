@@ -133,6 +133,7 @@ def parse_command_line():
 	parser.add_option("--likelihood-cache", help = "set the cache containin likelihood files")
 	parser.add_option("--zerolag-likelihood-cache", help = "set the cache containin zerolag likelihood files")
 	parser.add_option("--marginalized-likelihood-file", help = "set the marginalized likelihood file, required")
+	parser.add_option("--activation-counts-file", metavar = "filename", help = "Set the name of the h5 file containing activation counts for multicomponent p-astro.")
 	parser.add_option("--compress-ranking-stat", action = "store_true", help = "Choose whether to compress the ranking stat upon start up. Only used when --ranking-stat-input is set.")
 	parser.add_option("--compress-ranking-stat-threshold", type = "float", default = 0.03, help = "Only keep horizon distance values that differ by this much, fractionally, from their neighbours (default = 0.03).")
 	parser.add_option("--control-peak-time", default = 4, metavar = "secs", help = "set the control peak time, default 4")
