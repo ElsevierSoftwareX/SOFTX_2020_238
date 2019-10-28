@@ -110,6 +110,8 @@ def idq_interp(idq_file):
 class LnLRDensity(snglcoinc.LnLRDensity):
 	# range of SNRs covered by this object
 	snr_min = 4.0
+	chi2_over_snr2_min = 1e-5
+	chi2_over_snr2_max = 1e20
 
 	# SNR, \chi^2 binning definition
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
@@ -861,7 +863,9 @@ class LnNoiseDensity(LnLRDensity):
 		# approximately the same value at SNR 8 as does exp(-8**2 / 2.)
 		psnr = snr**-15
 		psnr = numpy.outer(psnr, numpy.ones(len(rcoss)))
-		arr[snrindices, rcossindices] = psnr
+		vol = numpy.outer(dsnr, drcoss)
+		# arr[snrindices, rcossindices] = psnr
+		arr[snrindices, rcossindices] = psnr * vol
 
 		# normalize to the requested count.  give 99% of the
 		# requested events to this portion of the model
@@ -913,7 +917,7 @@ class LnNoiseDensity(LnLRDensity):
 		"""
 		snr_slope = 0.8 / len(self.instruments)**3
 
-		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next) for instrument in self.instruments)
+		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(self.chi2_over_snr2_min, self.chi2_over_snr2_max)))).next) for instrument in self.instruments)
 		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
 		t_offsets_gen = dict((instruments, self.coinc_rates.plausible_toas(instruments).next) for instruments in self.coinc_rates.all_instrument_combos)
 		random_randint = random.randint
