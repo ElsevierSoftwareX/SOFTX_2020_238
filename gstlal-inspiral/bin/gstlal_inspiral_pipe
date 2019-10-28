@@ -241,13 +241,13 @@ def set_up_jobs(options):
 	inj_snr_condor_opts['request_cpus'] = "2"
 
 	inspiral_1ifo_condor_opts = default_condor_opts.copy()
-	inspiral_1ifo_condor_opts['+MemoryUsage'] = "( 4000 ) * 2 / 3"
+	inspiral_1ifo_condor_opts['+MemoryUsage'] = "( 5000 ) * 2 / 3"
 
 	inspiral_2ifo_condor_opts = default_condor_opts.copy()
-	inspiral_2ifo_condor_opts['+MemoryUsage'] = "( 6000 ) * 2 / 3"
+	inspiral_2ifo_condor_opts['+MemoryUsage'] = "( 7000 ) * 2 / 3"
 
 	inspiral_3ifo_condor_opts = default_condor_opts.copy()
-	inspiral_3ifo_condor_opts['+MemoryUsage'] = "( 8000 ) * 2 / 3"
+	inspiral_3ifo_condor_opts['+MemoryUsage'] = "( 9000 ) * 2 / 3"
 	inspiral_3ifo_condor_opts['request_cpus'] = "2"
 
 	# set condor commands
