@@ -111,6 +111,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	# range of SNRs covered by this object
 	snr_min = 4.0
 	chi2_over_snr2_min = 1e-5
+	chi2_over_snr2_max = 1e5
 
 	# SNR, \chi^2 binning definition
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.00001, 10, 500)))
@@ -918,7 +919,7 @@ class LnNoiseDensity(LnLRDensity):
 		snr_slope = 0.8 / len(self.instruments)**3
 
 		#snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(None, None)))).next) for instrument in self.instruments)
-		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(self.chi2_over_snr2_min, None)))).next) for instrument in self.instruments)
+		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(self.chi2_over_snr2_min, self.chi2_over_snr2_max)))).next) for instrument in self.instruments)
 		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
 		t_offsets_gen = dict((instruments, self.coinc_rates.plausible_toas(instruments).next) for instruments in self.coinc_rates.all_instrument_combos)
 		random_randint = random.randint
