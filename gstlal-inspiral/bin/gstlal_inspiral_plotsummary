@@ -56,6 +56,7 @@ import sqlite3
 import sys
 
 import lal
+from lal import gpstime
 from lal.utils import CacheEntry
 
 from glue import iterutils
@@ -597,36 +598,28 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 
 	def write_candidate_json(self, candidates, fname):
 		data = []
-		# FIXME generalize for virgo
 		fields = [
 			"rank",
 			"FAR (Hz)",
 			"FAP",
 			"ln L",
 			"SNR",
-			"time",
+			"GPS time",
+			"UTC time",
 			"M total",
 			"M chirp",
-			"Participating IFOs",
+			"Found IFOs",
 			"On IFOs",
+			"m1",
+			"m2",
+			"S_1z",
+			"S_2z",
 			"H1 SNR",
 			"H1 chisq",
-			"H1 m1",
-			"H1 m2",
-			"H1 S_1z",
-			"H1 S_2z",
 			"L1 SNR",
 			"L1 chisq",
-			"L1 m1",
-			"L1 m2",
-			"L1 S_1z",
-			"L1 S_2z",
 			"V1 SNR",
-			"V1 chisq",
-			"V1 m1",
-			"V1 m2",
-			"V1 S_1z",
-			"V1 S_2z"
+			"V1 chisq"
 		]
 		for rank, values in enumerate(candidates, 1):
 			if values[0] is None:
@@ -649,16 +642,27 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 				# being out of sync.
 				#
 				continue
-			row = [rank] + [truncate(float(v), 3) for v in values[:4]] + [truncate(float(values[4]), 6, si=False)] + [truncate(float(v), 3) for v in values[5:7]] + list(values[7:9])
 			# values[9] is a string that is e.g., H1:4.8993754:1.0139208:2.061641:1.145543 L1:8.2582664:1.1890973:2.061641:1.145543
-			ifodict = {"H1": [-1,-1,-1,-1,-1,-1], "L1": [-1,-1,-1,-1,-1,-1], "V1": [-1,-1,-1,-1,-1,-1]}
+			row = [rank] + [truncate(float(v), 3) for v in values[:4]] + [truncate(float(values[4]), 6, si=False)]
+			row.append(gpstime.gps_to_utc(float(values[4])).strftime("%Y-%m-%d %H:%M:%S"))
+			row.extend([truncate(float(v), 3) for v in values[5:7]] + list(values[7:9]))
+
+			# populate row with trigger data
+			ifodict = {"H1": ['-', '-'], "L1": ['-', '-'], "V1": ['-', '-']}
+			template_params = ['-'] * 4
 			for ifo_row in values[9].split():
 				ifodata = ifo_row.split(":")
-				ifodict[ifodata[0]] = [truncate(float(v), 3) for v in ifodata[1:]]
-			row.extend(ifodict["H1"])
-			row.extend(ifodict["L1"])
-			row.extend(ifodict["V1"])
+				ifodict[ifodata[0]] = [truncate(float(v), 3) for v in ifodata[1:3]]
+				template_params = [truncate(float(v), 3) for v in ifodata[3:]]
+
+			# add template params + SNR/chi^2 for all ifos
+			row.extend(template_params)
+			for ifo in sorted(ifodict.keys()):
+				row.extend(ifodict[ifo])
+
+			# add row to table
 			data.append(row)
+
 		save_table(fname, fields, data)
 
 	def finish(self):
