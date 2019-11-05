@@ -163,86 +163,26 @@ CREATE TEMPORARY TABLE
 	connection.cursor().execute("DROP INDEX sim_id_sngl_id_index")
 
 def create_coinc_view(connection):
-	"""
-	Construct a sngl_inspiral --> best matching coinc_event mapping.
-	Only triggers that match at least one coinc get an entry in this
-	table.
-	"""
-	#
-	# the log likelihood ratio stored in the likelihood column of the
-	# coinc_event table is the ranking statistic.  the "best match" is
-	# the coinc with the highest value in this column.  although it has
-	# not been true in the past, there is now a one-to-one relationship
-	# between the value of this ranking statistic and false-alarm rate,
-	# therefore it is OK to order by log likelihood ratio and then,
-	# later, impose a "detection" threshold based on false-alarm rate.
-	#
-
-	connection.cursor().execute("""
-CREATE TEMPORARY TABLE
-	sngl_coinc_map_helper
-AS
-	SELECT a.event_id as sid,
-		coinc_event.coinc_event_id as cid,
-		coinc_event.likelihood as lr,
-		coinc_event.nevents as nevents,
-		coinc_event.instruments as instruments
-	FROM coinc_event_map as a
-		JOIN coinc_event_map AS b ON (b.coinc_event_id == a.coinc_event_id)
-		JOIN coinc_event ON (coinc_event.coinc_event_id == b.event_id)
-	WHERE a.table_name == "sngl_inspiral"
-		AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0);
-	""")
-
-	connection.cursor().execute("CREATE INDEX IF NOT EXISTS sngl_coinc_map_helper_index ON sngl_coinc_map_helper (sid, cid);")
-
-#
-# FIXME NOTE FIXME this selects triple times with no more than two ifos to test the itacac sub threshold stuff
-#
-
-	connection.cursor().execute("""
-CREATE TEMPORARY TABLE
-        sngl_coinc_map
-AS
-        SELECT
-                sngl_inspiral.event_id AS event_id,
-                (
-                        SELECT
-                                cid
-                        FROM
-				sngl_coinc_map_helper
-                        WHERE
-                                sid = event_id
-                        ORDER BY
-                                lr
-			DESC
-                        LIMIT 1
-                ) AS coinc_event_id
-        FROM
-                sngl_inspiral
-        WHERE
-                coinc_event_id IS NOT NULL;
-
-	""")
-
-	connection.cursor().execute("DROP INDEX sngl_coinc_map_helper_index;")
-
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
 	sngl_far
 AS
 	SELECT
-		sngl_inspiral.process_id AS pid,
-		sngl_inspiral.Gamma1 AS Gamma1,
-		coinc_inspiral.combined_far AS far,
-		sngl_inspiral.event_id AS event_id,
-		sngl_inspiral.*
-		
-	FROM
-		sngl_coinc_map
-		JOIN coinc_inspiral ON ( coinc_inspiral.coinc_event_id == sngl_coinc_map.coinc_event_id  )
-		JOIN sngl_inspiral ON ( sngl_inspiral.event_id == sngl_coinc_map.event_id )
-	""")
+		coinc_event.process_id, 
+		(SELECT sngl_inspiral.Gamma1 FROM sngl_inspiral WHERE map.event_id == sngl_inspiral.event_id LIMIT 1), 
+		combined_far AS far, 
+		coinc_inspiral.coinc_event_id,
+		coinc_inspiral.* 
+	FROM coinc_inspiral 
+	JOIN coinc_event 
+		ON coinc_event.coinc_event_id = coinc_inspiral.coinc_event_id 
+	JOIN coinc_event_map as map 
+		ON map.coinc_event_id == coinc_event.coinc_event_id 
+	WHERE
+		map.table_name = "sngl_inspiral" 
+		AND combined_far < 1e-6 
+		AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0);
+""")
 
 if options.injection_database:
 	db = options.injection_database
@@ -283,7 +223,7 @@ elif options.zerolag_database:
         create_coinc_view(connection)
         s_row = {}
         xmldoc = dbtables.get_xml(connection)
-        inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+        coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
         for record in connection.cursor().execute("""
         SELECT 
                 *
@@ -301,7 +241,7 @@ elif options.zerolag_database:
                 far = record[2]
                 sid = record[3]
                 srow = record[4:]
-                s_row[(bank_id, process_id, sid)] = inspiral_table.row_from_cols(srow)
+                s_row[(bank_id, process_id, sid)] = coinc_inspiral_table.row_from_cols(srow)
 
 master_opts_dict = { 
 	"gps-start-time":None,
@@ -486,11 +426,12 @@ for job_id, (bankid, process_id, sid) in enumerate(s_row, start=1):
 	
 	if options.injection_database:
 		node = dagparts.DAGNode(gstlalInspiralInjJob, dag, parent_nodes = [], opts = this_opts_dict, input_files = this_input_dict, output_files = this_output_dict)
+		# all the remaining post processing
+		# FIXME this only works for injections
+		node = dagparts.DAGNode(bashJob, dag, parent_nodes = [node], opts = {"":["process.sh", "%d_%d_%d" % (job_id, bankid, process_id)]})
 	if options.zerolag_database:
                 node = dagparts.DAGNode(gstlalInspiralJob, dag, parent_nodes = [], opts = this_opts_dict, input_files = this_input_dict, output_files = this_output_dict)
 
-	# all the remaining post processing
-	node = dagparts.DAGNode(bashJob, dag, parent_nodes = [node], opts = {"":["process.sh", "%d_%d_%d" % (job_id, bankid, process_id)]})
 
 
 dag.write_sub_files()
