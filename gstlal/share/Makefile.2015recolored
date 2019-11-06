@@ -1,21 +1,25 @@
 ## @file Makefile.2015recolored
 # Makefile for recoloring data to the 2015 noise curves
 
+## Accounting info
+GROUP_USER = albert.einstein
+ACCOUNTING_TAG = ligo.dev.o2.cbc.explore.test
+
 ## General info
 MIN_SEG_LENGTH = 1000
-START = 966400000
-STOP =  966404000
+START = 1187000000
+STOP = 1187004000
 TRIM = 16
 LIGODESIGNPSD = early_aligo_asd.txt
 VIRGODESIGNPSD = v1_early_asd.txt
 
 # controls input data
-LIGOSCIENCE = DMT-SCIENCE:4
-VIRGOSCIENCE = ITF_SCIENCEMODE
-LIGOFRAMETYPEIN = 1_LDAS_C02_L2
-VIRGOFRAMETYPEIN = HrecV2
-LIGOINCHANNEL = LDAS-STRAIN
-VIRGOINCHANNEL = h_16384Hz
+LIGOSCIENCE = DCH-CLEAN_SCIENCE_C02:1
+VIRGOSCIENCE = ITF_SCIENCE
+LIGOFRAMETYPEIN = 1_CLEANED_HOFT_C02
+VIRGOFRAMETYPEIN = 1O2Repro2A
+LIGOINCHANNEL = DCH-CLEAN_STRAIN_C02
+VIRGOINCHANNEL = Hrec_hoft_V1O2Repro2A_16384Hz
 
 # controls output data
 LIGOFRAMETYPE = T1200307_V4_EARLY_RECOLORED_V2
@@ -29,28 +33,29 @@ all : dag
 
 
 %segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:$(LIGOSCIENCE)  --result-name=datasegments > $@
+	ligolw_segment_query_dqsegdb --segment-url=https://segments.ligo.org -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=$*:$(LIGOSCIENCE) --result-name=datasegments > $@
 
 V1segmentspadded.xml:
-	ligolw_segment_query --segment-url=https://segdb.ligo.caltech.edu -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=V1:$(VIRGOSCIENCE) --result-name=datasegments > $@
+	ligolw_segment_query_dqsegdb --segment-url=https://segments.ligo.org -q --gps-start-time ${START} --gps-end-time ${STOP} --include-segments=V1:$(VIRGOSCIENCE) --result-name=datasegments > $@
 
 frame.%1.cache:
-	ligo_data_find -o $* -t  $*$(LIGOFRAMETYPEIN) -l  -s $(START) -e $(STOP) --url-type file > $@
+	gw_data_find -o $* -t  $*$(LIGOFRAMETYPEIN) -l  -s $(START) -e $(STOP) --url-type file > $@
 
 frame.V1.cache:
-	ligo_data_find -o V -t $(VIRGOFRAMETYPEIN) -l  -s $(START) -e $(STOP) --url-type file > $@
+	gw_data_find -o V -t  V$(VIRGOFRAMETYPEIN) -l  -s $(START) -e $(STOP) --url-type file > $@
 
 frame.cache: frame.H1.cache frame.L1.cache frame.V1.cache
 	cat frame.H1.cache frame.L1.cache frame.V1.cache > $@
 
-segments.xml: H1segmentspadded.xml  L1segmentspadded.xml V1segmentspadded.xml
+segments.xml: H1segmentspadded.xml L1segmentspadded.xml V1segmentspadded.xml
 	ligolw_add --ilwdchar-compat --output $@ H1segmentspadded.xml L1segmentspadded.xml V1segmentspadded.xml
+	ligolw_no_ilwdchar $@
 
 $(LIGODESIGNPSD) :
-	wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/$@
+	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal/share/$@
 
 $(VIRGODESIGNPSD) :
-	wget http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/share/$@
+	wget https://git.ligo.org/lscsoft/gstlal/raw/master/gstlal/share/$@
 
 %recolorpsd.xml.gz : $(LIGODESIGNPSD) 
 	gstlal_psd_xml_from_asd_txt --instrument $* --output $@ $(LIGODESIGNPSD)
@@ -59,10 +64,32 @@ V1recolorpsd.xml.gz : $(VIRGODESIGNPSD)
 	gstlal_psd_xml_from_asd_txt --instrument V1 --output $@ $(VIRGODESIGNPSD)
 
 recolor_psd.xml.gz: H1recolorpsd.xml.gz L1recolorpsd.xml.gz V1recolorpsd.xml.gz
-	ligolw_add --ilwdchar-compat H1recolorpsd.xml.gz L1recolorpsd.xml.gz V1recolorpsd.xml.gz | gzip > $@
+	ligolw_add H1recolorpsd.xml.gz L1recolorpsd.xml.gz V1recolorpsd.xml.gz | gzip > $@
 
 dag : segments.xml frame.cache recolor_psd.xml.gz
-	gstlal_fake_frames_pipe  --color-psd recolor_psd.xml.gz --frame-segments-file segments.xml --frame-segments-name datasegments --min-segment-length $(MIN_SEG_LENGTH) --frame-cache frame.cache --channel-name=H1=$(LIGOINCHANNEL) --channel-name=L1=$(LIGOINCHANNEL) --channel-name=V1=$(VIRGOINCHANNEL) --output-channel-name=H1=$(LIGOOUTCHANNEL) --output-channel-name=L1=$(LIGOOUTCHANNEL) --output-channel-name=V1=$(VIRGOOUTCHANNEL) --output-path=H1=$(LIGOOUTPATH) --output-path=L1=$(LIGOOUTPATH) --output-path=V1=$(VIRGOOUTPATH) --frame-type=H1=$(LIGOFRAMETYPE) --frame-type=L1=$(LIGOFRAMETYPE) --frame-type=V1=$(VIRGOFRAMETYPE) --whiten-type medianofpsdperseg --frame-duration 16 --frames-per-file 256
+	gstlal_fake_frames_pipe \
+		--color-psd recolor_psd.xml.gz \
+		--frame-segments-file segments.xml \
+		--frame-segments-name datasegments \
+		--min-segment-length $(MIN_SEG_LENGTH) \
+		--frame-cache frame.cache \
+		--channel-name=H1=$(LIGOINCHANNEL) \
+		--channel-name=L1=$(LIGOINCHANNEL) \
+		--channel-name=V1=$(VIRGOINCHANNEL) \
+		--output-channel-name=H1=$(LIGOOUTCHANNEL) \
+		--output-channel-name=L1=$(LIGOOUTCHANNEL) \
+		--output-channel-name=V1=$(VIRGOOUTCHANNEL) \
+		--output-path=H1=$(LIGOOUTPATH) \
+		--output-path=L1=$(LIGOOUTPATH) \
+		--output-path=V1=$(VIRGOOUTPATH) \
+		--frame-type=H1=$(LIGOFRAMETYPE) \
+		--frame-type=L1=$(LIGOFRAMETYPE) \
+		--frame-type=V1=$(VIRGOFRAMETYPE) \
+		--whiten-type medianofpsdperseg \
+		--frame-duration 16 \
+		--frames-per-file 256 \
+		--accounting-group-user $(GROUP_USER) \
+		--accounting-group $(ACCOUNTING_TAG) \
 
 finish :
 	ls $(LIGOOUTPATH)/*/*.gwf | lalapps_path2cache > recolor_frame.cache
