@@ -37,6 +37,7 @@ import threading
 import time
 import warnings
 
+from gi.repository import GLib
 
 from . import bottle
 
@@ -44,7 +45,7 @@ try:
 	from . import servicediscovery
 except ImportError:
 	servicediscovery = None
-	warnings.warn("Disabling service discovery since avahi is not available.")
+	warnings.warn("avahi module is not available, disabling service discovery...")
 
 #
 # =============================================================================
@@ -121,12 +122,16 @@ class HTTPServers(list):
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
 		if servicediscovery:
-			self.service_publisher = servicediscovery.Publisher().__enter__()
+			try:
+				self.service_publisher = servicediscovery.Publisher().__enter__()
+			except GLib.Error:
+				self.service_publisher = None
+				warnings.warn("could not connect to avahi-daemon, disabling service discovery...")
 		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
 			httpd = HTTPDServer(host, port, bottle_app, verbose = verbose).__enter__()
 			if verbose:
 				print >>sys.stderr, "advertising http server \"%s\" on http://%s:%d ..." % (service_name, httpd.host, httpd.port),
-			if servicediscovery:
+			if servicediscovery and self.service_publisher:
 				service = self.service_publisher.add_service(
 					sname = service_name,
 					sdomain = service_domain,
@@ -147,7 +152,7 @@ class HTTPServers(list):
 		if self.verbose:
 			print >>sys.stderr, "de-advertising http server(s) ...",
 		try:
-			if servicediscovery:
+			if servicediscovery and self.service_publisher:
 				self.service_publisher.__exit__(None, None, None)
 		except Exception as e:
 			if self.verbose:
