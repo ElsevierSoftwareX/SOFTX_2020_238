@@ -35,11 +35,16 @@ import socket
 import sys
 import threading
 import time
+import warnings
 
 
 from . import bottle
-from . import servicediscovery
 
+try:
+	from . import servicediscovery
+except ImportError:
+	servicediscovery = None
+	warnings.warn("Disabling service discovery since avahi is not available.")
 
 #
 # =============================================================================
@@ -115,18 +120,22 @@ class HTTPServers(list):
 		if bottle_app is None:
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
-		self.service_publisher = servicediscovery.Publisher().__enter__()
+		if servicediscovery:
+			self.service_publisher = servicediscovery.Publisher().__enter__()
 		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
 			httpd = HTTPDServer(host, port, bottle_app, verbose = verbose).__enter__()
 			if verbose:
 				print >>sys.stderr, "advertising http server \"%s\" on http://%s:%d ..." % (service_name, httpd.host, httpd.port),
-			service = self.service_publisher.add_service(
-				sname = service_name,
-				sdomain = service_domain,
-				port = httpd.port,
-				properties = service_properties,
-				commit = False
-			)
+			if servicediscovery:
+				service = self.service_publisher.add_service(
+					sname = service_name,
+					sdomain = service_domain,
+					port = httpd.port,
+					properties = service_properties,
+					commit = False
+				)
+			else:
+				service = None
 			if verbose:
 				print >>sys.stderr, "done (%s)" % ".".join((service.sname, service.sdomain))
 			self.append((httpd, service))
@@ -138,7 +147,8 @@ class HTTPServers(list):
 		if self.verbose:
 			print >>sys.stderr, "de-advertising http server(s) ...",
 		try:
-			self.service_publisher.__exit__(None, None, None)
+			if servicediscovery:
+				self.service_publisher.__exit__(None, None, None)
 		except Exception as e:
 			if self.verbose:
 				print >>sys.stderr, "failed: %s" % str(e)
