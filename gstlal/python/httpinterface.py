@@ -142,7 +142,7 @@ class HTTPServers(list):
 			else:
 				service = None
 			if verbose:
-				print >>sys.stderr, "done (%s)" % ".".join((service.sname, service.sdomain))
+				print >>sys.stderr, "done (%s)" % (".".join((service.sname, service.sdomain)) if service else "")
 			self.append((httpd, service))
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
