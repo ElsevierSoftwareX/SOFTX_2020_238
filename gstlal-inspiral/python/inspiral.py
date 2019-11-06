@@ -645,9 +645,9 @@ class GracedBWrapper(object):
 
 			observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
 			instruments = "".join(sorted(self.instruments))
-			description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.group, self.search)
+			description = "%s_%s_%s_%s" % ("GSTLAL", ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.group, self.search)
 			end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
-			filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
+			filename = "%s-%s-%d-%d.xml" % (instruments, description, end_time, 1)
 
 			#
 			# construct message and send to gracedb.
@@ -867,7 +867,7 @@ class GracedBWrapper(object):
 					try:
 						resp = self.gracedb_client.createEvent(self.group, self.pipeline, filename, filecontents = message.getvalue(), search = self.search)
 					except gracedb.rest.HTTPError as resp:
-						pass
+						print resp
 					else:
 						resp_json = resp.json()
 						if resp.status == httplib.CREATED:
