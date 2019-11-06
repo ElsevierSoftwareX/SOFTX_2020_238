@@ -179,11 +179,11 @@ from gstlal import lloidhandler
 from gstlal import lloidparts
 from gstlal import pipeparts
 from gstlal import reference_psd
-from gstlal import servicediscovery
 from gstlal import simulation
 from gstlal import svd_bank
 
 GSTLAL_PROCESS_START_TIME = UTCToGPS(time.gmtime())
+DEFAULT_SERVICE_DOMAIN = "gw.local"
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -210,7 +210,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def service_domain(gracedb_search, gracedb_pipeline):
-	return "%s_%s.%s" % (gracedb_pipeline.lower(), gracedb_search.lower(), servicediscovery.DEFAULT_SERVICE_DOMAIN)
+	return "%s_%s.%s" % (gracedb_pipeline.lower(), gracedb_search.lower(), DEFAULT_SERVICE_DOMAIN)
 
 
 #
