@@ -295,6 +295,9 @@ if options.color_psd:
 
 	# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
 	rpsd_data = numpy.array(rpsd.data.data[:max_sample])
+	if len(rpsd_data) < max_sample: # FIXME this is off by one sample, but shouldn't be.
+		rpsd_data = numpy.append(rpsd_data, numpy.zeros(max_sample - len(rpsd_data)))
+
 	rpsd = lal.CreateCOMPLEX16FrequencySeries(name = rpsd.name, epoch = rpsd.epoch, f0 = rpsd.f0, deltaF = rpsd.deltaF, length = max_sample, sampleUnits = rpsd.sampleUnits)
 	rpsd.data.data = rpsd_data
 	
