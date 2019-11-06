@@ -18,6 +18,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_best_coinc_file \
 	gstlal_inspiral_calc_likelihood_by_bin \
 	gstlal_inspiral_check_livetimes \
+	gstlal_inspiral_coinc_extractor_dag \
 	gstlal_inspiral_metric_overlap \
 	gstlal_inspiral_metric_overlap_dag \
 	gstlal_inspiral_treebank \
