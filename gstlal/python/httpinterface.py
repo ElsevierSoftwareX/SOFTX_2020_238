@@ -146,7 +146,8 @@ class HTTPServers(list):
 			self.append((httpd, service))
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
-		self.service_publisher.commit()
+		if servicediscovery and self.service_publisher:
+			self.service_publisher.commit()
 
 	def __del__(self):
 		if self.verbose:
