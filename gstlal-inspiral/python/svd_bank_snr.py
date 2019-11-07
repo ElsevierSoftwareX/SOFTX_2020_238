@@ -65,11 +65,11 @@ class SNR(object):
 	This is a class that defines the approximate start time and end time for which
 	the SNR should be collected.
 	"""
-	def __init__(self, start, end, instrument, banks, sub_bank_id = 0):
+	def __init__(self, start, end, instrument, banks, bank_number = 0):
 		if start >= end:
 			raise ValueError("Start time must be less than end time.")
-		self.sub_bank_id = sub_bank_id
-		self.sngl_inspiral_table = banks[sub_bank_id].sngl_inspiral_table
+		self.bank_number = bank_number
+		self.sngl_inspiral_table = banks[bank_number].sngl_inspiral_table
 		self.s = start
 		self.e = end
 		self.epoch = None
@@ -259,12 +259,12 @@ class SNRPipelineHandler(lloidhandler.Handler):
 
 			# FIXME: it is a bit messy. Any possible fixes should follow the naming convention, otherwise gstlal_inspiral_plot_snr tools might breaks.
 			# LLOID
-			if hasattr(snrs, "sub_bank_id"):
+			if hasattr(snrs, "bank_number"):
 				if row_number is None:
-					outname = "%s-SVD_BANK_SNR_%d-%d-%d.xml.gz" % (instrument, snrs.sub_bank_id, snrs.start, snrs.duration)
+					outname = "%s-SVD_BANK_SNR_%d-%d-%d.xml.gz" % (instrument, snrs.bank_number, snrs.start, snrs.duration)
 					write_url(make_xmldoc({instrument: snrs[:]}), os.path.join(outdir, outname), verbose = self.verbose)
 				else:
-					outname = "%s-SVD_BANK_SNR_%d_%d-%d-%d.xml.gz" % (instrument, snrs.sub_bank_id, row_number, snrs.start, snrs.duration)
+					outname = "%s-SVD_BANK_SNR_%d_%d-%d-%d.xml.gz" % (instrument, snrs.bank_number, row_number, snrs.start, snrs.duration)
 					write_url(make_xmldoc({instrument: [snrs[row_number]]}), os.path.join(outdir, outname), verbose = self.verbose)
 			# FIR
 			else:
@@ -539,7 +539,7 @@ def scan_svd_banks_for_row(coinc_xmldoc, banks_dict):
 		banks_dict (dict): A dictionary of SVD banks key by instrument containing the event template.
 
 	Returns:
-		sub_bank_id (int)
+		bank_number (int)
 		row_number (int)
 
 	"""
@@ -547,18 +547,18 @@ def scan_svd_banks_for_row(coinc_xmldoc, banks_dict):
 
 	assert len(set([row.template_id for row in eventid_trigger_dict.values()])) == 1, "Templates should have the same template_id."
 
-	sub_bank_id = None
+	bank_number = None
 	row_number = None
 	for i, bank in enumerate(banks_dict.values()[0]):
 		for j, row in enumerate(bank.sngl_inspiral_table):
 			if row.template_id == eventid_trigger_dict.values()[0].template_id:
-				sub_bank_id = i
+				bank_number = i
 				row_number = j
 				break
-		if sub_bank_id is not None:
+		if bank_number is not None:
 			break
-	assert sub_bank_id is not None, "Cannot find the template listed in the coinc.xml."
-	return sub_bank_id, row_number
+	assert bank_number is not None, "Cannot find the template listed in the coinc.xml."
+	return bank_number, row_number
 
 def svd_banks_from_event(gid, outdir=".", save=False, verbose=False):
 	"""Find location of the SVD banks from gracedb event id.
@@ -571,7 +571,7 @@ def svd_banks_from_event(gid, outdir=".", save=False, verbose=False):
 
 	Returns:
 		banks_dict (dict of :obj: `Bank`): The SVD banks for an event key by instrument.
-		sub_bank_id (int)
+		bank_number (int)
 		row_number (int)
 
 	"""
@@ -603,9 +603,9 @@ def svd_banks_from_event(gid, outdir=".", save=False, verbose=False):
 
 	# Just get one of the template bank from any instrument,
 	# the templates should all have the same template_id because they are exact-matched.
-	sub_bank_id, row_number = scan_svd_banks_for_row(coinc_xmldoc, banks_dict)
+	bank_number, row_number = scan_svd_banks_for_row(coinc_xmldoc, banks_dict)
 
-	return banks_dict, sub_bank_id, row_number
+	return banks_dict, bank_number, row_number
 
 def framecache_from_event(gid, observatories, frame_types, time_span = 500, outdir = ".", filename = "frame.cache", verbose = False):
 	"""Get the frame cache for an event given the gracedb event id.
