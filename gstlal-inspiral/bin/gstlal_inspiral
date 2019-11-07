@@ -179,11 +179,11 @@ from gstlal import lloidhandler
 from gstlal import lloidparts
 from gstlal import pipeparts
 from gstlal import reference_psd
+from gstlal import servicediscovery
 from gstlal import simulation
 from gstlal import svd_bank
 
 GSTLAL_PROCESS_START_TIME = UTCToGPS(time.gmtime())
-DEFAULT_SERVICE_DOMAIN = "gw.local"
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -210,7 +210,7 @@ setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
 
 
 def service_domain(gracedb_search, gracedb_pipeline):
-	return "%s_%s.%s" % (gracedb_pipeline.lower(), gracedb_search.lower(), DEFAULT_SERVICE_DOMAIN)
+	return "%s_%s.%s" % (gracedb_pipeline.lower(), gracedb_search.lower(), servicediscovery.DEFAULT_SERVICE_DOMAIN)
 
 
 #
@@ -295,6 +295,7 @@ def parse_command_line():
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 	group.add_option("--write-pipeline", metavar = "filename", help = "Write a DOT graph description of the as-built pipeline to this file (optional).  The environment variable GST_DEBUG_DUMP_DOT_DIR must be set for this option to work.")
 	group.add_option("--output-kafka-server", metavar = "addr", help = "Set the server address and port number for output data. Optional, e.g., 10.14.0.112:9092")
+	group.add_option("--disable-service-discovery", action = "store_true", help = "Disable service discovery. This disables gstlal_inspiral jobs from being able to advertise the location of the services it provides.")
 	parser.add_option_group(group)
 
 	options, filenames = parser.parse_args()
@@ -676,6 +677,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			"cwd": os.getcwd(),
 			"pid": str(os.getpid()),
 		},
+		service_discovery = not options.disable_service_discovery,
 		verbose = options.verbose
 	)
 
