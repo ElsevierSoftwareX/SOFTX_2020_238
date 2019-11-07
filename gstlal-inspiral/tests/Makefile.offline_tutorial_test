@@ -516,6 +516,7 @@ H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURA
 		--min-instruments $(MIN_IFOS) \
 		--ht-gate-threshold 100. \
 		--coincidence-threshold 0.005 \
+		--disable-service-discovery \
 		--verbose
 	@echo ""
 
