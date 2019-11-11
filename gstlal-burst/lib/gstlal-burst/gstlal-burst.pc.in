@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: libgstlalburst
 Description: LAL/Gstreamer Library (the bursty bits)
 Version: @VERSION@
-Requires.private: lal lalmetaio lalburst gstlal
+Requires: lal lalmetaio glib-2.0 gsl gstlal
 Libs: -L${libdir} -lgstlalburst
 Cflags: -I${includedir}

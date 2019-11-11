@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: libgstlalinspiral
 Description: LAL/Gstreamer Library (the inspiral bits)
 Version: @VERSION@
-Requires: gstlal
+Requires: glib-2.0 gsl gstlal gstreamer-@GSTREAMER_RELEASE@ lal lalmetaio
 Libs: -L${libdir} -lgstlalinspiral
 Cflags: -I${includedir}

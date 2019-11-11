@@ -6,6 +6,6 @@ includedir=@includedir@
 Name: libgstlal
 Description: LAL/Gstreamer Library
 Version: @VERSION@
-Requires.private: fftw3 gsl lal lalframe lalmetaio lalsupport lalburst gstreamer-@GSTREAMER_RELEASE@ gstreamer-base-@GSTREAMER_RELEASE@ gstreamer-audio-@GSTREAMER_RELEASE@ gstreamer-video-@GSTREAMER_RELEASE@ gstreamer-plugins-base-@GSTREAMER_RELEASE@
+Requires: glib-2.0 gsl gstreamer-@GSTREAMER_RELEASE@ gstreamer-audio-@GSTREAMER_RELEASE@ lal
 Libs: -L${libdir} -lgstlal -lgstlaltags -lgstlaltypes
 Cflags: -I${includedir}
