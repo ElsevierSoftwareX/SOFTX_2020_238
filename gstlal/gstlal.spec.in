@@ -54,7 +54,7 @@ BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
 BuildRequires: numpy >= @MIN_NUMPY_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
-BuildRequires: pkgconfig >= 0.18.0
+BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
 BuildRequires: pygobject3-devel >= @MIN_PYGOBJECT_VERSION@

@@ -37,7 +37,7 @@ BuildRequires: lal-devel >= @MIN_LAL_VERSION@
 BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
-BuildRequires: pkgconfig >= 0.18.0
+BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 BuildRequires: python2-lal >= @MIN_LAL_VERSION@
 Conflicts: gstlal-ugly < 0.6.0

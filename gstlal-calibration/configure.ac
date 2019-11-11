@@ -97,7 +97,8 @@ case `cat /etc/redhat-release 2> /dev/null` in
     ;;
 esac
 LT_INIT
-PKG_PROG_PKG_CONFIG(0.18.0)
+AC_SUBST([MIN_PKG_CONFIG_VERSION], [0.18.0])
+PKG_PROG_PKG_CONFIG("$MIN_PKG_CONFIG_VERSION")
 
 
 #
