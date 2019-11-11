@@ -34,6 +34,8 @@
 #include <gst/gst.h>
 #include <lal/LIGOMetadataTables.h>
 #include <gsl/gsl_matrix_float.h>
+#include <gsl/gsl_matrix_complex_float.h>
+
 
 G_BEGIN_DECLS
 
