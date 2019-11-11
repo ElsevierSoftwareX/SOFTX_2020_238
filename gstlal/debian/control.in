@@ -24,7 +24,7 @@ Build-Depends:
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstrtspserver-1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
- pkg-config (>= 0.18.0),
+ pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-gi-dev (>= @MIN_PYGOBJECT_VERSION@),
  python-lal (>= @MIN_LAL_VERSION@),
