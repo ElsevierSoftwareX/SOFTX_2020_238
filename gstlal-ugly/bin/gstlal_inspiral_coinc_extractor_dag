@@ -249,9 +249,9 @@ master_opts_dict = {
 	"likelihood-snapshot-interval": 100000.0,
 	"track-psd": "",
 	"min-instruments": None,
-	"gracedb-far-threshold": 1e-6,
+	"gracedb-far-threshold": options.far_threshold,
 	"gracedb-service-url": None,
-	"ht-gate-threshold": 50.0,
+	"ht-gate-threshold": None,
 	"veto-segments-name": "vetoes",
 	"fir-stride": 0.25,
 	"gracedb-group": "CBC",
@@ -380,14 +380,24 @@ f.close()
 for job_id, (bankid, process_id, sid) in enumerate(s_row, start=1):
 	# FIXME Need to add option for dist stats output
 	job_dict = {}
+	ht_gate = []
 	for param, value in connection.cursor().execute("SELECT param, value FROM process_params WHERE process_id == ?", (process_id,)):
+		if param == "--svd-bank-cache":
+			svd_start, svd_stop = os.path.split(value)[1].split("-")[1].split("_")[0:2]
+		# ht gate stuff  OMG IS THIS SILLY
+		if param == "--ht-gate-threshold":
+			ht_gate.append(value)
 		job_dict.setdefault(param.replace("--",""), []).append(value)
+	ht_gate_id = int(bankid) - int(svd_start)
 	this_opts_dict = master_opts_dict.copy()
 	updatedict(this_opts_dict, job_dict)
 	this_input_dict = master_input_dict.copy()
 	updatedict(this_input_dict, job_dict)
 	this_output_dict = master_output_dict.copy()
 	updatedict(this_output_dict, job_dict)
+
+	# ht gate stuff  OMG IS THIS SILLY
+	this_input_dict["ht-gate-threshold"] = ht_gate[ht_gate_id]
 
 	# FIX some stuff
 	fixrelpath(this_input_dict, ("reference-psd", "frame-cache", "time-slide-file", "veto-segments-file", "frame-segments-file"))
