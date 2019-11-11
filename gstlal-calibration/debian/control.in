@@ -12,7 +12,7 @@ Build-Depends:
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
- pkg-config (>= 0.18.0),
+ pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-numpy
 

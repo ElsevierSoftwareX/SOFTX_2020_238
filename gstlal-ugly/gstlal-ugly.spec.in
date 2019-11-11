@@ -28,7 +28,7 @@ Requires: gds-lowlatency >= @MIN_GDS_VERSION@
 Requires: nds2-client >= @MIN_NDS_VERSION@
 Requires: orc >= @MIN_ORC_VERSION@
 Requires: python-%{gstreamername}
-BuildRequires: pkgconfig >= 0.18.0
+BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
 BuildRequires: doxygen  >= @MIN_DOXYGEN_VERSION@
 BuildRequires: graphviz
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@

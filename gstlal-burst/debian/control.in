@@ -13,7 +13,7 @@ Build-Depends:
  lalmetaio-dev (>= @MIN_LALMETAIO_VERSION@),
  python-glue (>= @MIN_GLUE_VERSION@),
  fakeroot,
- pkg-config (>= 0.18.0),
+ pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
  gstlal-dev (>= @MIN_GSTLAL_VERSION@),
  gstlal-ugly-dev (>= @MIN_GSTLAL_UGLY_VERSION@)
 
