@@ -273,6 +273,7 @@ def parse_command_line():
 	group.add_option("--gracedb-pipeline", metavar = "name", default = "gstlal", help = "Name of pipeline to provide in GracedB uploads (default is gstlal).")
 	group.add_option("--gracedb-search", metavar = "name", default = "LowMass", help = "Name of search to provide in GracedB uploads (default is LowMass).")
 	group.add_option("--gracedb-service-url", metavar = "url", default = gracedb_default_service_url, help = "Override default GracedB service url (optional, default is %s)." % gracedb_default_service_url)
+	group.add_option("--delay-uploads", action = "store_true", help = "Choose whether to delay uploads to allow aggregation of events downstream from many gstlal_inspiral jobs (default is False).")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Program Behaviour")
@@ -831,6 +832,8 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			search = options.gracedb_search,
 			pipeline = options.gracedb_pipeline,
 			service_url = options.gracedb_service_url,
+			delay_uploads = options.delay_uploads,
+			kafka_server = options.output_kafka_server,
 			upload_auxiliary_data = True,
 			verbose = options.verbose
 		),
