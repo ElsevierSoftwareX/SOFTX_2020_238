@@ -34,6 +34,10 @@ from optparse import OptionParser
 #
 
 from ligo import segments
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import process as ligolw_process
 from gstlal import dagparts
 from gstlal import inspiral_pipe
 from gstlal import far 
@@ -94,6 +98,27 @@ from lal.utils import CacheEntry
 # | --------------------------------------- | ---------------------------------------- | ---------- | -------- |
 # | Florent, Duncan Me., Jolien, Kipp, Chad | 67f86a6f2830f399c8d7c4cec6f357940a4b0abb | 2014-04-29	| <a href="@gstlal_inspiral_cgit_diff/bin/gstlal_inspiral_svd_bank_pipe?id=HEAD&id2=67f86a6f2830f399c8d7c4cec6f357940a4b0abb">gstlal_inspiral_svd_bank_pipe</a> |
 
+
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+lsctables.use_in(LIGOLWContentHandler)
+
+
+def get_chirpmass_from_bank_file(filenames, options):
+	chirpmasses = []
+	for filename in filenames:
+		xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+		chirpmasses.extend((row.mchirp for row in sngl_inspiral_table))
+	return max(chirpmasses)
+
+
+def get_ac_length_from_mchirp(ac_length_segments, mchirp):
+	for (seg, ac_length) in ac_length_segments:
+		if mchirp in seg:
+			return ac_length
+
+
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--instrument", help = "set the name of the instrument, required")
@@ -101,7 +126,7 @@ def parse_command_line():
 	parser.add_option("--bank-cache", metavar = "file", help = "Set the name of the bank cache, required")
 	parser.add_option("--overlap", metavar = "num", type = "int", default = 0, help = "set the factor that describes the overlap of the sub banks, must be even!")
 	parser.add_option("--identity-transform", default = False, action = "store_true", help = "turn off the SVD and use the identity reconstruction matrix")
-	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The number of samples to use for auto-chisquared, default 201 should be odd")
+	parser.add_option("--autocorrelation-length", action = "append", help = "The number of samples to use for auto-chisquared in a given chirp mass range given as e.g., 0:1e6:351 which means 351 for chirpmass between 0 and 1 million.")
 	parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
@@ -114,6 +139,12 @@ def parse_command_line():
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	options, filenames = parser.parse_args()
+
+	ac_seglist = []
+	for opt in options.autocorrelation_length:
+		start, stop, value = opt.split(":")
+		ac_seglist.append((segments.segment((float(start), float(stop))), int(value)))
+	options.autocorrelation_length = ac_seglist
 
 	if options.overlap % 2:
 		raise ValueError("overlap must be even")
@@ -156,6 +187,7 @@ groups = list(inspiral_pipe.group(files, options.num_banks))
 bank_ids = [0]
 for i, f in enumerate(groups):
 	# handle the edges by not clipping so you retain the template bank as intended.  
+	mchirp = get_chirpmass_from_bank_file(f, options)
 	clipleft = [options.overlap / 2] * len(f) # overlap must be even
 	clipright = [options.overlap / 2] * len(f) # overlap must be even
 	bank_ids = range(bank_ids[-1] + 1, bank_ids[-1] + 1 + len(f))
@@ -174,7 +206,7 @@ for i, f in enumerate(groups):
 			"sample-rate":options.sample_rate,
 			"clipleft":clipleft,
 			"clipright":clipright,
-			"autocorrelation-length":options.autocorrelation_length,
+			"autocorrelation-length":get_ac_length_from_mchirp(options.autocorrelation_length, mchirp),
 			"bank-id":bank_ids
 			},
 		input_files = {
