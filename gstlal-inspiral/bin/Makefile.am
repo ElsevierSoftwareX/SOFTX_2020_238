@@ -49,6 +49,7 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_calculate_range \
 	gstlal_ll_inspiral_daily_page \
 	gstlal_ll_inspiral_daily_page_online \
+	gstlal_ll_inspiral_event_uploader \
 	gstlal_ll_inspiral_get_urls \
 	gstlal_ll_inspiral_gracedb_min_instruments \
 	gstlal_ll_inspiral_gracedb_threshold \
