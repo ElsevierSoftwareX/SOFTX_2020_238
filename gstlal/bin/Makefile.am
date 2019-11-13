@@ -1,5 +1,6 @@
 dist_bin_SCRIPTS = \
 	gstlal_asd_txt_from_psd_xml \
+	gstlal_dagfile_rerun_relatives \
 	gstlal_fake_frames \
 	gstlal_fake_frames_pipe \
 	gstlal_launch \
