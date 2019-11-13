@@ -83,9 +83,9 @@ def online_inspiral_layer(dag, jobs, options):
 	inj_job_tags = []
 
 	if options.ht_gate_threshold_linear is not None:
-		# Linear scale specified
-		template_mchirp_dict = get_svd_bank_params(options.bank_cache.values()[0], online = True)
-		mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+		template_mchirp_dict = get_svd_bank_params_online(options.bank_cache.values()[0])
+	else: # saves cost of reading in svd banks
+		template_mchirp_dict = None
 
 	bank_groups = list(build_bank_groups(options.bank_cache, [1], options.max_jobs - 1))
 	if len(options.likelihood_files) != len(bank_groups):
@@ -96,14 +96,7 @@ def online_inspiral_layer(dag, jobs, options):
 		job_tags.append("%04d" % num_insp_nodes)
 
 		# Calculate the appropriate ht-gate-threshold value
-		threshold_values = None
-		if options.ht_gate_threshold_linear is not None:
-			# Linear scale specified
-			# use max mchirp in a given svd bank to decide gate threshold
-			bank_mchirps = [template_mchirp_dict["%04d" % int(os.path.basename(svd_file).split("-")[1].split("_")[3])][1] for svd_file in svd_banks.items()[0][1]]
-			threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
-		elif options.ht_gate_threshold is not None:
-			threshold_values = [options.ht_gate_threshold] * len(svd_banks.items()[0][1]) # Use the ht-gate-threshold value given
+		threshold_values = get_threshold_values(template_mchirp_dict, [job_tags[-1]], [svd_bank_string], options)
 
 		# Data source dag options
 		if (options.data_source == "framexmit"):
@@ -1487,16 +1480,15 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 
 def get_svd_bank_params_online(svd_bank_cache):
 	template_mchirp_dict = {}
-	for ce in [CacheEntry(f) for f in open(svd_bank_cache)]:
-		if not template_mchirp_dict.setdefault("%04d" % int(ce.description.split("_")[3]), []):
-			min_mchirp, max_mchirp = float("inf"), 0
-			xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
-			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
-				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
-				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
-				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
-			template_mchirp_dict["%04d" % int(ce.description.split("_")[3])] = (min_mchirp, max_mchirp)
-			xmldoc.unlink()
+	for ii, ce in enumerate([CacheEntry(f) for f in open(svd_bank_cache)]):
+		min_mchirp, max_mchirp = float("inf"), 0
+		xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+			snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+			mchirp_column = snglinspiraltable.getColumnByName("mchirp")
+			min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+		template_mchirp_dict["%04d" % ii] = (min_mchirp, max_mchirp)
+		xmldoc.unlink()
 	return template_mchirp_dict
 
 
