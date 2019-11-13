@@ -387,8 +387,10 @@ class DAG(object):
 	# methods
 	#
 
-	def __init__(self, *args, nodes = {}, maxjobs = {}, config = None, dot = None, dotupdate = False, dotoverwrite = True, dotinclude = None, node_status_file = None, node_status_file_updatetime = None, jobstate_log = None):
+	def __init__(self, nodes = {}, maxjobs = {}, config = None, dot = None, dotupdate = False, dotoverwrite = True, dotinclude = None, node_status_file = None, node_status_file_updatetime = None, jobstate_log = None):
 		"""
+		The meanings of the keyword arguments are:
+
 		nodes:
 			name --> JOB object mapping
 		maxjobs:
@@ -412,22 +414,37 @@ class DAG(object):
 			filename and update time or None for both
 		jobstate_log:
 			filename or None
+
+		It is also possible to initialize a DAG object from another
+		DAG (-like) object with.
+
+		>> new = DAG(old)
 		"""
-		if not args:
-			self.nodes = nodes
-			self.maxjobs = maxjobs
-			self.config = config
-			self.dot = dot
-			self.dotupdate = dotupdate
-			self.dotoverwrite = dotoverwrite
-			self.dotinclude = dotinclude
-			self.node_status_file = node_status_file
-			self.node_status_file_updatetime = node_status_file_updatetime
-			self.jobstate_log = jobstate_log
-		elif len(args) == 1:
-			# initialize ourselves from another DAG(-like)
-			# object
-			dag, = args
+		# initialize from keyword arguments, will check to see if
+		# nodes was a DAG object afteward
+		self.nodes = nodes
+		self.maxjobs = maxjobs
+		self.config = config
+		self.dot = dot
+		self.dotupdate = dotupdate
+		self.dotoverwrite = dotoverwrite
+		self.dotinclude = dotinclude
+		self.node_status_file = node_status_file
+		self.node_status_file_updatetime = node_status_file_updatetime
+		self.jobstate_log = jobstate_log
+
+		try:
+			# is nodes a DAG object?  test for this by trying
+			# to retrieve the attributes it would need if it
+			# is
+			dag = nodes
+			dag.nodes, dag.maxjobs, dag.config, dag.dot, dag.dotupdate, dag.dotoverwrite, dag.dotinclude, dag.node_status_file, dag.node_status_file_updatetime, dag.jobstate_log
+		except AttributeError:
+			# nope, it's not a proper DAG object
+			pass
+		else:
+			# that worked, so reinitialize ourselves from its
+			# attributes
 			# FIXME:  maybe the JOB class can be taught to
 			# duplicate itself
 			self.nodes = dict((name, copy.copy(node)) for name, node in dag.nodes.items())
@@ -440,8 +457,6 @@ class DAG(object):
 			self.node_status_file = dag.node_status_file
 			self.node_status_file_updatetime = dag.node_status_file_updatetime
 			self.jobstate_log = dag.jobstate_log
-		else:
-			raise ValueError("invalid arguments")
 
 	def reindex(self):
 		"""
@@ -646,8 +661,9 @@ class DAG(object):
 		del progress
 		# populate parent and child sets
 		getnode = self.nodes.__getitem__
-		arcs = (getnode(parent), getnode(child) for parent, child in arcs)
 		for parent, child in arcs:
+			parent = getnode(parent)
+			child = getnode(child)
 			parent.children.add(child)
 			child.parents.add(parent)
 		# make sure all categories are known
