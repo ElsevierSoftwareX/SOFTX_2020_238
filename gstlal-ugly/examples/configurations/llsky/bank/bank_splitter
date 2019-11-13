@@ -77,9 +77,7 @@ for file in filenames:
 	sngl_inspiral_table_split = lsctables.table.new_from_template(sngl_inspiral_table)
 	sngl_inspiral_table.parentNode.replaceChild(sngl_inspiral_table_split, sngl_inspiral_table)
 
-	process = ligolw_process.append_process(xmldoc, program = "bank_splitter", comment = "split bank into smaller banks after sorting", ifos = None)
-	ligolw_process.append_process_params(xmldoc, process, options_params)	
-
+	process = ligolw_process.register_to_xmldoc(xmldoc, program = "bank_splitter", options_params, comment = "split bank into smaller banks after sorting", ifos = None)
 
 	output=options.instrument + '_split_bank-' + os.path.basename(file)
 
