@@ -398,10 +398,12 @@ class LnSignalDensity(LnLRDensity):
 
 		# Evaluate the IDQ glitch probability # FIXME put in denominator
 		for ifo, seg in segments.items():
-			# FIXME don't just use the last segment, somehow include whole template duration?
-			t = float(seg[1])
-			# NOTE choose max over +-1 seconds because the sampling is only at 1 Hz.
-			lnP -= max(self.idq_glitch_lnl[ifo]([t-1., t, t+1.]))
+			# only proceed if we have a trigger from this ifo
+			if ifo in snrs:
+				# FIXME don't just use the last segment, somehow include whole template duration?
+				t = float(seg[1])
+				# NOTE choose max over +-1 seconds because the sampling is only at 1 Hz.
+				lnP -= max(self.idq_glitch_lnl[ifo]([t-1., t, t+1.]))
 
 		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
