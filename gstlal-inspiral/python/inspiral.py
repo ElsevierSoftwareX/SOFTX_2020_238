@@ -900,6 +900,7 @@ class GracedBWrapper(object):
 
 		if not self.delay_uploads and self.upload_auxiliary_data and len(gracedb_ids) > 0:
 			self.__upload_aux_xmldoc("strain spectral densities", "psd.xml.gz", "psd", lalseries.make_psd_xmldoc(psddict), gracedb_ids)
+			self.__upload_aux_xmldoc("ranking statistic PDFs", "ranking_data.xml.gz", "ranking_statistic", rankingstat_xmldoc_func(), gracedb_ids)
 
 		#
 		# done
