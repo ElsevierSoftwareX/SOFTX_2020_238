@@ -59,11 +59,12 @@ vec1s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table])
 
 output = numpy.zeros((len(vec1s), int(args.number_of_templates/3)))
 id2 = []
+col_id_map, col_idx = {}, 0
 
-#progress = ProgressBar(max=len(vec1s))
+progress = ProgressBar(max=len(vec1s))
 
 for n, vec1, in enumerate(vec1s):
-      #progress.increment(text="%s / %s" %(n+1, len(vec1s)))
+      progress.increment(text="%s / %s" %(n+1, len(vec1s)))
       g, det = g_ij(vec1[1:])
       b_idx = args.split_bank_index
       fwd_flag = 1
@@ -73,9 +74,15 @@ for n, vec1, in enumerate(vec1s):
             xmldoc2 = ligolw_utils.load_filename(sbank_str, verbose=False, contenthandler = LIGOLWContentHandler)
             sngl_inspiral_table2 = lsctables.SnglInspiralTable.get_table(xmldoc2)
             vec2s = numpy.array([id_x_y_z_zn_from_row(row) for row in sngl_inspiral_table2])
+            i2list = []
             for t2_id in vec2s[:,0]:
-                  if t2_id not in id2:
+                  if t2_id in col_id_map:
+                        i2 = col_id_map[t2_id]
+                  else:
+                        i2 = col_id_map[t2_id] = col_idx
+                        col_idx += 1
                         id2.append(t2_id)
+                  i2list.append(i2)
             if fwd_flag:
                   b_idx += 1
             else:
@@ -85,12 +92,12 @@ for n, vec1, in enumerate(vec1s):
             thisoutput = numpy.array([[i, row[1], row[2]] for i, row in enumerate(map(match, vec2s))])
             xmldoc2.unlink()
             maxovrlp = max(thisoutput[:,2])
-            output[n, thisoutput[:,0].astype(int)] = thisoutput[:,2]
+            output[n, i2list] = thisoutput[:,2]
 
             if maxovrlp >= args.overlap_threshold:
                   second_chance = 0
 
-            print "\t Max overlap in %s: %f" %(sbank_str.split('/')[-1],maxovrlp)
+            #print "\t Max overlap in %s: %f" %(sbank_str.split('/')[-1],maxovrlp)
 
             if maxovrlp < args.overlap_threshold:
                   if second_chance < 2:
