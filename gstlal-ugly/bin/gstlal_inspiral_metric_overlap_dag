@@ -13,13 +13,22 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
       pass
 lsctables.use_in(LIGOLWContentHandler)
 
+def file_len(fname):
+      with open(fname) as f:
+            for i, l in enumerate(f):
+                  pass
+      return i+1
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--psd-xml-file", help = "provide a psd xml file")
 parser.add_argument("--bank-file", help = "provide the bank file for which overlaps will be calculated")
+parser.add_argument("--split-bank-cache", help = "Cache file containing paths to split banks.")
 args = parser.parse_args()
 
 xmldoc = ligolw_utils.load_filename(args.bank_file, verbose = True, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+
+number_of_templates = len(sngl_inspiral_table)
 
 try:
 	os.mkdir("logs")
@@ -29,12 +38,15 @@ dag = dagparts.DAG("metric_overlap")
 
 overlapJob = dagparts.DAGJob("gstlal_inspiral_metric_overlap", condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
 
-num = 3000
+#num = 3000
 overlapnodes = []
 # FIXME dont hardcode 3345408, it comes from number of tiles in TimePhaseSNR
-for start in range(0, len(sngl_inspiral_table), num):
-        stop = start + num
-        overlapnodes.append(dagparts.DAGNode(overlapJob, dag, parent_nodes = [], opts = {"start-row":str(start), "num-rows":str(num)}, output_files = {"out-h5-file":"%s/metric_overlaps_%d_%d.h5" % (overlapJob.output_path, start, num)}, input_files = {"psd-xml-file": args.psd_xml_file, "bank-file": args.bank_file}))
+#for start in range(0, len(sngl_inspiral_table), num):
+#        stop = start + num
+#        overlapnodes.append(dagparts.DAGNode(overlapJob, dag, parent_nodes = [], opts = {"start-row":str(start), "num-rows":str(num)}, output_files = {"out-h5-file":"%s/metric_overlaps_%d_%d.h5" % (overlapJob.output_path, start, num)}, input_files = {"psd-xml-file": args.psd_xml_file, "bank-file": args.bank_file}))
+
+for i in range(0, file_len(args.split_bank_cache)):
+      overlapnodes.append(dagparts.DAGNode(overlapJob, dag, parent_nodes = [], opts = {"split-bank-cache":args.split_bank_cache, "split-bank-index": i, "number-of-templates": number_of_templates}, output_files = {"out-h5-file":"%s/metric_overlaps_%d.h5" % (overlapJob.output_path, i)}, input_files = {"psd-xml-file": args.psd_xml_file, "bank-file": args.bank_file}))
 
 dag.write_sub_files()
 dag.write_dag()
