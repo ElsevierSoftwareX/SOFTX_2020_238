@@ -701,11 +701,9 @@ class OnlineFrankensteinLnSignalDensity(LnSignalDensity):
 	files, cannot be marginalized together with other instances, nor
 	accept updates from new data.
 	"""
-	@classmethod
-	def splice(cls, src, Dh_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, dtdphi_file = src.dtdphi_file, min_instruments = src.min_instruments, horizon_factors = src.horizon_factors)
-		for key, lnpdf in src.densities.items():
-			self.densities[key] = lnpdf.copy()
+	@staticmethod
+	def splice(src, Dh_donor):
+		self = src.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
 		# data so that as it is updated, we get the updates.
 		self.horizon_history = Dh_donor.horizon_history
@@ -1091,11 +1089,9 @@ class OnlineFrankensteinLnNoiseDensity(LnNoiseDensity):
 	files, cannot be marginalized together with other instances, nor
 	accept updates from new data.
 	"""
-	@classmethod
-	def splice(cls, src, rates_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, min_instruments = src.min_instruments)
-		for key, lnpdf in src.densities.items():
-			self.densities[key] = lnpdf.copy()
+	@staticmethod
+	def splice(src, rates_donor):
+		self = src.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
 		# data so that as it is updated, we get the updates.
 		self.triggerrates = rates_donor.triggerrates
