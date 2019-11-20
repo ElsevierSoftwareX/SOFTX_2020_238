@@ -424,8 +424,8 @@ def parse_command_line():
 		# FIXME: this is ugly, but we have to protect against busted shared memory partitions
 		if options.data_source == "lvshm":
 			import subprocess
-			for partition in detectors.shm_part_dict.values():
-				subprocess.call(["smrepair", partition])
+			for ifo in detectors.channel_dict.keys():
+				subprocess.call(["smrepair", detectors.shm_part_dict[ifo]])
 
 		# FIXME REMOVE THIS. We need to get a better way of passing
 		# configuration information like this around.  Putting file
