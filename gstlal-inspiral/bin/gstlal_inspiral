@@ -435,10 +435,10 @@ def parse_command_line():
 		if options.activation_counts_file is not None:
 			import h5py
 			import numpy
-			ac_file = h5py.File(options.activation_counts_file)
-			options.activation_counts = dict((k, float(numpy.array(v))) for k, v in ac_file[options.job_tag].items())
-			# record the total number of bins
-			options.activation_counts['num_bins'] = len(ac_file)
+			with h5py.File(options.activation_counts_file) as ac_file:
+				options.activation_counts = dict((k, float(numpy.array(v))) for k, v in ac_file[options.job_tag].items())
+				# record the total number of bins
+				options.activation_counts['num_bins'] = len(ac_file)
 		else:
 			options.activation_counts = None
 
