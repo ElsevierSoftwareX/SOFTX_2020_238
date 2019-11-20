@@ -870,6 +870,8 @@ class GracedBWrapper(object):
 
 			# send event data to kafka if requested
 			if self.producer:
+				psd_fobj = StringIO.StringIO()
+				ligolw_utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), psd_fobj, gz = False)
 				self.producer.send(
 					"events",
 					value = {
@@ -878,10 +880,11 @@ class GracedBWrapper(object):
 						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
 						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,
 						"coinc": message.getvalue(),
-						"psd": lalseries.make_psd_xmldoc(psddict),
+						"psd": psd_fobj.getvalue(),
 						"p_astro": p_astro
 					}
 				)
+				del psd_fobj
 
 			# save event to disk
 			message.close()
