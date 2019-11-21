@@ -398,26 +398,25 @@ class Metric(object):
 			return numpy.dot(numpy.dot(x.T, metric), y)
 
 		delta = x-y
-		return (dot(delta, delta, metric_tensor))**.5
+                return (dot(delta, delta, metric_tensor))**.5
 
 	def volume_element(self, metric_tensor):
 		return abs(numpy.linalg.det(metric_tensor))**.5
 
 	def metric_match(self, metric_tensor, c1, c2):
-		d2 = self.distance(metric_tensor, c1, c2)**2
+		d2 = self.distance(metric_tensor, c1, c2)
 		if d2 < 1 and d2 >= 0:
 			return 1 - d2
 		else:
 			return 0.
 
 	def pseudo_match(self, metric_tensor, c1, c2):
-		d2 = self.distance(metric_tensor, c1, c2)**2
-		if d2 < 1 and d2 >= 0:
-			d2 = (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
-			return 1. - d2
-		else:
-			return 0.
-
+                d2 = self.distance(metric_tensor, c1, c2)**2
+                if math.isnan(d2):
+                        return 0.
+                else:
+                        d2 = (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
+                        return 1. - d2
 
 	def explicit_match(self, c1, c2):
 		def fftmatch(w1, w2):
