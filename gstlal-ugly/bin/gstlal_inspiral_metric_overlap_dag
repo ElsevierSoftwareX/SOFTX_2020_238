@@ -36,7 +36,7 @@ except:
 	pass
 dag = dagparts.DAG("metric_overlap")
 
-overlapJob = dagparts.DAGJob("gstlal_inspiral_metric_overlap", condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
+overlapJob = dagparts.DAGJob("gstlal_inspiral_metric_overlap", condor_commands = {"want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline", "request_memory":"1GB"})
 
 #num = 3000
 overlapnodes = []
