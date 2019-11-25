@@ -25,6 +25,7 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 #-------------------------------------------------
 
 from collections import deque, OrderedDict
+import httplib
 import json
 import logging
 from optparse import OptionParser
@@ -37,7 +38,7 @@ from confluent_kafka import Producer, Consumer, KafkaError
 import numpy
 
 from ligo.segments import segment
-from ligo.gracedb.rest import GraceDb
+from ligo.gracedb.rest import GraceDb, HTTPError
 from ligo.gracedb.rest import DEFAULT_SERVICE_URL as DEFAULT_GRACEDB_URL
 from ligo.scald import utils
 
@@ -103,6 +104,11 @@ class EventUploader(object):
 		else:
 			self.client = gracedb.rest.GraceDb(options.gracedb_service_url)
 
+		### gracedb settings
+		self.gracedb_group = options.gracedb_group
+		self.gracedb_pipeline = options.gracedb_pipeline
+		self.gracedb_search = options.gracedb_search
+
 		### initialize event store
 		self.events = OrderedDict()
 
@@ -134,13 +140,16 @@ class EventUploader(object):
 		if event_seg in self.events:
 			self.events[event_seg]['candidates'].append(candidate)
 		else:
+			new_event = False
 			for seg, event in self.events.keys():
 				if segment(candidate['time'], candidate['time']) in seg:
 					event['candidates'].append(candidate)
+					new_event = True
 
 			### event not found, create a new event
-			self.events[event_key] = self.new_event()
-			self.events[event_key]['candidates'].append(candidate)
+			if new_event:
+				self.events[event_seg] = self.new_event()
+				self.events[event_seg]['candidates'].append(candidate)
 
 
 	def event_window(self, t):
@@ -151,7 +160,7 @@ class EventUploader(object):
 		return segment(utils.floor_div(t - dt, 0.5), utils.floor_div(t + dt, 0.5) + 0.5)
 
 
-	def new_event(self, candidate):
+	def new_event(self):
 		"""
 		returns the structure that defines an event
 		"""
@@ -159,7 +168,7 @@ class EventUploader(object):
 			'num_sent': 0,
 			'time_sent': None,
 			'preferred': None,
-			'candidates': deque(maxlen = self.max_jobs)
+			'candidates': deque(maxlen = self.num_jobs)
 		}
 
 
@@ -172,12 +181,12 @@ class EventUploader(object):
 			if event['num_sent'] == 0:
 				updated, event = self.process_candidates(event)
 				assert updated
-				self.send_event(event)
+				self.upload_event(event)
 
 			elif utils.gps_now() >= self.next_event_upload(event):
 				updated, event = self.process_candidates(event)
 				if updated:
-					self.send_event(event)
+					self.upload_event(event)
 
 		# clean out old events
 		current_time = utils.gps_now()
@@ -197,8 +206,9 @@ class EventUploader(object):
 		event['candidates'].clear()
 
 		### either no preferred yet or preferred is undoubtedly better
-		if not event['preferred'] or (preferred['far'] < event['preferred']['far']
-			                      and preferred['snr'] > event['preferred']['snr']):
+		#if not event['preferred'] or (preferred['far'] < event['preferred']['far']
+		#	                      and preferred['snr'] > event['preferred']['snr']):
+		if not event['preferred'] or (preferred['far'] < event['preferred']['far']):
 			event['preferred'] = preferred
 			return True, event
 
@@ -248,14 +258,14 @@ class EventUploader(object):
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.createEvent(
-					self.group,
-					self.pipeline,
-					filename,
-					filecontents = event['coinc'],
-					search = self.search
+					self.gracedb_group,
+					self.gracedb_pipeline,
+					'coinc.xml',
+					filecontents = event['preferred']['coinc'],
+					search = self.gracedb_search
 				)
-			except gracedb.rest.HTTPError as resp:
-				pass
+			except HTTPError as resp:
+				logging.warning(resp)
 			else:
 				resp_json = resp.json()
 				if resp.status == httplib.CREATED:
@@ -266,19 +276,19 @@ class EventUploader(object):
 						"GstLAL internally computed p-astro",
 						"p_astro.json",
 						"p_astro",
-						event['p_astro'],
+						event['preferred']['p_astro'],
 						graceid
 					)
 					try:
-						resp = self.gracedb_client.writeLabel(gracedb_ids[-1], 'PASTRO_READY')
-					except gracedb.rest.HTTPError as resp:
+						resp = self.client.writeLabel(graceid, 'PASTRO_READY')
+					except HTTPError as resp:
 						logging.warning(resp)
 					break
 			logging.info("gracedb upload of %s failed on attempt %d/%d"  % (filename, attempt, self.retries))
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of %s failed" % filename)
-		self.upload_file("strain spectral densities", "psd.xml.gz", "psd", psd, graceid)
+		self.upload_file("strain spectral densities", "psd.xml.gz", "psd", event['preferred']['psd'], graceid)
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
@@ -295,7 +305,7 @@ class EventUploader(object):
 					filecontents = contents,
 					tagname = tag
 				)
-			except gracedb.rest.HTTPError as resp:
+			except HTTPError as resp:
 				pass
 			else:
 				if resp.status == httplib.CREATED:
