@@ -253,9 +253,12 @@ coh_sr = int(SampleRates["cohsr"]) # Sample rate for the coherence uncertainty c
 epics_sr = int(SampleRates["epicsrefsr"]) # Sample rate for EPICS records used for TDCFs
 compute_factors_sr = int(SampleRates["computefactorssr"]) # Sample rate for computing TDCFs
 record_factors_sr = int(SampleRates["recordfactorssr"]) # Sample rate for recording TDCFs
+metrics_sr = int(SampleRates["metricssr"])  if "metricssr" in SampleRates else 1 # Sample rate for recording metrics from pipeline
 hoft_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % hoft_sr
 ctrl_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % ctrl_sr
+latency_metrics_caps = "audio/x-raw, format=F64LE, rate=%d, channel-mask=(bitmask)0x0" % metrics_sr
 calibstate_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % calibstate_sr
+calibstate_metrics_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % metrics_sr
 obsintent_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % obsintent_sr
 lownoise_caps = "audio/x-raw, format=U32LE, rate=%d, channel-mask=(bitmask)0x0" % lownoise_sr
 filterclock_caps = []
@@ -391,6 +394,13 @@ skip_bad_files = Config.getboolean("InputConfigurations", "skipbadfiles")
 # Booleans for calibration tests
 test_latency = Config.getboolean("DebuggingConfigurations", "testlatency") if "testlatency" in DebuggingConfigs else False
 test_filters = Config.getboolean("DebuggingConfigurations", "testfilters") if "testfilters" in DebuggingConfigs else False
+monitor_statevector = Config.getboolean("DebuggingConfigurations", "monitorstatevector") if "monitorstatevector" in DebuggingConfigs else False
+
+# Silence latency metric output from stdout if not running in "test_latency" mode
+if test_latency:
+	silent = False
+else:
+	silent = True
 
 #
 # Load in the filters file that contains filter coefficients, etc.
@@ -1124,12 +1134,12 @@ if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memor
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument, use_mmap = True)
 
-if test_latency:
-	src = pipeparts.mklatency(pipeline, src, name = "%s_src" % OutputConfigs["frametype"])
-	src.connect("notify::current-latency", handler.latency_new_buffer)
-elif InputConfigs["datasource"] == "lvshm":
-	src = pipeparts.mklatency(pipeline, src, name = "%s_src" % OutputConfigs["frametype"], silent = True)
-	src.connect("notify::current-latency", handler.latency_new_buffer)
+# FIXME: I don't think I need to add a resampler before this latency element since it's hooked right up to the frames, which are already only coming in at a rate of 1 Hz.
+if (test_latency or InputConfigs["datasource"] == "lvshm"):
+	src = pipeparts.mktee(pipeline, src)
+	src_latency = pipeparts.mklatency(pipeline, src, name = "%s_src" % OutputConfigs["frametype"], silent = silent)
+	src_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	pipeparts.mkfakesink(pipeline, src_latency)
 
 
 #
@@ -2275,12 +2285,12 @@ else:
 if actsr != hoft_sr:
 	ctrl = calibration_parts.mkresample(pipeline, ctrl, 4, False, hoft_caps)
 
-if test_latency:
-	ctrl = pipeparts.mklatency(pipeline, ctrl, name = "%s_ctrl" % OutputConfigs["frametype"])
-	ctrl.connect("notify::current-latency", handler.latency_new_buffer)
-elif InputConfigs["datasource"] == "lvshm":
-	ctrl = pipeparts.mklatency(pipeline, ctrl, name = "%s_ctrl" % OutputConfigs["frametype"], silent = True)
-	ctrl.connect("notify::current-latency", handler.latency_new_buffer)
+if (test_latency or InputConfigs["datasource"] == "lvshm"):
+	ctrl = pipeparts.mktee(pipeline, ctrl)
+	ctrl_latency = calibration_parts.mkresample(pipeline, ctrl, 0, False, latency_metrics_caps) 
+	ctrl_latency = pipeparts.mklatency(pipeline, ctrl_latency, name = "%s_ctrl" % OutputConfigs["frametype"], silent = silent)
+	ctrl_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	pipeparts.mkfakesink(pipeline, ctrl_latency)
 
 #
 # RESIDUAL BRANCH
@@ -2373,12 +2383,12 @@ if dewhitening:
 	res_filter_settle_time += float(len(resdewhiten)-resdewhitendelay)/hoft_sr
 	res_filter_latency += float(resdewhitendelay)/hoft_sr
 
-if test_latency:
-	res = pipeparts.mklatency(pipeline, res, name = "%s_res" % OutputConfigs["frametype"])
-	res.connect("notify::current-latency", handler.latency_new_buffer)
-elif InputConfigs["datasource"] == "lvshm":
-	res = pipeparts.mklatency(pipeline, res, name = "%s_res" % OutputConfigs["frametype"], silent = True)
-	res.connect("notify::current-latency", handler.latency_new_buffer)
+if test_latency or InputConfigs["datasource"] == "lvshm":
+	res = pipeparts.mktee(pipeline, res)
+	res_latency = calibration_parts.mkresample(pipeline, res, 0, False, latency_metrics_caps) 
+	res_latency = pipeparts.mklatency(pipeline, res_latency, name = "%s_res" % OutputConfigs["frametype"], silent = silent)
+	res_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	res_latency.fakesink(pipeline, res_latency)
 
 filter_settle_time = max(res_filter_settle_time, tst_filter_settle_time, pumuim_filter_settle_time)
 filter_latency = max(res_filter_latency, tst_filter_latency, pumuim_filter_latency)
@@ -2405,13 +2415,12 @@ except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
-if test_latency:
-	strain = pipeparts.mklatency(pipeline, strain, name = "%s_hoft" % OutputConfigs["frametype"])
-	strain.connect("notify::current-latency", handler.latency_new_buffer)
-elif InputConfigs["datasource"] == "lvshm":
-	strain = pipeparts.mklatency(pipeline, strain, name = "%s_hoft" % OutputConfigs["frametype"], silent = True)
-	strain.connect("notify::current-latency", handler.latency_new_buffer)
-
+if test_latency or InputConfigs["datasource"] == "lvshm":
+	strain = pipeparts.mktee(pipeline, strain)
+	strain_latency = calibration_parts.mkresample(pipeline, strain, 0, False, latency_metrics_caps)
+	strain_latency = pipeparts.mklatency(pipeline, strain_latency, name = "%s_hoft" % OutputConfigs["frametype"], silent = silent)
+	strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	pipeparts.mkfakesink(pipeline, strain_latency)
 
 # Put the units back to strain before writing to frames
 straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
@@ -2952,12 +2961,12 @@ if any(witness_channel_list):
 
 if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
 	clean_strain = pipeparts.mkprogressreport(pipeline, clean_strain, "progress_hoft_cleaned_%s" % instrument)
-	if test_latency:
-		clean_strain = pipeparts.mklatency(pipeline, clean_strain, name = "%s_hoft_cleaned" % OutputConfigs["frametype"])
-		clean_strain.connect("notify::current-latency", handler.latency_new_buffer)
-	elif InputConfigs["datasource"] == "lvshm":
-		clean_strain = pipeparts.mklatency(pipeline, clean_strain, name = "%s_hoft_cleaned" % OutputConfigs["frametype"], silent = True)
-		clean_strain.connect("notify::current-latency", handler.latency_new_buffer)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		clean_strain = pipeparts.mktee(pipeline, clean_strain)
+		clean_strain_latency = calibration_parts.mkresample(pipeline, clean_strain, 0, False, latency_metrics_caps)
+		clean_strain_latency = pipeparts.mklatency(pipeline, clean_strain_latency, name = "%s_hoft_cleaned" % OutputConfigs["frametype"], silent = silent)
+		clean_strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, clean_strain_latency)
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
 	clean_straintee = pipeparts.mktee(pipeline, clean_strain)
 	if not pick_cleanest_strain_channel:
@@ -3014,18 +3023,20 @@ if noisesubgatetee is not None:
 
 if compute_calib_statevector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
-	if test_latency:
-		calibstatevector = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec" % OutputConfigs["frametype"])
-		calibstatevector.connect("notify::current-latency", handler.latency_new_buffer)
-	elif InputConfigs["datasource"] == "lvshm":
-		calibstatevector = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec" % OutputConfigs["frametype"], silent = True)
-		calibstatevector.connect("notify::current-latency", handler.latency_new_buffer)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+		calibstatevector_latency = calibration_parts.mkresample(pipeline, calibstatevector, 0, False, calibstate_metrics_caps)
+		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector_latency, name = "%s_calibstatevec" % OutputConfigs["frametype"], silent = silent)
+		calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
-	calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-	statevector_monitor = pipeparts.mkgeneric(pipeline, calibstatevector, "lal_nxydump")
-	statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)
-	statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
+	if InputConfigs["datasource"] == "lvshm" and monitor_statevector:
+		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+		statevector_monitor = calibration_parts.mkgeneric(pipeline, calibstatevector, 0, False, calibstate_metrics_caps)
+		statevector_monitor = pipeparts.mkgeneric(pipeline, statevector_monitor, "lal_nxydump")
+		statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)
+		statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
@@ -3296,12 +3307,12 @@ else:
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 
-if test_latency:
-	mux = pipeparts.mklatency(pipeline, mux, name = "%s_sink" % OutputConfigs["frametype"])
-	mux.connect("notify::current-latency", handler.latency_new_buffer)
-elif InputConfigs["datasource"] == "lvshm":
-	mux = pipeparts.mklatency(pipeline, mux, name = "%s_sink" % OutputConfigs["frametype"], silent = True)
-	mux.connect("notify::current-latency", handler.latency_new_buffer)
+# FIXME: I don't think I need to resample here either since the frames are already collected into 1 second chunks
+if test_latency or InputConfigs["datasource"] == "lvshm":
+	mux = pipeparts.mktee(pipeline, mux)
+	mux_latency = pipeparts.mklatency(pipeline, mux, name = "%s_sink" % OutputConfigs["frametype"], silent = silent)
+	mux_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	pipeparts.mkfakesink(pipeline, mux_latency)
 
 if OutputConfigs["datasink"] == "lvshm":
 	pipeparts.mkgeneric(pipeline, mux, "gds_lvshmsink", sync=False, async=False, shm_name = OutputConfigs["outputshmpartition"], num_buffers = int(OutputConfigs["numbuffers"]), blocksize = int(OutputConfigs["framesize"])*options.frame_duration*options.frames_per_file, buffer_mode = int(OutputConfigs["buffermode"]))
