@@ -735,7 +735,11 @@ WHERE
 		# get the zerolag counts.
 		# we model the tail of the distribution - top 0.1 - 1% - where
 		# clustering only effects the result at a < 1% level.
-		onepercent = zl_counts.cumsum().searchsorted(zl_counts.sum() - 1000)
+		if zl_counts.sum() < 100 * 1000:
+			tail_zl_counts = zl_counts.sum() * 0.99
+		else:
+			tail_zl_counts = zl_counts.sum() - 1000
+		onepercent = zl_counts.cumsum().searchsorted(tail_zl_counts)
 
 		# normalize the counts
 		noise_counts /= noise_counts.sum()
