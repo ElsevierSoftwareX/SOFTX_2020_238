@@ -30,7 +30,7 @@ import numpy
 
 from kafka import KafkaConsumer
 
-from ligo.scald import io
+from ligo.scald.io import influx
 
 
 #
@@ -116,7 +116,7 @@ if __name__ == '__main__':
 	)
 
 	# set up aggregator sink
-	agg_sink = io.influx.Aggregator(
+	agg_sink = influx.Aggregator(
 		hostname=influx_hostname,
 		port=influx_port,
 		db=influx_database_name,

@@ -111,6 +111,7 @@ class Handler(simplehandler.Handler):
 					# Check if kafka server is now available if it's supposed to be used
 					if self.producer is None:
 						from kafka import KafkaProducer
+						from kafka import errors
 						try:
 							self.producer = KafkaProducer(
 									bootstrap_servers = [self.kafka_server],
@@ -134,6 +135,7 @@ class Handler(simplehandler.Handler):
 				# Check if kafka server is now available if it's supposed to be used
 				if self.producer is None:
 					from kafka import KafkaProducer
+					from kafka import errors
 					try:
 						self.producer = KafkaProducer(
 								bootstrap_servers = [self.kafka_server],
