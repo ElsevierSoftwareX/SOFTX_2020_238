@@ -1,5 +1,5 @@
 ####################
-# Modules for calculating and storing likelihood ratio density and FAPFARs 
+# Modules for calculating and storing likelihood ratio density
 # for the cosmic string search.
 #
 
@@ -13,19 +13,21 @@
 #
 
 
+from __future__ import print_function
+
 import itertools
 import math
 import numpy
 import random
 import sys
 
-from lal import rate
-from . import snglcoinc
-
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 from ligo.lw import param as ligolw_param
 from ligo.lw import utils as ligolw_utils 
+
+from lal import rate
+from . import snglcoinc
 
 # FIXME don't import gstlal modules in lalsuite
 from gstlal.stats import trigger_rate
@@ -47,7 +49,7 @@ from . import string_extrinsics
 
 class LnLRDensity(snglcoinc.LnLRDensity):
 	# SNR, chi^2 binning definition
-	snr2_chi2_binning = rate.NDBins((rate.ATanLogarithmicBins(10, 1e7, 801), rate.ATanLogarithmicBins(.1, 1e4, 801)))
+	snr2_chi2_binning = rate.NDBins((rate.ATanLogarithmicBins(10, 1e3, 801), rate.ATanLogarithmicBins(1e-3, 1.0, 801)))
 
 	def __init__(self, instruments, delta_t, snr_threshold, min_instruments = 2):
 		# check input
@@ -85,8 +87,7 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		return self
 
 	def increment(self, event):
-		#self.densities["%s_snr2_chi2" % event.ifo].count[event.snr, event.chisq / event.chisq_dof / event.snr**2.] += 1.0
-		self.densities["%s_snr2_chi2" % event.ifo].count[event.snr**2, event.chisq / event.chisq_dof] += 1.0
+		self.densities["%s_snr2_chi2" % event.ifo].count[event.snr**2., event.chisq / event.chisq_dof / event.snr**2.] += 1.0
 
 	def copy(self):
 		new = type(self)(self.instruments, min_instruments = self.min_instruments)
@@ -100,12 +101,26 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	def finish(self):
 		for key, lnpdf in self.densities.items():
 			if key.endswith("_snr2_chi2"):
-				rate.filter_array(lnpdf.array, rate.gaussian_window(11, 11, sigma = 20))
+				rate.filter_array(lnpdf.array, rate.gaussian_window(3, 3, sigma = 10))
 			else:
 				# shouldn't get here
 				raise Exception
 			lnpdf.normalize()
 		self.mkinterps()
+
+		#
+		# never allow PDFs that have had the density estimation
+		# transform applied to be written to disk:  on-disk files
+		# must only ever provide raw counts.  also don't allow
+		# density estimation to be applied twice
+		#
+
+		def to_xml(*args, **kwargs):
+			raise NotImplementedError("writing .finish()'ed LnLRDensity object to disk is forbidden")
+		self.to_xml = to_xml
+		def finish(*args, **kwargs):
+			raise NotImplementedError(".finish()ing a .finish()ed LnLRDensity object is forbidden")
+		self.finish = finish
 
 	def to_xml(self, name):
 		xml = super(LnLRDensity, self).to_xml(name)
@@ -140,11 +155,10 @@ class LnSignalDensity(LnLRDensity):
 	def __init__(self, *args, **kwargs):
 		super(LnSignalDensity, self).__init__(*args, **kwargs)
 
-	def __call__(self, snr2s, chi2s):
+	def __call__(self, snr2s, chi2s_over_snr2s):
 		super(LnSignalDensity, self).__call__()
 		interps = self.interps
-		return sum(interps["%s_snr2_chi2" % instrument](snr2s[instrument], chi2) for instrument, chi2 in chi2s.items())
-		#return sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
+		return sum(interps["%s_snr2_chi2" % instrument](snr2s[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def add_signal_model(self, prefactors_range = (0.001, 0.30), inv_snr_pow = 4.):
 		# normalize to 10 *mi*llion signals. This count makes the
@@ -152,6 +166,11 @@ class LnSignalDensity(LnLRDensity):
 		for instrument in self.instruments:
 			string_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["%s_snr2_chi2" % instrument], 10000000., prefactors_range, inv_snr_pow = inv_snr_pow, snr_min = self.snr_threshold)
 			self.densities["%s_snr2_chi2" % instrument].normalize()
+
+	# FIXME remove when we construct a signal model by the trigger param PDFs
+	def increment(self, events, weight):
+		for event in events:
+			self.densities["%s_snr2_chi2" % event.ifo].count[event.snr**2., event.chisq / event.chisq_dof / event.snr**2.] += weight
 
 	def to_xml(self, name):
 		xml = super(LnSignalDensity, self).to_xml(name)
@@ -182,14 +201,13 @@ class LnNoiseDensity(LnLRDensity):
 			min_instruments = self.min_instruments
 		)
 
-	def __call__(self, snr2s, chi2s):
+	def __call__(self, snr2s, chi2s_over_snr2s):
 		# FIXME evaluate P(t|noise), P(ifos|t,noise) using the 
 		# triggerrate record (cf inspiral_lr)
 		super(LnNoiseDensity, self).__call__()
 		interps = self.interps
-		return sum(interps["%s_snr2_chi2" % instrument](snr2s[instrument], chi2) for instrument, chi2 in chi2s.items())
 
-		#return sum(interps["%s_snr2_chi2" % instrument](snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
+		return sum(interps["%s_snr2_chi2" % instrument](snr2s[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
 	def __iadd__(self, other):
 		super(LnNoiseDensity, self).__iadd__(other)
@@ -227,9 +245,13 @@ class LnNoiseDensity(LnLRDensity):
 		The sequence is suitable for input to the .ln_lr_samples()
 		log likelihood ratio generator.
 		"""
-		snr_slope = 0.8 / len(self.instruments)**3
+		snr2_slope = 1.0
+		# some settings to avoid overflow errors
+		snr2_max = 1e20
+		chi2_over_snr2_min = 1e-20
+		chi2_over_snr2_max = 1e20
 
-		snr2chi2gens = dict((instrument, iter(self.densities["%s_snr2_chi2" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_threshold, None), slice(None, None)))).next) for instrument in self.instruments)
+		snr2chi2gens = dict((instrument, iter(self.densities["%s_snr2_chi2" % instrument].bins.randcoord(ns = (snr2_slope, 1.), domain = (slice(self.snr_threshold**2, snr2_max), slice(chi2_over_snr2_min, chi2_over_snr2_max)))).next) for instrument in self.instruments)
 		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
 		def nCk(n, k):
 			return math.factorial(n) // math.factorial(k) // math.factorial(n - k)
@@ -256,8 +278,7 @@ class LnNoiseDensity(LnLRDensity):
 			# set kwargs
 			kwargs = dict(
 				snr2s = dict((instrument, value[0]) for instrument, value in zip(instruments, seq[0::2])),
-				chi2s = dict((instrument, value[1]) for instrument, value in zip(instruments, seq[0::2]))
-				#chi2s_over_snr2s = dict((instrument, value[1]) for instrument, value in zip(instruments, seq[0::2]))
+				chi2s_over_snr2s = dict((instrument, value[1]) for instrument, value in zip(instruments, seq[0::2]))
 			)
 			yield (), kwargs, sum(seq[1::2], lnP_t + lnP_instruments)
 

@@ -34,6 +34,7 @@ except ImportError:
 import itertools
 import math
 import numpy
+from scipy import interpolate
 import sys
 
 
@@ -97,11 +98,11 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		self.candidates += other.candidates
 		return self
 
-	def __call__(self, *args, **kwargs):
+	def __call__(self, **kwargs):
 		# NOTE now we use the default definition, but the
 		# ranking statistic definition can be customized here
 		# (to include e.g. veto cuts, chisq cuts, ...)
-		return super(RankingStat, self).__call__(*args, **kwargs)
+		return super(RankingStat, self).__call__(**kwargs)
 
 	def copy(self):
 		new = type(self)(
@@ -118,9 +119,8 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	def kwargs_from_triggers(self, events, offsetvector):
 		assert len(events) >= self.min_instruments
 		return dict(
-			snr2s = dict((event.ifo, event.snr**2.0) for event in events),
-			#chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events)
-			chi2s = dict((event.ifo, event.chisq / event.chisq_dof) for event in events)
+			snr2s = dict((event.ifo, event.snr**2.) for event in events),
+			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events)
 		)
 
 	def ln_lr_from_triggers(self, events, offsetvector):
@@ -243,7 +243,7 @@ class RankingStatPDF(object):
 			nsamples = nsamples)
 
 		if verbose:
-			print >> sys.stderr, "done computing ranking statistic PDFs"
+			print("done computing ranking statistic PDFs", file=sys.stderr)
 
 		#
 		# apply density estimation kernels to counts
@@ -265,7 +265,7 @@ class RankingStatPDF(object):
 
 		self.noise_lr_lnpdf.array /= self.noise_lr_lnpdf.array.sum()
 		self.noise_lr_lnpdf.normalize()
-		self.signal_lr_lnpdf.array /= self.signal_lr_lnpdf_array.sum()
+		self.signal_lr_lnpdf.array /= self.signal_lr_lnpdf.array.sum()
 		self.signal_lr_lnpdf.normalize()
 
 
@@ -274,12 +274,13 @@ class RankingStatPDF(object):
 		new.noise_lr_lnpdf = self.noise_lr_lnpdf.copy()
 		new.signal_lr_lnpdf = self.signal_lr_lnpdf.copy()
 		new.candidates_lr_lnpdf = self.candidates_lr_lnpdf.copy()
+		new.segments = type(self.segments)(self.segments)
 		return new
 
 	def collect_zero_lag_rates(self, connection, coinc_def_id):
-		for ln_likelihood_ratio in connection.cursor().execute("""
+		for ln_likelihood_ratio_tuple in connection.cursor().execute("""
 SELECT
-	likelihood,
+	likelihood
 FROM
 	coinc_event
 WHERE
@@ -294,6 +295,8 @@ WHERE
 			AND time_slide.offset != 0
 	)
 """, (coinc_def_id,)):
+			# FIXME don't know sqlite syntax
+			ln_likelihood_ratio = ln_likelihood_ratio_tuple[0]
 			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
 			self.candidates_lr_lnpdf.count[ln_likelihood_ratio,] += 1.
 		self.candidates_lr_lnpdf.normalize()
@@ -317,6 +320,7 @@ WHERE
 		self.signal_lr_lnpdf.normalize()
 		self.candidates_lr_lnpdf += other.candidates_lr_lnpdf
 		self.candidates_lr_lnpdf.normalize()
+		self.segments += other.segments
 		return self
 
 	@classmethod
@@ -337,13 +341,15 @@ WHERE
 	def from_xml(cls, xml, name = u"string_cusp"):
 		# find the root of the XML tree containing the
 		# serialization of this object
-		xml = xls.get_xml_root(xml, name)
+		xml = cls.get_xml_root(xml, name)
 		# create a mostly uninitialized instance
 		self = cls(None)
 		# popuate from XML
 		self.noise_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"noise_lr_lnpdf")
 		self.signal_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"signal_lr_lnpdf")
 		self.candidates_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"candidates_lr_lnpdf")
+		self.segments = ligolw_param.get_pyvalue(xml, u"segments").strip()
+		self.segments = segmentsUtils.from_range_strings(self.segments.split(",") if self.segments else [], float)
 		return self
 	
 	def to_xml(self, name = u"string_cusp"):
@@ -357,6 +363,7 @@ WHERE
 		xml.appendChild(self.noise_lr_lnpdf.to_xml(u"noise_lr_lnpdf"))
 		xml.appendChild(self.signal_lr_lnpdf.to_xml(u"signal_lr_lnpdf"))
 		xml.appendChild(self.candidates_lr_lnpdf.to_xml(u"candidates_lr_lnpdf"))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"segments", ",".join(segmentsUtils.to_range_strings(self.segments))))
 		return xml
 
 
@@ -385,11 +392,12 @@ class FAPFAR(object):
 		
 		# set the rate normalization LR threshold to the mode of
 		# the zero-lag LR distribution.
-		zl = rankingstat.candidates_lr_lnpdf.copy()
+		zl = rankingstatpdf.candidates_lr_lnpdf.copy()
 		rate_normalization_lr_threshold, = zl.argmax()
+		print("lr_threshold %f" % rate_normalization_lr_threshold, file=sys.stderr)
 
 		# record trials factor, with safety checks
-		counts = rankingstatpdf.candidates_lr_lnpdf.count()
+		counts = rankingstatpdf.candidates_lr_lnpdf.count
 		assert not numpy.isnan(counts.array).any(), "zero lag log likelihood ratio counts contain NaNs"
 		assert (counts.array >= 0.).all(), "zero lag log likelihood ratio rates contain negative values"
 		self.count_above_threshold = counts[rate_normalization_lr_threshold:,].sum()
@@ -503,16 +511,16 @@ def marginalize_rankingstat(filenames, verbose = False):
 
 def marginalize_rankingstatpdf(filenames, verbose = False):
 	rankingstatpdf = None
-	for n, filename in enumerate(filenames, start = 1):
+	for n, filename in enumerate(filenames, 1):
 		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(urls)),
+			print("%d/%d:" % (n, len(filenames)), end=' ', file=sys.stderr)
 		xmldoc = ligolw_utils.load_filename(filename, verbose = verbose, contenthandler = RankingStat.LIGOLWContentHandler)
 		if rankingstatpdf is None:
 			rankingstatpdf = RankingStatPDF.from_xml(xmldoc)
 		else:
 			rankingstatpdf += RankingStatPDF.from_xml(xmldoc)
 		xmldoc.unlink()
-	return data
+	return rankingstatpdf
 
 
 #
