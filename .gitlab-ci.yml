@@ -360,7 +360,7 @@ test:offline:
     - make -f Makefile.offline_tutorial_test ENABLE_PLOTTING=0
 
     # Back-up the results docs:
-    - cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
+    #- cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
 
   #artifacts:
   #  expire_in: 24h
