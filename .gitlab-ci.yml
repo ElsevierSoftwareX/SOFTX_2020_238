@@ -362,12 +362,12 @@ test:offline:
     # Back-up the results docs:
     - cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
 
-  artifacts:
-    expire_in: 24h
-    paths:
-      - gstlal-inspiral/tests/WEBDIR/gstlal_offline_tutorial
-      - public
-    when: always
+  #artifacts:
+  #  expire_in: 24h
+  #  paths:
+  #    - gstlal-inspiral/tests/WEBDIR/gstlal_offline_tutorial
+  #    - public
+  #  when: always
   only:
     - schedules
     - pushes
