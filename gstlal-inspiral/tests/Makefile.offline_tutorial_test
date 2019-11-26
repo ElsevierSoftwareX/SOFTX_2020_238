@@ -498,7 +498,7 @@ H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-ALL_MASS_MOD
 		--verbose
 	@echo ""
 	
-H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-$(START)-$(DURATION).xml.gz L1-0000_SVD-$(START)-$(DURATION).xml.gz H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz
+H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-$(START)-$(DURATION).xml.gz L1-0000_SVD-$(START)-$(DURATION).xml.gz H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_0001
 	$(TIME) gstlal_inspiral \
 		--reference-psd measured_psd.xml.gz \
@@ -527,6 +527,7 @@ H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURA
 		--disable-service-discovery \
 		--verbose
 	@echo ""
+H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz
 
 H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0001
