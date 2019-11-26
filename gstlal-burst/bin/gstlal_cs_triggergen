@@ -99,7 +99,7 @@ options, filenames = parse_command_line()
 #
 
 class PipelineHandler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, rankingstat, xmldoc, template_banks, sngl_burst, reference_psds, whitens, firbanks, triggergens):
+	def __init__(self, mainloop, pipeline, rankingstat, xmldoc, template_banks, sngl_burst, reference_psds, whitens, firbanks, triggergens, is_noninjections):
 		simplehandler.Handler.__init__(self, mainloop, pipeline)
 		self.lock = threading.Lock()
 		self.rankingstat = rankingstat
@@ -108,6 +108,7 @@ class PipelineHandler(simplehandler.Handler):
 		self.whitens = whitens
 		self.firbank = firbanks
 		self.triggergen = triggergens
+		self.is_noninjections = is_noninjections
 		# template normalization. use central_freq to uniquely identify templates
 		self.sigma = dict((row.central_freq, 0.0) for row in template_banks[template_banks.keys()[0]])
 		# horizon distance
@@ -157,12 +158,12 @@ class PipelineHandler(simplehandler.Handler):
 			# the push method returns True if the coincidence engine has new results. in that case, call the pull() method to run the coincidence engine.
 			if events:
 				if self.streamburca.push(instrument, events, buf_timestamp):
-					self.streamburca.pull(self.rankingstat, self.rankingstat.denominator.triggerrates.segmentlistdict())
+					self.streamburca.pull(self.rankingstat, self.rankingstat.denominator.triggerrates.segmentlistdict(), noninjections = self.is_noninjections)
 
 	def flush(self):
 		with self.lock:
 			# leftover triggers
-			self.streamburca.pull(self.rankingstat, self.rankingstat.denominator.triggerrates.segmentlistdict(), flush = True)
+			self.streamburca.pull(self.rankingstat, self.rankingstat.denominator.triggerrates.segmentlistdict(), noninjections = self.is_noninjections, flush = True)
 
 	def update_templates(self, instrument, psd):
 		template_t = [None] * len(self.template_bank[instrument])
@@ -415,12 +416,14 @@ process_rankingstat = ligolw_process.register_to_xmldoc(xmldoc_rankingstat, "lal
 #
 
 if options.injection_file is not None:
-	# FIXME we can require in the dag generator script to NOT have
-	# time-slide file as argument when injection-file is given.
+	# FIXME as a sanity check we can require in the dag generator script to NOT
+	# have time-slide file as argument when injection-file is given.
 	del options.time_slide_file
 	xmldoc = ligolw_add.ligolw_add(xmldoc, [options.injection_file], contenthandler = LIGOLWContentHandler, verbose = options.verbose)
+	is_noninjections = False
 else:
 	xmldoc = ligolw_add.ligolw_add(xmldoc, [options.time_slide_file], contenthandler = LIGOLWContentHandler, verbose = options.verbose)
+	is_noninjections = True
 
 time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
 
@@ -512,7 +515,7 @@ rankingstat = stringutils.RankingStat(instruments = all_ifos, delta_t = options.
 # handler
 #
 
-handler = PipelineHandler(mainloop, pipeline, rankingstat, xmldoc, template_bank_table, sngl_burst_table, psd, whiten, firbank, triggergen)
+handler = PipelineHandler(mainloop, pipeline, rankingstat, xmldoc, template_bank_table, sngl_burst_table, psd, whiten, firbank, triggergen, is_noninjections)
 
 
 #

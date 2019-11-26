@@ -102,7 +102,7 @@ class StreamBurca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, rankingstat, snr_segments, coinc_sieve = None, flush = False):
+	def pull(self, rankingstat, snr_segments, noninjections = False, coinc_sieve = None, flush = False):
 		#
 		# iterate over coincidences
 		#
@@ -122,7 +122,7 @@ class StreamBurca(object):
 				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_burst)
 
 		# add singles into the noise model
-		if flushed:
+		if flushed and noninjections:
 			# times when at least 2 instruments were generating SNR.
 			# Used to select zero-lag singles for inclusion in the
 			# denominator.
