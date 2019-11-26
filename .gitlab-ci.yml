@@ -357,7 +357,7 @@ test:offline:
     - cd gstlal-inspiral/tests
 
     # Run the makefile:
-    - make -j2 -f Makefile.offline_tutorial_test ENABLE_PLOTTING=0
+    - make -f Makefile.offline_tutorial_test ENABLE_PLOTTING=0
 
     # Back-up the results docs:
     - cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
