@@ -33,6 +33,7 @@ import sqlite3
 import string
 import sys
 
+from ligo.lw import dbtables
 from ligo.lw import ligolw
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
@@ -71,6 +72,7 @@ def parse_command_line():
 	)
 	parser.add_option("-o", "--output", metavar = "filename", default = None, help = "Set the name of the likelihood data file to write (default = stdout).")
 	parser.add_option("-c", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-l", "--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files (output of trigger generator) in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--T010150", metavar = "description", default = None, help = "Write the output to a file whose name is compatible with the file name format described in LIGO-T010150-00-E, \"Naming Convention for Frame Files which are to be Processed by LDAS\".  The description string will be used to form the second field in the file name.")
 	parser.add_option("--injection-reweight", metavar = "off|astrophysical", default = "off", help = "Set the weight function to be applied to the injections (default = \"off\").  When \"off\", the injections are all given equal weight and so the injection population is whatever was injected.  When set to \"astrophysical\", the injections are reweighted to simulate an amplitude^{-4} distribution.")
@@ -89,11 +91,19 @@ def parse_command_line():
 		elif set(options.T010150) - T010150_letters:
 			raise ValueError("invalid characters in description \"%s\"" % options.T010150)
 
+	# for denominator
+	options.likelihood_filenames = []
+	if options.likelihood_cache:
+		options.likelihood_filenames += [CacheEntry(line).path for line in file(options.likelihood_cache)]
+	if not options.likelihood_filenames:
+		raise ValueError("no rankingstat files!")
+
+	# for numerator
+	# FIXME remove when we construct a signal model by the trigger param PDFs
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in file(options.input_cache)]
-
 	if not filenames:
-		raise ValueError("no input files!")
+		raise ValueError("no input cache!")
 
 	if options.injection_reweight not in ("off", "astrophysical"):
 		raise ValueError("--injection-reweight \"%s\" not recognized" % options.injections_reweight)
@@ -172,19 +182,51 @@ process = ligolw_process.register_to_xmldoc(xmldoc, program = u"lalapps_string_m
 # Iterate over files to obtain the denominator and zero-lag
 #
 
-rankingstat = stringutils.marginalize_rankingstat(filenames, verbose = options.verbose)
+rankingstat = stringutils.marginalize_rankingstat(options.likelihood_filenames, verbose = options.verbose)
 
 
 #
 # obtain the numerator
-# FIXME for now we simply copy over the numerator from an existing table
 #
 
 
-adhoc_rankingstat = stringutils.marginalize_rankingstat(["/home/daichi.tsuna/playground/rankingstat_numerator/G1+H1+H2+L1+T1+V1-STRING_LIKELIHOOD_O2CUSP_INJ_0_0-1164600798-154406.xml.gz"], verbose = options.verbose)
-adhoc_rankingstat.finish()
-rankingstat.numerator = adhoc_rankingstat.numerator 
-rankingstat.finish()
+for n, filename in enumerate(filenames):
+	#
+	# Open the database file.
+	#
+
+	if options.verbose:
+		print("%d/%d: %s" % (n + 1, len(filenames), filename), file=sys.stderr)
+
+	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
+	connection = sqlite3.connect(working_filename)
+	if options.tmp_space is not None:
+		dbtables.set_temp_store_directory(connection, options.tmp_space, verbose = options.verbose)
+
+	#
+	# Summarize the database.
+	#
+
+	contents = SnglBurstUtils.CoincDatabase(connection, live_time_program = "StringSearch", search = "StringCusp", veto_segments_name = options.vetoes_name)
+	if options.verbose:
+		SnglBurstUtils.summarize_coinc_database(contents)
+
+	if contents.sim_burst_table is None:
+		continue
+	else:
+		weight_func = get_injection_weight_func(contents, options.injection_reweight, options.injection_reweight_cutoff)
+		# iterate over burst<-->burst coincs matching injections
+		# "exactly".
+		for sim, events, offsetvector in contents.get_injections():
+			rankingstat.numerator.increment(events, weight = weight_func(sim))
+
+	#
+	# Clean up.
+	#
+
+	contents.xmldoc.unlink()
+	connection.close()
+	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
 
 
 #

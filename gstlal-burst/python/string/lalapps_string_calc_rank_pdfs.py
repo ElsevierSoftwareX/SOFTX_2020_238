@@ -98,6 +98,7 @@ options, filenames, paramdict = parse_command_line()
 
 
 rankingstat = stringutils.marginalize_rankingstat(filenames, verbose = options.verbose) 
+rankingstat.finish()
 
 
 #
