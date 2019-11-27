@@ -26,6 +26,7 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
 from collections import deque, OrderedDict
 import httplib
+from itertools import chain
 import json
 import logging
 from optparse import OptionParser
@@ -57,14 +58,15 @@ def parse_command_line():
 	parser.add_option("--rootdir", metavar = "path", default = ".", help = "Sets the root directory where logs and metadata are stored.")
 	parser.add_option("--num-jobs", type = int, default = 10, help="number of jobs to listen to")
 	parser.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
-	parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the synchronizer acquires and processes data. Default = 0.1 seconds.")
+	parser.add_option("--max-event-time", type = "int", default = 7200, help = "Maximum time to keep around an event. Default = 2 hours.")
+	parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the event uploader acquires and processes data. Default = 0.1 seconds.")
 	parser.add_option("--request-timeout", type = "float", default = 0.2, help = "Timeout for requesting messages from a topic. Default = 0.2 seconds.")
 	parser.add_option("--kafka-server", metavar = "string", help = "Sets the server url that the kafka topic is hosted on. Required.")
 	parser.add_option("--input-topic", metavar = "string", help = "Sets the input kafka topic. Required.")
 	parser.add_option("--gracedb-group", metavar = "name", default = "Test", help = "Gracedb group to which to upload events (default is Test).")
 	parser.add_option("--gracedb-pipeline", metavar = "name", default = "gstlal", help = "Name of pipeline to provide in GracedB uploads (default is gstlal).")
 	parser.add_option("--gracedb-search", metavar = "name", default = "LowMass", help = "Name of search to provide in GracedB uploads (default is LowMass).")
-	parser.add_option("--gracedb-service-url", metavar = "url", default = DEFAULT_GRACEDB_URL, help = "Override default GracedB service url (optional, default is %s)." % DEFAULT_GRACEDB_URL)
+	parser.add_option("--gracedb-service-url", metavar = "url", default = DEFAULT_GRACEDB_URL, help = "Override default GracedB service url (optional, default is {}).".format(DEFAULT_GRACEDB_URL))
 
 	options, args = parser.parse_args()
 
@@ -84,6 +86,7 @@ class EventUploader(object):
 		### initialize timing options
 		self.processing_cadence = options.processing_cadence
 		self.request_timeout = options.request_timeout
+		self.max_event_time = options.max_event_time
 		self.retries = 5
 		self.retry_delay = 1
 		self.is_running = False
@@ -93,7 +96,7 @@ class EventUploader(object):
 
 		### initialize consumer
 		consumer_kafka_settings = self.kafka_settings
-		consumer_kafka_settings['group.id'] = '-'.join(['synchronizer', options.tag])
+		consumer_kafka_settings['group.id'] = '-'.join(['uploader', options.tag])
 		self.consumer = Consumer(consumer_kafka_settings)
 		self.consumer.subscribe([options.input_topic])
 		self.num_jobs = options.num_jobs
@@ -102,7 +105,7 @@ class EventUploader(object):
 		if options.gracedb_service_url.startswith("file"):
 			self.client = inspiral.FakeGracedbClient(options.gracedb_service_url)
 		else:
-			self.client = gracedb.rest.GraceDb(options.gracedb_service_url)
+			self.client = GraceDb(options.gracedb_service_url)
 
 		### gracedb settings
 		self.gracedb_group = options.gracedb_group
@@ -136,20 +139,23 @@ class EventUploader(object):
 		handles the processing of a candidate, creating
 		a new event if necessary
 		"""
-		event_seg = self.event_window(candidate['time'])
-		if event_seg in self.events:
-			self.events[event_seg]['candidates'].append(candidate)
+		key = self.event_window(candidate['time'])
+		if key in self.events:
+			logging.info('adding new candidate for event: [{:.1f}, {:.1f}]'.format(*key))
+			self.events[key]['candidates'].append(candidate)
 		else:
-			new_event = False
+			new_event = True
 			for seg, event in self.events.keys():
 				if segment(candidate['time'], candidate['time']) in seg:
+					logging.info('adding new candidate for time window: [{:.1f}, {:.1f}]'.format(*key))
 					event['candidates'].append(candidate)
-					new_event = True
+					new_event = False
 
 			### event not found, create a new event
 			if new_event:
-				self.events[event_seg] = self.new_event()
-				self.events[event_seg]['candidates'].append(candidate)
+				logging.info('found new event for time window: [{:.1f}, {:.1f}]'.format(*key))
+				self.events[key] = self.new_event()
+				self.events[key]['candidates'].append(candidate)
 
 
 	def event_window(self, t):
@@ -177,22 +183,31 @@ class EventUploader(object):
 		process events stored, selecting the best candidate.
 		upload if a new preferred event is found
 		"""
-		for event in sorted(self.events.values(), reverse=True):
+		for key, event in sorted(self.events.items(), reverse=True):
 			if event['num_sent'] == 0:
 				updated, event = self.process_candidates(event)
 				assert updated
+				logging.info(
+					'uploading first event for time window: '
+					'[{:.1f}, {:.1f}], far: {:.3E}'.format(*chain(key, (event['preferred']['far'],)))
+				)
 				self.upload_event(event)
 
 			elif utils.gps_now() >= self.next_event_upload(event):
 				updated, event = self.process_candidates(event)
+				logging.info(
+					'uploading first event for time window: '
+					'[{:.1f}, {:.1f}], far: {:.3E}'.format(*chain(key, (event['preferred']['far'],)))
+				)
 				if updated:
 					self.upload_event(event)
 
 		# clean out old events
 		current_time = utils.gps_now()
-		for seg in list(self.events.keys()):
-			if current_time - seg[0] >= self.max_event_time:
-				self.events.pop(seg)
+		for key in list(self.events.keys()):
+			if current_time - key[0] >= self.max_event_time:
+				logging.info('removing stale event [{:.1f}, {:.1f}]'.format(*key))
+				self.events.pop(key)
 
 
 	def process_candidates(self, event):
@@ -205,10 +220,18 @@ class EventUploader(object):
 		preferred = self.select_best(event['candidates'])
 		event['candidates'].clear()
 
-		### either no preferred yet or preferred is undoubtedly better
-		#if not event['preferred'] or (preferred['far'] < event['preferred']['far']
-		#	                      and preferred['snr'] > event['preferred']['snr']):
-		if not event['preferred'] or (preferred['far'] < event['preferred']['far']):
+		### no preferred event yet
+		if not event['preferred']:
+			logging.info('found event with far: {:.3E}'.format(preferred['far']))
+			event['preferred'] = preferred
+			return True, event
+
+		### preferred event is more significant
+		if preferred['far'] < event['preferred']['far']:
+			logging.info(
+				'found new preferred event with far: '
+				'{:.3E}, previous far: {:.3E}'.format(preferred['far'], event['preferred']['far'])
+			)
 			event['preferred'] = preferred
 			return True, event
 
@@ -270,8 +293,7 @@ class EventUploader(object):
 				resp_json = resp.json()
 				if resp.status == httplib.CREATED:
 					graceid = resp_json['graceid']
-					if self.verbose:
-						logging.info("event assigned grace ID %s" % graceid)
+					logging.info("event assigned grace ID {}".format(graceid))
 					self.upload_file(
 						"GstLAL internally computed p-astro",
 						"p_astro.json",
@@ -284,18 +306,18 @@ class EventUploader(object):
 					except HTTPError as resp:
 						logging.warning(resp)
 					break
-			logging.info("gracedb upload of %s failed on attempt %d/%d"  % (filename, attempt, self.retries))
+			logging.warning("gracedb upload of {} failed on attempt {:d}/{:d}".format(filename, attempt, self.retries))
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
-			logging.warning("gracedb upload of %s failed" % filename)
-		self.upload_file("strain spectral densities", "psd.xml.gz", "psd", event['preferred']['psd'], graceid)
+			logging.warning("gracedb upload of {} failed".format(filename))
+		self.upload_file("strain spectral densities", "psd.xml", "psd", event['preferred']['psd'], graceid)
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
 		"""
 		upload a file to gracedb
 		"""
-		logging.info("posting '%s' to gracedb ID %s ..." % (filename, graceid))
+		logging.info("posting '{}' to gracedb ID {} ...".format(filename, graceid))
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.writeLog(
@@ -306,21 +328,24 @@ class EventUploader(object):
 					tagname = tag
 				)
 			except HTTPError as resp:
-				pass
+				logging.warning(resp)
 			else:
 				if resp.status == httplib.CREATED:
 					break
-			logging.info("gracedb upload of %s for ID %s failed on attempt %d/%d"  % (filename, graceid, attempt, self.retries))
+			logging.info(
+				"gracedb upload of {} for ID {} "
+				"failed on attempt {:d}/{:d}".format(filename, graceid, attempt, self.retries)
+			)
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
-			logging.warning("gracedb upload of %s for ID %s failed" % (filename, graceid))
+			logging.warning("gracedb upload of {} for ID {} failed".format(filename, graceid))
 
 
 	def next_event_upload(self, event):
 		"""
 		check whether enough time has elapsed to send an updated event
 		"""
-		return event['time_sent'] + numpy.pow(4, event['num_sent'])
+		return event['time_sent'] + numpy.power(4, event['num_sent'])
 
 
 	def update_coinc_far(self, coinc, far):
@@ -338,8 +363,6 @@ class EventUploader(object):
 		while self.is_running:
 			self.fetch_data()
 			self.process_events()
-
-			### repeat with processing cadence
 			time.sleep(self.processing_cadence)
 
 
@@ -347,7 +370,7 @@ class EventUploader(object):
 		"""
 		start the event loop
 		"""
-		logging.info('starting event uploader for %d inspiral jobs...' % self.num_jobs)
+		logging.info('starting event uploader for {:d} inspiral jobs...'.format(self.num_jobs))
 		self.is_running = True
 		self.process()
 
@@ -371,7 +394,7 @@ class SignalHandler(object):
 			signal.signal(sig, self)
 
 	def __call__(self, signum, frame):
-		print >>sys.stderr, "SIG %d received, attempting graceful shutdown..." % signum
+		logging.info("SIG {:d} received, attempting graceful shutdown...".format(signum))
 		self.event_uploader.stop()
 		sys.exit(0)
 
