@@ -351,7 +351,7 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 
 if options.segments_file is not None:
 	seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segments_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
-	assert seglists.keys() == all_ifos, 'ifo masmatch between segments and channels'
+	assert set(all_ifos).issubset(set(seglists.keys())), 'unknown ifo given'
 	for ifo in all_ifos:
 		seglists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
 
@@ -362,7 +362,7 @@ if options.segments_file is not None:
 
 if options.vetoes_file is not None:
 	vetolists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.vetoes_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.vetoes_name).coalesce()
-	assert vetolists.keys() == all_ifos, 'ifo masmatch between segments and channels'
+	assert set(all_ifos).issubset(set(vetolists.keys())), 'unknown ifo given'
 	for ifo in all_ifos:
 		vetolists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
 
@@ -506,9 +506,11 @@ for ifo in all_ifos:
 
 #
 # Load/Initialize ranking statistic data.
+# instruments must be ones that appear in the whole search,
+# so that we can combine the rankingstat objects later on.
 #
 
-rankingstat = stringutils.RankingStat(instruments = all_ifos, delta_t = options.delta_t, snr_threshold = options.threshold, min_instruments = 2)
+rankingstat = stringutils.RankingStat(instruments = seglists.keys(), delta_t = options.delta_t, snr_threshold = options.threshold, min_instruments = 2)
 
 
 #
