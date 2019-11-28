@@ -161,33 +161,46 @@ int ligolw_table_default_row_callback(struct ligolw_table *table, struct ligolw_
  */
 
 
-static void next_token(char **start, char **end, char **end_end, char delimiter)
+static void next_token(char **start, char **end, char **next_start, char delimiter)
 {
-	char *s, *e, *ee;
-	int quoted = 0;
+	char *c;
 
 	/* find the token's start */
-	for(s = *start; *s && isspace(*s) && *s != delimiter && !(quoted = *s == '"'); s++);
-	if(!*s || *s == delimiter) {
-		/* token has zero length */
-		*start = *end = *end_end = s;
-		return;
+	for(c = *start; *c && isspace(*c) && *c != delimiter && *c != '"'; c++);
+
+	/* quoted token */
+	if(*c == '"') {
+		/* start at first character next to quote charater '"' */
+		*start = ++c;
+		/* end at '\0' or '"' */
+		for(; *c && *c != '"'; c++);
+		*end = c;
+		/* find the delimiter, this marks the end of current token */
+		if(*c == '"')
+			c++;
+		for(; *c && isspace(*c) && *c != delimiter; c++);
 	}
-	/* find the end end of the token */
-	for(ee = s + 1; *ee && (quoted || *ee != delimiter); ee++)
-		if(quoted && *ee == '"')
-			quoted = 0;
-	/* move backwards from end end to find end */
-	for(e = ee - 1; e > s && isspace(*e); e--);
-	/* adjust */
-	if(*s == '"')
-		s++;
-	if(*e != '"')
-		e++;
-	/* answer */
-	*start = s;
-	*end = e;
-	*end_end = ee;
+	/* token has zero length */
+	else if(!*c || *c == delimiter) {
+		/* at the delimiter, this marks the end of current token */
+		*start = *end = c;
+	}
+	/* unquoted token */
+	else {
+		/* start at first non-white space and non-quote character */
+		*start = c;
+		/* end at space or delimiter or '\0' */
+		for(++c; *c && !isspace(*c) && *c != delimiter; c++);
+		*end = c;
+		/* find the delimiter, this marks the end of current token */
+		for(; *c && isspace(*c) && *c != delimiter; c++);
+	}
+
+	/* skip the delimiter and white spaces and go to next start */
+	if(*c == delimiter)
+		c++;
+	for(; *c && isspace(*c) && *c != delimiter; c++);
+	*next_start = c;
 }
 
 
@@ -239,9 +252,9 @@ struct ligolw_table *ligolw_table_parse(ezxml_t elem, int (row_callback)(struct 
 		row.cells = malloc(table->n_columns * sizeof(*row.cells));
 
 		for(c = 0; c < table->n_columns; c++) {
-			char *end, *end_end;
+			char *end, *next;
 
-			next_token(&txt, &end, &end_end, table->delimiter);
+			next_token(&txt, &end, &next, table->delimiter);
 
 			switch(table->columns[c].type) {
 			case ligolw_cell_type_char_s:
@@ -279,15 +292,15 @@ struct ligolw_table *ligolw_table_parse(ezxml_t elem, int (row_callback)(struct 
 				break;
 			}
 
-			/* don't set null at end until after testing
-			 * end_end incase they point to the same place */
-			if(!*end_end) {
-				*end = '\0';
-				txt = end_end;
-				break;
-			}
+			/* null-terminate current token.  this does not
+			 * interfer with the exit test for the loop over
+			 * txt because end and next can only point to the
+			 * same address if that address is the end of the
+			 * text */
 			*end = '\0';
-			txt = end_end + 1;
+
+			/* advance to next token */
+			txt = next;
 		}
 
 		if(row_callback(table, row, callback_data)) {
