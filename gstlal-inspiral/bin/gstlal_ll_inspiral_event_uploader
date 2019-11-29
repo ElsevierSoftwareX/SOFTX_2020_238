@@ -145,9 +145,9 @@ class EventUploader(object):
 			self.events[key]['candidates'].append(candidate)
 		else:
 			new_event = True
-			for seg, event in self.events.keys():
+			for seg, event in self.events.items():
 				if segment(candidate['time'], candidate['time']) in seg:
-					logging.info('adding new candidate for time window: [{:.1f}, {:.1f}]'.format(*key))
+					logging.info('adding new candidate for time window: [{:.1f}, {:.1f}]'.format(*seg))
 					event['candidates'].append(candidate)
 					new_event = False
 
@@ -188,18 +188,18 @@ class EventUploader(object):
 				updated, event = self.process_candidates(event)
 				assert updated
 				logging.info(
-					'uploading first event for time window: '
-					'[{:.1f}, {:.1f}], far: {:.3E}'.format(*chain(key, (event['preferred']['far'],)))
+					'uploading first event with far = {:.3E} for time window: '
+					'[{:.1f}, {:.1f}]'.format(*chain((event['preferred']['far'],), key))
 				)
 				self.upload_event(event)
 
-			elif utils.gps_now() >= self.next_event_upload(event):
+			elif event['candidates'] and utils.gps_now() >= self.next_event_upload(event):
 				updated, event = self.process_candidates(event)
-				logging.info(
-					'uploading first event for time window: '
-					'[{:.1f}, {:.1f}], far: {:.3E}'.format(*chain(key, (event['preferred']['far'],)))
-				)
 				if updated:
+					logging.info(
+						'uploading event {:d} with far = {:.3E} for time window: '
+						'[{:.1f}, {:.1f}]'.format(*chain((event['num_sent'], event['preferred']['far']), key))
+					)
 					self.upload_event(event)
 
 		# clean out old events
@@ -317,7 +317,7 @@ class EventUploader(object):
 		"""
 		upload a file to gracedb
 		"""
-		logging.info("posting '{}' to gracedb ID {} ...".format(filename, graceid))
+		logging.info("posting '{}' to gracedb ID {}".format(filename, graceid))
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.writeLog(
