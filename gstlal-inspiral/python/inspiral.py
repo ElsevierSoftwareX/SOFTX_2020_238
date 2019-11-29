@@ -843,6 +843,24 @@ class GracedBWrapper(object):
 				coinc_inspiral_index[coinc_event.coinc_event_id].combined_far
 			)
 
+			# send event data to kafka
+			if self.producer:
+				psd_fobj = StringIO.StringIO()
+				ligolw_utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), psd_fobj, gz = False)
+				self.producer.send(
+					"events",
+					value = {
+						"far": coinc_inspiral_index[coinc_event.coinc_event_id].combined_far,
+						"snr": coinc_inspiral_index[coinc_event.coinc_event_id].snr,
+						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
+						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,
+						"coinc": message.getvalue(),
+						"psd": psd_fobj.getvalue(),
+						"p_astro": p_astro
+					}
+				)
+				del psd_fobj
+
 			# upload events
 			if not self.delay_uploads:
 				for attempt in range(1, self.retries + 1):
@@ -867,24 +885,6 @@ class GracedBWrapper(object):
 					time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 				else:
 					print >>sys.stderr, "gracedb upload of %s failed" % filename
-
-			# send event data to kafka if requested
-			if self.producer:
-				psd_fobj = StringIO.StringIO()
-				ligolw_utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), psd_fobj, gz = False)
-				self.producer.send(
-					"events",
-					value = {
-						"far": coinc_inspiral_index[coinc_event.coinc_event_id].combined_far,
-						"snr": coinc_inspiral_index[coinc_event.coinc_event_id].snr,
-						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
-						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,
-						"coinc": message.getvalue(),
-						"psd": psd_fobj.getvalue(),
-						"p_astro": p_astro
-					}
-				)
-				del psd_fobj
 
 			# save event to disk
 			message.close()
