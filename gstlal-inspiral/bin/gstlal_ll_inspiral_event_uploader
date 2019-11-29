@@ -188,8 +188,12 @@ class EventUploader(object):
 				updated, event = self.process_candidates(event)
 				assert updated
 				logging.info(
-					'uploading first event with far = {:.3E} for time window: '
-					'[{:.1f}, {:.1f}]'.format(*chain((event['preferred']['far'],), key))
+					'uploading {} event with far = {:.3E} for time window: '
+					'[{:.1f}, {:.1f}]'.format(
+						self.to_ordinal(1),
+						event['preferred']['far'],
+						key[0], key[1],
+					)
 				)
 				self.upload_event(event)
 
@@ -197,8 +201,12 @@ class EventUploader(object):
 				updated, event = self.process_candidates(event)
 				if updated:
 					logging.info(
-						'uploading event {:d} with far = {:.3E} for time window: '
-						'[{:.1f}, {:.1f}]'.format(*chain((event['num_sent'], event['preferred']['far']), key))
+						'uploading {} event with far = {:.3E} for time window: '
+						'[{:.1f}, {:.1f}]'.format(
+							self.to_ordinal(event['num_sent'] + 1),
+							event['preferred']['far'],
+							key[0], key[1]
+						)
 					)
 					self.upload_event(event)
 
@@ -306,11 +314,14 @@ class EventUploader(object):
 					except HTTPError as resp:
 						logging.warning(resp)
 					break
-			logging.warning("gracedb upload of {} failed on attempt {:d}/{:d}".format(filename, attempt, self.retries))
+			logging.warning(
+				"gracedb upload of {} "
+				"failed on attempt {:d}/{:d}".format(filename, attempt, self.retries)
+			)
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} failed".format(filename))
-		self.upload_file("strain spectral densities", "psd.xml", "psd", event['preferred']['psd'], graceid)
+		self.upload_file("strain PSDs", "psd.xml", "psd", event['preferred']['psd'], graceid)
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
@@ -382,6 +393,18 @@ class EventUploader(object):
 		logging.info('shutting down...')
 		### FIXME: should also handle pushing rest of data in buffer
 		self.is_running = False
+
+
+	@staticmethod
+	def to_ordinal(n):
+		"""
+		given an integer, returns the ordinal number
+		representation.
+
+		this black magic is taken from
+		https://stackoverflow.com/a/20007730
+		"""
+		return "%d%s" % (n,"tsnrhtdd"[(n/10%10!=1)*(n%10<4)*n%10::4])
 
 
 class SignalHandler(object):
