@@ -153,7 +153,7 @@ class EventUploader(object):
 
 			### event not found, create a new event
 			if new_event:
-				logging.info('found new event for time window: [{:.1f}, {:.1f}]'.format(*key))
+				logging.info('found new event: [{:.1f}, {:.1f}]'.format(*key))
 				self.events[key] = self.new_event()
 				self.events[key]['candidates'].append(candidate)
 
@@ -188,7 +188,7 @@ class EventUploader(object):
 				updated, event = self.process_candidates(event)
 				assert updated
 				logging.info(
-					'uploading {} event with far = {:.3E} for time window: '
+					'uploading {} candidate with far = {:.3E} for event: '
 					'[{:.1f}, {:.1f}]'.format(
 						self.to_ordinal(1),
 						event['preferred']['far'],
@@ -201,7 +201,7 @@ class EventUploader(object):
 				updated, event = self.process_candidates(event)
 				if updated:
 					logging.info(
-						'uploading {} event with far = {:.3E} for time window: '
+						'uploading {} candidate with far = {:.3E} for event: '
 						'[{:.1f}, {:.1f}]'.format(
 							self.to_ordinal(event['num_sent'] + 1),
 							event['preferred']['far'],
@@ -230,14 +230,14 @@ class EventUploader(object):
 
 		### no preferred event yet
 		if not event['preferred']:
-			logging.info('found event with far: {:.3E}'.format(preferred['far']))
+			logging.info('found candidate with far: {:.3E}'.format(preferred['far']))
 			event['preferred'] = preferred
 			return True, event
 
 		### preferred event is more significant
 		if preferred['far'] < event['preferred']['far']:
 			logging.info(
-				'found new preferred event with far: '
+				'found new preferred candidate with far: '
 				'{:.3E}, previous far: {:.3E}'.format(preferred['far'], event['preferred']['far'])
 			)
 			event['preferred'] = preferred
@@ -284,8 +284,9 @@ class EventUploader(object):
 		"""
 		upload a new event + auxiliary files
 		"""
+		if not event['time_sent']:
+			event['time_sent'] = utils.gps_now()
 		event['num_sent'] += 1
-		event['time_sent'] = utils.gps_now()
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.createEvent(
