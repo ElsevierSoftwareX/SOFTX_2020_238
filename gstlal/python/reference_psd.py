@@ -519,7 +519,7 @@ class PSDFirKernel(object):
 		#
 
 		if nyquist is not None:
-			i = int(round((nyquist * 2. - psd.f0) / psd.deltaF))
+			i = int(round((nyquist - psd.f0) / psd.deltaF))
 			assert i < len(data)
 			data = data[:i + 1]
 			sample_rate = 2 * int(round(psd.f0 + (len(data) - 1) * psd.deltaF))
