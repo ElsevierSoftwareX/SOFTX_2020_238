@@ -27,8 +27,10 @@
 #
 
 
+import math
 from optparse import OptionParser
 import sys
+import numpy
 
 from ligo.lw import utils as ligolw_utils
 from gstlal import far
@@ -104,20 +106,48 @@ for filename in filenames:
 	elem = rankingstat.get_xml_root(xmldoc, name)
 	elem.parentNode.removeChild(elem)
 	elem.unlink()
-	elem = rankingstatpdf.get_xml_root(xmldoc, name)
-	elem.parentNode.removeChild(elem)
-	elem.unlink()
+	if rankingstatpdf is not None:
+		elem = rankingstatpdf.get_xml_root(xmldoc, name)
+		elem.parentNode.removeChild(elem)
+		elem.unlink()
 
 	#
 	# compress horizon distance history.  the outer loop makes a list
 	# to ensure no problems modifying the object being iterated over
 	#
 
-	rankingstat.numerator.horizon_history.compress(
-		threshold = options.threshold,
-		remove_deviations = options.remove_horizon_deviations,
-		deviation_percent = options.deviation_percent
-	)
+	abs_ln_thresh = math.log1p(options.threshold)
+	for instrument, horizon_history in list(rankingstat.numerator.horizon_history.items()):
+		# GPS time / distance pairs
+		items = horizon_history.items()
+		if options.remove_horizon_deviations:
+			values = numpy.array(items)[:,1]
+			mean_horizon = values[values!=0].mean()
+			items = [item for item in items if item[1] < (mean_horizon * (1. + options.deviation_percent))]
+
+		# compress array
+		j = 1
+		for i in range(1, len(items) - 1):
+			values = items[j - 1][1], items[i][1], items[i + 1][1]
+			# remove distances that are non-zero and differ
+			# fractionally from both neighbours by less than
+			# the selected threshold.  always keep the first
+			# and last values
+			if values[0] > 0. and values[1] > 0. and values[2] > 0. and abs(math.log(values[1] / values[0])) < abs_ln_thresh and abs(math.log(values[1] / values[2])) < abs_ln_thresh:
+				continue
+			# remove distances that are 0 and surrounded by 0
+			# on both sides (basically the same as the last
+			# test, but we can't take log(0)).
+			if values == (0., 0., 0.):
+				continue
+			items[j] = items[i]
+			j += 1
+		del items[j:]
+		if options.verbose:
+			print >>sys.stderr, "\"%s\":  %s horizon history reduced to %.3g%% of original size" % (filename, instrument, 100. * j / (i + 1.))
+
+		# replace
+		rankingstat.numerator.horizon_history[instrument] = type(horizon_history)(items)
 
 	#
 	# re-insert into XML tree
