@@ -106,9 +106,10 @@ for filename in filenames:
 	elem = rankingstat.get_xml_root(xmldoc, name)
 	elem.parentNode.removeChild(elem)
 	elem.unlink()
-	elem = rankingstatpdf.get_xml_root(xmldoc, name)
-	elem.parentNode.removeChild(elem)
-	elem.unlink()
+	if rankingstatpdf is not None:
+		elem = rankingstatpdf.get_xml_root(xmldoc, name)
+		elem.parentNode.removeChild(elem)
+		elem.unlink()
 
 	#
 	# compress horizon distance history.  the outer loop makes a list
