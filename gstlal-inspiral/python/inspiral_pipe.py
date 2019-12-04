@@ -130,6 +130,7 @@ def online_inspiral_layer(dag, jobs, options):
 			"fir-stride": options.fir_stride,
 			"data-source": options.data_source,
 			"gracedb-far-threshold": options.gracedb_far_threshold,
+			"delay-uploads": options.delay_uploads,
 			"gracedb-group": options.gracedb_group,
 			"gracedb-pipeline": options.gracedb_pipeline,
 			"gracedb-search": options.gracedb_search,
@@ -209,6 +210,21 @@ def online_inspiral_layer(dag, jobs, options):
 			)
 
 	return job_tags, inj_job_tags
+
+
+def event_upload_layer(dag, jobs, options, job_tags):
+	job_options = {
+		"kafka-server": options.output_kafka_server,
+		"gracedb-group": options.gracedb_group,
+		"gracedb-pipeline": options.gracedb_pipeline,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-service-url": options.gracedb_service_url,
+		"num-jobs": len(job_tags),
+		"input-topic": "events",
+		"rootdir": "event_uploader",
+		"verbose": "",
+	}
+	return dagparts.DAGNode(jobs['eventUploader'], dag, [], opts = job_options)
 
 
 def aggregator_layer(dag, jobs, options, job_tags):
