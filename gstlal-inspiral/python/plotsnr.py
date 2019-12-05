@@ -153,13 +153,18 @@ def _trim_by_time(snr_series, center, span):
 		gps_time (float): The nearest gps_time at center.
 		relative_gps_time (numpy.array <type 'float'>): The gpstime relative to gps_time.
 	"""
-	start = _find_nearest(snr_series, center - span)[1]
-	mid = _find_nearest(snr_series, center)[1]
-	end = _find_nearest(snr_series, center + span)[1]
+	if center and span:
+		start = _find_nearest(snr_series, center - span)[1]
+		mid = _find_nearest(snr_series, center)[1]
+		end = _find_nearest(snr_series, center + span)[1]
+	else:
+		start = None
+		mid = 0
+		end = None
 
 	gps_time = (snr_series.epoch.gpsSeconds + snr_series.epoch.gpsNanoSeconds * 1.e-9 + (numpy.arange(snr_series.data.length) * snr_series.deltaT))
 
-	return snr_series.data.data[start:end+1], gps_time[mid], (gps_time - gps_time[mid])[start:end+1]
+	return snr_series.data.data[start:end], gps_time[mid], (gps_time - gps_time[mid])[start:end]
 
 def _trim_by_samples(snr_series, center, samples=351):
 	"""Trim the snr_series to the nearest center with given samples, the original time series is remained intact.
