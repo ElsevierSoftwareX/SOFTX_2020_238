@@ -436,15 +436,16 @@ class LnSignalDensity(LnLRDensity):
 		raise NotImplementedError
 
 	def copy(self):
-		# NOTE: create a new class rather than instantiating
-		# one to avoid generating extra copies of data that
-		# is intended to be read-only. instead, make references.
-		new = type(self).__new__(self.__class__)
-		new.__dict__.update(self.__dict__)
-		# make copies for writable data
+		new = super(LnSignalDensity, self).copy()
 		new.horizon_history = self.horizon_history.copy()
-		for key, lnpdf in self.densities.items():
-			new.densities[key] = lnpdf.copy()
+		new.population_model_file = self.population_model_file
+		new.dtdphi_file = self.dtdphi_file
+		new.idq_file = self.idq_file
+		# okay to use references because read-only data
+		new.population_model = self.population_model
+		new.InspiralExtrinsics = self.InspiralExtrinsics
+		new.horizon_factors = self.horizon_factors
+		new.idq_glitch_lnl = self.idq_glitch_lnl
 		return new
 
 	def local_mean_horizon_distance(self, gps, window = segments.segment(-32., +2.)):
@@ -703,9 +704,11 @@ class OnlineFrankensteinLnSignalDensity(LnSignalDensity):
 	files, cannot be marginalized together with other instances, nor
 	accept updates from new data.
 	"""
-	@staticmethod
-	def splice(src, Dh_donor):
-		self = src.copy()
+	@classmethod
+	def splice(cls, src, Dh_donor):
+		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, dtdphi_file = src.dtdphi_file, min_instruments = src.min_instruments, horizon_factors = src.horizon_factors)
+		for key, lnpdf in src.densities.items():
+			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
 		# data so that as it is updated, we get the updates.
 		self.horizon_history = Dh_donor.horizon_history
@@ -1091,9 +1094,11 @@ class OnlineFrankensteinLnNoiseDensity(LnNoiseDensity):
 	files, cannot be marginalized together with other instances, nor
 	accept updates from new data.
 	"""
-	@staticmethod
-	def splice(src, rates_donor):
-		self = src.copy()
+	@classmethod
+	def splice(cls, src, rates_donor):
+		self = cls(src.template_ids, src.instruments, src.delta_t, min_instruments = src.min_instruments)
+		for key, lnpdf in src.densities.items():
+			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's
 		# data so that as it is updated, we get the updates.
 		self.triggerrates = rates_donor.triggerrates
