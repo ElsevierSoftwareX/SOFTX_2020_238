@@ -1994,6 +1994,8 @@ class InspiralExtrinsics(object):
 	p_of_ifos[("K1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1L1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("K1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1V1_p_of_instruments_given_H_d.h5"))
 
+	time_phase_snr = None
+
 	def __init__(self, min_instruments = 1, filename = None):
 		#
 		# NOTE every instance will repeat this min_instruments
@@ -2013,10 +2015,9 @@ class InspiralExtrinsics(object):
 			for combo in pofI.histograms:
 				pofI.histograms[combo].array /= total
 			pofI.mkinterp()
-		if filename is not None:
-			self.time_phase_snr = TimePhaseSNR.from_hdf5(filename)
-		else:
-			self.time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
+
+		# load time phase snr if not already available
+		self.load_time_phase_snr(filename)
 
 
 	def p_of_instruments_given_horizons(self, instruments, horizons):
@@ -2028,6 +2029,16 @@ class InspiralExtrinsics(object):
 			return 1.0
 		on_ifos = tuple(sorted(horizons.keys()))
 		return self.p_of_ifos[on_ifos](instruments, horizons)
+
+
+	@classmethod
+	def load_time_phase_snr(cls, filename = None):
+		if not cls.time_phase_snr:
+			if filename is not None:
+				cls.time_phase_snr = TimePhaseSNR.from_hdf5(filename)
+			else:
+				cls.time_phase_snr = TimePhaseSNR.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5"))
+
 
 #
 # =============================================================================
