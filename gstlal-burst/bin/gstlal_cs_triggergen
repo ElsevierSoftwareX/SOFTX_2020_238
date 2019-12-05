@@ -110,7 +110,7 @@ class PipelineHandler(simplehandler.Handler):
 		self.triggergen = triggergens
 		self.is_noninjections = is_noninjections
 		# template normalization. use central_freq to uniquely identify templates
-		self.sigma = dict((row.central_freq, 0.0) for row in template_banks[template_banks.keys()[0]])
+		self.sigma = {ifo: dict((row.central_freq, 0.0) for row in template_banks[ifo]) for ifo in template_banks.keys()}
 		# horizon distance
 		self.horizon_distance = None
 		# for PSD
@@ -131,12 +131,13 @@ class PipelineHandler(simplehandler.Handler):
 				if mapinfo.data:
 					events.extend(snglbursttable.GSTLALSnglBurst.from_buffer(mapinfo.data))
 				memory.unmap(mapinfo)
+			# get ifo from the appsink name property
+			instrument = elem.get_property("name")
+			# calculalte event amplitude using sigma
 			for event in events:
 				event.process_id = process.process_id
 				event.event_id = self.sngl_burst.get_next_id()
-				event.amplitude = event.snr / self.sigma[event.central_freq]
-			# get ifo from the appsink name property
-			instrument = elem.get_property("name")
+				event.amplitude = event.snr / self.sigma[instrument][event.central_freq]
 			# extract segment.  move the segment's upper
 			# boundary to include all triggers.
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
@@ -192,9 +193,11 @@ class PipelineHandler(simplehandler.Handler):
 			template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd)
 			# Obtain the normalization for getting the amplitude of signal from SNR
 			# Integrate over frequency range covered by template. Note that template_f is already whitened.
+			# FIXME the psd used here is overestimated for Virgo at lower frequencies,
+			# thus result in underestimating the amplitude for Virgo triggers
 			sigmasq = 0.0
 			sigmasq = numpy.trapz(4.0 * template_f.data.data**2, dx = psd.deltaF)
-			self.sigma[row.central_freq] = numpy.sqrt(sigmasq.real)
+			self.sigma[instrument][row.central_freq] = numpy.sqrt(sigmasq.real)
 			# obtain autocorr time series by squaring template and inverse FFT it
 			template_f_squared = lal.CreateCOMPLEX16FrequencySeries("whitened template_freq squared", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("strain s"), length // 2 + 1)
 			autocorr_t = lal.CreateREAL8TimeSeries("autocorr_time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
@@ -285,7 +288,7 @@ class PipelineHandler(simplehandler.Handler):
 				# with the highest high-f cutoff, and define the horizon distance
 				# to be sigma/10^(19) Mpc. This definition should be consistent in
 				# other places where this quantity is used.
-				self.horizon_distance = self.sigma[max(self.sigma.keys())]/1.e19
+				self.horizon_distance = self.sigma[instrument][max(self.sigma[instrument].keys())]/1.e19
 				assert not (math.isnan(self.horizon_distance) or math.isinf(self.horizon_distance))
 			else:
 				# Burn-in period. Use templates with all zeros so that we won't get any triggers.
@@ -351,6 +354,7 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 
 if options.segments_file is not None:
 	seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segments_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
+	# seglist contains all the ifos that participate in the whole search.
 	assert set(all_ifos).issubset(set(seglists.keys())), 'unknown ifo given'
 	for ifo in all_ifos:
 		seglists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
