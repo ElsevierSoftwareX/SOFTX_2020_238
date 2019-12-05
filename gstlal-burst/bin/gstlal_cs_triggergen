@@ -487,6 +487,9 @@ for ifo in all_ifos:
 	#
 
 	head = whiten[ifo] = pipeparts.mkwhiten(pipeline, head, fft_length = 8, name = "lal_whiten_%s" % ifo)
+	# high-pass filter with Hann window to suppress low-frequency artifacts in
+	# Virgo detector data
+	head = pipeparts.mkgeneric(pipeline, head, "audiowsincband", length = options.sample_rate + 1, lower_frequency = 1e1, upper_frequency = 1e4, window = 4)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkresample(pipeline, head)
 	# FIXME NO hardcoding original sample rate!
