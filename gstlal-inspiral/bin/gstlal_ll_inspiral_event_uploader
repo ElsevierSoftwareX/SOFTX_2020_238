@@ -27,10 +27,12 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 from collections import deque, OrderedDict
 import httplib
 from itertools import chain
+import gzip
 import json
 import logging
 from optparse import OptionParser
 import signal
+import StringIO
 import sys
 import time
 import timeit
@@ -322,7 +324,13 @@ class EventUploader(object):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} failed".format(filename))
-		self.upload_file("strain PSDs", "psd.xml", "psd", event['preferred']['psd'], graceid)
+
+		# gzip and upload psd
+		psd_fobj = StringIO.StringIO()
+		with gzip.GzipFile(fileobj=psd_fobj, mode="wb", compresslevel=3) as f:
+			f.write(event['preferred']['psd'])
+		self.upload_file("strain PSDs", "psd.xml.gz", "psd", psd_fobj.getvalue(), graceid)
+		del psd_fobj
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
