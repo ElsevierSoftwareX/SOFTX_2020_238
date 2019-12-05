@@ -106,7 +106,7 @@ def parse_command_line():
 	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Set the cache file for svd banks (required iff running injection-only analysis)")
 	# NOTE: delete unless we want db metadata. injection db?
 	parser.add_option("--non-injection-db", metavar = "filename", help = "Set the non injection data base file (required iff running injection-only analysis)")
-	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis)")
+	parser.add_option("--marginalized-likelihood-file", metavar = "filename", help = "Set the marginalized likelihood file (required iff running injection-only analysis or performing rerank with the marginalized_likelihood file already computed.)")
 	parser.add_option("--marginalized-likelihood-with-zerolag-file", metavar = "filename", help = "Set the marginalized likelihood with zerolag file (required iff running injection-only analysis)")
 
 	# Condor commands
@@ -249,14 +249,20 @@ if __name__ == '__main__':
 	# mass model job
 	model_node, model_file = inspiral_pipe.mass_model_layer(dag, jobs, [], instruments, options, boundary_seg, reference_psd)
 
-	# marginalize jobs
-	marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, [], lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, reference_psd, svd_dtdphi_map, options.idq_file)
+	if not options.marginalized_likelihood_file:
+		# marginalize jobs
+		marg_nodes = inspiral_pipe.marginalize_layer(dag, jobs, [], lloid_output, lloid_diststats, options, boundary_seg, instrument_set, model_node, model_file, reference_psd, svd_dtdphi_map, options.idq_file)
 
-	# calc rank PDF jobs
-	rankpdf_nodes, rankpdf_zerolag_nodes = inspiral_pipe.calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set)
+		# calc rank PDF jobs
+		rankpdf_nodes, rankpdf_zerolag_nodes = inspiral_pipe.calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument_set)
 
-	# final marginalization step
-	final_marg_nodes, margfiles_to_delete = inspiral_pipe.final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, options)
+		# final marginalization step
+		final_marg_nodes, margfiles_to_delete = inspiral_pipe.final_marginalize_layer(dag, jobs, rankpdf_nodes, rankpdf_zerolag_nodes, options)
+	else:
+		# Create fake marg_nodes and final_marg_nodes objects for the likelihood and compute far layers
+		marg_nodes, final_marg_nodes = [], []
+
+		margfiles_to_delete = []
 
 	# likelihood jobs
 	likelihood_nodes = inspiral_pipe.likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, options, boundary_seg, instrument_set)
