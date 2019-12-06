@@ -489,11 +489,12 @@ class GracedBWrapper(object):
 
 	DEFAULT_SERVICE_URL = gracedb.rest.DEFAULT_SERVICE_URL
 
-	def __init__(self, instruments, far_threshold = None, min_instruments = None, group = "Test", search = "LowMass", pipeline = "gstlal", service_url = None, kafka_server = None, delay_uploads = False, upload_auxiliary_data = True, verbose = False):
+	def __init__(self, instruments, far_threshold = None, min_instruments = None, group = "Test", search = "LowMass", label = None, pipeline = "gstlal", service_url = None, kafka_server = None, delay_uploads = False, upload_auxiliary_data = True, verbose = False):
 		self.instruments = frozenset(instruments)
 		self.min_instruments = min_instruments
 		self.group = group
 		self.search = search
+		self.label = label
 		self.pipeline = pipeline
 		self.service_url = service_url if service_url is not None else self.DEFAULT_SERVICE_URL
 		self.upload_auxiliary_data = upload_auxiliary_data
@@ -890,7 +891,7 @@ class GracedBWrapper(object):
 			if not self.delay_uploads:
 				for attempt in range(1, self.retries + 1):
 					try:
-						resp = self.gracedb_client.createEvent(self.group, self.pipeline, filename, filecontents = message.getvalue(), search = self.search)
+						resp = self.gracedb_client.createEvent(self.group, self.pipeline, filename, filecontents = message.getvalue(), search = self.search, label = self.label)
 					except gracedb.rest.HTTPError as resp:
 						print resp
 					else:
