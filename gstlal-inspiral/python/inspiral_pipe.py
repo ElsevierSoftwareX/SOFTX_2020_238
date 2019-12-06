@@ -134,6 +134,7 @@ def online_inspiral_layer(dag, jobs, options):
 			"gracedb-group": options.gracedb_group,
 			"gracedb-pipeline": options.gracedb_pipeline,
 			"gracedb-search": options.gracedb_search,
+			"gracedb-label": options.gracedb_label,
 			"gracedb-service-url": options.gracedb_service_url,
 			"job-tag": job_tags[-1],
 			"likelihood-snapshot-interval": options.likelihood_snapshot_interval,
