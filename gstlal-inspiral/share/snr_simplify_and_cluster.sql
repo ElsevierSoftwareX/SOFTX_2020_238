@@ -172,6 +172,9 @@ FROM
 -- create a look-up table of info required for clustering
 --
 
+CREATE INDEX tmpindex1 ON coinc_event_map (coinc_event_id);
+CREATE INDEX tmpindex2 ON coinc_event (coinc_event_id);
+
 CREATE TEMPORARY TABLE _cluster_info_ AS
 	SELECT
 		coinc_event.coinc_event_id AS coinc_event_id,
@@ -185,6 +188,9 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 		JOIN coinc_inspiral ON (
 			coinc_inspiral.coinc_event_id == coinc_event.coinc_event_id
 		);
+DROP INDEX tmpindex1;
+DROP INDEX tmpindex2;
+
 CREATE INDEX tmpindex1 ON _cluster_info_ (coinc_event_id);
 CREATE INDEX tmpindex2 ON _cluster_info_ (category, end_time, ranking_stat);
 
