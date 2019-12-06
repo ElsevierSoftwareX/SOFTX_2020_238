@@ -162,7 +162,7 @@ CREATE TEMPORARY TABLE
 	connection.cursor().execute("DROP INDEX sim_id_combined_far_index")
 	connection.cursor().execute("DROP INDEX sim_id_sngl_id_index")
 
-def create_coinc_view(connection):
+def create_coinc_view(connection, options):
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
 	sngl_far
@@ -180,9 +180,9 @@ AS
 		ON map.coinc_event_id == coinc_event.coinc_event_id 
 	WHERE
 		map.table_name = "sngl_inspiral" 
-		AND combined_far < 1e-6 
+		AND combined_far < ? 
 		AND NOT EXISTS (SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0);
-""")
+""", (float(options.far_threshold),))
 
 if options.injection_database:
 	db = options.injection_database
@@ -220,7 +220,7 @@ if options.injection_database:
 		s_row[(bank_id, process_id, sid)] = inspiral_table.row_from_cols(srow)
 
 elif options.zerolag_database:
-        create_coinc_view(connection)
+        create_coinc_view(connection, options)
         s_row = {}
         xmldoc = dbtables.get_xml(connection)
         coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(xmldoc)
@@ -236,7 +236,6 @@ elif options.zerolag_database:
         LIMIT ? 
         """ % (options.far_threshold,), (int(num_inspiral_jobs),)):
                 process_id = record[0]
-		print "process id", process_id
                 bank_id = record[1]
                 far = record[2]
                 sid = record[3]
@@ -250,9 +249,9 @@ master_opts_dict = {
 	"likelihood-snapshot-interval": 100000.0,
 	"track-psd": "",
 	"min-instruments": None,
-	"gracedb-far-threshold": 1e-6,
+	"gracedb-far-threshold": options.far_threshold,
 	"gracedb-service-url": None,
-	"ht-gate-threshold": 50.0,
+	"ht-gate-threshold": None,
 	"veto-segments-name": "vetoes",
 	"fir-stride": 0.25,
 	"gracedb-group": "CBC",
@@ -380,17 +379,25 @@ f.close()
 
 for job_id, (bankid, process_id, sid) in enumerate(s_row, start=1):
 	# FIXME Need to add option for dist stats output
-	print "++ job_id: %s ++" % job_id
-	print dir(s_row[(bankid, process_id, sid)])
 	job_dict = {}
+	ht_gate = []
 	for param, value in connection.cursor().execute("SELECT param, value FROM process_params WHERE process_id == ?", (process_id,)):
+		if param == "--svd-bank-cache":
+			svd_start, svd_stop = os.path.split(value)[1].split("-")[1].split("_")[0:2]
+		# ht gate stuff  OMG IS THIS SILLY
+		if param == "--ht-gate-threshold":
+			ht_gate.append(value)
 		job_dict.setdefault(param.replace("--",""), []).append(value)
+	ht_gate_id = int(bankid) - int(svd_start)
 	this_opts_dict = master_opts_dict.copy()
 	updatedict(this_opts_dict, job_dict)
 	this_input_dict = master_input_dict.copy()
 	updatedict(this_input_dict, job_dict)
 	this_output_dict = master_output_dict.copy()
 	updatedict(this_output_dict, job_dict)
+
+	# ht gate stuff  OMG IS THIS SILLY
+	this_input_dict["ht-gate-threshold"] = ht_gate[ht_gate_id]
 
 	# FIX some stuff
 	fixrelpath(this_input_dict, ("reference-psd", "frame-cache", "time-slide-file", "veto-segments-file", "frame-segments-file"))
