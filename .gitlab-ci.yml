@@ -356,21 +356,18 @@ test:offline:
 
     - cd gstlal-inspiral/tests
 
-    # Patch gstlal_inspiral to disable servicediscovery/avahi:
-    - patch /usr/bin/gstlal_inspiral ./disable_service_discovery.patch
-
     # Run the makefile:
-    - make -f Makefile.offline_tutorial_test
+    - make -f Makefile.offline_tutorial_test ENABLE_PLOTTING=0
 
     # Back-up the results docs:
-    - cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
+    #- cp -rf ./WEBDIR/gstlal_offline_tutorial ../../public/
 
-  artifacts:
-    expire_in: 24h
-    paths:
-      - gstlal-inspiral/tests/WEBDIR/gstlal_offline_tutorial
-      - public
-    when: always
+  #artifacts:
+  #  expire_in: 24h
+  #  paths:
+  #    - gstlal-inspiral/tests/WEBDIR/gstlal_offline_tutorial
+  #    - public
+  #  when: always
   only:
     - schedules
     - pushes
@@ -388,6 +385,7 @@ pages:
     - yum -y install python2-pip texlive* graphviz python-matplotlib tzdata
     - pip install setuptools sphinx==1.7 sphinx_rtd_theme
     - pip install -U pytz
+    - mkdir -p public/
     - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
   dependencies:
@@ -413,13 +411,6 @@ docker:el7:
   script:
     # add RPMs to directory to pass to docker
     - mkdir rpms 
-
-    # Copy over patch that will be used to disable servicediscovery.
-    # In the dockerfile, first install the rpms, and then apply the 
-    # patch to /usr/bin/gstlal-inspiral. Just put it in the same 
-    # directory as where the rpms are going to get copied. 
-
-    - cp gstlal-inspiral/tests/disable_service_discovery.patch rpms/
 
     # Copy rpms to new container.
     - mv rpmbuild/RPMS/x86_64/*.rpm rpms

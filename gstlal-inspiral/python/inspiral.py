@@ -50,6 +50,7 @@
 #
 
 
+import json
 import math
 import numpy
 from scipy import random
@@ -488,7 +489,7 @@ class GracedBWrapper(object):
 
 	DEFAULT_SERVICE_URL = gracedb.rest.DEFAULT_SERVICE_URL
 
-	def __init__(self, instruments, far_threshold = None, min_instruments = None, group = "Test", search = "LowMass", pipeline = "gstlal", service_url = None, upload_auxiliary_data = True, verbose = False):
+	def __init__(self, instruments, far_threshold = None, min_instruments = None, group = "Test", search = "LowMass", pipeline = "gstlal", service_url = None, kafka_server = None, delay_uploads = False, upload_auxiliary_data = True, verbose = False):
 		self.instruments = frozenset(instruments)
 		self.min_instruments = min_instruments
 		self.group = group
@@ -506,6 +507,20 @@ class GracedBWrapper(object):
 		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
 		bottle.route("/gracedb_min_instruments.txt", method = "GET")(self.web_get_gracedb_min_instruments)
 		bottle.route("/gracedb_min_instruments.txt", method = "POST")(self.web_set_gracedb_min_instruments)
+
+		if delay_uploads:
+			assert kafka_server is not None, "if delaying uploads, need to specify a kafka server"
+		self.delay_uploads = delay_uploads
+
+		# set up kafka producer
+		if kafka_server is not None:
+			from kafka import KafkaProducer
+			self.producer = KafkaProducer(
+				bootstrap_servers=[kafka_server],
+				value_serializer=lambda m: json.dumps(m).encode('utf-8'),
+			)
+		else:
+			self.producer = None
 
 	@property
 	def far_threshold(self):
@@ -575,7 +590,7 @@ class GracedBWrapper(object):
 				else:
 					if resp.status == httplib.CREATED:
 						break
-				print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d: %d: %s"  % (filename, gracedb_id, attempt, self.retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
+				print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d"  % (filename, gracedb_id, attempt, self.retries)
 				time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 			else:
 				print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
@@ -630,9 +645,9 @@ class GracedBWrapper(object):
 
 			observatories = "".join(sorted(set(instrument[0] for instrument in self.instruments)))
 			instruments = "".join(sorted(self.instruments))
-			description = "%s_%s_%s_%s" % (instruments, ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.group, self.search)
+			description = "%s_%s_%s_%s" % ("GSTLAL", ("%.4g" % coinc_inspiral_index[coinc_event.coinc_event_id].mass).replace(".", "_").replace("-", "_"), self.group, self.search)
 			end_time = int(coinc_inspiral_index[coinc_event.coinc_event_id].end)
-			filename = "%s-%s-%d-%d.xml" % (observatories, description, end_time, 0)
+			filename = "%s-%s-%d-%d.xml" % (instruments, description, end_time, 1)
 
 			#
 			# construct message and send to gracedb.
@@ -818,34 +833,60 @@ class GracedBWrapper(object):
 
 			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
-			# FIXME: make this optional from command line?
-			if True:
+
+			# calculate p(astro)
+			p_astro = get_p_astro_func(
+				coinc_event.likelihood,
+				last_coincs.sngl_inspirals(coinc_event.coinc_event_id)[0].mass1,
+				last_coincs.sngl_inspirals(coinc_event.coinc_event_id)[0].mass2,
+				coinc_inspiral_index[coinc_event.coinc_event_id].snr,
+				coinc_inspiral_index[coinc_event.coinc_event_id].combined_far
+			)
+
+			# send event data to kafka
+			if self.producer:
+				psd_fobj = StringIO.StringIO()
+				ligolw_utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), psd_fobj, gz = False)
+				self.producer.send(
+					"events",
+					value = {
+						"far": coinc_inspiral_index[coinc_event.coinc_event_id].combined_far,
+						"snr": coinc_inspiral_index[coinc_event.coinc_event_id].snr,
+						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
+						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,
+						"coinc": message.getvalue(),
+						"psd": psd_fobj.getvalue(),
+						"p_astro": p_astro
+					}
+				)
+				del psd_fobj
+
+			# upload events
+			if not self.delay_uploads:
 				for attempt in range(1, self.retries + 1):
 					try:
 						resp = self.gracedb_client.createEvent(self.group, self.pipeline, filename, filecontents = message.getvalue(), search = self.search)
 					except gracedb.rest.HTTPError as resp:
-						pass
+						print resp
 					else:
 						resp_json = resp.json()
 						if resp.status == httplib.CREATED:
 							if self.verbose:
 								print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
 							gracedb_ids.append(resp_json["graceid"])
-							p_astro = get_p_astro_func(coinc_event.likelihood, last_coincs.sngl_inspirals(coinc_event.coinc_event_id)[0].mass1, last_coincs.sngl_inspirals(coinc_event.coinc_event_id)[0].mass2, coinc_inspiral_index[coinc_event.coinc_event_id].snr, coinc_inspiral_index[coinc_event.coinc_event_id].combined_far)
 							self.__upload_aux_data("GstLAL internally computed p-astro", "p_astro.json", "p_astro", p_astro, [gracedb_ids[-1]])
 							try:
 								resp = self.gracedb_client.writeLabel(gracedb_ids[-1], 'PASTRO_READY')
 							except gracedb.rest.HTTPError as resp:
 								print >> sys.stderr, resp
 							break
-					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d: %d: %s"  % (filename, attempt, self.retries, resp.status, httplib.responses.get(resp.status, "Unknown"))
+					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d" % (filename, attempt, self.retries)
 					print >>sys.stderr, resp_json
 					time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 				else:
 					print >>sys.stderr, "gracedb upload of %s failed" % filename
-			else:
-				with open(filename, "w") as f:
-					f.write(message.getvalue())
+
+			# save event to disk
 			message.close()
 			try:
 				os.mkdir("gracedb_uploads")
@@ -860,8 +901,9 @@ class GracedBWrapper(object):
 		# upload PSDs and ranking statistic data
 		#
 
-		if self.upload_auxiliary_data and len(gracedb_ids) > 0:
+		if not self.delay_uploads and self.upload_auxiliary_data and len(gracedb_ids) > 0:
 			self.__upload_aux_xmldoc("strain spectral densities", "psd.xml.gz", "psd", lalseries.make_psd_xmldoc(psddict), gracedb_ids)
+			self.__upload_aux_xmldoc("ranking statistic PDFs", "ranking_data.xml.gz", "ranking_statistic", rankingstat_xmldoc_func(), gracedb_ids)
 
 		#
 		# done

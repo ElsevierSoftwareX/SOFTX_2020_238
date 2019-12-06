@@ -191,7 +191,7 @@ def parse_command_line():
 	parser.add_option("--shift", metavar = "ns", help = "Number of nanoseconds to delay (negative) or advance (positive) the time stream", type = "int")
 	parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz, max 16384 Hz")
 	parser.add_option("--whiten-reference-psd", metavar = "name", help = "Set the name of psd xml file to whiten the data with")
-	parser.add_option("--whiten-track-psd", action = "store_true", help = "Calculate PSD from input data and track with time.  Always enabled if --whiten-reference-psd is not given.")
+	parser.add_option("--whiten-track-psd", action = "store_true", help = "Whiten the data by tracking PSD changes, can be combined with --whiten-reference-psd to seed the process.")
 	parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to color the data with")
 	parser.add_option("--output-path", metavar = "name", default = ".", help = "Path to output frame files (default = \".\").")
 	parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
@@ -212,8 +212,6 @@ def parse_command_line():
 	if options.frame_type is None:
 		raise ValueError("--frame-type is required")
 
-	if options.whiten_reference_psd is None:
-		options.whiten_track_psd = True
 
 	return options, filenames
 
@@ -295,6 +293,9 @@ if options.color_psd:
 
 	# Truncate to requested output sample rate, if it is higher than the psd provides an assert will fail later
 	rpsd_data = numpy.array(rpsd.data.data[:max_sample])
+	if len(rpsd_data) < max_sample: # FIXME this is off by one sample, but shouldn't be.
+		rpsd_data = numpy.append(rpsd_data, numpy.zeros(max_sample - len(rpsd_data)))
+
 	rpsd = lal.CreateCOMPLEX16FrequencySeries(name = rpsd.name, epoch = rpsd.epoch, f0 = rpsd.f0, deltaF = rpsd.deltaF, length = max_sample, sampleUnits = rpsd.sampleUnits)
 	rpsd.data.data = rpsd_data
 	

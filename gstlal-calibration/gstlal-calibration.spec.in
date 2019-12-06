@@ -20,7 +20,7 @@ Requires: scipy
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 
-BuildRequires: pkgconfig >= 0.18.0
+BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
 BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
 BuildRequires: fftw-devel >= 3

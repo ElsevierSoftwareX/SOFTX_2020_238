@@ -14,6 +14,7 @@ parser.add_argument("--m2", action = "append", help = "provide the num:start:sto
 parser.add_argument("--chi-eff", action = "append", help = "provide the num:start:stop parameters for chi effective, e.g., 11:-1:1")
 parser.add_argument("--accounting-group", help = "set accounting group")
 parser.add_argument("--accounting-group-user", help = "set accounting group user")
+parser.add_argument("--condor-command", action = "append", help = "set condor commands of the form command=value, can be given multiple times")
 
 args = parser.parse_args()
 
@@ -24,19 +25,25 @@ except:
 
 dag = dagparts.DAG("ac_counts")
 
-acJob = dagparts.DAGJob("gstlal_inspiral_activation_counts", condor_commands = {"accounting_group": args.accounting_group, "accounting_group_user": args.accounting_group_user})
+condor_opts = {
+	"accounting_group": args.accounting_group,
+	"accounting_group_user": args.accounting_group_user,
+	"want_graceful_removal": "True",
+	"kill_sig": "15"
+}
+condor_commands = dagparts.condor_command_dict_from_opts(args.condor_command, condor_opts)
+acJob = dagparts.DAGJob("gstlal_inspiral_activation_counts", condor_commands = condor_commands)
 
-for bin, line in enumerate(open(args.svd_cache)):
+for bin_id, line in enumerate(open(args.svd_cache)):
 	dagparts.DAGNode(acJob,
 		dag,
 		parent_nodes = [],
 		opts = {"m1": args.m1, "m2": args.m2, "chi-eff":args.chi_eff, "name":args.name},
 		input_files = {"psd-xml-file": args.psd_xml_file, "svd-file": CacheEntry(line).path},
-		output_files = {"output": "%04d-COUNTS.txt" % bin}
+		output_files = {"output": "%04d-COUNTS.txt" % bin_id}
 		)
 
 dag.write_sub_files()
 dag.write_dag()
 dag.write_script()
 dag.write_cache()
-

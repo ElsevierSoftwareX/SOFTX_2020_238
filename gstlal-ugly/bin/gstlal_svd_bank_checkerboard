@@ -105,14 +105,13 @@ for bank_file in options.svd_files:
 			del bank.sngl_inspiral_table[0::2]
 		else:
 			del bank.sngl_inspiral_table[1::2]
+
 	# Set output path
-	if options.even:
-		out_path = options.outdir+"/even/"
-	else:
-		out_path = options.outdir+"/odd/"
+	out_path = options.outdir
+
 	# Check output path exists
 	if not os.path.isdir(out_path):
 		os.mkdir(out_path)
+
 	# Write out checkerboard SVD bank
 	svd_bank.write_bank(out_path+bank_file.split('/')[-1], banks, cliplefts = [0]*len(banks), cliprights = [0]*len(banks), verbose = options.verbose)
-

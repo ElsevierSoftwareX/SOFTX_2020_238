@@ -35,6 +35,7 @@ import socket
 import sys
 import threading
 import time
+import warnings
 
 
 from . import bottle
@@ -111,34 +112,43 @@ class HTTPServers(list):
 	bottle_app should be a Bottle instance.  If bottle_app is None (the
 	default) then the current default Bottle application is used.
 	"""
-	def __init__(self, port = 0, bottle_app = None, service_name = "www", service_domain = None, service_properties = None, verbose = False):
+	def __init__(self, port = 0, bottle_app = None, service_name = "www", service_domain = None, service_properties = None, verbose = False, service_discovery = True):
 		if bottle_app is None:
 			bottle_app = bottle.default_app()
 		self.verbose = verbose
-		self.service_publisher = servicediscovery.Publisher().__enter__()
+		self.service_discovery = service_discovery
+		if self.service_discovery:
+			self.service_publisher = servicediscovery.Publisher().__enter__()
+		else:
+			warnings.warn("disabling service discovery, this web server won't be able to advertise the location of the services it provides.")
 		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
 			httpd = HTTPDServer(host, port, bottle_app, verbose = verbose).__enter__()
 			if verbose:
 				print >>sys.stderr, "advertising http server \"%s\" on http://%s:%d ..." % (service_name, httpd.host, httpd.port),
-			service = self.service_publisher.add_service(
-				sname = service_name,
-				sdomain = service_domain,
-				port = httpd.port,
-				properties = service_properties,
-				commit = False
-			)
+			if self.service_discovery:
+				service = self.service_publisher.add_service(
+					sname = service_name,
+					sdomain = service_domain,
+					port = httpd.port,
+					properties = service_properties,
+					commit = False
+				)
+			else:
+				service = None
 			if verbose:
-				print >>sys.stderr, "done (%s)" % ".".join((service.sname, service.sdomain))
+				print >>sys.stderr, "done (%s)" % (".".join((service.sname, service.sdomain)) if service else "")
 			self.append((httpd, service))
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
-		self.service_publisher.commit()
+		if self.service_discovery:
+			self.service_publisher.commit()
 
 	def __del__(self):
 		if self.verbose:
 			print >>sys.stderr, "de-advertising http server(s) ...",
 		try:
-			self.service_publisher.__exit__(None, None, None)
+			if self.service_discovery:
+				self.service_publisher.__exit__(None, None, None)
 		except Exception as e:
 			if self.verbose:
 				print >>sys.stderr, "failed: %s" % str(e)

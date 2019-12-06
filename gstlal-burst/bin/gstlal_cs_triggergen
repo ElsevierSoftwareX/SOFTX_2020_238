@@ -31,6 +31,8 @@ from ligo.lw import utils as ligolw_utils
 import lal
 from lal import series
 from lal import LIGOTimeGPS
+from lalburst import CoincBurstTable
+from lalburst import stringutils
 import lalsimulation
 
 
@@ -50,8 +52,9 @@ def parse_command_line():
 
 	parser.add_option("--sample-rate", metavar = "rate", type = "float", help = "Desired sample rate (Hz).")
 	parser.add_option("--frame-cache", metavar = "filename", help = "Frame cache file to load as input data.")
-	parser.add_option("--reference-psd", metavar = "filename", help = "Reference psd files as input to obtain the template and SNR. Can be given for multiple detectors, but must be in one file. If None, the PSD will be measured on the fly, but there will be some burn-in time where the data will not be analyzed until the PSD converges.")
-	parser.add_option("--output", metavar = "filename", help = "Name of output xml file.")
+	parser.add_option("--reference-psd", metavar = "filename", help = "Reference psd files as input to obtain the template and SNR. Can be given for multiple detectors, but must be in one file. If not given, the PSD will be measured on the fly, which can prevent loss of sensitivity for not using the most recent PSD. However, there will be some burn-in time where the data will not be analyzed until the PSD converges.")
+	parser.add_option("--output", metavar = "filename", help = "Name of output xml file to record candidate events.")
+	parser.add_option("--rankingstat-output", metavar = "filename", help = "Name of output xml file to record rankingstat objects.")
 	parser.add_option("--segments-file", metavar = "filename", help = "Set the name of the LIGO Light-Weight XML file with segment lists that are science mode, for the trigger generator to enable gating.  See also --segments-name.")
 	parser.add_option("--segments-name", metavar = "name", help = "Set the name of the segment lists to retrieve from the segments file.  See also --segments-file.")
 	parser.add_option("--vetoes-file", metavar = "filename", help = "Set the name of the LIGO Light-Weight XML file with segment lists that are vetoed, for the trigger generator to enable gating.  See also --vetoes-name.")
@@ -65,12 +68,12 @@ def parse_command_line():
 	parser.add_option("--threshold", metavar = "snr_threshold", type = "float", help = "SNR threshold.")
 	parser.add_option("--cluster-events", metavar = "cluster_events", type = "float", help = "Cluster events with input timescale (in seconds).")
 	parser.add_option("--user-tag", metavar = "user_tag", type = "string", help = "User tag set in the search summary and process tables")
-	parser.add_option("--deltat", metavar = "deltat", type = "float", default = 0.008, help = "Maximum time difference in seconds for coincidence, excluding the light-travel time between the detectors. Default: 0.008")
+	parser.add_option("--delta-t", metavar = "delta_t", type = "float", default = 0.008, help = "Maximum time difference in seconds for coincidence, excluding the light-travel time between the detectors. Default: 0.008")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 
 	options, filenames = parser.parse_args()
 
-	required_options = ["sample_rate", "frame_cache", "output", "time_slide_file", "channel", "template_bank", "gps_start_time", "gps_end_time", "threshold", "cluster_events"]
+	required_options = ["sample_rate", "frame_cache", "output", "rankingstat_output", "time_slide_file", "channel", "template_bank", "gps_start_time", "gps_end_time", "threshold", "cluster_events"]
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError("missing required options %s" % ", ".join(sorted("--%s" % option.replace("_", "-") for option in missing_options)))
@@ -96,22 +99,25 @@ options, filenames = parse_command_line()
 #
 
 class PipelineHandler(simplehandler.Handler):
-	def __init__(self, mainloop, pipeline, xmldoc, template_banks, sngl_burst, analyzed_seglistdict, reference_psds, whitens, firbanks, triggergens):
+	def __init__(self, mainloop, pipeline, rankingstat, xmldoc, template_banks, sngl_burst, reference_psds, whitens, firbanks, triggergens, is_noninjections):
 		simplehandler.Handler.__init__(self, mainloop, pipeline)
 		self.lock = threading.Lock()
+		self.rankingstat = rankingstat
 		self.template_bank = template_banks
 		self.sngl_burst = sngl_burst
-		self.analyzed_seglistdict = analyzed_seglistdict
 		self.whitens = whitens
 		self.firbank = firbanks
 		self.triggergen = triggergens
+		self.is_noninjections = is_noninjections
 		# template normalization. use central_freq to uniquely identify templates
-		self.sigma = dict((row.central_freq, 0.0) for row in template_banks[template_banks.keys()[0]])
+		self.sigma = {ifo: dict((row.central_freq, 0.0) for row in template_banks[ifo]) for ifo in template_banks.keys()}
+		# horizon distance
+		self.horizon_distance = None
 		# for PSD
 		self.update_psd = dict.fromkeys(triggergens, 0)
 		self.reference_psd = reference_psds
 		# create a StreamBurca instance, initialized with the XML document and the coincidence parameters
-		self.streamburca = streamburca.StreamBurca(xmldoc, process.process_id, options.deltat, min_instruments = 2, verbose = options.verbose)
+		self.streamburca = streamburca.StreamBurca(xmldoc, process.process_id, options.delta_t, min_instruments = 2, verbose = options.verbose)
 
 
 	def appsink_new_buffer(self, elem):
@@ -127,37 +133,38 @@ class PipelineHandler(simplehandler.Handler):
 				memory.unmap(mapinfo)
 			# get ifo from the appsink name property
 			instrument = elem.get_property("name")
+			# calculalte event amplitude using sigma
+			for event in events:
+				event.process_id = process.process_id
+				event.event_id = self.sngl_burst.get_next_id()
+				event.amplitude = event.snr / self.sigma[instrument][event.central_freq]
 			# extract segment.  move the segment's upper
 			# boundary to include all triggers.
 			buf_timestamp = LIGOTimeGPS(0, buf.pts)
 			if buf.mini_object.flags & Gst.BufferFlags.GAP:
-				buf_seg = None
 				# sanity check that gap buffers are empty
 				assert not events
+				# the horizon distance is zero at this timestamp
+				#self.record_horizon_distance(instrument, float(buf_timestamp), 0.0)
 			else:
-				buf_seg = {instrument: segments.segmentlist([segments.segment(buf_timestamp, max(buf_timestamp + LIGOTimeGPS(0, buf.duration), max(event.peak for event in events if event.ifo == instrument) if events else 0.0))])}
-			# obtain union of this segment and the previously added segments
-			self.analyzed_seglistdict |= buf_seg
+				# the horizon distance is non-zero at this timestamp
+				#self.record_horizon_distance(instrument, float(timestamp), self.horizon_distance)
+				# update trigger rate and livetime
+				buf_seg = segments.segment(buf_timestamp, max(buf_timestamp + LIGOTimeGPS(0, buf.duration), max(event.peak for event in events if event.ifo == instrument) if events else 0.0))
+				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(buf_seg, len(events))
 			# put info of each event in the sngl burst table
 			if options.verbose:
 				print >> sys.stderr, "at", buf_timestamp, "got", len(events), "in", set([event.ifo for event in events])
-			for event in events:
-				event.process_id = process.process_id
-				event.event_id = self.sngl_burst.get_next_id()
-				event.amplitude = event.snr / self.sigma[event.central_freq]
 			# push the single detector triggers into the StreamBurca instance
 			# the push method returns True if the coincidence engine has new results. in that case, call the pull() method to run the coincidence engine.
 			if events:
 				if self.streamburca.push(instrument, events, buf_timestamp):
-					self.streamburca.pull()
+					self.streamburca.pull(self.rankingstat, self.rankingstat.denominator.triggerrates.segmentlistdict(), noninjections = self.is_noninjections)
 
 	def flush(self):
 		with self.lock:
-			# dump segmentlistdict to segment table
-			with ligolw_segments.LigolwSegments(xmldoc, process) as llwsegment:
-				llwsegment.insert_from_segmentlistdict(self.analyzed_seglistdict, name = u"StringSearch", comment="triggergen")
 			# leftover triggers
-			self.streamburca.pull(flush = True)
+			self.streamburca.pull(self.rankingstat, self.rankingstat.denominator.triggerrates.segmentlistdict(), noninjections = self.is_noninjections, flush = True)
 
 	def update_templates(self, instrument, psd):
 		template_t = [None] * len(self.template_bank[instrument])
@@ -186,9 +193,11 @@ class PipelineHandler(simplehandler.Handler):
 			template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd)
 			# Obtain the normalization for getting the amplitude of signal from SNR
 			# Integrate over frequency range covered by template. Note that template_f is already whitened.
+			# FIXME the psd used here is overestimated for Virgo at lower frequencies,
+			# thus result in underestimating the amplitude for Virgo triggers
 			sigmasq = 0.0
 			sigmasq = numpy.trapz(4.0 * template_f.data.data**2, dx = psd.deltaF)
-			self.sigma[row.central_freq] = numpy.sqrt(sigmasq.real)
+			self.sigma[instrument][row.central_freq] = numpy.sqrt(sigmasq.real)
 			# obtain autocorr time series by squaring template and inverse FFT it
 			template_f_squared = lal.CreateCOMPLEX16FrequencySeries("whitened template_freq squared", LIGOTimeGPS(epoch), psd.f0, 1.0/duration, lal.Unit("strain s"), length // 2 + 1)
 			autocorr_t = lal.CreateREAL8TimeSeries("autocorr_time", LIGOTimeGPS(epoch), psd.f0, 1.0 / options.sample_rate, lal.Unit("strain"), length)
@@ -239,6 +248,7 @@ class PipelineHandler(simplehandler.Handler):
 				timestamp = psd.epoch
 			else:
 				psd = self.reference_psd[instrument]
+				timestamp = psd.epoch
 				deltaf = self.whitens[instrument].get_property("delta-f")
 				psd_interp = reference_psd.interpolate_psd(psd, deltaf)
 				self.whitens[instrument].set_property("psd-mode", 1)
@@ -246,10 +256,11 @@ class PipelineHandler(simplehandler.Handler):
 
 			stability = float(message.src.get_property("n-samples")) / message.src.get_property("average-samples")
 
-			# the logic should be neater here, but this is hoped to be temporary until we wipe out everything when finishing transition to offline way
+			# the logic should be neater here, but this is hoped to be temporary
+			# until we wipe out everything when finishing transition to offline way
 			if stability > 0.3 or self.reference_psd is not None:
 				if self.update_psd[instrument] != 0:
-					# do nothing, just decrease the counter
+					# don't update the PSD, just decrease the counter
 					self.update_psd[instrument] -= 1
 				else:
 					# PSD counter reached zero
@@ -262,6 +273,23 @@ class PipelineHandler(simplehandler.Handler):
 					else:
 						self.update_psd[instrument] = -1
 					self.update_templates(instrument, psd)
+				# record horizon distance for this timestamp.
+				# If the signal is h(f) = A f^(-4/3) (f_l < f < f_h),
+				# SNR is proportional to A and sigma (template norm. factor).
+				# (See Siemens+ 06, PRD, 73, 105001 for details.)
+				# Horizon distance is defined as mean distance where a signal
+				# of fixed amplitude (e.g. 1.4-1.4 BNS) can be seen with SNR 8.
+				# Thus the horizon distance is inversely proportional to the
+				# template normalization parameter sigma.
+				# The normalization of the horizon distance can be arbitrary
+				# since only the relative difference of sensitivity (PSD) at
+				# different times/detectors is important (probably).
+				# Since sigma is order 10^(19-20), we use sigma for the template
+				# with the highest high-f cutoff, and define the horizon distance
+				# to be sigma/10^(19) Mpc. This definition should be consistent in
+				# other places where this quantity is used.
+				self.horizon_distance = self.sigma[instrument][max(self.sigma[instrument].keys())]/1.e19
+				assert not (math.isnan(self.horizon_distance) or math.isinf(self.horizon_distance))
 			else:
 				# Burn-in period. Use templates with all zeros so that we won't get any triggers.
 				if options.verbose:
@@ -275,6 +303,9 @@ class PipelineHandler(simplehandler.Handler):
 				self.firbank[instrument].set_property("latency", (len(template[0]) - 1) // 2)
 				self.firbank[instrument].set_property("fir_matrix", template)
 				self.triggergen[instrument].set_property("autocorrelation_matrix", autocorr)
+				# Since the whitener's average is not satisfactorily converged,
+				# claim horizon distance to be zero.
+				self.horizon_distance = 0.
 			return True
 		return False
 
@@ -323,7 +354,8 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 
 if options.segments_file is not None:
 	seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segments_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
-	assert seglists.keys() == all_ifos, 'ifo masmatch between segments and channels'
+	# seglist contains all the ifos that participate in the whole search.
+	assert set(all_ifos).issubset(set(seglists.keys())), 'unknown ifo given'
 	for ifo in all_ifos:
 		seglists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
 
@@ -334,7 +366,7 @@ if options.segments_file is not None:
 
 if options.vetoes_file is not None:
 	vetolists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.vetoes_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.vetoes_name).coalesce()
-	assert vetolists.keys() == all_ifos, 'ifo masmatch between segments and channels'
+	assert set(all_ifos).issubset(set(vetolists.keys())), 'unknown ifo given'
 	for ifo in all_ifos:
 		vetolists[ifo] &= segments.segmentlist([segments.segment(LIGOTimeGPS(options.gps_start_time), LIGOTimeGPS(options.gps_end_time))])
 
@@ -346,12 +378,22 @@ if options.vetoes_file is not None:
 
 template_file = dict.fromkeys(all_ifos, None)
 template_bank_table = dict.fromkeys(all_ifos, None)
+template_ids = []
 
 for filename in options.template_bank:
 	xmldoc = ligolw_utils.load_filename(filename, contenthandler = LIGOLWContentHandler, verbose = options.verbose)
 	table = lsctables.SnglBurstTable.get_table(xmldoc)
 	template_bank_table[table[0].ifo] = table
 	template_file[table[0].ifo] = filename
+	# Obtain template_ids. We use the cutoff frequency as an ID.
+	# FIXME we assume that the same template bank is used for all detectors,
+	# and we check that here. This was true in past searches, but might not be
+	# if we e.g. rigorously threshold on overlaps between "whitened" templates.
+	these_template_ids = [row.central_freq for row in table]
+	# this always passes for the first file, and only passes for the
+	# subsequent files if the template banks exactly match.
+	assert len(template_ids)==0 or template_ids == these_template_ids, "mismatch in template bank between instruments"
+	template_ids = these_template_ids
 
 
 #
@@ -364,35 +406,28 @@ process = ligolw_process.register_to_xmldoc(xmldoc, "StringSearch", options.__di
 
 
 #
-# append search_summary table
+# also for putting rankingstat objects
 #
 
-search_summary_table = lsctables.New(lsctables.SearchSummaryTable, ["process:process_id", "comment", "ifos", "in_start_time", "in_start_time_ns", "in_end_time", "in_end_time_ns", "out_start_time", "out_start_time_ns", "out_end_time", "out_end_time_ns", "nevents", "nnodes"])
-xmldoc.childNodes[-1].appendChild(search_summary_table)
-search_summary = lsctables.SearchSummary()
-search_summary.process_id = process.process_id
-if options.user_tag:
-	search_summary.comment = options.user_tag
-else:
-	search_summary.comment = "None"
-search_summary.ifos = ",".join(all_ifos)
-search_summary.out_start = search_summary.in_start = LIGOTimeGPS(options.gps_start_time)
-search_summary.out_end = search_summary.in_end = LIGOTimeGPS(options.gps_end_time)
-search_summary.nnodes = 1
-search_summary.nevents = 0
-search_summary_table.append(search_summary)
+xmldoc_rankingstat = ligolw.Document()
+xmldoc_rankingstat.appendChild(ligolw.LIGO_LW())
+process_rankingstat = ligolw_process.register_to_xmldoc(xmldoc_rankingstat, "lalapps_string_meas_likelihood", options.__dict__)
 
 
 #
 # append the injection file and time slide file (ligolw_add job in previous pipeline)
 # the injection file already has a time slide table in it.
-# FIXME we can require NOT to have time-slide file as argument when injection-file is given.
 #
 
 if options.injection_file is not None:
+	# FIXME as a sanity check we can require in the dag generator script to NOT
+	# have time-slide file as argument when injection-file is given.
+	del options.time_slide_file
 	xmldoc = ligolw_add.ligolw_add(xmldoc, [options.injection_file], contenthandler = LIGOLWContentHandler, verbose = options.verbose)
+	is_noninjections = False
 else:
 	xmldoc = ligolw_add.ligolw_add(xmldoc, [options.time_slide_file], contenthandler = LIGOLWContentHandler, verbose = options.verbose)
+	is_noninjections = True
 
 time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
 
@@ -403,14 +438,6 @@ time_slide_table = lsctables.TimeSlideTable.get_table(xmldoc)
 
 sngl_burst_table = lsctables.New(lsctables.SnglBurstTable, ["process:process_id", "event_id","ifo","search","channel","start_time","start_time_ns","peak_time","peak_time_ns","duration","central_freq","bandwidth","amplitude","snr","confidence","chisq","chisq_dof"])
 xmldoc.childNodes[-1].appendChild(sngl_burst_table)
-
-
-#
-# construct dictionary of segment lists that were analyzed
-# (i.e. which contributes to the live time)
-#
-
-analyzed_seglistdict = segments.segmentlistdict()
 
 
 #
@@ -460,6 +487,9 @@ for ifo in all_ifos:
 	#
 
 	head = whiten[ifo] = pipeparts.mkwhiten(pipeline, head, fft_length = 8, name = "lal_whiten_%s" % ifo)
+	# high-pass filter with Hann window to suppress low-frequency artifacts in
+	# Virgo detector data
+	head = pipeparts.mkgeneric(pipeline, head, "audiowsincband", length = options.sample_rate + 1, lower_frequency = 1e1, upper_frequency = 1e4, window = 4)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkresample(pipeline, head)
 	# FIXME NO hardcoding original sample rate!
@@ -482,10 +512,19 @@ for ifo in all_ifos:
 
 
 #
+# Load/Initialize ranking statistic data.
+# instruments must be ones that appear in the whole search,
+# so that we can combine the rankingstat objects later on.
+#
+
+rankingstat = stringutils.RankingStat(instruments = seglists.keys(), delta_t = options.delta_t, snr_threshold = options.threshold, min_instruments = 2)
+
+
+#
 # handler
 #
 
-handler = PipelineHandler(mainloop, pipeline, xmldoc, template_bank_table, sngl_burst_table, analyzed_seglistdict, psd, whiten, firbank, triggergen)
+handler = PipelineHandler(mainloop, pipeline, rankingstat, xmldoc, template_bank_table, sngl_burst_table, psd, whiten, firbank, triggergen, is_noninjections)
 
 
 #
@@ -520,10 +559,9 @@ mainloop.run()
 handler.flush()
 
 
-#
-# obtain nevents from the coinc event table, and write output to disk
-# FIXME vetoes table also needs to be dumped here with ligolw_add
-#
-
-search_summary.nevents = len(lsctables.CoincTable.get_table(xmldoc))
+# write triggers & coinc events to XML file
 ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)
+
+# also write rankingstat object to an XML file
+xmldoc_rankingstat.childNodes[-1].appendChild(rankingstat.to_xml())
+ligolw_utils.write_filename(xmldoc_rankingstat, options.rankingstat_output, gz = (options.rankingstat_output or "stdout").endswith(".gz"), verbose = options.verbose)

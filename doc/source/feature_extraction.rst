@@ -3,26 +3,36 @@
 Feature Extraction
 ====================================================================================================
 
-The `fxtools` module and related feature-based executables contain relevant libraries to identify
-glitches in low-latency using auxiliary channel data.
+SNAX (Signal-based Noise Acquisition and eXtraction), the `snax` module and related SNAX executables
+contain relevant libraries to identify glitches in low-latency using auxiliary channel data.
 
-`gstlal_feature_extractor` functions as a modeled search for data quality by applying matched filtering
+SNAX functions as a modeled search for data quality by applying matched filtering
 on auxiliary channel timeseries using waveforms that model a large number of glitch classes. Its primary
 purpose is to whiten incoming auxiliary channels and extract relevant features in low-latency.
 
-There are two different modes of output `gstlal_feature_extractor` can function in:
+.. _feature_extraction-intro:
 
-  1. **Timeseries:** Production of regularly-spaced feature rows, containing the SNR, waveform parameters,
-                     and the time of the loudest event in a sampling time interval.
-  2. **ETG:** This produces output that resembles that of a traditional event trigger generator (ETG), in
-              which only feature rows above an SNR threshold will be produced.
+Introduction
+------------
+
+There are two different modes of feature generation:
+
+  1. **Timeseries:**
+
+     Production of regularly-spaced feature rows, containing the SNR, waveform parameters,
+     and the time of the loudest event in a sampling time interval.
+
+  2. **ETG:**
+
+     This produces output that resembles that of a traditional event trigger generator (ETG), in
+     which only feature rows above an SNR threshold will be produced.
 
 One useful feature in using a matched filter approach to detect glitches is the ability to switch between
-different glitch templates or generate a heterogeneous bank of templates.. Currently, there are Sine-Gaussian
-and half-Sine-Gaussian waveforms implemented for use in detecting glitches, but the feature extractor was
-designed to be fairly modular and so it isn't difficult to design and add new waveforms for use.
+different glitch templates or generate a heterogeneous bank of templates. Currently, there are Sine-Gaussian,
+half-Sine-Gaussian, and tapered Sine-Gaussian waveforms implemented for use in detecting glitches, but the feature
+extractor is designed to be fairly modular and so it isn't difficult to design and add new waveforms for use.
 
-Since the GstLAL feature extractor uses time-domain convolution to matched filter auxiliary channel timeseries
+Since SNAX uses time-domain convolution to matched filter auxiliary channel timeseries
 with glitch waveforms, this allows latencies to be much lower than in traditional ETGs. The latency upon writing
 features to disk are O(5 s) in the current layout when using waveforms where the peak occurs at the edge of the
 template (zero-latency templates). Otherwise, there is extra latency incurred due to the non-causal nature of
@@ -32,7 +42,7 @@ the waveform itself.
 
     digraph llpipe {
      labeljust = "r";
-     label="gstlal_feature_extractor"
+     label="gstlal_snax_extract"
      rankdir=LR;
      graph [fontname="Roman", fontsize=24];
      edge [ fontname="Roman", fontsize=10 ];
@@ -128,17 +138,19 @@ the waveform itself.
 
     }
 
+.. _feature_extraction-highlights:
 
-**Highlights:**
+Highlights
+----------
 
-* Launch feature extractor jobs in online or offline mode:
+* Launch SNAX jobs in online or offline mode:
 
   * Online: Using /shm or framexmit protocol
   * Offline: Read frames off disk
 
 * Online/Offline DAGs available for launching jobs.
 
-  * Offline DAG parallelizes by time, channels are processed sequentially by subsets to reduce I/O concurrency issues. There are options to allow flexibility in choosing this, however.
+  * Offline DAG parallelizes by time, channels are processed sequentially by subsets to reduce I/O concurrency issues.
 
 * On-the-fly PSD generation (or take in a prespecified PSD)
 
@@ -161,3 +173,73 @@ the waveform itself.
   * Waveform type (currently Sine-Gaussian and half-Sine-Gaussian only)
   * Specify parameter ranges (frequency, Q for Sine-Gaussian based)
   * Min mismatch between templates
+
+.. _feature_extraction-online:
+
+Online Operation
+----------------
+
+An online DAG is provided in /gstlal-burst/share/snax/Makefile.gstlal_feature_extractor_online
+in order to provide a convenient way to launch online feature extraction jobs as well as auxiliary jobs as
+needed (synchronizer/hdf5 file sinks). A condensed list of instructions for use is also provided within the Makefile itself.
+
+There are four separate modes that can be used to launch online jobs:
+
+  1. Auxiliary channel ingestion:
+
+    a. Reading from framexmit protocol (DATA_SOURCE=framexmit).
+       This mode is recommended when reading in live data from LHO/LLO.
+
+    b. Reading from shared memory (DATA_SOURCE=lvshm).
+       This mode is recommended for reading in data for O2 replay (e.g. UWM).
+
+  2. Data transfer of features:
+
+    a. Saving features directly to disk, e.g. no data transfer.
+       This will save features to disk directly from the feature extractor,
+       and saves features periodically via hdf5.
+
+    b. Transfer of features via Kafka topics.
+       This requires a Kafka/Zookeeper service to be running (can be existing LDG
+       or your own). Features get transferred via Kafka from the feature extractor,
+       parallel instances of the extractor get synchronized, and then sent downstream
+       where it can be read by other processes (e.g. iDQ). In addition, an streaming
+       hdf5 file sink is launched where it'll dump features periodically to disk.
+
+In order to start up online runs, you'll need an installation of gstlal. An installation Makefile that
+includes Kafka dependencies are located at: gstlal/gstlal-burst/share/feature_extractor/Makefile.gstlal_idq_icc
+
+To run, making sure that the correct environment is sourced:
+
+  $ make -f Makefile.gstlal_feature_extractor_online
+
+Then launch the DAG with:
+
+  $ condor_submit_dag feature_extractor_pipe.dag
+
+.. _feature_extraction-offline:
+
+Offline Operation
+-----------------
+
+An offline DAG is provided in /gstlal-burst/share/snax/Makefile.gstlal_feature_extractor_offline
+in order to provide a convenient way to launch offline feature extraction jobs. A condensed list of
+instructions for use is also provided within the Makefile itself.
+
+For general use cases, the only configuration options that need to be changed are:
+
+ * User/Accounting tags: GROUP_USER, ACCOUNTING_TAG
+ * Analysis times: START, STOP
+ * Data ingestion: IFO, CHANNEL_LIST
+ * Waveform parameters: WAVEFORM, MISMATCH, QHIGH
+
+In order to start up offline runs, you'll need an installation of gstlal. An installation Makefile that
+includes Kafka dependencies are located at: gstlal/gstlal-burst/share/feature_extractor/Makefile.gstlal_idq_icc
+
+To generate a DAG, making sure that the correct environment is sourced:
+
+  $ make -f Makefile.gstlal_feature_extractor_offline
+
+Then launch the DAG with:
+
+  $ condor_submit_dag feature_extractor_pipe.dag

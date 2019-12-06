@@ -83,9 +83,9 @@ def online_inspiral_layer(dag, jobs, options):
 	inj_job_tags = []
 
 	if options.ht_gate_threshold_linear is not None:
-		# Linear scale specified
-		template_mchirp_dict = get_svd_bank_params(options.bank_cache.values()[0], online = True)
-		mchirp_min, ht_gate_threshold_min, mchirp_max, ht_gate_threshold_max = [float(y) for x in options.ht_gate_threshold_linear.split("-") for y in x.split(":")]
+		template_mchirp_dict = get_svd_bank_params_online(options.bank_cache.values()[0])
+	else: # saves cost of reading in svd banks
+		template_mchirp_dict = None
 
 	bank_groups = list(build_bank_groups(options.bank_cache, [1], options.max_jobs - 1))
 	if len(options.likelihood_files) != len(bank_groups):
@@ -96,14 +96,7 @@ def online_inspiral_layer(dag, jobs, options):
 		job_tags.append("%04d" % num_insp_nodes)
 
 		# Calculate the appropriate ht-gate-threshold value
-		threshold_values = None
-		if options.ht_gate_threshold_linear is not None:
-			# Linear scale specified
-			# use max mchirp in a given svd bank to decide gate threshold
-			bank_mchirps = [template_mchirp_dict["%04d" % int(os.path.basename(svd_file).split("-")[1].split("_")[3])][1] for svd_file in svd_banks.items()[0][1]]
-			threshold_values = [(ht_gate_threshold_max - ht_gate_threshold_min)/(mchirp_max - mchirp_min)*(bank_mchirp - mchirp_min) + ht_gate_threshold_min for bank_mchirp in bank_mchirps]
-		elif options.ht_gate_threshold is not None:
-			threshold_values = [options.ht_gate_threshold] * len(svd_banks.items()[0][1]) # Use the ht-gate-threshold value given
+		threshold_values = get_threshold_values(template_mchirp_dict, [job_tags[-1]], [svd_bank_string], options)
 
 		# Data source dag options
 		if (options.data_source == "framexmit"):
@@ -137,6 +130,7 @@ def online_inspiral_layer(dag, jobs, options):
 			"fir-stride": options.fir_stride,
 			"data-source": options.data_source,
 			"gracedb-far-threshold": options.gracedb_far_threshold,
+			"delay-uploads": options.delay_uploads,
 			"gracedb-group": options.gracedb_group,
 			"gracedb-pipeline": options.gracedb_pipeline,
 			"gracedb-search": options.gracedb_search,
@@ -149,6 +143,10 @@ def online_inspiral_layer(dag, jobs, options):
 			"output-kafka-server": options.output_kafka_server
 		}
 		common_opts.update(datasource_opts)
+
+		# If providing an activation counts file provide it.
+		if options.activation_counts_file:
+			common_opts.update({"activation-counts-file": options.activation_counts_file})
 
 		# add ranking stat compression options, if requested
 		if options.compress_ranking_stat:
@@ -212,6 +210,21 @@ def online_inspiral_layer(dag, jobs, options):
 			)
 
 	return job_tags, inj_job_tags
+
+
+def event_upload_layer(dag, jobs, options, job_tags):
+	job_options = {
+		"kafka-server": options.output_kafka_server,
+		"gracedb-group": options.gracedb_group,
+		"gracedb-pipeline": options.gracedb_pipeline,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-service-url": options.gracedb_service_url,
+		"num-jobs": len(job_tags),
+		"input-topic": "events",
+		"rootdir": "event_uploader",
+		"verbose": "",
+	}
+	return dagparts.DAGNode(jobs['eventUploader'], dag, [], opts = job_options)
 
 
 def aggregator_layer(dag, jobs, options, job_tags):
@@ -985,7 +998,14 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 		inputs = [o[0] for o in outputs]
 
 		# (input files for next job, dist stat files, parents for next job)
-		likelihood_nodes[None, bin_key] = (inputs, marg_nodes[bin_key].output_files["output"], [marg_nodes[bin_key]])
+		if bin_key in marg_nodes:
+			likelihood_url = marg_nodes[bin_key].output_files["output"]
+			parents = [marg_nodes[bin_key]]
+		else:
+			likelihood_url = lloid_diststats[bin_key][0]
+			parents = []
+
+		likelihood_nodes[None, bin_key] = (inputs, likelihood_url, parents)
 
 	# injection jobs
 	for inj in options.injections:
@@ -1020,27 +1040,37 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 		cluster_sql_file = options.cluster_sql_file if sim_tag is None else options.injection_sql_file
 		likelihood_job = jobs['calcLikelihood'] if sim_tag is None else jobs['calcLikelihoodInj']
 
-		# cluster sub banks
-		cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = parents,
-			opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"":inputs}
-			)
+		# If we have only have 1 input file per bin, assume file is already clustered
+		# FIXME This means dags that run over a single segment O(1000)
+		# seconds will not have snr chisq clustering applied before the
+		# likelihood-ratio assignment, which also means those dags will
+		# not be able to be reranked. This is probably not a big deal,
+		# because a dag that small can quickly be rerun
+		if len(inputs) > 1:
+			# cluster sub banks
+			cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = parents,
+				opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"":inputs}
+				)
 
-		# merge sub banks
-		merge_node = dagparts.DAGNode(jobs['ligolwAdd'], dag, parent_nodes = [cluster_node],
-			input_files = {"":inputs},
-			output_files = {"output":xml}
-			)
+			# merge sub banks
+			merge_node = dagparts.DAGNode(jobs['ligolwAdd'], dag, parent_nodes = [cluster_node],
+				input_files = {"":inputs},
+				output_files = {"output":xml}
+				)
 
-		# cluster and simplify sub banks
-		cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [merge_node],
-			opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-			input_files = {"":xml}
-			)
+			# cluster and simplify sub banks
+			cluster_node = [dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [merge_node],
+				opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+				input_files = {"":xml}
+				)]
+
+		else:
+			cluster_node = []
 
 		# assign likelihoods
 		likelihood_node = dagparts.DAGNode(likelihood_job, dag,
-			parent_nodes = [cluster_node],
+			parent_nodes = cluster_node,
 			opts = {"tmp-space": dagparts.condor_scratch_space(), "force": ""},
 			input_files = {"likelihood-url":likelihood_url, "": xml}
 			)
@@ -1252,12 +1282,12 @@ def compute_far_layer(dag, jobs, margnodes, injdbs, noninjdb, final_sqlite_nodes
 		filesuffixs = ['', '_with_zerolag']
 	else:
 		filesuffixs = ['']
-	if options.marginalized_likelihood_file: ### injection-only run
+	if options.marginalized_likelihood_file:
 		assert not margnodes, "no marg nodes should be produced in an injection-only DAG"
 		margnodes = [None, None]
 
 	for margnode, margfile, filesuffix in zip(margnodes, margfiles, filesuffixs):
-		if options.marginalized_likelihood_file: ### injection-only run
+		if options.marginalized_likelihood_file:
 			parents = final_sqlite_nodes
 			marginalized_likelihood_file = margfile
 		else:
@@ -1483,16 +1513,15 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 
 def get_svd_bank_params_online(svd_bank_cache):
 	template_mchirp_dict = {}
-	for ce in [CacheEntry(f) for f in open(svd_bank_cache)]:
-		if not template_mchirp_dict.setdefault("%04d" % int(ce.description.split("_")[3]), []):
-			min_mchirp, max_mchirp = float("inf"), 0
-			xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
-			for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
-				snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
-				mchirp_column = snglinspiraltable.getColumnByName("mchirp")
-				min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
-			template_mchirp_dict["%04d" % int(ce.description.split("_")[3])] = (min_mchirp, max_mchirp)
-			xmldoc.unlink()
+	for ii, ce in enumerate([CacheEntry(f) for f in open(svd_bank_cache)]):
+		min_mchirp, max_mchirp = float("inf"), 0
+		xmldoc = ligolw_utils.load_url(ce.path, contenthandler = svd_bank.DefaultContentHandler)
+		for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
+			snglinspiraltable = lsctables.SnglInspiralTable.get_table(root)
+			mchirp_column = snglinspiraltable.getColumnByName("mchirp")
+			min_mchirp, max_mchirp = min(min_mchirp, min(mchirp_column)), max(max_mchirp, max(mchirp_column))
+		template_mchirp_dict["%04d" % ii] = (min_mchirp, max_mchirp)
+		xmldoc.unlink()
 	return template_mchirp_dict
 
 

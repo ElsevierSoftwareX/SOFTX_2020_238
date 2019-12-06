@@ -7,53 +7,44 @@ Re-calculating GraceDb gstlal candidates. This assumes you are login to LIGO-Cal
 all data (svd banks, psd ...) are availible on the gracedb and the cluster. You also need obtain certificate
 via "ligo-proxy-init" before using this option. Use --save to save the svd banks and psd to disk.
 
-Example 1:
+Example 1: Calculate SNRs for two detectors.
 $ ligo-proxy-init chiwai.chan
-$ export GSTLAL_FIR_WHITEN=0
 $ gstlal_inspiral_calc_snr \
 --gid G348519 \
 --observatory H \
 --observatory L \
 --type H1_HOFT_C00 \
 --type L1_HOFT_C00 \
+--min-instruments 2 \
+--time-slide-file tisi.xml\
 --track-psd \
---outdir . \
+--outdir outputs \
+--ranking-stat-output rankingstat.xml.gz \
+--coinc-output followup_coinc.xml.gz \
 --verbose
 
-Example 2:
-$ echo "1250471617 1250472600" >> l1segs.txt
-$ echo "1250472615 1250473617" >> l1segs.txt
-$ ligolw_segments --name framesegments --insert-from-segwizard L1=l1segs.txt --output framesegments.xml
+Example 2: Calculate SNRs for single detector.
 $ ligo-proxy-init chiwai.chan
-$ export GSTLAL_FIR_WHITEN=0
 $ gstlal_inspiral_calc_snr \
 --gid G347846 \
 --observatory L \
 --frame-segments-file framesegments.xml \
 --frame-segments-name framesegments \
+--time-slide-file tisi.xml\
+--min-instruments 1 \
 --type L1_HOFT_C00 \
 --track-psd \
---outdir . \
+--outdir outputs \
+--ranking-stat-output rankingstat.xml.gz \
+--coinc-output followup_coinc.xml.gz \
 --verbose
 
 Calculate SNR using LLOID method. You should have access to svd banks and reference psd for this option. For
-filter particular template in the svd banks, you should know the --sub-bank-id and the --row-number of the template;
-Otherwise, if only --sub-bank-id is provided, SNRs for all templates in the sub-bank will be produced. To limit the
+filter particular template in the svd banks, you should know the --bank-number and the --row-number of the template;
+Otherwise, if only --bank-number is provided, SNRs for all templates in the sub-bank will be produced. To limit the
 output size, use --start and --end to specify the range of SNR in GPS time.
 
 Example: G348519
-
-Downloaded from /home/gstlalcbc/observing/3/online/svd/new-bank/4_bns/mario/
-> H1-GSTLAL_SVD_BANK_258-0-0.xml.gz
-> L1-GSTLAL_SVD_BANK_258-0-0.xml.gz
-> V1-GSTLAL_SVD_BANK_258-0-0.xml.gz
-Downloaded from gracedb candidate event G348519
-> psd.xml.gz
-
-$ export GSTLAL_FIR_WHITEN=0
-$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory L --type L1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O L1_FRAME
-$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory H --type H1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O H1_FRAME
-$ cat *_FRAME > frame.cache
 $ gstlal_inspiral_calc_snr \
 --mode 0\
 --data-source frames \
@@ -62,71 +53,71 @@ $ gstlal_inspiral_calc_snr \
 --frame-cache frame.cache \
 --gps-start-time 1251009527 \
 --gps-end-time 1251009527 \
+--time-slide-file tisi.xml\
 --reference-psd psd.xml.gz \
 --track-psd \
---svd-bank H1:H1-GSTLAL_SVD_BANK_258-0-0.xml.gz,L1:L1-GSTLAL_SVD_BANK_258-0-0.xml.gz,V1:V1-GSTLAL_SVD_BANK_258-0-0.xml.gz \
---sub-bank-id 0 \
+--min-instruments 2 \
+--svd-bank H1:H1-GSTLAL_SVD_BANK_258-0-0.xml.gz,L1:L1-GSTLAL_SVD_BANK_258-0-0.xml.gz \
+--bank-number 0 \
 --row-number 203 \
---instrument H1 \
---instrument L1 \
 --outdir outputs \
+--ranking-stat-output rankingstat.xml.gz \
+--coinc-output followup_coinc.xml.gz \
 --start 1251010522 \
 --end 1251010532 \
 --verbose
 
-
 Calculate SNR using Finite Impulse Response. Typically, you won't use this option unless you simply want to calculate SNR for one particular
-template and you don't have access to the corresponding svd bank which contains the template. To use this option, You should have a XML file
-containing one sngl_inspiral table, the backend of generating template is through cbc_template_fir, see cbc_template_fir to see what parameters
-are necessary to generate template. To limit the output size, use --start and --end to specify the range of SNR in GPS time.
+template and you don't have access to the corresponding svd bank which contains the template. To use this option, You should have a Bank file,
+see svd_bank_snr.write_bank(). To limit the output size, use --start and --end to specify the range of SNR in GPS time.
 
 Example: G348519
-
-Downloaded from gracedb candidate event G348519
-> psd.xml.gz
-
-$ export GSTLAL_FIR_WHITEN=0
-$ cp /home/ryan.magee/observing/3/psds/190509/cleaned/H1L1V1psd_new.xml.gz .
-$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory L --type L1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O L1_FRAME
-$ python -m gwdatafind --server "datafind.ligo.org:443" --observatory H --type H1_HOFT_C00 --gps-start 1251009527 --gps-end 1251011527 --lal-cache -O H1_FRAME
-$ cat *_FRAME > frame.cache
-$ python
->> from gstlal import svd_bank_snr
->> svd_bank_snr.FIR_SNR.make_simplified_sngl_inspiral_table(30.383705, 12.924967, 0, 0, -0.24138632, 0, 0, 0.6948265)
 $ gstlal_inspiral_calc_snr \
 --mode 1\
 --data-source "frames" \
 --channel-name H1=GDS-CALIB_STRAIN \
 --channel-name L1=GDS-CALIB_STRAIN \
 --frame-cache frame.cache \
+--time-slide-file tisi.xml\
 --gps-start-time 1251009527 \
 --gps-end-time 1251011527 \
---reference-psd ./psd.xml.gz \
+--reference-psd psd.xml.gz \
 --track-psd \
---table template.xml.gz \
---approximant SEOBNRv4_ROM \
---sample-rate 2048 \
---template-psd ./H1L1V1psd_new.xml.gz \
---f-low 15 \
---instrument H1 \
---instrument L1 \
+--min-instruments 2 \
+--bank H1:H1_templates.xml.gz,L1:L1_templates.xml.gz \
+--outdir outputs \
+--ranking-stat-output rankingstat.xml.gz \
+--coinc-output followup_coinc.xml.gz \
 --start 1251010522 \
 --end 1251010532 \
---outdir ./outputs \
-
+--verbose
 """
-import numpy
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 import os
+import sys
+import time
 
 from gstlal import datasource
+from gstlal import far
 from gstlal import inspiral
+from gstlal import lloidparts
+from gstlal import multirate_datasource
+from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import reference_psd
 from gstlal import svd_bank
 from gstlal import svd_bank_snr
+from gstlal.stats.inspiral_lr import LnLRDensity
+
+import gi
+gi.require_version('Gst', '1.0')
+gi.require_version('GstAudio', '1.0')
+from gi.repository import GObject, Gst, GstAudio
+GObject.threads_init()
+Gst.init(None)
 
 import lal
+from lal import UTCToGPS
 import lal.series
 
 from ligo.lw import ligolw
@@ -143,23 +134,18 @@ from ligo.lw.utils import segments as ligolw_segments
 class ContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
+
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
+
 
 # disable mkchecktimestamps()
 # FIXME:  python plugin broken until we switch to Python 3
 pipeparts.mkchecktimestamps = lambda pipeline, src, *args: src
 
-class epilogFormatter(IndentedHelpFormatter):
-	def format_epilog(self, epilog):
-		if epilog:
-			return epilog + "\n"
-		else:
-			return ""
-
 def parse_command_line():
-	parser = OptionParser(formatter = epilogFormatter(), description = "Using gstlal inspiral pipeline to calculate SNR for template(s)", epilog = __doc__)
+	parser = OptionParser(description = "Using gstlal inspiral pipeline to calculate SNR for template(s)")
 
 	datasource.append_options(parser)
 
@@ -172,17 +158,12 @@ def parse_command_line():
 	group.add_option("--median-samples", default = 7, type = "int", help = "The number of samples used to estimate the median value of the PSD")
 	parser.add_option_group(group)
 
-	group = OptionGroup(parser, "Template Options", "Choose a template from a SVD bank file / a single SnglInspiral Table")
+	group = OptionGroup(parser, "Template Options", "Choose a template from a SVD bank file / a bank file (see svd_bank_snr.Bank).")
 	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments (require)." )
-	group.add_option("--coinc", metavar = "filename", help = "The coinc.xml file associated with --svd-bank. This is used to find the --sub-bank-id and --row-number for a particular event. If given, the --sub-bank-id and --row-number will be overwritten. (optional)")
-	group.add_option("--sub-bank-id", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (require).")
+	group.add_option("--coinc", metavar = "filename", help = "The coinc.xml file associated with --svd-bank. This is used to find the --bank-number and --row-number for a particular event. If given, the --bank-number and --row-number will be overwritten. (optional)")
+	group.add_option("--bank-number", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (require).")
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
-	group.add_option("--table", metavar = "filename", help = "A LIGO light-weight xml.gz file containing SnglInspiral Table. Expecting one template only.")
-	group.add_option("--approximant", metavar = "name", type = "str", help = "Name of the Waveform model (require).")
-	group.add_option("--sample-rate", metavar = "Hz", default = 2048, type = "int", help = "Sampling rate of the template and SNR for mode 1")
-	group.add_option("--f-low", metavar = "Hz", default = 10, type = "float", help = "The minimum frequency of GW signal")
-	group.add_option("--f-high", metavar = "Hz", type = "float", help = "The maximum frequency of GW signal")
-	group.add_option("--template-psd", metavar = "filename", help = "The psd for whitening template (require).")
+	group.add_option("--bank", metavar = "filename", help = "LIGO light-weight xml.gz file(s) containing only one template. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3. Expecting one template only for each file (require).")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")
@@ -195,30 +176,39 @@ def parse_command_line():
 	group.add_option("--gid", metavar = "gracedb event id", type = "str", help = "The gracedb event id.")
 	group.add_option("--observatory", metavar = "OBS", type = "str", action = "append", help = "Name of the observatory (H,L,V ...), also see gwdatafind.")
 	group.add_option("--type", metavar = "frame type", type = "str", action = "append", help = "Name of the observatory (H,L,V ...), also see gwdatafind.")
-	group.add_option("--time-span", metavar = "seconds", type = "int", default = 1000, help = "The time span around the event's trigger time, must be larger or equal to 1000s (default = 1000).")
+	group.add_option("--time-span", metavar = "seconds", type = "int", default = 500, help = "The time span around the event's trigger time, must be larger or equal to 500s (default = 500).")
 	parser.add_option_group(group)
 
-	group = OptionGroup(parser, "Output Control Options", "Control SNR output")
+	group = OptionGroup(parser, "Ranking Statistic Options", "Adjust ranking statistic behaviour.")
+	group.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (require).")
+	group.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
+	group.add_option("--coincidence-threshold", metavar = "seconds", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.")
+	parser.add_option_group(group)
+
+	group = OptionGroup(parser, "Output Control Options", "Control SNR / RankingStat outputs.")
 	group.add_option("--outdir", metavar = "directory", default = ".", type = "str", help = "Output directory for SNR(s) (default = .).")
-	group.add_option("--save", action = "store_true", default = False, help = "Save frame cache / svd bank / psd (default = False).")
-	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
+	group.add_option("--ranking-stat-output", metavar = "filename", default = None, help = "Set the name of the file to which to write ranking statistic data collected from triggers. This will not be prefixed by --outdir (optional).")
+	group.add_option("--coinc-output", metavar = "filename", default = "followup_coinc.xml", help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite. This will not be prefixed by --outdir (default ./followup_coinc.xml).")
 	group.add_option("--complex", action = "store_true", help = "Choose whether to output the complex snr or not.")
 	group.add_option("--start", metavar = "seconds", type = "float", help = "Start SNR time series at GPS time '--start' (require).")
 	group.add_option("--end", metavar = "seconds", type = "float", help = "End SNR time series at GPS time '--end' (require).")
-	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
-	group.add_option("--instrument", metavar = "name", type = "str", action = "append", help = "The instrument(s) to be analyzed(require).")
 	parser.add_option_group(group)
 
-	parser.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
+	group = OptionGroup(parser, "Program Options", "Control Program Behaviour.")
+	group.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
+	group.add_option("--comment", metavar = "message", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
+	group.add_option("--save", action = "store_true", default = False, help = "Save frame cache / svd bank / psd if using --gid (default = False).")
+	group.add_option("--mode", metavar = "method", type = "int", default = 0, help = "The method (0 = LLOID / 1 = FIR) that is used to calculate SNR (default = 0).")
+	group.add_option("--output-width", metavar = "bits", type = "int", default = 32, help = "The size of the output data, can only be 32 or 64 bits (default = 32 bits).")
+	group.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.	This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
+	parser.add_option_group(group)
 
 	options, args = parser.parse_args()
 
-	# initialize gw_data_source_info
-	gw_data_source_info = None
+	#
+	# Bait out from here if --gid is provided, else continue setting the program
+	#
 
-	if options.outdir is None:
-		missing_required_options.append("--outdir")
-	# Setting up GW data
 	if options.gid is not None:
 		# Setting up inputs for GraceDb event, this will overwrite svd-bank/template/psd related inputs.
 		if options.observatory is None or options.type is None:
@@ -246,42 +236,49 @@ def parse_command_line():
 
 			psds_dict = svd_bank_snr.psd_from_event(options.gid, save = options.save, verbose = options.verbose)
 
-			banks_dict, options.sub_bank_id, options.row_number = svd_bank_snr.svd_banks_from_event(options.gid, save = options.save, verbose = options.verbose)
+			banks_dict, options.bank_number, options.row_number = svd_bank_snr.svd_banks_from_event(options.gid, save = options.save, verbose = options.verbose)
 
+			# bait out from here
 			return options, gw_data_source_info, banks_dict, psds_dict
-	else:
-		# Setting up GW data for non-GraceDb event
-		gw_data_source_info = datasource.GWDataSourceInfo(options)
-		# Setting up how many instruments to analyze
-		if options.instrument is not None:
-			# Avoid repeated --instrument
-			options.instrument = list(set(options.instrument))
-		else:
-			raise ValueError("Must provide at least one --instrument.")
-		# Check if --frame-cache contains the data from --instrument
-		for instrument in options.instrument:
-			if instrument not in gw_data_source_info.channel_dict.keys():
-				raise ValueError("No such instrument: %s in GWDataSourceInfo: (%s)"% (instrument, ", ".join(gw_data_source_info.channel_dict.keys())))
+
+	#
+	# Do general program options checking
+	#
+
+	if options.outdir is None:
+		missing_required_options.append("--outdir")
 
 	# Check SNRs series output
 	if options.start is None or options.end is None:
 		raise ValueError("Must have --start and --end.")
 	elif options.start >= options.end:
 		raise ValueError("--start must less than --end.")
+
+	#
+	# Setting up GW data
+	#
+
 	# Extra handle for SNRs output because SNRs are not stable initially and have padding at the end
 	# FIXME: the 50s is hardcoded and only use to avoid snr being unstable due to edge effect when doing convoluion
+	gw_data_source_info = datasource.GWDataSourceInfo(options)
 	if options.start - gw_data_source_info.seg[0] <= 50 or gw_data_source_info.seg[1] - options.end <= 50:
 		raise ValueError("Check your inputted --start / --end or your frame file. You should have a long enough data such that, the --start/--end is larger/less than the start/end of your data at least 50s. ")
 
+	#
 	# Setting up PSD
+	#
+
 	if options.reference_psd:
 		psd = lal.series.read_psd_xmldoc(ligolw_utils.load_url(options.reference_psd, contenthandler = lal.series.PSDContentHandler))
-		# Check if --reference-psd contains the psd from --instrument
-		for instrument in options.instrument:
-			if instrument not in set(psd):
-				raise ValueError("No such instrument: %s in psd: (%s)"% (instrument, ", ".join(set(psd))))
+		# Check if there enough reference psds for GW data
+		if set(psd) < set(gw_data_source_info.channel_dict):
+			raise ValueError("Missing PSD(s) for %s." % (", ".join(sorted(set(gw_data_source_info.channel_dict) - set(psd)))))
 	else:
 		options.track_psd = True
+
+	#
+	# Setting up SVD banks (mode 0 = LLOID) or template table (mode 1 = FIR)
+	#
 
 	# Use LLOID method
 	if options.mode == 0:
@@ -289,63 +286,66 @@ def parse_command_line():
 		# Checking required options
 		if options.svd_bank is None:
 			missing_required_options.append("--svd-bank")
-		if options.sub_bank_id is None and options.coinc is None:
-			missing_required_options.append("--sub-bank-id")
+		if options.bank_number is None and options.coinc is None:
+			missing_required_options.append("--bank-number")
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
 
 		# Setting up SVD bank
 		bank_urls = inspiral.parse_svdbank_string(options.svd_bank)
-		# Check if --svd-bank contains svd banks from --instrument
-		for instrument in options.instrument:
-			if instrument not in set(bank_urls):
-				raise ValueError("No SVD Banks for --instrument=%s." % instrument)
 
-		banks_dict = dict([(ifo, svd_bank.read_banks(svdbanks, svd_bank.DefaultContentHandler)) for ifo, svdbanks in bank_urls.items()])
+		# Check if there are enough svd banks for GW data
+		if set(bank_urls) < set(gw_data_source_info.channel_dict):
+			raise ValueError("Missing SVD bank(s) for %s." % (", ".join(sorted(set(gw_data_source_info.channel_dict) - set(bank_urls)))))
 
-		# Scan for the --sub-bank-id and --row-number if --coinc is given
+		banks_dict = inspiral.parse_bank_files(bank_urls, options.verbose)
+
+		# Scan for the --bank-number and --row-number if --coinc is given
 		if options.coinc is not None:
 			coinc_xmldoc = ligolw_utils.load_url(options.coinc, verbose = options.verbose, contenthandler = ContentHandler)
-			options.sub_bank_id, options.row_number = svd_bank_snr.scan_svd_banks_for_row(coinc_xmldoc, banks_dict)
-		# Check if --sub-bank-id and --row-number is valid
+			options.bank_number, options.row_number = svd_bank_snr.scan_svd_banks_for_row(coinc_xmldoc, banks_dict)
+		# Check if --bank-number and --row-number is valid
 		for banks in banks_dict.values():
-			if not (0 <= options.sub_bank_id < len(banks)) :
-				raise ValueError("Invaild --sub-bank-id %d. Possible id [0-%d)\n" % (options.sub_bank_id, len(banks)))
-			if options.row_number is not None and not (0 <= options.row_number < len(banks[options.sub_bank_id].sngl_inspiral_table)):
-				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[options.sub_bank_id].sngl_inspiral_table)))
-
-		return options, gw_data_source_info, banks_dict, psd
+			if not (0 <= options.bank_number < len(banks)) :
+				raise ValueError("Invaild --bank-number %d. Possible id [0-%d)\n" % (options.bank_number, len(banks)))
+			if options.row_number is not None and not (0 <= options.row_number < len(banks[options.bank_number].sngl_inspiral_table)):
+				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[options.bank_number].sngl_inspiral_table)))
 
 	# Use Finite Impulse Response
 	elif options.mode == 1:
-		missing_required_options = []
-		# Checking required options
-		if options.table is None:
-			missing_required_options.append("--table")
-		if options.approximant is None:
-			missing_required_options.append("--approximant")
-		if options.template_psd is None:
-			missing_required_options.append("--template-psd")
-		# Raise VauleError is required option(s) is/are missing
-		if missing_required_options:
-			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
+		bank_urls = inspiral.parse_svdbank_string(options.bank)
+		banks_dict = svd_bank_snr.parse_bank_files(bank_urls)
 
-		xmldoc = ligolw_utils.load_url(options.table, contenthandler = ContentHandler, verbose = options.verbose)
-		template_table = table.get_table(xmldoc, lsctables.SnglInspiralTable.tableName)
-
-		return options, gw_data_source_info, template_table, psd
+		# Check if there enough templates for GW data
+		if set(banks_dict) < set(gw_data_source_info.channel_dict):
+			raise ValueError("Missing table(s) for %s." % (", ".join(sorted(set(gw_data_source_info.channel_dict) - set(banks_dict)))))
 
 	# Unknown mode
 	else:
 		raise ValueError("Invalid mode: %d" % options.mode)
 
-options, gw_data_source_info, template, psds_dict  = parse_command_line()
+	return options, gw_data_source_info, banks_dict, psd
+
+options, gw_data_source_info, banks_dict, psds_dict = parse_command_line()
+
+#====================================================================================================
+#
+#						Post Setup
+#
+#====================================================================================================
 
 if options.veto_segments_file is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
+
+offsetvectors = lsctables.TimeSlideTable.get_table(ligolw_utils.load_filename(options.time_slide_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)).as_dict().values()
+all_instruments = reduce(lambda a, b: a | set(b), offsetvectors, set())
+if len(all_instruments) < options.min_instruments:
+	raise ValueError("--time-slide-file \"%s\" names %s but we need at least %d instruments" % (options.time_slide_file, ", ".join(sorted(all_instruments)), options.min_instruments))
+if not (all_instruments >= set(gw_data_source_info.channel_dict)):
+	raise ValueError("--time-slide-file names %s but have channel names for %s" % (", ".join(sorted(all_instruments)), ", ".join(sorted(gw_data_source_info.channel_dict))))
 
 #====================================================================================================
 #
@@ -353,62 +353,184 @@ else:
 #
 #====================================================================================================
 
+if options.verbose:
+	sys.stderr.write("Building pipeline...\n")
+
+pipeline = Gst.Pipeline(name = "gstlal_inspiral_SNR")
+mainloop = GObject.MainLoop()
+
+#
+# Construct Pipeline Handler
+#
+
+rankingstat = far.RankingStat(
+	template_ids = set(row.template_id for row in banks_dict.values()[0][options.bank_number or 0].sngl_inspiral_table),
+	instruments = set(gw_data_source_info.channel_dict),
+	delta_t = options.coincidence_threshold,
+	min_instruments = options.min_instruments,
+	horizon_factors = banks_dict.values()[0][options.bank_number or 0].horizon_factors
+)
+coincs_document = inspiral.CoincsDocument(
+	url = options.coinc_output,
+	process_params = {},
+	process_start_time = UTCToGPS(time.gmtime()),
+	comment = options.comment,
+	instruments = rankingstat.instruments,
+	seg = gw_data_source_info.seg,
+	offsetvectors = offsetvectors,
+	injection_filename = options.injections,
+	tmp_path = options.tmp_space,
+	replace_file = True,
+	verbose = options.verbose
+)
+
+snr_document = svd_bank_snr.SignalNoiseRatioDocument(
+	dict((instrument, svd_bank_snr.SNR(options.start, options.end, instrument, banks_dict[instrument], bank_number = options.bank_number or 0, method = "FIR" if options.mode else "LLOID")) for instrument in gw_data_source_info.channel_dict),
+	banks_dict,
+	verbose = options.verbose
+)
+
+handler = svd_bank_snr.SNRPipelineHandler(
+	mainloop,
+	pipeline,
+	coincs_document,
+	rankingstat,
+	snr_document,
+	banks_dict.values()[0][options.bank_number or 0].horizon_distance_func,
+	ranking_stat_output_url = options.ranking_stat_output,
+	verbose = options.verbose)
+
+snr_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_snr_buffer)
+trigger_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
+
+# Switch between mode
 if options.mode == 0:
-	banks_dict = template
-
-	for instrument in options.instrument:
-		lloid_snr = svd_bank_snr.LLOID_SNR(
-			gw_data_source_info,
-			banks_dict[instrument][options.sub_bank_id],
-			instrument,
-			options.row_number,
-			options.start,
-			options.end,
-			psd = psds_dict,
+	#
+	# Build LLOID pipeline
+	#
+	itacac_dict = {}
+	for instrument in gw_data_source_info.channel_dict:
+		bank = banks_dict[instrument][options.bank_number]
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, options.verbose)
+		hoftdict = multirate_datasource.mkwhitened_multirate_src(
+			pipeline,
+			src = src,
+			rates = set(rate for rate in banks_dict[instrument][options.bank_number].get_rates()),
+			instrument = instrument,
+			psd = psds_dict[instrument],
 			psd_fft_length = options.psd_fft_length,
 			ht_gate_threshold = options.ht_gate_threshold,
 			veto_segments = veto_segments,
 			track_psd = options.track_psd,
 			width = options.output_width,
-			verbose = options.verbose
+			statevector = statevector,
+			dqvector = dqvector,
+			fir_whiten_reference_psd = banks_dict[instrument][options.bank_number].processed_psd
 		)
-		snrdict = {}
-		if options.row_number is None:
-			snrdict.setdefault(instrument, [])
-			for index, snr in enumerate(lloid_snr(COMPLEX = options.complex)):
-				snr.epoch += banks_dict[instrument][options.sub_bank_id].sngl_inspiral_table[index].end
-				snrdict[instrument].append(snr)
-			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SVD_BANK_SNR_%d-%d-%d.xml.gz" % (instrument, options.sub_bank_id, int(snr.epoch), int(snr.data.length * snr.deltaT))), verbose = options.verbose)
-		else:
-			snrdict = {instrument : lloid_snr(COMPLEX = options.complex)}
-			snrdict[instrument][0].epoch += banks_dict[instrument][options.sub_bank_id].sngl_inspiral_table[options.row_number].end
-			svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict), os.path.join(options.outdir, "%s-SVD_BANK_SNR_%d_%d-%d-%d.xml.gz" % (instrument, options.sub_bank_id, options.row_number, int(snrdict[instrument][0].epoch), int(snrdict[instrument][0].data.length * snrdict[instrument][0].deltaT))), verbose = options.verbose)
 
+		snr = lloidparts.mkLLOIDhoftToSnrSlices(
+			pipeline,
+			hoftdict = hoftdict,
+			bank = bank,
+			control_snksrc = (None, None),
+			block_duration = 8 * Gst.SECOND,
+			fir_stride = 16,
+			verbose = options.verbose,
+			logname = instrument
+		)
+
+		snr = pipeparts.mktee(pipeline, snr)
+
+		# attach appsink to collect SNRs
+		snr_appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, snr), name = instrument)
+
+		# add itacac
+		nsamps_window = 1 * max(bank.get_rates())
+		if bank.bank_id not in itacac_dict:
+			itacac_dict[bank.bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
+		head = itacac_dict[bank.bank_id]
+		pad = head.get_request_pad("sink%d" % len(head.sinkpads))
+		for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+			pad.set_property(prop, val)
+		pipeparts.mkqueue(pipeline, snr).srcpads[0].link(pad)
+
+# Switch between mode
 elif options.mode == 1:
-	template_table = template
+	#
+	# Build FIR pipeline
+	#
 
-	for instrument in options.instrument:
-		template, time_offset = svd_bank_snr.FIR_SNR.make_template(template_table, options.template_psd, options.sample_rate, options.approximant, instrument, options.f_low, f_high = options.f_high, verbose = options.verbose)
+	itacac_dict = {}
+	dummy_bank_id = 0
+	for instrument in gw_data_source_info.channel_dict:
+		template = banks_dict[instrument][0].templates[0]
+		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 
-		#FIXME: proper handle for latency
-		fir_snr = svd_bank_snr.FIR_SNR(
-			gw_data_source_info,
-			template,
-			instrument,
-			options.sample_rate,
-			0,
-			options.start,
-			options.end,
-			psd = psds_dict,
+		hoftdict = multirate_datasource.mkwhitened_multirate_src(
+			pipeline,
+			src = src,
+			rates = [banks_dict[instrument][0].sample_rate],
+			instrument = instrument,
+			psd = psds_dict[instrument],
 			psd_fft_length = options.psd_fft_length,
 			ht_gate_threshold = options.ht_gate_threshold,
 			veto_segments = veto_segments,
-			width = options.output_width,
 			track_psd = options.track_psd,
-			verbose = options.verbose
-			)
+			width = options.output_width,
+			statevector = statevector,
+			dqvector = dqvector,
+			fir_whiten_reference_psd = None
+		)
 
-		firsnr = fir_snr(COMPLEX = options.complex)
-		snrdict = {instrument : firsnr}
-		snrdict[instrument][0].epoch += time_offset
-		svd_bank_snr.write_url(svd_bank_snr.make_xmldoc(snrdict),os.path.join(options.outdir, "%s-FIR_SNR-%d-%d.xml.gz" % (instrument, int(snrdict[instrument][0].epoch), int(snrdict[instrument][0].data.length * snrdict[instrument][0].deltaT))), verbose = options.verbose)
+		snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkfirbank(pipeline, hoftdict[banks_dict[instrument][0].sample_rate], latency = 0, fir_matrix = [template.real, template.imag] ,block_stride = 16 * banks_dict[instrument][0].sample_rate, time_domain = False))
+
+		snr = pipeparts.mktee(pipeline, snr)
+		# attach appsink to collect SNRs
+		snr_appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, snr), name = instrument)
+
+		# add itacac
+		if dummy_bank_id not in itacac_dict:
+			itacac_dict[dummy_bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
+		head = itacac_dict[dummy_bank_id]
+		pad = head.get_request_pad("sink%d" % len(head.sinkpads))
+		for prop, val in [("n", banks_dict[instrument][0].sample_rate), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", banks_dict[instrument][0].template_bank_filename), ("sigmasq", banks_dict[instrument][0].sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(banks_dict[instrument][0].autocorrelation_bank)), ("autocorrelation_mask", banks_dict[instrument][0].autocorrelation_mask)]:
+			pad.set_property(prop, val)
+		pipeparts.mkqueue(pipeline, snr).srcpads[0].link(pad)
+
+#
+# Attach appsink to collect triggers
+#
+
+# since only one template bank is being processed, there should not be more than one item in itacac_dict.
+assert len(itacac_dict.values()) == 1
+trigger_appsync.add_sink(pipeline, itacac_dict.values()[0], caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "bank_%s_sink" % itacac_dict.keys()[0])
+
+#
+# Run pipeline
+#
+
+if options.verbose:
+	sys.stderr.write("Setting pipeline state to READY...\n")
+if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline cannot enter ready state.")
+
+datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
+
+if options.verbose:
+	sys.stderr.write("Seting pipeline state to PLAYING...\n")
+if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline cannot enter playing state.")
+if options.verbose:
+	sys.stderr.write("Calculating SNR...\n")
+
+mainloop.run()
+
+if options.verbose:
+	sys.stderr.write("Calculation done.\n")
+if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
+	raise RuntimeError("pipeline could not be set to NULL.")
+
+# Write outputs
+handler.write_output_url(url = options.coinc_output)
+handler.write_snrs(options.outdir, row_number = options.row_number or 0, COMPLEX = options.complex)
+

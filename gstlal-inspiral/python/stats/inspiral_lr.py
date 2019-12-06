@@ -398,10 +398,12 @@ class LnSignalDensity(LnLRDensity):
 
 		# Evaluate the IDQ glitch probability # FIXME put in denominator
 		for ifo, seg in segments.items():
-			# FIXME don't just use the last segment, somehow include whole template duration?
-			t = float(seg[1])
-			# NOTE choose max over +-1 seconds because the sampling is only at 1 Hz.
-			lnP -= max(self.idq_glitch_lnl[ifo]([t-1., t, t+1.]))
+			# only proceed if we have a trigger from this ifo
+			if ifo in snrs:
+				# FIXME don't just use the last segment, somehow include whole template duration?
+				t = float(seg[1])
+				# NOTE choose max over +-1 seconds because the sampling is only at 1 Hz.
+				lnP -= max(self.idq_glitch_lnl[ifo]([t-1., t, t+1.]))
 
 		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
@@ -704,7 +706,7 @@ class OnlineFrankensteinLnSignalDensity(LnSignalDensity):
 	"""
 	@classmethod
 	def splice(cls, src, Dh_donor):
-		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, dtdphi_file = src.dtdphi_file, min_instruments = src.min_instruments, horizon_factors = src.horizon_factors)
+		self = cls(src.template_ids, src.instruments, src.delta_t, population_model_file = src.population_model_file, dtdphi_file = src.dtdphi_file, idq_file = src.idq_file, min_instruments = src.min_instruments, horizon_factors = src.horizon_factors)
 		for key, lnpdf in src.densities.items():
 			self.densities[key] = lnpdf.copy()
 		# NOTE:  not a copy.  we hold a reference to the donor's

@@ -143,6 +143,10 @@ SAMPLES_MAX_256 = 2048
 
 ADDITIONAL_DAG_OPTIONS:=--samples-min $(SAMPLES_MIN) --samples-max-256 $(SAMPLES_MAX_256)
 
+# whether to disable plotting, pass in ENABLE_PLOTTING=0 to disable
+
+ENABLE_PLOTTING ?= 1
+
 ##############
 # Channels #
 ##############
@@ -171,7 +175,11 @@ BANK_CACHE_FILES:=H1_split_bank.cache L1_split_bank.cache
 # Workflow #
 ############
 
+ifeq ($(ENABLE_PLOTTING), 1)
 all: gstlal_inspiral_summary_page_0002
+else
+all: gstlal_compute_far_from_snr_chisq_histograms_0001
+endif
 
 plots:
 	# Makes local plots directory
@@ -490,7 +498,7 @@ H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-ALL_MASS_MOD
 		--verbose
 	@echo ""
 	
-H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-$(START)-$(DURATION).xml.gz L1-0000_SVD-$(START)-$(DURATION).xml.gz H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz
+H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz: measured_psd.xml.gz frames.cache segments.xml.gz vetoes.xml.gz tisi.xml H1-0000_SVD-$(START)-$(DURATION).xml.gz L1-0000_SVD-$(START)-$(DURATION).xml.gz H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_0001
 	$(TIME) gstlal_inspiral \
 		--reference-psd measured_psd.xml.gz \
@@ -516,8 +524,10 @@ H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURA
 		--min-instruments $(MIN_IFOS) \
 		--ht-gate-threshold 100. \
 		--coincidence-threshold 0.005 \
+		--disable-service-discovery \
 		--verbose
 	@echo ""
+H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-0000_LLOID-$(START)-$(DURATION).xml.gz
 
 H1L1-0000_MARG_DIST_STATS-$(START)-$(DURATION).xml.gz: H1L1-0000_CREATE_PRIOR_DIST_STATS-$(START)-$(DURATION).xml.gz H1L1-0000_DIST_STATS-$(START)-$(DURATION).xml.gz
 	# gstlal_inspiral_marginalize_likelihood_0001
@@ -602,6 +612,8 @@ gstlal_compute_far_from_snr_chisq_histograms_0001: marginalized_likelihood.xml.g
 # PLotting scripts #
 ####################
 
+ifeq ($(ENABLE_PLOTTING), 1)
+
 gstlal_inspiral_plotsummary_0001: gstlal_compute_far_from_snr_chisq_histograms_0001 plots
 	# gstlal_inspiral_plotsummary_0001
 	$(TIME) gstlal_inspiral_plotsummary \
@@ -653,6 +665,8 @@ gstlal_inspiral_summary_page_0002: gstlal_inspiral_summary_page_0001
 	@echo "Make box unreadable with: chmod a-rwx $(WEBDIR)/OPEN-BOX*"
 	@echo "Open box with: chmod a+rwx $(WEBDIR)/OPEN-BOX*"
 	@touch gstlal_inspiral_summary_page_0002
+
+endif
 
 clean:
 	rm -rf H* L* *.txt *.xml *.gz *.cache gstlal_* lalapps_* ligolw_* $(WEBDIR)* plots/

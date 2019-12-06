@@ -57,12 +57,43 @@ if options.center and options.span:
 	segment = "-" + str(int(options.center - options.span)) + "-" + str(int(options.span * 2))
 
 SNRs_dict = {}
+autocorrelations_dict = {}
 for url in urls:
-	SNRs_dict.update(svd_bank_snr.read_xmldoc(svd_bank_snr.read_url(url, svd_bank_snr.SNRContentHandler, verbose = options.verbose)))
+	snr_dict, ac_dict = svd_bank_snr.read_xmldoc(svd_bank_snr.read_url(url, svd_bank_snr.SNRContentHandler, verbose = options.verbose))
+	SNRs_dict.update(snr_dict)
+	autocorrelations_dict.update(ac_dict)
+snrs_groups = zip(*SNRs_dict.values())
+acs_groups = zip(*autocorrelations_dict.values())
 
-for row, snrs_group in enumerate(zip(*SNRs_dict.values())):
+#=============================================================================================
+#
+#					Plot SNRs
+#
+#=============================================================================================
+for row, snrs_group in enumerate(snrs_groups):
 	figure = plotsnr.plot_snr(dict(zip(SNRs_dict.keys(), zip(snrs_group))), width = options.width, center = options.center, span = options.span, verbose = options.verbose)
 	if len(zip(*SNRs_dict.values())) == 1:
 		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + segment + suffix))
 	else:
-		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + "-"+ str(row) + segment + suffix))
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + "_"+ str(row) + segment + suffix))
+
+
+if len(snrs_groups) != len(acs_groups):
+	raise ValueError("The number of SNR time series and template autocorrelations does not matched.")
+
+#=============================================================================================
+#
+#				Plot SNRs with autocorrelation
+#
+#=============================================================================================
+row = 0
+for snrs_group, acs_group in zip(snrs_groups, acs_groups):
+	figure = plotsnr.plot_snr_with_ac(dict(zip(SNRs_dict.keys(), zip(snrs_group))), dict(zip(autocorrelations_dict.keys(), zip(acs_group))),  width = options.width, ref_trigger_time = options.center, verbose = options.verbose)
+
+	all_instruments = set(SNRs_dict) & set(autocorrelations_dict)
+	# just pick one, they must be the same length
+	if len(zip(*SNRs_dict.values())) == 1:
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(all_instruments)) + description + "_with_autocorrlation" + segment+ suffix))
+	else:
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(all_instruments)) + description + "_"+ str(row) + segment + suffix))
+	row += 1

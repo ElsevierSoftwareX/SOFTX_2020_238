@@ -33,7 +33,6 @@ import timeit
 
 from collections import deque
 from Queue import PriorityQueue
-from multiprocessing.dummy import Pool as ThreadPool
 from optparse import OptionParser
 
 from lal import gpstime
@@ -92,13 +91,11 @@ class StreamSynchronizer(object):
         self.num_topics = options.num_topics
 
         ### initialize consumers
-        self.consumer_names = ['%s_%s' % (options.input_topic_basename, str(i).zfill(4)) for i in range(1, self.num_topics + 1)]
-        # FIXME: hacky way of introducing group id, should be a settable option
+        self.topics = ['%s_%s' % (options.input_topic_basename, str(i).zfill(4)) for i in range(1, self.num_topics + 1)]
         consumer_kafka_settings = self.kafka_settings
-        consumer_kafka_settings['group.id'] = 'group_1'
-        self.consumers = [Consumer(consumer_kafka_settings) for topic in self.consumer_names]
-        for topic, consumer in zip(self.consumer_names, self.consumers):
-            consumer.subscribe([topic])
+        consumer_kafka_settings['group.id'] = '-'.join(['synchronizer', options.tag])
+        self.consumer = Consumer(consumer_kafka_settings)
+        self.consumer.subscribe([topic for topic in self.topics])
 
         ### initialize producer
         self.producer_name = options.output_topic_basename
@@ -111,32 +108,23 @@ class StreamSynchronizer(object):
         # 5 minute queue for outgoing buffers
         self.feature_buffer = deque(maxlen = 300)
 
-    def fetch_data(self, consumer):
+    def fetch_data(self):
         """
         requests for a new message from an individual topic,
         and add to the feature queue
         """
-        message = consumer.poll(timeout=self.request_timeout)
+        messages = self.consumer.consume(num_messages=len(self.topics), timeout=self.request_timeout)
 
-        ### only add to queue if no errors in receiving data
-        if message and not message.error():
+        for message in messages:
+            ### only add to queue if no errors in receiving data
+            if message and not message.error():
 
-            ### decode json and parse data
-            feature_subset = json.loads(message.value())
+                ### decode json and parse data
+                feature_subset = json.loads(message.value())
 
-            ### add to queue if timestamp is within timeout
-            if self.no_drop or (feature_subset['timestamp'] >= self.max_timeout()):
-                self.add_to_queue(feature_subset['timestamp'], feature_subset['features'])
-
-    def fetch_all_data(self):
-        """
-        requests for a new message from all topics, and add
-        to the feature queue
-        """
-        pool = ThreadPool(self.num_topics)
-        result = pool.map_async(self.fetch_data, self.consumers)
-        result.wait()
-        pool.close()
+                ### add to queue if timestamp is within timeout
+                if self.no_drop or (feature_subset['timestamp'] >= self.max_timeout()):
+                    self.add_to_queue(feature_subset['timestamp'], feature_subset['features'])
 
     def add_to_queue(self, timestamp, data):
         """
@@ -208,7 +196,7 @@ class StreamSynchronizer(object):
         """
         while self.is_running:
             ### ingest and combine incoming feature subsets, dropping late data
-            self.fetch_all_data()
+            self.fetch_data()
             self.process_queue()
             ### push combined features downstream
             while self.feature_buffer:

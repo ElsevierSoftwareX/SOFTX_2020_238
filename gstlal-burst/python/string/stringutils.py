@@ -34,7 +34,7 @@ except ImportError:
 import itertools
 import math
 import numpy
-import scipy.stats
+from scipy import interpolate
 import sys
 
 
@@ -43,15 +43,13 @@ from ligo.lw import array as ligolw_array
 from ligo.lw import param as ligolw_param
 from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
-from ligo.lw.utils import process as ligolw_process
-import lal
-from lal import rate
 from ligo.segments import utils as segmentsUtils
-from lalburst import offsetvector
-from lalburst import snglcoinc
+from . import snglcoinc
+from . import string_lr_far
 
-from gstlal import string_lr_far
-
+from lal import rate
+# FIXME don't import gstlal modules in lalsuite
+from gstlal import stats as gstlalstats
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
 from .git_version import date as __date__
@@ -68,119 +66,12 @@ from .git_version import version as __version__
 
 
 #
-# Make a look-up table of time-of-arrival triangulators
-#
-
-
-def triangulators(timing_uncertainties):
-	"""
-	Return a dictionary of snglcoinc.TOATriangulator objects
-	initialized for a variety of instrument combinations.
-	timing_uncertainties is a dictionary of instrument->$\\Delta t$
-	pairs.  The return value is a dictionary of (instrument
-	tuple)->TOATrangulator mappings.  The instrument names in each
-	tuple are sorted in alphabetical order, and the triangulators are
-	constructed with the instruments in that order (the the
-	documentation for snglcoinc.TOATriangulator for more information).
-
-	Example:
-
-	>>> x = triangulators({"H1": 0.005, "L1": 0.005, "V1": 0.005})
-
-	constructs a dictionary of triangulators for every combination of
-	two or more instruments that can be constructed from those three.
-
-	The program lalapps_string_plot_binj can be used to measure the
-	timing uncertainties for the instruments in a search.
-	"""
-	allinstruments = sorted(timing_uncertainties.keys())
-
-	triangulators = {}
-	for n in range(2, len(allinstruments) + 1):
-		for instruments in itertools.combinations(allinstruments, n):
-			triangulators[instruments] = snglcoinc.TOATriangulator([lal.cached_detector_by_prefix[instrument].location for instrument in instruments], [timing_uncertainties[instrument] for instrument in instruments])
-
-	return triangulators
-
-
-#
-# A binning for instrument combinations
-#
-# FIXME:  we decided that the coherent and null stream naming convention
-# would look like
-#
-# H1H2:LSC-STRAIN_HPLUS, H1H2:LSC-STRAIN_HNULL
-#
-# and so on.  i.e., the +, x and null streams from a coherent network would
-# be different channels from a single instrument whose name would be the
-# mash-up of the names of the instruments in the network.  that is
-# inconsisntent with the "H1H2+", "H1H2-" shown here, so this needs to be
-# fixed but I don't know how.  maybe it'll go away before it needs to be
-# fixed.
-#
-
-
-class InstrumentBins(rate.HashableBins):
-	"""
-	Example:
-
-	>>> x = InstrumentBins()
-	>>> x[frozenset(("H1", "L1"))]
-	55
-	>>> x.centres()[55]
-	frozenset(['H1', 'L1'])
-	"""
-
-	names = ("E0", "E1", "E2", "E3", "G1", "H1", "H2", "H1H2+", "H1H2-", "L1", "V1")
-
-	def __init__(self, names):
-		super(InstrumentBins, self).__init__(frozenset(combo) for n in range(len(names) + 1) for combo in itertools.combinations(names, n))
-
-	# FIXME:  hack to allow instrument binnings to be included as a
-	# dimension in multi-dimensional PDFs by defining a volume for
-	# them.  investigate more sensible ways to do this.  maybe NDBins
-	# and BinnedDensity should understand the difference between
-	# functional and parametric co-ordinates.
-	def lower(self):
-		return numpy.arange(0, len(self), dtype = "double")
-	def upper(self):
-		return numpy.arange(1, len(self) + 1, dtype = "double")
-
-	xml_bins_name = u"instrumentbins"
-
-# NOTE:  side effect of importing this module:
-rate.NDBins.xml_bins_name_mapping.update({
-	InstrumentBins.xml_bins_name: InstrumentBins,
-	InstrumentBins: InstrumentBins.xml_bins_name
-})
-
-
-#
-# for ranking statistic
-#
-
-def kwarggeniter(d, min_instruments):
-	d = tuple(sorted(d.items()))
-	return map(dict, itertools.chain(*(itertools.combinations(d, i) for i in range(min_instruments, len(d) + 1))))
-
-def kwarggen(snrs, chi2s_over_snr2s, min_instruments):
-	for snrs, chi2s_over_snr2s in zip(
-		kwarggeniter(snrs, min_instruments),
-		kwarggeniter(chi2s_over_snr2s, min_instruments)
-	):
-		yield {
-			"snrs": snrs,
-			"chi2s_over_snr2s": chi2s_over_snr2s,
-		}
-
-
-#
 # Parameter distributions
 #
 
 
-class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
-	ligo_lw_name_suffix = u"stringcusp_coincparamsdistributions"
+class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
+	ligo_lw_name_suffix = u"string_rankingstat"
 
 	@ligolw_array.use_in
 	@ligolw_param.use_in
@@ -188,11 +79,10 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 		pass
 
-	def __init__(self, instruments=frozenset(("H1", "L1")), min_instruments=2):
-		self.triangulators = triangulators(dict.fromkeys(instruments, 8e-5))
-		self.numerator = string_lr_far.LnSignalDensity(instruments = instruments, min_instruments = min_instruments)
-		self.denominator = string_lr_far.LnNoiseDensity(instruments = instruments, min_instruments = min_instruments)
-		self.candidates = string_lr_far.LnLRDensity(instruments = instruments, min_instruments = min_instruments)
+	def __init__(self, delta_t, snr_threshold, instruments = frozenset(("H1", "L1")), min_instruments = 2):
+		self.numerator = string_lr_far.LnSignalDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, min_instruments = min_instruments)
+		self.denominator = string_lr_far.LnNoiseDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, min_instruments = min_instruments)
+		self.candidates = string_lr_far.LnLRDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, min_instruments = min_instruments)
 
 	@property
 	def instruments(self):
@@ -203,51 +93,38 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 		return self.denominator.min_instruments
 	
 	def __iadd__(self, other):
-		if type(self) != type(other):
-			raise TypeError(other)
-		if set(self.triangulators.keys()) != set(other.triangulators.keys()):
-			raise ValueError("incompatible instruments")
 		self.numerator += other.numerator
 		self.denominator += other.denominator
 		self.candidates += other.candidates
 		return self
 
+	def __call__(self, **kwargs):
+		# NOTE now we use the default definition, but the
+		# ranking statistic definition can be customized here
+		# (to include e.g. veto cuts, chisq cuts, ...)
+		return super(RankingStat, self).__call__(**kwargs)
+
 	def copy(self):
-		new = type(self)([])
-		new.triangulators = self.triangulators	# share reference
+		new = type(self)(
+			instruments = self.instruments,
+			min_instruments = self.min_instruments,
+			delta_t = self.delta_t,
+			snr_threshold = self.snr_threshold
+		)
 		new.numerator = self.numerator.copy()
 		new.denominator = self.denominator.copy()
 		new.candidates = self.candidates.copy()
 		return new
 
-	def coinc_params(self, events, offsetvector):
-		params = {}
-
-		#
-		# check for coincs that have been vetoed entirely
-		#
-
-		if len(events) < 2:
-			return params
-
-		#
-		# Initialize the parameter dictionary, sort the events by
-		# instrument name (the multi-instrument parameters are defined for
-		# the instruments in this order and the triangulators are
-		# constructed this way too), and retrieve the sorted instrument
-		# names
-		#
-
-		events = tuple(sorted(events, key = lambda event: event.ifo))
-		instruments = tuple(event.ifo for event in events)
-
+	def kwargs_from_triggers(self, events, offsetvector):
+		assert len(events) >= self.min_instruments
 		return dict(
-			snrs = dict((event.ifo, event.snr) for event in events),
+			snr2s = dict((event.ifo, event.snr**2.) for event in events),
 			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events)
 		)
 
 	def ln_lr_from_triggers(self, events, offsetvector):
-		return self(**self.coinc_params(events, offsetvector))
+		return self(**self.kwargs_from_triggers(events, offsetvector))
 
 	def finish(self):
 		self.numerator.finish()
@@ -264,17 +141,15 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 		return xml[0]
 
 	@classmethod
-	def from_xml(cls, xml, name):
+	def from_xml(cls, xml, name = u"string_cusp"):
 		xml = cls.get_xml_root(xml, name)
 		self = cls.__new__(cls)
 		self.numerator = string_lr_far.LnSignalDensity.from_xml(xml, "numerator")
 		self.denominator = string_lr_far.LnNoiseDensity.from_xml(xml, "denominator")
 		self.candidates = string_lr_far.LnLRDensity.from_xml(xml, "candidates")
-		instruments = self.candidates.instruments
-		self.triangulators = triangulators(dict.fromkeys(instruments, 8e-5))
 		return self
 
-	def to_xml(self, name):
+	def to_xml(self, name = u"string_cusp"):
 		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
 		xml.appendChild(self.numerator.to_xml("numerator"))
 		xml.appendChild(self.denominator.to_xml("denominator"))
@@ -283,95 +158,369 @@ class StringCoincParamsDistributions(snglcoinc.LnLikelihoodRatioMixin):
 
 
 #
-# I/O
+# =============================================================================
+#
+#                             Ranking Statistic PDF
+#
+# =============================================================================
 #
 
 
-def load_likelihood_data(filenames, verbose = False):
-	coinc_params = None
-	seglists = None
+def binned_log_likelihood_ratio_rates_from_samples(signal_lr_lnpdf, noise_lr_lnpdf, samples, nsamples):
+	"""
+	Populate signal and noise BinnedLnPDF densities from a sequence of
+	samples (which can be a generator). The first nsamples elements
+	from the sequence are used. The samples must be a sequence of
+	three-element tuples (or sequences) in which the first element is a
+	value of the ranking statistic (likelihood ratio) and the second
+	and third elements are the logs of the probabilities of obtaining
+	that value of the ranking statistic in the signal and noise populations
+	respectively.
+	"""
+	exp = math.exp
+	isnan = math.isnan
+	signal_lr_lnpdf_count = signal_lr_lnpdf.count
+	noise_lr_lnpdf_count = noise_lr_lnpdf.count
+	for ln_lamb, lnP_signal, lnP_noise in itertools.islice(samples, nsamples):
+		if isnan(ln_lamb):
+			raise ValueError("encountered NaN likelihood ratio")
+		if isnan(lnP_signal) or isnan(lnP_noise):
+			raise ValueError("encountered NaN signal or noise model probability densities")
+		signal_lr_lnpdf_count[ln_lamb,] += exp(lnP_signal)
+		noise_lr_lnpdf_count[ln_lamb,] += exp(lnP_noise)
+
+	return signal_lr_lnpdf.array, noise_lr_lnpdf.array
+
+
+#
+# Class to compute ranking statistic PDFs for background-like and
+# signal-like populations
+#
+
+
+class RankingStatPDF(object):
+	ligo_lw_name_suffix = u"string_rankingstatpdf"
+
+	@staticmethod
+	def density_estimate(lnpdf, name, kernel = rate.gaussian_window(4.)):
+		"""
+		For internal use only.
+		"""
+		assert not numpy.isnan(lnpdf.array).any(), "%s log likelihood ratio PDF contain NaNs" % name
+		rate.filter_array(lnpdf.array, kernel)
+
+	def __init__(self, rankingstat, nsamples = 2**24, verbose = False):
+		#
+		# bailout used by .from_xml() class method to get an
+		# uninitialized instance
+		#
+
+		if rankingstat is None:
+			return
+
+		#
+		# initialize binnings
+		#
+
+		self.noise_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(-10., 30., 3000),)))
+		self.signal_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(-10., 30., 3000),)))
+		self.candidates_lr_lnpdf = rate.BinnedLnPDF(rate.NDBins((rate.ATanBins(-10., 30., 3000),)))
+
+		#
+		# obtain analyzed segments that will be used to obtain livetime
+		#
+
+		self.segments = segmentsUtils.vote(rankingstat.denominator.triggerrates.segmentlistdict().values(),rankingstat.min_instruments)
+
+		#
+		# run importance-weighted random sampling to populate binnings.
+		#
+
+		self.signal_lr_lnpdf.array, self.noise_lr_lnpdf.array = binned_log_likelihood_ratio_rates_from_samples(
+			self.signal_lr_lnpdf,
+			self.noise_lr_lnpdf,
+			rankingstat.ln_lr_samples(rankingstat.denominator.random_params(), rankingstat),
+			nsamples = nsamples)
+
+		if verbose:
+			print("done computing ranking statistic PDFs", file=sys.stderr)
+
+		#
+		# apply density estimation kernels to counts
+		#
+
+		self.density_estimate(self.noise_lr_lnpdf, "noise model")
+		self.density_estimate(self.signal_lr_lnpdf, "signal model")
+
+		#
+		# set the total sample count in the noise and signal
+		# ranking statistic histogram equal to the total expected
+		# count of the respective events from the experiment. This
+		# information is required so that when adding ranking
+		# statistic PDFs in our .__iadd__() method they are
+		# combined with the correct relative weights, so that
+		# .__iadd__() has the effect of marginalizing the
+		# distribution over the experients being combined.
+		#
+
+		self.noise_lr_lnpdf.array /= self.noise_lr_lnpdf.array.sum()
+		self.noise_lr_lnpdf.normalize()
+		self.signal_lr_lnpdf.array /= self.signal_lr_lnpdf.array.sum()
+		self.signal_lr_lnpdf.normalize()
+
+
+	def copy(self):
+		new = self.__class__(None)
+		new.noise_lr_lnpdf = self.noise_lr_lnpdf.copy()
+		new.signal_lr_lnpdf = self.signal_lr_lnpdf.copy()
+		new.candidates_lr_lnpdf = self.candidates_lr_lnpdf.copy()
+		new.segments = type(self.segments)(self.segments)
+		return new
+
+	def collect_zero_lag_rates(self, connection, coinc_def_id):
+		for ln_likelihood_ratio_tuple in connection.cursor().execute("""
+SELECT
+	likelihood
+FROM
+	coinc_event
+WHERE
+	coinc_def_id == ?
+	AND NOT EXISTS (
+		SELECT
+			*
+		FROM
+			time_slide
+		WHERE
+			time_slide.time_slide_id == coinc_event.time_slide_id
+			AND time_slide.offset != 0
+	)
+""", (coinc_def_id,)):
+			# FIXME don't know sqlite syntax
+			ln_likelihood_ratio = ln_likelihood_ratio_tuple[0]
+			assert ln_likelihood_ratio is not None, "null likelihood ratio encountered.  probably coincs have not been ranked"
+			self.candidates_lr_lnpdf.count[ln_likelihood_ratio,] += 1.
+		self.candidates_lr_lnpdf.normalize()
+
+	
+	def density_estimate_zero_lag_rates(self):
+		# apply density estimation preserving total count, then
+		# normalize PDF
+		count_before = self.candidates_lr_lnpdf.array.sum()
+		# FIXME: should .normalize() be able to handle NaN?
+		if count_before:
+			self.density_estimate(self.candidates_lr_lnpdf, "zero lag")
+			self.candidates_lr_lnpdf.array *= count_before / self.candidates_lr_lnpdf.array.sum()
+		self.candidates_lr_lnpdf.normalize()
+	
+
+	def __iadd__(self, other):
+		self.noise_lr_lnpdf += other.noise_lr_lnpdf
+		self.noise_lr_lnpdf.normalize()
+		self.signal_lr_lnpdf += other.signal_lr_lnpdf
+		self.signal_lr_lnpdf.normalize()
+		self.candidates_lr_lnpdf += other.candidates_lr_lnpdf
+		self.candidates_lr_lnpdf.normalize()
+		self.segments += other.segments
+		return self
+
+	@classmethod
+	def get_xml_root(cls, xml, name):
+		"""
+		Sub-classes can use this in their overrides of the
+		.from_xml() method to find the root element of the XML
+		serialization.
+		"""
+		name = u"%s:%s" % (name, cls.ligo_lw_name_suffix)
+		xml = [elem for elem in xml.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == name]
+		if len(xml) != 1:
+			raise ValueError("XML tree must contain exactly one %s element named %s" % (ligolw.LIGO_LW.tagName, name))
+		return xml[0]
+
+
+	@classmethod
+	def from_xml(cls, xml, name = u"string_cusp"):
+		# find the root of the XML tree containing the
+		# serialization of this object
+		xml = cls.get_xml_root(xml, name)
+		# create a mostly uninitialized instance
+		self = cls(None)
+		# popuate from XML
+		self.noise_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"noise_lr_lnpdf")
+		self.signal_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"signal_lr_lnpdf")
+		self.candidates_lr_lnpdf = rate.BinnedLnPDF.from_xml(xml, u"candidates_lr_lnpdf")
+		self.segments = ligolw_param.get_pyvalue(xml, u"segments").strip()
+		self.segments = segmentsUtils.from_range_strings(self.segments.split(",") if self.segments else [], float)
+		return self
+	
+	def to_xml(self, name = u"string_cusp"):
+		# do not allow ourselves to be written to disk without our
+		# PDF's internal normalization metadata being up to date
+		self.noise_lr_lnpdf.normalize()
+		self.signal_lr_lnpdf.normalize()
+		self.candidates_lr_lnpdf.normalize()
+
+		xml = ligolw.LIGO_LW({u"Name": u"%s:%s" % (name, self.ligo_lw_name_suffix)})
+		xml.appendChild(self.noise_lr_lnpdf.to_xml(u"noise_lr_lnpdf"))
+		xml.appendChild(self.signal_lr_lnpdf.to_xml(u"signal_lr_lnpdf"))
+		xml.appendChild(self.candidates_lr_lnpdf.to_xml(u"candidates_lr_lnpdf"))
+		xml.appendChild(ligolw_param.Param.from_pyvalue(u"segments", ",".join(segmentsUtils.to_range_strings(self.segments))))
+		return xml
+
+
+#
+# =============================================================================
+#
+#                       False alarm rates/probabilities 
+#
+# =============================================================================
+#
+
+
+#
+# Class to compute false-alarm probabilities and false-alarm rates from
+# ranking statistic PDFs
+#
+
+class FAPFAR(object):
+	def __init__(self, rankingstatpdf):
+		# input checks
+		if not rankingstatpdf.candidates_lr_lnpdf.array.any():
+			raise ValueError("RankingStatPDF's zero-lag counts are all zero")
+
+		# obtain livetime from rankingstatpdf
+		self.livetime = float(abs(rankingstatpdf.segments)) 
+		
+		# set the rate normalization LR threshold to the mode of
+		# the zero-lag LR distribution.
+		zl = rankingstatpdf.candidates_lr_lnpdf.copy()
+		rate_normalization_lr_threshold, = zl.argmax()
+		print("lr_threshold %f" % rate_normalization_lr_threshold, file=sys.stderr)
+
+		# record trials factor, with safety checks
+		counts = rankingstatpdf.candidates_lr_lnpdf.count
+		assert not numpy.isnan(counts.array).any(), "zero lag log likelihood ratio counts contain NaNs"
+		assert (counts.array >= 0.).all(), "zero lag log likelihood ratio rates contain negative values"
+		self.count_above_threshold = counts[rate_normalization_lr_threshold:,].sum()
+
+		# get noise model ranking stat values and event counts from
+		# bins
+		threshold_index = rankingstatpdf.noise_lr_lnpdf.bins[0][rate_normalization_lr_threshold]
+		ranks = rankingstatpdf.noise_lr_lnpdf.bins[0].lower()[threshold_index:]
+		counts = rankingstatpdf.noise_lr_lnpdf.array[threshold_index:]
+		assert not numpy.isnan(counts).any(), "background log likelihood ratio rates contain NaNs"
+		assert (counts >= 0.).all(), "background log likelihood ratio rates contain negative values"
+
+		# complementary cumulative distribution function
+		ccdf = counts[::-1].cumsum()[::-1]
+		ccdf /= ccdf[0]
+
+		# ccdf is P(ranking statistic > threshold | a candidate).
+		# we need P(rankins statistic > threshold), i.e. need to
+		# correct for the possibility that no candidate is present.
+		# specifically, the ccdf needs to =1-1/e at the candidate
+		# identification threshold, and cdf=1/e at the candidate
+		# threshold, in order for FAR(threshold) * livetime to
+		# equal the actual observed number of candidates.
+		ccdf = gstlalstats.poisson_p_not_0(ccdf)
+
+		# safety checks
+		assert not numpy.isnan(ranks).any(), "log likelihood ratio co-ordinates contain NaNs"
+		assert not numpy.isinf(ranks).any(), "log likelihood ratio co-ordinates are not all finite"
+		assert not numpy.isnan(ccdf).any(), "log likelihood ratio CCDF contains NaNs"
+		assert ((0. <= ccdf) & (ccdf <= 1.)).all(), "log likelihood ratio CCDF failed to be normalized"
+
+		# build interpolator.
+		self.ccdf_interpolator = interpolate.interp1d(ranks, ccdf)
+
+		# record min and max ranks so we know which end of the ccdf
+		# to use when we're out of bounds
+		self.minrank = ranks[0]
+		self.maxrank = ranks[-1]
+
+	@gstlalstats.assert_probability
+	def ccdf_from_rank(self, rank):
+		return self.ccdf_interpolator(numpy.clip(rank, self.minrank, self.maxrank))
+
+	def fap_from_rank(self, rank):
+		# implements equation (8) from Phys. Rev. D 88, 024025.
+		# arXiv: 1209.0718
+		return gstlalstats.fap_after_trials(self.ccdf_from_rank(rank), self.count_above_threshold)
+	
+	def far_from_rank(self, rank):
+		# implements equation (B4) of Phys. Rev. D 88, 024025.
+		# arXiv: 1209.0718. the return value is divided by T to
+		# convert events/experiment to events/second. "tdp" =
+		# true-dismissal probability = 1 - single-event FAP, the
+		# integral in equation (B4)
+		log_tdp = numpy.log1p(-self.ccdf_from_rank(rank))
+		return self.count_above_threshold * -log_tdp / self.livetime
+	
+	def assign_fapfars(self, connection):
+		# assign false-alarm probabilities and false-alarm rates
+		def as_float(f):
+			def g(x):
+				return float(f(x))
+			return g
+		connection.create_function("fap_from_rankingstat", 1, as_float(self.fap_from_rank))
+		connection.create_function("far_from_rankingstat", 1, as_float(self.far_from_rank))
+		connection.cursor().execute("""
+UPDATE
+	coinc_burst
+SET
+	false_alarm_probability = (
+		SELECT
+			fap_from_rankingstat(coinc_event.likelihood)
+		FROM
+			coinc_event
+		WHERE
+			coinc_event.coinc_event_id == coinc_burst.coinc_event_id
+	),
+	false_alarm_rate = (
+		SELECT
+			fap_from_rankingstat(coinc_event.likelihood)
+		FROM
+			coinc_event
+		WHERE
+			coinc_event.coinc_event_id == coinc_burst.coinc_event_id
+	)
+""")
+
+
+#
+# =============================================================================
+#
+#                                     I/O
+#
+# =============================================================================
+#
+
+
+def marginalize_rankingstat(filenames, verbose = False):
+	rankingstat = None
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
 			print("%d/%d:" % (n, len(filenames)), end=' ', file=sys.stderr)
-		xmldoc = ligolw_utils.load_filename(filename, verbose = verbose, contenthandler = StringCoincParamsDistributions.LIGOLWContentHandler)
-		this_coinc_params = StringCoincParamsDistributions.from_xml(xmldoc, u"string_cusp_likelihood")
-		this_seglists = lsctables.SearchSummaryTable.get_table(xmldoc).get_out_segmentlistdict(lsctables.ProcessTable.get_table(xmldoc).get_ids_by_program(u"lalapps_string_meas_likelihood")).coalesce()
+		xmldoc = ligolw_utils.load_filename(filename, verbose = verbose, contenthandler = RankingStat.LIGOLWContentHandler)
+		if rankingstat is None:
+			rankingstat = RankingStat.from_xml(xmldoc)
+		else:
+			rankingstat += RankingStat.from_xml(xmldoc)
 		xmldoc.unlink()
-		if coinc_params is None:
-			coinc_params = this_coinc_params
-		else:
-			coinc_params += this_coinc_params
-		if seglists is None:
-			seglists = this_seglists
-		else:
-			seglists |= this_seglists
-	return coinc_params, seglists
+	return rankingstat
 
 
-#
-# =============================================================================
-#
-#                                   Livetime
-#
-# =============================================================================
-#
-
-
-def time_slides_livetime(seglists, time_slides, min_instruments, verbose = False, clip = None):
-	"""
-	seglists is a segmentlistdict of times when each of a set of
-	instruments were on, time_slides is a sequence of
-	instrument-->offset dictionaries, each vector of offsets in the
-	sequence is applied to the segmentlists and the total time during
-	which at least min_instruments were on is summed and returned.  If
-	clip is not None, after each offset vector is applied to seglists
-	the result is intersected with clip before computing the livetime.
-	If verbose is True then progress reports are printed to stderr.
-	"""
-	livetime = 0.0
-	seglists = seglists.copy()	# don't modify original
-	N = len(time_slides)
-	if verbose:
-		print("computing the live time for %d time slides:" % N, file=sys.stderr)
-	for n, time_slide in enumerate(time_slides):
+def marginalize_rankingstatpdf(filenames, verbose = False):
+	rankingstatpdf = None
+	for n, filename in enumerate(filenames, 1):
 		if verbose:
-			print("\t%.1f%%\r" % (100.0 * n / N), end=' ', file=sys.stderr)
-		seglists.offsets.update(time_slide)
-		if clip is None:
-			livetime += float(abs(segmentsUtils.vote(seglists.values(), min_instruments)))
+			print("%d/%d:" % (n, len(filenames)), end=' ', file=sys.stderr)
+		xmldoc = ligolw_utils.load_filename(filename, verbose = verbose, contenthandler = RankingStat.LIGOLWContentHandler)
+		if rankingstatpdf is None:
+			rankingstatpdf = RankingStatPDF.from_xml(xmldoc)
 		else:
-			livetime += float(abs(segmentsUtils.vote((seglists & clip).values(), min_instruments)))
-	if verbose:
-		print("\t100.0%", file=sys.stderr)
-	return livetime
-
-
-def time_slides_livetime_for_instrument_combo(seglists, time_slides, instruments, verbose = False, clip = None):
-	"""
-	like time_slides_livetime() except computes the time for which
-	exactly the instruments given by the sequence instruments were on
-	(and nothing else).
-	"""
-	livetime = 0.0
-	# segments for instruments that must be on
-	onseglists = seglists.copy(keys = instruments)
-	# segments for instruments that must be off
-	offseglists = seglists.copy(keys = set(seglists) - set(instruments))
-	N = len(time_slides)
-	if verbose:
-		print("computing the live time for %s in %d time slides:" % (", ".join(instruments), N), file=sys.stderr)
-	for n, time_slide in enumerate(time_slides):
-		if verbose:
-			print("\t%.1f%%\r" % (100.0 * n / N), end=' ', file=sys.stderr)
-		onseglists.offsets.update(time_slide)
-		offseglists.offsets.update(time_slide)
-		if clip is None:
-			livetime += float(abs(onseglists.intersection(onseglists.keys()) - offseglists.union(offseglists.keys())))
-		else:
-			livetime += float(abs((onseglists & clip).intersection(onseglists.keys()) - offseglists.union(offseglists.keys())))
-	if verbose:
-		print("\t100.0%", file=sys.stderr)
-	return livetime
+			rankingstatpdf += RankingStatPDF.from_xml(xmldoc)
+		xmldoc.unlink()
+	return rankingstatpdf
 
 
 #
@@ -424,7 +573,7 @@ GROUP BY
 
 def create_sim_burst_best_string_sngl_map(connection, coinc_def_id):
 	"""
-	Construct a sim_burst --> best matching coinc_event mapping.
+	Construct a sim_burst --> best matching sngl_burst mapping.
 	"""
 	connection.cursor().execute("""
 CREATE TEMPORARY TABLE
@@ -459,43 +608,4 @@ AS
 		sim_burst
 	WHERE
 		event_id IS NOT NULL
-	""", (coinc_def_id,))
-
-
-def create_sim_burst_best_string_coinc_map(connection, coinc_def_id):
-	"""
-	Construct a sim_burst --> best matching coinc_event mapping for
-	string cusp injections and coincs.
-	"""
-	# FIXME:  this hasn't finished being ported from the inspiral code
-	connection.cursor().execute("""
-CREATE TEMPORARY TABLE
-	sim_burst_best_string_coinc_map
-AS
-	SELECT
-		sim_burst.simulation_id AS simulation_id,
-		(
-			SELECT
-				coinc_inspiral.coinc_event_id
-			FROM
-				coinc_event_map AS a
-				JOIN coinc_event_map AS b ON (
-					b.coinc_event_id == a.coinc_event_id
-				)
-				JOIN coinc_inspiral ON (
-					b.table_name == 'coinc_event'
-					AND b.event_id == coinc_inspiral.coinc_event_id
-				)
-			WHERE
-				a.table_name == 'sim_burst'
-				AND a.event_id == sim_burst.simulation_id
-				AND coinc_event.coinc_def_id == ?
-			ORDER BY
-				(sngl_burst.chisq / sngl_burst.chisq_dof) / (sngl_burst.snr * sngl_burst.snr)
-			LIMIT 1
-		) AS coinc_event_id
-	FROM
-		sim_burst
-	WHERE
-		coinc_event_id IS NOT NULL
 	""", (coinc_def_id,))
