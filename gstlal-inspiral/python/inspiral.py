@@ -893,7 +893,13 @@ class GracedBWrapper(object):
 				os.mkdir("gracedb_uploads")
 			except OSError:
 				pass
-			with open(os.path.join("gracedb_uploads", filename), "w") as fileobj:
+			gps_dir = str(end_time)[:5]
+ 			try:
+				os.mkdir("gracedb_uploads/%s" % gps_dir)
+			except OSError:
+				pass
+			with open(os.path.join("gracedb_uploads/%s" % gps_dir, filename), "w") as fileobj:
+			#with open(os.path.join("gracedb_uploads", filename), "w") as fileobj:
 				ligolw_utils.write_fileobj(xmldoc, fileobj, gz = False)
 
 			xmldoc.unlink()
