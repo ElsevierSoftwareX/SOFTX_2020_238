@@ -145,6 +145,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-search", default = "LowMass", help = "gracedb type, default LowMass")
 	parser.add_option("--gracedb-pipeline", default = "gstlal", help = "gracedb type, default gstlal")
 	parser.add_option("--gracedb-group", default = "Test", help = "gracedb group, default Test")
+	parser.add_option("--gracedb-label", action = "append", help = "Labels to apply to gracedb uploads. Can be applied multiple times.")
 	parser.add_option("--gracedb-service-url", default = "https://gracedb.ligo.org/api/", help = "GraceDb service url, default https://gracedb.ligo.org/api/")
 	parser.add_option("--lvalert-server-url", default = "https://lvalert.cgca.uwm.edu", help = "lvalert server url, default https://lvalert.cgca.uwm.edu")
 	parser.add_option("--inj-gracedb-far-threshold", type = "float", help = "false alarm rate threshold for gracedb (Hz), if not given gracedb events are not sent (for injection stream)")
