@@ -72,6 +72,7 @@ from gstlal import pipeparts
 from gstlal import calibration_parts
 from gstlal import datasource
 from gstlal import calibhandler
+from gstlal import simplehandler
 
 from ligo import segments
 
@@ -1115,7 +1116,11 @@ if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_
 
 pipeline = Gst.Pipeline(name="gstlal_compute_strain")
 mainloop = GObject.MainLoop()
-handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server)
+if kafka_server is not None:
+	handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server)
+else:
+	print("Using simple handler")
+	handler = simplehandler.Handler(mainloop, pipeline)
 
 # 
 # Turn off debugging tools or verboseness
@@ -1138,7 +1143,8 @@ elif InputConfigs["datasource"] == "frames": # Data is to be read from frame fil
 if (test_latency or InputConfigs["datasource"] == "lvshm"):
 	src = pipeparts.mktee(pipeline, src)
 	src_latency = pipeparts.mklatency(pipeline, src, name = "%s_src" % OutputConfigs["frametype"], silent = silent)
-	src_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	if kafka_server is not None:
+		src_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, src_latency)
 
 
@@ -2289,7 +2295,8 @@ if (test_latency or InputConfigs["datasource"] == "lvshm"):
 	ctrl = pipeparts.mktee(pipeline, ctrl)
 	ctrl_latency = calibration_parts.mkresample(pipeline, ctrl, 0, False, latency_metrics_caps) 
 	ctrl_latency = pipeparts.mklatency(pipeline, ctrl_latency, name = "%s_ctrl" % OutputConfigs["frametype"], silent = silent)
-	ctrl_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	if kafka_server is not None:
+		ctrl_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, ctrl_latency)
 
 #
@@ -2387,7 +2394,8 @@ if test_latency or InputConfigs["datasource"] == "lvshm":
 	res = pipeparts.mktee(pipeline, res)
 	res_latency = calibration_parts.mkresample(pipeline, res, 0, False, latency_metrics_caps) 
 	res_latency = pipeparts.mklatency(pipeline, res_latency, name = "%s_res" % OutputConfigs["frametype"], silent = silent)
-	res_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	if kafka_server is not None:
+		res_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, res_latency)
 
 filter_settle_time = max(res_filter_settle_time, tst_filter_settle_time, pumuim_filter_settle_time)
@@ -2419,7 +2427,8 @@ if test_latency or InputConfigs["datasource"] == "lvshm":
 	strain = pipeparts.mktee(pipeline, strain)
 	strain_latency = calibration_parts.mkresample(pipeline, strain, 0, False, latency_metrics_caps)
 	strain_latency = pipeparts.mklatency(pipeline, strain_latency, name = "%s_hoft" % OutputConfigs["frametype"], silent = silent)
-	strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	if kafka_server is not None:
+		strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, strain_latency)
 
 # Put the units back to strain before writing to frames
@@ -2965,7 +2974,8 @@ if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_lis
 		clean_strain = pipeparts.mktee(pipeline, clean_strain)
 		clean_strain_latency = calibration_parts.mkresample(pipeline, clean_strain, 0, False, latency_metrics_caps)
 		clean_strain_latency = pipeparts.mklatency(pipeline, clean_strain_latency, name = "%s_hoft_cleaned" % OutputConfigs["frametype"], silent = silent)
-		clean_strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		if kafka_server is not None:
+			clean_strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
 		pipeparts.mkfakesink(pipeline, clean_strain_latency)
 	clean_straintagstr = "units=strain,channel-name=%sCALIB_STRAIN_CLEAN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
 	clean_straintee = pipeparts.mktee(pipeline, clean_strain)
@@ -3027,7 +3037,8 @@ if compute_calib_statevector:
 		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
 		calibstatevector_latency = calibration_parts.mkresample(pipeline, calibstatevector, 0, False, calibstate_metrics_caps)
 		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector_latency, name = "%s_calibstatevec" % OutputConfigs["frametype"], silent = silent)
-		calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		if kafka_server is not None:
+			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
 		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
@@ -3036,7 +3047,8 @@ if compute_calib_statevector:
 		statevector_monitor = calibration_parts.mkresample(pipeline, calibstatevector, 0, False, calibstate_metrics_caps)
 		statevector_monitor = pipeparts.mkgeneric(pipeline, statevector_monitor, "lal_nxydump")
 		statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)
-		statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
+		if kafka_server is not None:
+			statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
@@ -3311,7 +3323,8 @@ mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 if test_latency or InputConfigs["datasource"] == "lvshm":
 	mux = pipeparts.mktee(pipeline, mux)
 	mux_latency = pipeparts.mklatency(pipeline, mux, name = "%s_sink" % OutputConfigs["frametype"], silent = silent)
-	mux_latency.connect("notify::current-latency", handler.latency_new_buffer)
+	if kafka_server is not None:
+		mux_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, mux_latency)
 
 if OutputConfigs["datasink"] == "lvshm":

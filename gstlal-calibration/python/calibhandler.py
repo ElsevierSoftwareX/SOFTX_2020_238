@@ -67,11 +67,11 @@ class Handler(simplehandler.Handler):
 		#
 		# initialize
 		#
-		self.lock = threading.Lock()
 		self.pipeline = pipeline
 		self.verbose = verbose
 		self.kafka_server = kafka_server
 		if self.kafka_server is not None:
+			self.lock = threading.Lock()
 			from kafka import KafkaProducer
 			from kafka import errors
 			try:
