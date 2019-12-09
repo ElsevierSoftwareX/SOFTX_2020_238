@@ -93,6 +93,7 @@ $ gstlal_inspiral_calc_snr \
 --verbose
 """
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
+import math
 import os
 import sys
 import time
@@ -105,6 +106,7 @@ from gstlal import multirate_datasource
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import reference_psd
+from gstlal import simulation
 from gstlal import svd_bank
 from gstlal import svd_bank_snr
 from gstlal.stats.inspiral_lr import LnLRDensity
@@ -117,9 +119,11 @@ GObject.threads_init()
 Gst.init(None)
 
 import lal
+from lal import LIGOTimeGPS
 from lal import UTCToGPS
 import lal.series
 
+from ligo import segments
 from ligo.lw import ligolw
 from ligo.lw import utils as ligolw_utils
 from ligo.lw import param as ligolw_param
@@ -179,10 +183,24 @@ def parse_command_line():
 	group.add_option("--time-span", metavar = "seconds", type = "int", default = 500, help = "The time span around the event's trigger time, must be larger or equal to 500s (default = 500).")
 	parser.add_option_group(group)
 
-	group = OptionGroup(parser, "Ranking Statistic Options", "Adjust ranking statistic behaviour.")
+	group = OptionGroup(parser, "Trigger Generator Control / Outputs Options", "Adjust the trigger generator's behaviors and its outputs.")
+	group.add_option("--FAR-trialsfactor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb")
+	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to snapshot candidate and ranking statistic data to disk when running online.")
+	group.add_option("--ranking-stat-pdf", metavar = "url", help = "Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources)")
+	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly.  Required when --data-source is lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
+	group.add_option("--zerolag-rankingstat-pdf", metavar = "url", help = "Record a histogram of the likelihood ratio ranking statistic values assigned to zero-lag candidates in this XML file.  This is used to construct the extinction model and set the overall false-alarm rate normalization during online running.  If it does not exist at start-up, a new file will be initialized, otherwise the counts will be added to the file's contents.  Required when --data-source is lvshm or framexmit;  optional otherwise.")
 	group.add_option("--time-slide-file", metavar = "filename", help = "Set the name of the xml file to get time slide offsets (require).")
 	group.add_option("--min-instruments", metavar = "count", type = "int", default = 2, help = "Set the minimum number of instruments that must contribute triggers to form a candidate (default = 2).")
+	group.add_option("--singles-threshold", metavar = "SNR", type = "float", default = float("inf"), help = "Set the SNR threshold at which to record single-instrument events in the output (default = +inf, i.e. don't retain singles).")
+	group.add_option("--control-peak-time", metavar = "seconds", type = "int", help = "Set a time window in seconds to find peaks in the control signal (optional, default is to disable composite detection statistic).")
 	group.add_option("--coincidence-threshold", metavar = "seconds", type = "float", default = 0.005, help = "Set the coincidence window in seconds (default = 0.005 s).  The light-travel time between instruments will be added automatically in the coincidence test.")
+
+	group.add_option("--gracedb-service-url", metavar = "url", type = "str", help = "Fake graceDb service url. This can only be a local url.")
+	group.add_option("--gracedb-far-threshold", metavar = "Hertz", type = "float", help = "False-alarm rate threshold for fake gracedb uploads in Hertz (default = do not upload to gracedb).")
+	group.add_option("--gracedb-group", metavar = "name", default = "Test", help = "Gracedb group to which to upload events (default is Test).")
+	group.add_option("--gracedb-pipeline", metavar = "name", default = "gstlal", help = "Name of pipeline to provide in fake GracedB uploads (default = 'gstlal').")
+	group.add_option("--gracedb-search", metavar = "name", default = "event-followup", help = "Name of search to provide in fake GracedB uploads (default = 'event-followup').")
+	group.add_option("--reconstruction-segment", metavar = "start:stop", action = "append", help = "Only reconstruct the SNRs for this time interval. Note: Use this carefully, this is not compatible with the option --start and --end. This is only added for coincidence document (optional).")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Output Control Options", "Control SNR / RankingStat outputs.")
@@ -195,6 +213,7 @@ def parse_command_line():
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Program Options", "Control Program Behaviour.")
+	group.add_option("--fir-stride", metavar = "seconds", type = "float", default = 8, help = "Set the length of the fir filter stride in seconds. default = 8")
 	group.add_option("--verbose", action = "store_true", help = "Be verbsoe.")
 	group.add_option("--comment", metavar = "message", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
 	group.add_option("--save", action = "store_true", default = False, help = "Save frame cache / svd bank / psd if using --gid (default = False).")
@@ -274,6 +293,7 @@ def parse_command_line():
 		if set(psd) < set(gw_data_source_info.channel_dict):
 			raise ValueError("Missing PSD(s) for %s." % (", ".join(sorted(set(gw_data_source_info.channel_dict) - set(psd)))))
 	else:
+		psd = dict((ifo, None) for ifo in set(gw_data_source_info.channel_dict))
 		options.track_psd = True
 
 	#
@@ -335,11 +355,13 @@ options, gw_data_source_info, banks_dict, psds_dict = parse_command_line()
 #
 #====================================================================================================
 
+# Prepare veto segements
 if options.veto_segments_file is not None:
 	veto_segments = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.veto_segments_file, verbose = options.verbose, contenthandler = LIGOLWContentHandler), options.veto_segments_name).coalesce()
 else:
 	veto_segments = None
 
+# Prepare offsetvectors
 offsetvectors = lsctables.TimeSlideTable.get_table(ligolw_utils.load_filename(options.time_slide_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)).as_dict().values()
 all_instruments = reduce(lambda a, b: a | set(b), offsetvectors, set())
 if len(all_instruments) < options.min_instruments:
@@ -347,6 +369,26 @@ if len(all_instruments) < options.min_instruments:
 if not (all_instruments >= set(gw_data_source_info.channel_dict)):
 	raise ValueError("--time-slide-file names %s but have channel names for %s" % (", ".join(sorted(all_instruments)), ", ".join(sorted(gw_data_source_info.channel_dict))))
 
+# Load template ids and horizon_factors
+sngl_inspiral_table = banks_dict.values()[0][options.bank_number or 0].sngl_inspiral_table.copy()
+horizon_factors = {}
+for bank in banks_dict.values()[0]:
+	sngl_inspiral_table.extend(bank.sngl_inspiral_table)
+	horizon_factors.update(bank.horizon_factors)
+template_ids = frozenset(row.template_id for row in sngl_inspiral_table)
+
+# Choose to optionally reconstruct segments around injections (not
+# blind injections!)
+if options.injections:
+	offset_padding = max(math.ceil(abs(row.end))+1 for bank in banks_dict.values()[0] for row in bank.sngl_inspiral_table)
+	reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
+elif options.reconstruction_segment:
+	reconstruction_segment_list = segments.segmentlist()
+	for reconstruction_segment in options.reconstruction_segment:
+		t0, t1 = reconstruction_segment.split(":")
+		reconstruction_segment_list.append(segments.segment(LIGOTimeGPS(int(t0)), LIGOTimeGPS(int(t1))))
+else:
+	reconstruction_segment_list = None
 #====================================================================================================
 #
 #						main
@@ -363,16 +405,34 @@ mainloop = GObject.MainLoop()
 # Construct Pipeline Handler
 #
 
-rankingstat = far.RankingStat(
-	template_ids = set(row.template_id for row in banks_dict.values()[0][options.bank_number or 0].sngl_inspiral_table),
-	instruments = set(gw_data_source_info.channel_dict),
-	delta_t = options.coincidence_threshold,
-	min_instruments = options.min_instruments,
-	horizon_factors = banks_dict.values()[0][options.bank_number or 0].horizon_factors
-)
+if options.ranking_stat_input:
+	xmldoc = ligolw_utils.load_url(options.ranking_stat_input, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler)
+	rankingstat, _ = far.parse_likelihood_control_doc(xmldoc)
+	if rankingstat is None:
+		raise ValueError("--ranking-stat-input does not contain parameter distribution data.")
+	if rankingstat.template_ids is None:
+		rankingstat.template_ids = template_ids
+	elif rankingstat.template_ids != template_ids:
+		raise ValueError("--ranking-stat-input has wrong template ids.")
+	if rankingstat.instruments != all_instruments:
+		raise ValueError("--ranking-stat-input does not have the same instruments as defined in --time-slide-file.")
+	if rankingstat.delta_t != options.coincidence_threshold:
+		raise ValueError("--ranking-stat-input does not have the same delta_t as --coincidence-threshold.")
+	if rankingstat.min_instruments != options.min_instruments:
+		raise ValueError("--ranking-stat-input does not have the same min_instruments as --min-instruments.")
+	rankingstat.numerator.set_horizon_factors(horizon_factors)
+else:
+	rankingstat = far.RankingStat(
+		template_ids = template_ids,
+		instruments = set(gw_data_source_info.channel_dict),
+		delta_t = options.coincidence_threshold,
+		min_instruments = options.min_instruments,
+		horizon_factors = horizon_factors
+	)
+
 coincs_document = inspiral.CoincsDocument(
 	url = options.coinc_output,
-	process_params = {},
+	process_params = options.__dict__.copy(),
 	process_start_time = UTCToGPS(time.gmtime()),
 	comment = options.comment,
 	instruments = rankingstat.instruments,
@@ -390,18 +450,8 @@ snr_document = svd_bank_snr.SignalNoiseRatioDocument(
 	verbose = options.verbose
 )
 
-handler = svd_bank_snr.SNRPipelineHandler(
-	mainloop,
-	pipeline,
-	coincs_document,
-	rankingstat,
-	snr_document,
-	banks_dict.values()[0][options.bank_number or 0].horizon_distance_func,
-	ranking_stat_output_url = options.ranking_stat_output,
-	verbose = options.verbose)
-
+handler = svd_bank_snr.SNRPipelineHandler(snr_document, verbose = options.verbose)
 snr_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_snr_buffer)
-trigger_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
 
 # Switch between mode
 if options.mode == 0:
@@ -412,31 +462,35 @@ if options.mode == 0:
 	for instrument in gw_data_source_info.channel_dict:
 		bank = banks_dict[instrument][options.bank_number]
 		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, options.verbose)
-		hoftdict = multirate_datasource.mkwhitened_multirate_src(
+		hoft = multirate_datasource.mkwhitened_multirate_src(
 			pipeline,
-			src = src,
-			rates = set(rate for rate in banks_dict[instrument][options.bank_number].get_rates()),
-			instrument = instrument,
+			src,
+			set(rate for rate in banks_dict[instrument][options.bank_number].get_rates()),
+			instrument,
+			dqvector = dqvector,
+			fir_whiten_reference_psd = banks_dict[instrument][options.bank_number].processed_psd,
+			ht_gate_threshold = options.ht_gate_threshold,
 			psd = psds_dict[instrument],
 			psd_fft_length = options.psd_fft_length,
-			ht_gate_threshold = options.ht_gate_threshold,
-			veto_segments = veto_segments,
-			track_psd = options.track_psd,
-			width = options.output_width,
 			statevector = statevector,
-			dqvector = dqvector,
-			fir_whiten_reference_psd = banks_dict[instrument][options.bank_number].processed_psd
+			track_psd = options.track_psd,
+			veto_segments = veto_segments,
+			width = options.output_width
 		)
 
 		snr = lloidparts.mkLLOIDhoftToSnrSlices(
 			pipeline,
-			hoftdict = hoftdict,
-			bank = bank,
-			control_snksrc = (None, None),
-			block_duration = 8 * Gst.SECOND,
-			fir_stride = 16,
-			verbose = options.verbose,
-			logname = instrument
+			hoft,
+			bank,
+			(None, None),
+			1 * Gst.SECOND,
+			control_peak_time = options.control_peak_time,
+			fir_stride = options.fir_stride,
+			logname = instrument,
+			nxydump_segment = None,
+			reconstruction_segment_list = reconstruction_segment_list,
+			snrslices = None,
+			verbose = options.verbose
 		)
 
 		snr = pipeparts.mktee(pipeline, snr)
@@ -466,34 +520,35 @@ elif options.mode == 1:
 		template = banks_dict[instrument][0].templates[0]
 		src, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 
-		hoftdict = multirate_datasource.mkwhitened_multirate_src(
+		hoft = multirate_datasource.mkwhitened_multirate_src(
 			pipeline,
-			src = src,
-			rates = [banks_dict[instrument][0].sample_rate],
-			instrument = instrument,
+			src,
+			[banks_dict[instrument][0].sample_rate],
+			instrument,
+			dqvector = dqvector,
+			fir_whiten_reference_psd = None,
+			ht_gate_threshold = options.ht_gate_threshold,
 			psd = psds_dict[instrument],
 			psd_fft_length = options.psd_fft_length,
-			ht_gate_threshold = options.ht_gate_threshold,
-			veto_segments = veto_segments,
-			track_psd = options.track_psd,
-			width = options.output_width,
 			statevector = statevector,
-			dqvector = dqvector,
-			fir_whiten_reference_psd = None
+			track_psd = options.track_psd,
+			veto_segments = veto_segments,
+			width = options.output_width
 		)
 
-		snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkfirbank(pipeline, hoftdict[banks_dict[instrument][0].sample_rate], latency = 0, fir_matrix = [template.real, template.imag] ,block_stride = 16 * banks_dict[instrument][0].sample_rate, time_domain = False))
+		snr = pipeparts.mktogglecomplex(pipeline, pipeparts.mkfirbank(pipeline, hoft[banks_dict[instrument][0].sample_rate], latency = 0, fir_matrix = [template.real, template.imag] ,block_stride = 16 * banks_dict[instrument][0].sample_rate, time_domain = False))
 
 		snr = pipeparts.mktee(pipeline, snr)
 		# attach appsink to collect SNRs
 		snr_appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, snr), name = instrument)
 
 		# add itacac
+		nsamps_window = banks_dict[instrument][0].sample_rate
 		if dummy_bank_id not in itacac_dict:
 			itacac_dict[dummy_bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
 		head = itacac_dict[dummy_bank_id]
 		pad = head.get_request_pad("sink%d" % len(head.sinkpads))
-		for prop, val in [("n", banks_dict[instrument][0].sample_rate), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", banks_dict[instrument][0].template_bank_filename), ("sigmasq", banks_dict[instrument][0].sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(banks_dict[instrument][0].autocorrelation_bank)), ("autocorrelation_mask", banks_dict[instrument][0].autocorrelation_mask)]:
+		for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", banks_dict[instrument][0].template_bank_filename), ("sigmasq", banks_dict[instrument][0].sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(banks_dict[instrument][0].autocorrelation_bank)), ("autocorrelation_mask", banks_dict[instrument][0].autocorrelation_mask)]:
 			pad.set_property(prop, val)
 		pipeparts.mkqueue(pipeline, snr).srcpads[0].link(pad)
 
@@ -501,8 +556,37 @@ elif options.mode == 1:
 # Attach appsink to collect triggers
 #
 
+# Note: we have to separately init the lloidhandler #FIXME
+handler.lloidhandler_init(
+	mainloop,
+	pipeline,
+	coincs_document,
+	rankingstat,
+	banks_dict.values()[0][options.bank_number or 0].horizon_distance_func,
+	gracedbwrapper = inspiral.GracedBWrapper(
+		rankingstat.instruments,
+		far_threshold = options.gracedb_far_threshold,
+		min_instruments = options.min_instruments,
+		group = options.gracedb_group,
+		search = options.gracedb_search,
+		pipeline = options.gracedb_pipeline,
+		service_url = options.gracedb_service_url,
+		upload_auxiliary_data = True,
+		verbose = options.verbose
+	),
+	zerolag_rankingstatpdf_url = options.zerolag_rankingstat_pdf,
+	rankingstatpdf_url = options.ranking_stat_pdf,
+	ranking_stat_output_url = options.ranking_stat_output,
+	ranking_stat_input_url = options.ranking_stat_input,
+	likelihood_snapshot_interval = options.likelihood_snapshot_interval,
+	sngls_snr_threshold = options.singles_threshold,
+	FAR_trialsfactor = options.FAR_trialsfactor,
+	verbose = options.verbose
+)
+
 # since only one template bank is being processed, there should not be more than one item in itacac_dict.
 assert len(itacac_dict.values()) == 1
+trigger_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
 trigger_appsync.add_sink(pipeline, itacac_dict.values()[0], caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "bank_%s_sink" % itacac_dict.keys()[0])
 
 #
