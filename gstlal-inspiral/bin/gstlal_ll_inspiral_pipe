@@ -196,6 +196,7 @@ def parse_command_line():
 	parser.add_option("--zookeeper-port", type = "int", metavar = "number", help = "Set the zookeeper port. default 2181", default = 2181)
 	parser.add_option("--output-kafka-server", metavar = "addr", help = "Set the kafka server hostname to send output data to - note, for now this must be the cluster facing ip address of the submit node. example = 10.14.0.112:9092")
 	parser.add_option("--run-output-kafka", action = "store_true", help = "Actually launch a zookeeper and kafka job as part of the dag")
+	parser.add_option("--delay-uploads", action = "store_true", help = "Choose whether to delay uploads to allow aggregation of events downstream from many gstlal_inspiral jobs (default is False).")
 	parser.add_option("--agg-data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
 	parser.add_option("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
 	parser.add_option("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
@@ -313,6 +314,9 @@ trigaggJob = dagparts.DAGJob("gstlal_ll_inspiral_trigger_aggregator", condor_com
 # DQ job
 dqJob = dagparts.DAGJob("gstlal_ll_dq", condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command))
 
+# event aggregator job
+eventUploaderJob = dagparts.DAGJob("gstlal_ll_inspiral_event_uploader", condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command))
+
 if options.state_backup_destination:
 	# State saving job 
 	stateJob = dagparts.DAGJob("gstlal_ll_inspiral_save_state", universe = "local", condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command))
@@ -428,6 +432,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 		"coincidence-threshold":options.coincidence_threshold,
 		"fir-stride":options.fir_stride,
 		"data-source":options.data_source,
+		"delay-uploads": options.delay_uploads,
 		"gracedb-far-threshold":options.gracedb_far_threshold,
 		"gracedb-group":options.gracedb_group,
 		"gracedb-pipeline":options.gracedb_pipeline,
@@ -491,6 +496,7 @@ for num_insp_nodes, (svd_banks, likefile, zerolikefile) in enumerate(zip(bank_gr
 			"coincidence-threshold":options.coincidence_threshold,
 			"fir-stride":options.fir_stride,
 			"data-source":options.data_source,
+			"delay-uploads": options.delay_uploads,
 			"gracedb-far-threshold":options.inj_gracedb_far_threshold,
 			"gracedb-group":options.inj_gracedb_group,
 			"gracedb-pipeline":options.inj_gracedb_pipeline,
@@ -611,6 +617,24 @@ if options.agg_data_backend == 'influx':
 aggNode = dagparts.DAGNode(trigaggJob, dag, [], opts = trigagg_options)
 
 #
+# set up event aggregator job if needed
+#
+
+if options.delay_uploads:
+	event_agg_options = {
+		"kafka-server": options.output_kafka_server,
+		"gracedb-group": options.gracedb_group,
+		"gracedb-pipeline": options.gracedb_pipeline,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-service-url": options.gracedb_service_url,
+		"num-jobs": len(jobTags),
+		"input-topic": "events",
+		"rootdir": "event_uploader",
+		"verbose": "",
+	}
+	eventUploaderNode = dagparts.DAGNode(eventUploaderJob, dag, [], opts = event_agg_options)
+
+#
 # summary page
 #
 
@@ -624,7 +648,6 @@ aggNode = dagparts.DAGNode(trigaggJob, dag, [], opts = trigagg_options)
 #else:
 #
 #	pageNode = dagparts.DAGNode(pageJob, dag, [], opts = {"directory":".", "web-dir": options.web_dir}, input_files = {"":jobTags}, output_files = {})
-
 
 if options.state_backup_destination:
 	stateNode = dagparts.DAGNode(stateJob, dag, [], opts = {}, input_files = {"":[options.state_backup_destination, options.marginalized_likelihood_file] + options.likelihood_files}, output_files = {})
