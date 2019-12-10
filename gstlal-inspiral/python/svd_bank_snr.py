@@ -17,6 +17,7 @@ from gstlal import lloidhandler
 from gstlal import lvalert_helper
 from gstlal import pipeio
 from gstlal import streamthinca
+from gstlal import simplehandler
 from gstlal import svd_bank
 from gstlal.lloidhandler import SegmentsTracker
 from gstlal.snglinspiraltable import GSTLALSnglInspiral as SnglInspiral
@@ -290,38 +291,9 @@ class SNR(object):
 		tseries.data.data = array
 		return tseries
 
-
-class SNRPipelineHandler(lloidhandler.Handler):
-	"""Simplified version of lloidhandler.Handler.
-
-	This is the SNR pipeline handler derived from lloidhandler. It adds additional
-	control for collecting SNR timeseries.
-
-	"""
-	def __init__(self, snr_document, verbose = False):
-		self.snr_document = snr_document
-		self.verbose = verbose
-
-	def lloidhandler_init(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, FAR_trialsfactor = 1.0, min_instruments = None, verbose = False):
-		super(SNRPipelineHandler, self).__init__(
-			mainloop,
-			pipeline,
-			coincs_document,
-			rankingstat,
-			horizon_distance_func,
-			gracedbwrapper = gracedbwrapper,
-			zerolag_rankingstatpdf_url = zerolag_rankingstatpdf_url,
-			rankingstatpdf_url = rankingstatpdf_url,
-			ranking_stat_output_url = ranking_stat_output_url,
-			ranking_stat_input_url = ranking_stat_input_url,
-			likelihood_snapshot_interval = likelihood_snapshot_interval,
-			sngls_snr_threshold = sngls_snr_threshold,
-			FAR_trialsfactor = FAR_trialsfactor,
-			kafka_server = None,
-			cluster = True,
-			tag = "0000",
-			verbose = verbose
-		)
+class SNRHandler(object):
+	def __init__(self, *arg, **kwargs):
+		super(SNRHandler, self).__init__(*arg, **kwargs)
 
 	def appsink_new_snr_buffer(self, elem):
 		"""Callback function for SNR appsink."""
@@ -366,6 +338,38 @@ class SNRPipelineHandler(lloidhandler.Handler):
 			snrs.finish(COMPLEX)
 		self.snr_document.write_output_url(outdir, row_number=row_number)
 
+
+class Handler(SNRHandler, lloidhandler.Handler):
+	"""Simplified version of lloidhandler.Handler.
+
+	This is the SNR pipeline handler derived from lloidhandler. It adds additional
+	control for collecting SNR timeseries.
+
+	"""
+	def __init__(self, snr_document, verbose=False):
+		self.snr_document = snr_document
+		self.verbose = verbose
+
+	def init(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, FAR_trialsfactor = 1.0 ):
+		super(Handler, self).__init__(
+			mainloop,
+			pipeline,
+			coincs_document,
+			rankingstat,
+			horizon_distance_func,
+			gracedbwrapper = gracedbwrapper,
+			zerolag_rankingstatpdf_url = zerolag_rankingstatpdf_url,
+			rankingstatpdf_url = rankingstatpdf_url,
+			ranking_stat_output_url = ranking_stat_output_url,
+			ranking_stat_input_url = ranking_stat_input_url,
+			likelihood_snapshot_interval = likelihood_snapshot_interval,
+			sngls_snr_threshold = sngls_snr_threshold,
+			FAR_trialsfactor = FAR_trialsfactor,
+			kafka_server = None,
+			cluster = True,
+			tag = "0000",
+			verbose = self.verbose
+		)
 
 #=============================================================================================
 #
