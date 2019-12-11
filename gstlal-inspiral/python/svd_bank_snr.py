@@ -291,9 +291,9 @@ class SNR(object):
 		tseries.data.data = array
 		return tseries
 
-class SNRHandler(object):
+class SNRHandlerMixin(object):
 	def __init__(self, *arg, **kwargs):
-		super(SNRHandler, self).__init__(*arg, **kwargs)
+		super(SNRHandlerMixin, self).__init__(*arg, **kwargs)
 
 	def appsink_new_snr_buffer(self, elem):
 		"""Callback function for SNR appsink."""
@@ -339,18 +339,34 @@ class SNRHandler(object):
 		self.snr_document.write_output_url(outdir, row_number=row_number)
 
 
-class Handler(SNRHandler, lloidhandler.Handler):
-	"""Simplified version of lloidhandler.Handler.
+class SimpleSNRHandler(SNRHandlerMixin, simplehandler.Handler):
+	"""Simple SNR pipeline handler.
 
-	This is the SNR pipeline handler derived from lloidhandler. It adds additional
-	control for collecting SNR timeseries.
+	This is the SNR pipeline handler derived from simplehandler. It
+	only implements the controls for collecting SNR timeseries.
 
 	"""
-	def __init__(self, snr_document, verbose=False):
+	def __init__(self, pipeline, mainloop, snr_document, verbose=False):
+		super(SimpleSNRHandler, self).__init__(mainloop, pipeline)
+		self.lock = threading.Lock()
 		self.snr_document = snr_document
 		self.verbose = verbose
 
-	def init(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, FAR_trialsfactor = 1.0 ):
+class Handler(SNRHandlerMixin, lloidhandler.Handler):
+	"""Simplified version of lloidhandler.Handler.
+
+	This is the SNR pipeline handler derived from lloidhandler. In
+	addition to the control for collecting SNR timeseries, it
+	implements controls for trigger generator.
+
+	"""
+	def __init__(self, snr_document, verbose=False):
+		self.lock = threading.Lock()
+		self.snr_document = snr_document
+		self.verbose = verbose
+
+	# Explictly delay the class initialization.
+	def init(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url=None, rankingstatpdf_url=None, ranking_stat_output_url=None, ranking_stat_input_url=None, likelihood_snapshot_interval=None, sngls_snr_threshold=None, FAR_trialsfactor=1.0, verbose=False):
 		super(Handler, self).__init__(
 			mainloop,
 			pipeline,
@@ -368,7 +384,7 @@ class Handler(SNRHandler, lloidhandler.Handler):
 			kafka_server = None,
 			cluster = True,
 			tag = "0000",
-			verbose = self.verbose
+			verbose = verbose
 		)
 
 #=============================================================================================
@@ -480,6 +496,7 @@ class Bank(object):
 		self.bank_id = None
 		self.sample_rate = rate
 		self.template_bank_filename = None
+		self.processed_psd = None
 		self.horizon_factors = None
 		self.horizon_distance_func = lambda psd, snr: [100, None]
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
@@ -518,6 +535,7 @@ class Bank(object):
 
 			bank.bank_id = ligolw_param.get_pyvalue(root, "bank_id")
 			bank.sample_rate = ligolw_param.get_pyvalue(root, "sample_rate")
+			bank.processed_psd = None
 			bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
 			bank.template_bank_filename = ligolw_param.get_pyvalue(root, "template_bank_filename")
 			bank.sigmasq = ligolw_array.get_array(root, "sigmasq").array
