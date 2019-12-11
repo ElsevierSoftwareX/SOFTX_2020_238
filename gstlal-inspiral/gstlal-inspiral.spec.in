@@ -19,6 +19,7 @@ Requires: h5py
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
+Requires: lalapps
 Requires: ligo-gracedb >= 1.11
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
