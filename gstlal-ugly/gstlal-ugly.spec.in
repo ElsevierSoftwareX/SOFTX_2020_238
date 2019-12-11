@@ -11,7 +11,7 @@ Requires: python >= @MIN_PYTHON_VERSION@
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
 Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
-Requires: python2-ligo-scald
+Requires: python2-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 Requires: fftw >= 3
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
