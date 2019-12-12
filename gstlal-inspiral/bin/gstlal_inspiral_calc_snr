@@ -184,7 +184,7 @@ def parse_command_line():
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Trigger Generator Control / Outputs Options", "Adjust the trigger generator's behaviors and its outputs.")
-	group.add_option("--FAR-trialAfactor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb (default = 1.0).")
+	group.add_option("--FAR-trialsfactor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb (default = 1.0).")
 	group.add_option("--likelihood-snapshot-interval", type = "float", metavar = "seconds", help = "How often to snapshot candidate and ranking statistic data to disk when running online (optional).")
 	group.add_option("--ranking-stat-pdf", metavar = "url", help = "Set the URL from which to load the ranking statistic PDF.  This is used to compute false-alarm probabilities and false-alarm rates and is required for online operation (when --data-source is framexmit or lvshm).  It is forbidden for offline operation (all other data sources)")
 	group.add_option("--ranking-stat-input", metavar = "url", help = "Set the URL from which to load a ranking statistic definition.  When this is enabled, signal candidates will have ranking statistic values assigned on-the-fly.  Required when --data-source is lvshm or framexmit;  must also set --likelihood-snapshot-interval.")
@@ -334,12 +334,28 @@ def parse_command_line():
 
 	# Use Finite Impulse Response
 	elif options.mode == 1:
+		missing_required_options = []
+		# Checking required options
+		if options.bank is None:
+			missing_required_options.append("--bank")
+		if options.bank_number is None and options.coinc is None:
+			missing_required_options.append("--bank-number")
+		# Raise VauleError is required option(s) is/are missing
+		if missing_required_options:
+			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
+
 		bank_urls = inspiral.parse_svdbank_string(options.bank)
 		banks_dict = svd_bank_snr.parse_bank_files(bank_urls)
 
 		# Check if there enough templates for GW data
 		if set(banks_dict) < set(gw_data_source_info.channel_dict):
 			raise ValueError("Missing table(s) for %s." % (", ".join(sorted(set(gw_data_source_info.channel_dict) - set(banks_dict)))))
+		# Check if --bank-number and --row-number is valid
+		for banks in banks_dict.values():
+			if not (0 <= options.bank_number < len(banks)) :
+				raise ValueError("Invaild --bank-number %d. Possible id [0-%d)\n" % (options.bank_number, len(banks)))
+			if options.row_number is not None and not (0 <= options.row_number < len(banks[options.bank_number].sngl_inspiral_table)):
+				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[options.bank_number].sngl_inspiral_table)))
 
 	# Unknown mode
 	else:
