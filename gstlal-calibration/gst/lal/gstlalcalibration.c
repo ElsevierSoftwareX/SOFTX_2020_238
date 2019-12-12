@@ -73,6 +73,7 @@
 #include <gstlal_typecast.h>
 #include <gstlal_matrixsolver.h>
 #include <gstlal_sensingtdcfs.h>
+#include <gstlal_makediscont.h>
 
 
 /*
@@ -110,6 +111,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_typecast", GSTLAL_TYPECAST_TYPE},
 		{"lal_matrixsolver", GSTLAL_MATRIXSOLVER_TYPE},
 		{"lal_sensingtdcfs", GSTLAL_SENSINGTDCFS_TYPE},
+		{"lal_makediscont", GSTLAL_MAKEDISCONT_TYPE},
 		{NULL, 0},
 	};
 
