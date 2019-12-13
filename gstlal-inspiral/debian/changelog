@@ -1,3 +1,14 @@
+gstlal-inspiral (1.6.9-1) unstable; urgency=low
+
+  * add option in online DAG to aggregate events rather than
+    upload events directly from gstlal_inspiral jobs
+  * add gstlal_ll_inspiral_event_uploader to aggregate events in
+    low-latency operation
+  * gstlal_snglinspiral.h: add missing headers, includes
+  * ilwdify: remove call to .end_of_rows()
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 12 Dec 2019 15:58:20 -0800
+
 gstlal-inspiral (1.6.8-1) unstable; urgency=low
 
   * lloidhandler: aggregate max SNRs from each IFO rather than across ifos -
