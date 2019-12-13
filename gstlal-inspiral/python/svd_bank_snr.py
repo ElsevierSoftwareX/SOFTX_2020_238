@@ -502,8 +502,8 @@ class Bank(object):
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 
 		# Until the correct way to set the time_slice for multiple templates is known, generating more than one
-		# template is forbidden.
-		assert len(self.sngl_inspiral_table) == 1
+		# template is forbidden.  #FIXME: it looks like allowing this, the SNRs is unaffected
+		# assert len(self.sngl_inspiral_table) == 1
 
 		# FIXME: still correct if we have more than one templates?
 		template = min(self.sngl_inspiral_table, key = lambda row: row.mchirp)
