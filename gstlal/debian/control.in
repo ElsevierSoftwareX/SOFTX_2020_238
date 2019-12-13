@@ -28,7 +28,9 @@ Build-Depends:
  python-all-dev (>= @MIN_PYTHON_VERSION@),
  python-gi-dev (>= @MIN_PYGOBJECT_VERSION@),
  python-lal (>= @MIN_LAL_VERSION@),
- python-numpy-dev (>= @MIN_NUMPY_VERSION@),
+ python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
+ python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
+ python-numpy (>= @MIN_NUMPY_VERSION@),
  zlib1g-dev
 
 Package: gstlal
