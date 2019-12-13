@@ -453,14 +453,16 @@ for instrument in gw_data_source_info.channel_dict:
 			verbose = options.verbose
 		)
 	else:
+		fir_matrix = []
+		for template in bank.templates:
+			fir_matrix += [template.real, template.imag]
 		snr = pipeparts.mktogglecomplex(
 			pipeline,
 			pipeparts.mkfirbank(
 				pipeline,
 				hoft[bank.sample_rate],
 				latency = 0,
-				fir_matrix = [bank.templates[0].real,
-				bank.templates[0].imag],
+				fir_matrix = fir_matrix,
 				block_stride = 16 * bank.sample_rate,
 				time_domain = False
 				)
