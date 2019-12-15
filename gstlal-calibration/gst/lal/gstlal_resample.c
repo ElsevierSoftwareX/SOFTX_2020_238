@@ -566,7 +566,7 @@ static void avg_downsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE 
 		} \
  \
 		/* Save the sum of the unused samples in end_samples and the number of unused samples in num_end_samples */ \
-		*num_end_samples = (src_size + inv_cadence / 2 - leading_samples) % inv_cadence; \
+		*num_end_samples = 1 + (src_size + inv_cadence / 2 - leading_samples - 1) % inv_cadence; \
 		*end_samples = *src / 2; \
 		src++; \
 		for(i = 1; i < *num_end_samples; i++, src++) \
@@ -1331,8 +1331,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 		} else {
 			/* We are downsampling */
 			*othersize = size / inv_cadence;
-			gint32 *weight = (void *) &element->dxdt0;
-			if(size % inv_cadence || (element->quality > 0 && element->quality < 4 && *weight < (inv_cadence + 1) / 2) || (element->quality > 3 && element->num_end_samples < element->max_end_samples)) {
+			if(size % inv_cadence || (element->quality > 0 && element->quality < 4 && element->num_end_samples < (inv_cadence + 1) / 2) || (element->quality > 3 && element->num_end_samples < element->max_end_samples)) {
 				element->need_buffer_resize = TRUE;
 				*othersize += (element->num_end_samples / inv_cadence + 2); /* max possible size */
 			}
@@ -1572,8 +1571,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 				gint32 trailing_samples = (inbuf_samples - element->leading_samples - 1) % inv_cadence;
 				outbuf_size -= element->unit_size * (1 - trailing_samples / (inv_cadence / 2));
 				/* Check if there will be an outgoing sample on this buffer before the presentation timestamp of the input buffer */
-				gint32 *weight = (void *) &element->dxdt0;
-				if(element->leading_samples + *weight >= inv_cadence && *weight + (gint32) inbuf_samples >= inv_cadence)
+				if(element->leading_samples + element->num_end_samples >= inv_cadence && element->num_end_samples + (gint32) inbuf_samples >= inv_cadence)
 					outbuf_size += element->unit_size;
 			} else if(element->quality > 3 && element->num_end_samples == element->max_end_samples)
 				outbuf_size = element->unit_size * ((inbuf_samples + inv_cadence - (element->max_end_samples / 2 + element->leading_samples) % inv_cadence - 1) / inv_cadence);

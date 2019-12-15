@@ -423,8 +423,8 @@ static void *input_buffer_timer(void *void_element) {
 		 */
 naptime:
 		/* don't hog a billion CPUs */
-		if(element->block_duration < G_MAXUINT64 / 2)
-			sleep(element->block_duration / 1000000000.0);
+		if(element->block_duration < G_MAXUINT64 / 2 && element->block_duration > 1000000000.0)
+			sleep((unsigned int) (element->block_duration / 1000000000.0));
 		else
 			sleep(1);
 
