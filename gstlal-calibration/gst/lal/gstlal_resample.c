@@ -132,6 +132,7 @@ static void linear_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE
  \
 	/* Save the last input sample for the next buffer, so that we can find the slope */ \
 	*end_samples = *src; \
+	*num_end_samples = 1; \
 }
 
 DEFINE_LINEAR_UPSAMPLE(float, )
@@ -328,7 +329,7 @@ static void sinc_upsample_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *src, DTYPE C
 				dst[dst_index + j] += sinc_table[j] * *end_samples; \
 				dst[dst_index - j] += sinc_table[j] * *end_samples; \
 			} \
-			j_start = j_stop; \
+			j_start = j_stop + 1; \
 			j_stop = sinc_length / 2; \
 			for(j = j_start; j <= j_stop; j++) \
 				dst[dst_index + j] += sinc_table[j] * *end_samples; \
