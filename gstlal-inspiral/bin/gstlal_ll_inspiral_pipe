@@ -302,7 +302,7 @@ aggNodes = inspiral_pipe.aggregator_layer(dag, jobs, options, job_tags)
 #
 
 if options.delay_uploads:
-	eventNodes = inspiral_pipe.event_upload_layer(dag, jobs, options)
+	eventNodes = inspiral_pipe.event_upload_layer(dag, jobs, options, job_tags)
 
 # inspiral state backup
 
