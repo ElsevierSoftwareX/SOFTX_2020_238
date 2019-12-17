@@ -173,6 +173,8 @@ def parse_command_line():
 	parser.add_option("--zookeeper-port", type = "int", metavar = "number", help = "Set the zookeeper port. default 2181", default = 2181)
 	parser.add_option("--output-kafka-server", metavar = "addr", help = "Set the kafka server hostname to send output data to - note, for now this must be the cluster facing ip address of the submit node. example = 10.14.0.112:9092")
 	parser.add_option("--delay-uploads", action = "store_true", help = "Choose whether to delay uploads to allow aggregation of events downstream from many gstlal_inspiral jobs (default is False).")
+	parser.add_option("--event-aggregator-far-threshold", type = "float", default = 3.84e-07, help = "FAR threshold considered for an event to be public, not including a trials factor. Used in the event aggregator if using --delay-uploads. Default = 1 / month.")
+	parser.add_option("--event-aggregator-far-trials-factor", type = "int", default = 1, help = "Trials factor for number of CBC pipelines uploading events to GraceDB. Used in the event aggregator if using --delay-uploads. Default = 1.")
 	parser.add_option("--agg-data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
 	parser.add_option("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
 	parser.add_option("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")

@@ -219,6 +219,8 @@ def event_upload_layer(dag, jobs, options, job_tags):
 		"gracedb-pipeline": options.gracedb_pipeline,
 		"gracedb-search": options.gracedb_search,
 		"gracedb-service-url": options.gracedb_service_url,
+		"far-threshold": options.event_aggregator_far_threshold,
+		"far-trials-factor": options.event_aggregator_far_trials_factor,
 		"num-jobs": len(job_tags),
 		"input-topic": "events",
 		"rootdir": "event_uploader",
