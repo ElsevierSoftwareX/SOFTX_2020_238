@@ -72,7 +72,6 @@ struct _GSTLALResample {
 		GSTLAL_RESAMPLE_Z64,
 		GSTLAL_RESAMPLE_Z128
 	} data_type;
-	gboolean need_buffer_resize;
 	gint32 leading_samples;
 	gint32 first_leading_samples;
 
