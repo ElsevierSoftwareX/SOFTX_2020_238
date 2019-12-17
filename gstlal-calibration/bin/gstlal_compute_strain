@@ -2027,21 +2027,21 @@ if CalibrationConfigs["calibrationmode"] == "Partial":
 
 	# if you need to, dewhiten the TST and PUM/UIM chains
 	if dewhitening:
-		tst = calibration_parts.mkresample(pipeline, tsttee, 4, False, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
+		tst = calibration_parts.mkresample(pipeline, tsttee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % tstdewhitensr) 
 		tst = pipeparts.mkfirbank(pipeline, tst, latency = int(tstdewhitendelay), fir_matrix = [tstdewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += float(len(tstdewhiten)-tstdewhitendelay)/tstdewhitensr
 		tst_filter_latency += float(tstdewhitendelay)/tstdewhitensr
 		if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_kappauim:
-			pum = calibration_parts.mkresample(pipeline, pum, 4, False, "audio/x-raw, format=F64LE, rate=%d" % pumdewhitensr)
+			pum = calibration_parts.mkresample(pipeline, pum, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumdewhitensr)
 			pum = pipeparts.mkfirbank(pipeline, pum, latency = int(pumdewhitendelay), fir_matrix = [pumdewhiten[::-1]], time_domain = td)
 			pum_filter_settle_time += float(len(pumdewhiten)-pumdewhitendelay)/pumdewhitensr
 			pum_filter_latency += float(pumdewhitendelay)/pumdewhitensr
-			uim = calibration_parts.mkresample(pipeline, uim, 4, False, "audio/x-raw, format=F64LE, rate=%d" % uimdewhitensr)
+			uim = calibration_parts.mkresample(pipeline, uim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % uimdewhitensr)
 			uim = pipeparts.mkfirbank(pipeline, uim, latency = int(uimdewhitendelay), fir_matrix = [uimdewhiten[::-1]], time_domain = td)
 			uim_filter_settle_time += float(len(uimdewhiten)-uimdewhitendelay)/uimdewhitensr
 			uim_filter_latency += float(uimdewhitendelay)/uimdewhitensr
 		else:
-			pumuim = calibration_parts.mkresample(pipeline, pumuim, 4, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr)
+			pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimdewhitensr)
 			pumuim = pipeparts.mkfirbank(pipeline, pumuim, latency = int(pumuimdewhitendelay), fir_matrix = [pumuimdewhiten[::-1]], time_domain = td)
 			pumuim_filter_settle_time += float(len(pumuimdewhiten)-pumuimdewhitendelay)/pumuimdewhitensr
 			pumuim_filter_latency += float(pumuimdewhitendelay)/pumuimdewhitensr
@@ -2055,7 +2055,7 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 	
 	if dewhitening:
 		# dewhiten the DARM_CTRL channel
-		ctrl = calibration_parts.mkresample(pipeline, darmctrltee, 4, False, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
+		ctrl = calibration_parts.mkresample(pipeline, darmctrltee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % ctrldewhitensr)
 		ctrl = pipeparts.mkfirbank(pipeline, ctrl, latency = int(ctrldewhitendelay), fir_matrix = [ctrldewhiten[::-1]], time_domain = td)
 		tst_filter_settle_time += float(len(ctrldewhiten)-ctrldewhitendelay)/ctrldewhitensr
 		tst_filter_latency += float(ctrldewhitendelay)/ctrldewhitensr
@@ -2077,7 +2077,7 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 	pumuim = ctrltee
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
-tst = calibration_parts.mkresample(pipeline, tst, 4, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
+tst = calibration_parts.mkresample(pipeline, tst, 5, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
 if test_filters:
 	tst = pipeparts.mktee(pipeline, tst)
 	tst_before_filters = tst
@@ -2128,8 +2128,8 @@ if tstchainsr < actsr:
 # Check whether we need to filter the PUM and UIM stages separately or together
 if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_kappauim:
 	# resample what will become the PUM and UIM actuation paths to the PUM and UIM FIR filter sample rates
-	pum = calibration_parts.mkresample(pipeline, pumtee, 4, False, "audio/x-raw, format=F64LE, rate=%d" % pumchainsr)
-	uim = calibration_parts.mkresample(pipeline, uimtee, 4, False, "audio/x-raw, format=F64LE, rate=%d" % uimchainsr)
+	pum = calibration_parts.mkresample(pipeline, pumtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumchainsr)
+	uim = calibration_parts.mkresample(pipeline, uimtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % uimchainsr)
 	if test_filters:
 		pum = pipeparts.mktee(pipeline, pum)
 		pum_before_filters = pum
@@ -2220,7 +2220,7 @@ if apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_k
 	ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, tst, pum, uim))
 else:
 	# resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
-	pumuim = calibration_parts.mkresample(pipeline, pumuim, 4, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+	pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
 	if test_filters:
 		pumuim = pipeparts.mktee(pipeline, pumuim)
 		pumuim_before_filters = pumuim

@@ -4,13 +4,13 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1239984268 - 256 | bc)
+START = $(shell echo 1249981184 - 256 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1239984268 + 64542 + 256 | bc)
+END = $(shell echo 1249981184 + 2048 + 256 | bc)
 #1240048818
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
@@ -20,7 +20,7 @@ PLOT_COOLDOWN_TIME = 256
 GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1252081818_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
-DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_1239472998.ini
+DCSCONFIGS = Filters/O3/GDSFilters/L1DCS_C01_1249927218_test_noTDCFs.ini
 EXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_exactKappas_1239472998.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
@@ -34,7 +34,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: lines_ratio_DCS
+all: filters_tf_DCS
 
 ###############################################
 ### These commands should change less often ###
@@ -155,15 +155,13 @@ filters_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
 filters_tf_CALCS: $(IFO)1_easy_raw_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.7 --ratio-magnitude-max 1.3 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
-filters_tf_all: 
-	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache $(IFO)1_hoft_DCS_frames.cache
+filters_tf_all: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache $(IFO)1_hoft_DCS_frames.cache
 	python plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.8 --ratio-magnitude-max 1.2 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -20 --ratio-phase-max 20
 
 latency_test: $(IFO)1_hoft_GDS_SHM_frames.cache
 	python latency_plot.py --intime-file gstlal_compute_strain_timestamps_in.txt --outtime-file gstlal_compute_strain_timestamps_out.txt --plot-filename-prefix $(IFO)1GDS_latency --plot-title '$(IFO)1 Calibration Latency vs Time'
 
-latency_tests: 
-	#$(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache
+latency_tests: $(IFO)1_hoft_GDS_OLD_frames.cache $(IFO)1_hoft_GDS_BETTER_frames.cache
 	python latency_plot.py --intime-file-list 'gstlal_compute_strain_timestamps_in_resample.txt,gstlal_compute_strain_timestamps_in_old.txt,gstlal_compute_strain_timestamps_in_better.txt' --outtime-file-list 'gstlal_compute_strain_timestamps_out_resample.txt,gstlal_compute_strain_timestamps_out_old.txt,gstlal_compute_strain_timestamps_out_better.txt' --plot-filename-prefix $(IFO)1GDS_latency --labels 'Including resampling latency,6s Tukey-windowed actuation filter,3.5s Kaiser-windowed actuation filter'
 
 RMS_timeseries: $(IFO)1_C00_frames.cache $(IFO)1_X02_frames.cache
@@ -190,8 +188,7 @@ kappastimeseries_GDS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cach
 SRC_detuning_C00: $(IFO)1_C00_frames.cache
 	python timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_C00_frames.cache --channel-list 'GDS-CALIB_F_S_SQUARED,GDS-CALIB_SRC_Q_INVERSE'
 
-noise_subtraction_ASD_DCS:
-	#$(IFO)1_hoft_DCS_frames.cache
+noise_subtraction_ASD_DCS: $(IFO)1_hoft_DCS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-fmin 2450 --ASD-fmax 2550 --ratio-fmin 2450 --ratio-fmax 2550 --ASD-min 1e-23 --ASD-max 1e-21 --ratio-min 0
 
 noise_subtraction_ASD_DCS_LINES: $(IFO)1_hoft_DCS_frames.cache
@@ -203,8 +200,7 @@ noise_subtraction_ASD_GDS: $(IFO)1_hoft_GDS_frames.cache
 noise_subtraction_ASD_C00: $(IFO)1_C00_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_C00_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN_CLEAN'
 
-highpass_filter_ASD_GDS: 
-	#$(IFO)1_C00_frames.cache $(IFO)1_lowLatency_GDS_frames.cache $(IFO)1_lowLatency_asymmetric_GDS_frames.cache
+highpass_filter_ASD_GDS: $(IFO)1_C00_frames.cache $(IFO)1_lowLatency_GDS_frames.cache $(IFO)1_lowLatency_asymmetric_GDS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_lowLatency_GDS_frames.cache,$(IFO)1_lowLatency_asymmetric_GDS_frames.cache' --channel-list 'GDS-CALIB_STRAIN,GDS-CALIB_STRAIN,GDS-CALIB_STRAIN' --ASD-fmin 0.5 --ASD-labels 'C00,0.95s Latency Symmetric Filters,0.95s Latency Asymmetric Filters'
 
 noise_subtraction_ASD_DCH_DCS: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_clean_C02_frames.cache
