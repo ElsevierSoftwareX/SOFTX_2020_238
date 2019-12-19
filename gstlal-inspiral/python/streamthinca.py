@@ -211,13 +211,12 @@ class backgroundcollector(object):
 		elif len(event_ids) == 1:
 			self.zerolag_singles.update(event_ids)
 
-	def pull(self, snr_min, hl_on, flushed_events):
+	def pull(self, snr_min, two_or_more_instruments, flushed_events):
 		index = dict((id(event), event) for event in flushed_events)
 		flushed_ids = set(index)
 		background_ids = self.timeshifted_coincs & flushed_ids
 		self.timeshifted_coincs -= flushed_ids
-		# put all virgo and kagra in their own background
-		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if ((float(index[event_id].end) in hl_on) or (index[event_id].ifo not in ("H1", "L1"))))
+		background_ids |= set(event_id for event_id in self.zerolag_singles & flushed_ids if float(index[event_id].end) in two_or_more_instruments)
 		self.zerolag_singles -= flushed_ids
 		return [event for event in map(index.__getitem__, background_ids) if event.snr >= snr_min]
 
@@ -350,14 +349,11 @@ class StreamThinca(object):
 		# add selected singles to the noise model
 
 		if flushed:
-			# times when H and L were generating
+			# times when at least 2 instruments were generating
 			# SNR.  used to select zero-lag singles for
 			# inclusion in the denominator.
 
-			if "H1" in snr_segments and "L1" in snr_segments:
-				hl_on = snr_segments["H1"] & snr_segments["L1"]
-			else:
-				hl_on = segments.segmentlist([])
+			two_or_more_instruments = segmentsUtils.vote(snr_segments.values(), 2)
 			# FIXME:  this is needed to work around rounding
 			# problems in safety checks below, trying to
 			# compare GPS trigger times to float segment
@@ -365,9 +361,9 @@ class StreamThinca(object):
 			# precision to know if triggers near the edge are
 			# in or out).  it would be better not to have to
 			# screw around like this.
-			hl_on.protract(1e-3)  # 1 ms
+			two_or_more_instruments.protract(1e-3)  # 1 ms
 
-			for event in self.backgroundcollector.pull(rankingstat.snr_min, hl_on, flushed):
+			for event in self.backgroundcollector.pull(rankingstat.snr_min, two_or_more_instruments, flushed):
 				rankingstat.denominator.increment(event)
 
 		# add any triggers that have been used in coincidences for
