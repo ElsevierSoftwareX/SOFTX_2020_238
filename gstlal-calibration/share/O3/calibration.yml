@@ -8,7 +8,13 @@ navbar:
   image: https://ldas-jobs.ligo.caltech.edu/~gstlalcbc/static/gstlal.png
   pages:
     - index
-    - L1
+    - H1_red
+    - H1_test
+    - H1_other
+    - L1_prod
+    - L1_red
+    - L1_test
+    - L1_other
 
   tabs:
     - name: Docs
@@ -22,40 +28,123 @@ navbar:
 
 pages:
   index:
-    title: H1
+    title: H1 (production)
     type: grid
     mode: online
     lookback: 600
     delay: 10
     plots:
-      - plot: H1_latency_timeseries
+      - plot: H1_latency_timeseries_prod
         grid: {x: 0, y: 0, h: 8, w: 12}
         visible: true
-      - plot: H1_statevector
+      - plot: H1_statevector_prod
         grid: {x: 0, y: 0, h: 5, w: 12}
         visible: true
 
-  L1:
-    title: L1
+  H1_red:
+    title: H1 (redundant)
     type: grid
     mode: online
     lookback: 600
     delay: 10
     plots:
-      - plot: L1_latency_timeseries
+      - plot: H1_latency_timeseries_red
         grid: {x: 0, y: 0, h: 8, w: 12}
         visible: true
-      - plot: L1_statevector
+      - plot: H1_statevector_red
         grid: {x: 0, y: 0, h: 5, w: 12}
         visible: true
 
+  H1_test:
+    title: H1 (testing)
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: H1_latency_timeseries_test
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: H1_statevector_test
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+  H1_other:
+    title: H1 (other)
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: H1_latency_timeseries_other
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: H1_statevector_other
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+  L1_prod:
+    title: L1 (production)
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: L1_latency_timeseries_prod
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: L1_statevector_prod
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+  L1_red:
+    title: L1 (redundant)
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: L1_latency_timeseries_red
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: L1_statevector_red
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+  L1_test:
+    title: L1 (testing)
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: L1_latency_timeseries_test
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: L1_statevector_test
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
+
+  L1_other:
+    title: L1 (other)
+    type: grid
+    mode: online
+    lookback: 600
+    delay: 10
+    plots:
+      - plot: L1_latency_timeseries_other
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: L1_statevector_other
+        grid: {x: 0, y: 0, h: 5, w: 12}
+        visible: true
 
 #--------------------------------------------------------------
 ### schema configuration
 
 schemas:
-  H1_latency:
-    measurement: H1_latency
+  H1_latency_production:
+    measurement: H1_latency_production
     column: data
     aggregate: max
     tag: stage
@@ -69,8 +158,8 @@ schemas:
       - calibstatevec
       - sink
 
-  L1_latency:
-    measurement: L1_latency
+  H1_latency_redundant:
+    measurement: H1_latency_redundant
     column: data
     aggregate: max
     tag: stage
@@ -84,8 +173,98 @@ schemas:
       - calibstatevec
       - sink
 
-  H1_statevector_bit_check:
-    measurement: H1_statevector_bit_check
+  H1_latency_testing:
+    measurement: H1_latency_testing
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  H1_latency_other:
+    measurement: H1_latency_other
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  L1_latency_production:
+    measurement: L1_latency_production
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  L1_latency_redundant:
+    measurement: L1_latency_redundant
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  L1_latency_testing:
+    measurement: L1_latency_testing
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  L1_latency_other:
+    measurement: L1_latency_other
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
+      - calibstatevec
+      - sink
+
+  H1_statevector_bit_check_production:
+    measurement: H1_statevector_bit_check_production
     column: data
     aggregate: max
     tag: check
@@ -94,8 +273,68 @@ schemas:
       - monitor_on
       - TDCFs_valid
 
-  L1_statevector_bit_check:
-    measurement: L1_statevector_bit_check
+  H1_statevector_bit_check_redundant:
+    measurement: H1_statevector_bit_check_redundant
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  H1_statevector_bit_check_testing:
+    measurement: H1_statevector_bit_check_testing
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  H1_statevector_bit_check_other:
+    measurement: H1_statevector_bit_check_other
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  L1_statevector_bit_check_production:
+    measurement: L1_statevector_bit_check_production
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  L1_statevector_bit_check_redundant:
+    measurement: L1_statevector_bit_check_redundant
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  L1_statevector_bit_check_testing:
+    measurement: L1_statevector_bit_testing
+    column: data
+    aggregate: max
+    tag: check
+    tag_key: check
+    check:
+      - monitor_on
+      - TDCFs_valid
+
+  L1_statevector_bit_check_other:
+    measurement: L1_statevector_bit_check_other
     column: data
     aggregate: max
     tag: check
@@ -109,30 +348,102 @@ schemas:
 ### plot configuration
 
 plots:
-  H1_latency_timeseries:
-    title: Latency at various stages for H1 h(t) data production
+  H1_latency_timeseries_prod:
+    title: Latency at various stages for H1 h(t) data production (production machine)
     type: TimeSeries
-    schema: H1_latency
+    schema: H1_latency_production
     layout:
       yaxis: {title: {text: 'Latency [s]'}}
 
-  L1_latency_timeseries:
-    title: Latency at various stages for L1 h(t) data production
+  H1_latency_timeseries_red:
+    title: Latency at various stages for H1 h(t) data production (redundant machine)
     type: TimeSeries
-    schema: L1_latency
+    schema: H1_latency_redundant
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  H1_latency_timeseries_test:
+    title: Latency at various stages for H1 h(t) data production (testing machine)
+    type: TimeSeries
+    schema: H1_latency_testing
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  H1_latency_timeseries_other:
+    title: Latency at various stages for H1 h(t) data production (other machine)
+    type: TimeSeries
+    schema: H1_latency_other
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  L1_latency_timeseries_prod:
+    title: Latency at various stages for L1 h(t) data production (production machine)
+    type: TimeSeries
+    schema: L1_latency_production
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  L1_latency_timeseries_red:
+    title: Latency at various stages for L1 h(t) data production (redundant machine)
+    type: TimeSeries
+    schema: L1_latency_redundant
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  L1_latency_timeseries_test:
+    title: Latency at various stages for L1 h(t) data production (testing machine)
+    type: TimeSeries
+    schema: L1_latency_testing
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  L1_latency_timeseries_other:
+    title: Latency at various stages for L1 h(t) data production (other machine)
+    type: TimeSeries
+    schema: L1_latency_other
     layout:
       yaxis: {title: {text: 'Latency [s]'}}
 
   # state vector checks
-  H1_statevector:
-    title: 'H1 state vector check'
+  H1_statevector_prod:
+    title: 'H1 state vector check (production machine)'
     type: TimeSeries
-    schema: H1_statevector_bit_check
+    schema: H1_statevector_bit_check_production
 
-  L1_statevector:
-    title: 'L1 state vector check'
+  H1_statevector_red:
+    title: 'H1 state vector check (redundant machine)'
     type: TimeSeries
-    schema: L1_statevector_bit_check
+    schema: H1_statevector_bit_check_redundant
+
+  H1_statevector_test:
+    title: 'H1 state vector check (testing machine)'
+    type: TimeSeries
+    schema: H1_statevector_bit_check_testing
+
+  H1_statevector_other:
+    title: 'H1 state vector check (other machine)'
+    type: TimeSeries
+    schema: H1_statevector_bit_check_other
+
+  L1_statevector_prod:
+    title: 'L1 state vector check (production machine)'
+    type: TimeSeries
+    schema: L1_statevector_bit_check_production
+
+  L1_statevector_red:
+    title: 'L1 state vector check (redundant machine)'
+    type: TimeSeries
+    schema: L1_statevector_bit_check_redundant
+
+  L1_statevector_test:
+    title: 'L1 state vector check (testing machine)'
+    type: TimeSeries
+    schema: L1_statevector_bit_check_testing
+
+  L1_statevector_other:
+    title: 'L1 state vector check (other machine)'
+    type: TimeSeries
+    schema: L1_statevector_bit_check_other
 
 
 #--------------------------------------------------------------
