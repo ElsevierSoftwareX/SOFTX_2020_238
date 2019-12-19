@@ -3035,20 +3035,18 @@ if compute_calib_statevector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
 	if test_latency or InputConfigs["datasource"] == "lvshm":
 		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector_latency = calibration_parts.mkresample(pipeline, calibstatevector, 0, False, calibstate_metrics_caps)
-		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector_latency, name = "%s_calibstatevec" % OutputConfigs["frametype"], silent = silent)
+		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec" % OutputConfigs["frametype"], silent = silent)
 		if kafka_server is not None:
+			# Dump latency info to kafka
 			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
+			if monitor_statevector:
+				# Dump statevector metric info to kafka
+				statevector_monitor = pipeparts.mkgeneric(pipeline, calibstatevector, "lal_nxydump")
+				statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)	
+				statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
 		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 	dqtagstr = "channel-name=%s:GDS-CALIB_STATE_VECTOR, instrument=%s" % (instrument, instrument)
 	calibstatevector = pipeparts.mktaginject(pipeline, calibstatevector, dqtagstr)
-	if InputConfigs["datasource"] == "lvshm" and monitor_statevector:
-		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		statevector_monitor = calibration_parts.mkresample(pipeline, calibstatevector, 0, False, calibstate_metrics_caps)
-		statevector_monitor = pipeparts.mkgeneric(pipeline, statevector_monitor, "lal_nxydump")
-		statevector_monitor = pipeparts.mkappsink(pipeline, statevector_monitor, max_buffers = 1)
-		if kafka_server is not None:
-			statevector_monitor.connect("new-sample", handler.appsink_statevector_new_buffer, instrument, monitor_bitmask_dict)
 
 #
 # Produce time-dependent correction factors to be recorded in the frames
