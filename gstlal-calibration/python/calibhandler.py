@@ -86,6 +86,15 @@ class Handler(simplehandler.Handler):
 				self.producer = None
 				if self.verbose:
 					print("No brokers available for kafka. Defaulting to not pushing to kafka.")
+			import socket
+			if "dmt3" in socket.gethostname():
+				self.machine = "testing"
+			elif "dmt2" in socket.gethostname():
+				self.machine = "redundant"
+			elif "dmt0" in socket.gethostname():
+				self.machine = "production"
+			else:
+				self.machine = "other"
 
 	def appsink_statevector_new_buffer(self, elem, ifo, bitmaskdict):
 		if self.kafka_server is not None:
@@ -123,7 +132,7 @@ class Handler(simplehandler.Handler):
 							if self.verbose:
 								print("No brokers available for kafka. Defaulting to not pushing to kafka.")
 					else:
-						self.producer.send("%s_statevector_bit_check" % ifo, value = monitor_dict) 
+						self.producer.send("%s_statevector_bit_check_%s" % (ifo, self.machine), value = monitor_dict) 
 			return Gst.FlowReturn.OK	
 
 	def latency_new_buffer(self, elem, param):
@@ -147,6 +156,6 @@ class Handler(simplehandler.Handler):
 						if self.verbose:
 							print("No brokers available for kafka. Defaulting to not pushing to kafka.")
 				else:
-					self.producer.send("%s_latency" % (name.split("_")[0]), value = {"time": time, name: latency})
+					self.producer.send("%s_latency_%s" % (name.split("_")[0], self.machine), value = {"time": time, name: latency})
 			return Gst.FlowReturn.OK
 
