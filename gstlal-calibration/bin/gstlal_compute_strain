@@ -2858,6 +2858,13 @@ if compute_calib_statevector:
 	all_bits_list.extend(epics_bits_list)
 
 	calibstatevector = calibration_parts.mkadder(pipeline, tuple(all_bits_list))
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec_allotherbits" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 
 #
 # SUBTRACTION OF LINES AND NOISE
@@ -3013,6 +3020,13 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	if compute_calib_statevector:
 		# Add these into the CALIB_STATE_VECTOR
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
+		if test_latency or InputConfigs["datasource"] == "lvshm":
+			calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+			calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec_cleaningbits" % OutputConfigs["frametype"], silent = silent)
+			if kafka_server is not None:
+				# Dump latency info to kafka
+				calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 	if pick_cleanest_strain_channel:
 		noise_sub_ok_bitmask = pow(2,line_sub_bitnum) + pow(2,noise_sub_bitnum)
 		noise_sub_state_vector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
@@ -3030,6 +3044,13 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 # Check if we gated the cleaning with any ODC bits, and if so, add that to the CALIB_STATE_VECTOR
 if noisesubgatetee is not None:
 	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, noisesubgatetee))
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec_noisesubgate" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 
 if compute_calib_statevector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
