@@ -155,8 +155,11 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - calibstatevec
+      - calibstatevec_final
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   H1_latency_redundant:
     measurement: H1_latency_redundant
@@ -172,6 +175,11 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
+
+  H1_latency_redundant:
 
   H1_latency_testing:
     measurement: H1_latency_testing
@@ -187,6 +195,9 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   H1_latency_other:
     measurement: H1_latency_other
@@ -202,6 +213,9 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_production:
     measurement: L1_latency_production
@@ -217,6 +231,9 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_redundant:
     measurement: L1_latency_redundant
@@ -232,6 +249,9 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_testing:
     measurement: L1_latency_testing
@@ -247,6 +267,9 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_other:
     measurement: L1_latency_other
@@ -262,6 +285,9 @@ schemas:
       - ctrl
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   H1_statevector_bit_check_production:
     measurement: H1_statevector_bit_check_production
