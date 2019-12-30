@@ -2693,6 +2693,13 @@ if compute_calib_statevector:
 			coherence_ok_list.append(pcaly_line4_coh_ok)
 
 		coherence_bits = calibration_parts.mkadder(pipeline, tuple(coherence_ok_list))
+		if test_latency or InputConfigs["datasource"] == "lvshm":
+			coherence_bits = pipeparts.mktee(pipeline, coherence_bits)
+			coherence_bits_latency = pipeparts.mklatency(pipeline, coherence_bits, name = "%s_coherencebits" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			coherence_bits_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, coherence_bits_latency)
 
 	#
 	# H(T)-OK BIT BRANCH
@@ -2734,6 +2741,13 @@ if compute_calib_statevector:
 	# Now calculate h(t)-OK bit
 	htok = pipeparts.mkbitvectorgen(pipeline, higherbitstee, bit_vector = 1, threshold = htok_threshold)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, calibstate_caps)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		htok = pipeparts.mktee(pipeline, htok)
+		htok_latency = pipeparts.mklatency(pipeline, htok, name = "%s_hoftok" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			htok_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, htok_latency)
 
 	#
 	# HW INJECTION BITS
@@ -2755,6 +2769,13 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either BurstHWInjBitmask or BurstHWInjOffBitmask")
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, calibstate_caps)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		hwinjburst = pipeparts.mktee(pipeline, hwinjburst)
+		hwinjburst_latency = pipeparts.mklatency(pipeline, hwinjburst, name = "%s_hwinjburst" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			hwinjburst_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, hwinjburst_latency)
 
 	if detcharhwinj_bitmask is not None:
 		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, status_out = pow(2,no_detchar_inj_bitnum))
@@ -2763,6 +2784,13 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either DetCharHWInjBitmask or DetcharHWInjOffBitmask")
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, calibstate_caps)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		hwinjdetchar = pipeparts.mktee(pipeline, hwinjdetchar)
+		hwinjdetchar_latency = pipeparts.mklatency(pipeline, hwinjdetchar, name = "%s_hwinjdetchar" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			hwinjdetchar_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, hwinjdetchar_latency)
 
 	if stochhwinj_bitmask is not None:
 		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, status_out = pow(2,no_stoch_inj_bitnum))
@@ -2771,6 +2799,13 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either StochHWInjBitmask or StochHWInjOffBitmask")
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, calibstate_caps)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		hwinjstoch = pipeparts.mktee(pipeline, hwinjstoch)
+		hwinjstoch_latency = pipeparts.mklatency(pipeline, hwinjstoch, name = "%s_hwinjstoch" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			hwinjstoch_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, hwinjstoch_latency)
 
 	#
 	# EPICS BITS
@@ -2865,7 +2900,7 @@ if compute_calib_statevector:
 	calibstatevector = calibration_parts.mkadder(pipeline, tuple(all_bits_list))
 	if test_latency or InputConfigs["datasource"] == "lvshm":
 		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec_allotherbits" % OutputConfigs["frametype"], silent = silent)
+		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_allotherbits" % OutputConfigs["frametype"], silent = silent)
 		if kafka_server is not None:
 			# Dump latency info to kafka
 			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
@@ -3040,7 +3075,7 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
 		if test_latency or InputConfigs["datasource"] == "lvshm":
 			calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-			calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec_cleaningbits" % OutputConfigs["frametype"], silent = silent)
+			calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_cleaningbits" % OutputConfigs["frametype"], silent = silent)
 			if kafka_server is not None:
 				# Dump latency info to kafka
 				calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
@@ -3064,7 +3099,7 @@ if noisesubgatetee is not None:
 	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, noisesubgatetee))
 	if test_latency or InputConfigs["datasource"] == "lvshm":
 		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_calibstatevec_noisesubgate" % OutputConfigs["frametype"], silent = silent)
+		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_noisesubgate" % OutputConfigs["frametype"], silent = silent)
 		if kafka_server is not None:
 			# Dump latency info to kafka
 			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
