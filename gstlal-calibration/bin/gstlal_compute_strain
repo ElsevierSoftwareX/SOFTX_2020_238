@@ -2423,6 +2423,12 @@ except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
+
+# Put the units back to strain before writing to frames
+straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
+straintee = pipeparts.mktee(pipeline, strain)
+if not pick_cleanest_strain_channel:
+	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 if test_latency or InputConfigs["datasource"] == "lvshm":
 	strain = pipeparts.mktee(pipeline, strain)
 	strain_latency = calibration_parts.mkresample(pipeline, strain, 0, False, latency_metrics_caps)
@@ -2430,12 +2436,6 @@ if test_latency or InputConfigs["datasource"] == "lvshm":
 	if kafka_server is not None:
 		strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, strain_latency)
-
-# Put the units back to strain before writing to frames
-straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-straintee = pipeparts.mktee(pipeline, strain)
-if not pick_cleanest_strain_channel:
-	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 
 #
 # CALIB_STATE_VECTOR BRANCH
@@ -2693,13 +2693,6 @@ if compute_calib_statevector:
 			coherence_ok_list.append(pcaly_line4_coh_ok)
 
 		coherence_bits = calibration_parts.mkadder(pipeline, tuple(coherence_ok_list))
-		if test_latency or InputConfigs["datasource"] == "lvshm":
-			coherence_bits = pipeparts.mktee(pipeline, coherence_bits)
-			coherence_bits_latency = pipeparts.mklatency(pipeline, coherence_bits, name = "%s_coherencebits" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			coherence_bits_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, coherence_bits_latency)
 
 	#
 	# H(T)-OK BIT BRANCH
@@ -2741,13 +2734,6 @@ if compute_calib_statevector:
 	# Now calculate h(t)-OK bit
 	htok = pipeparts.mkbitvectorgen(pipeline, higherbitstee, bit_vector = 1, threshold = htok_threshold)
 	htok = pipeparts.mkcapsfilter(pipeline, htok, calibstate_caps)
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		htok = pipeparts.mktee(pipeline, htok)
-		htok_latency = pipeparts.mklatency(pipeline, htok, name = "%s_hoftok" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			htok_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, htok_latency)
 
 	#
 	# HW INJECTION BITS
@@ -2762,14 +2748,6 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either CBCHWInjBitmask or CBCHWInjOffBitmask")
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		hwinjcbc = pipeparts.mktee(pipeline, hwinjcbc)
-		hwinjcbc_latency = pipeparts.mklatency(pipeline, hwinjcbc, name = "%s_hwinjcbc" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			hwinjcbc_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, hwinjcbc_latency)
-
 	if bursthwinj_bitmask is not None:
 		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,no_burst_inj_bitnum))
 	elif bursthwinj_offbitmask is not None:
@@ -2777,13 +2755,6 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either BurstHWInjBitmask or BurstHWInjOffBitmask")
 	hwinjburst = pipeparts.mkcapsfilter(pipeline, hwinjburst, calibstate_caps)
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		hwinjburst = pipeparts.mktee(pipeline, hwinjburst)
-		hwinjburst_latency = pipeparts.mklatency(pipeline, hwinjburst, name = "%s_hwinjburst" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			hwinjburst_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, hwinjburst_latency)
 
 	if detcharhwinj_bitmask is not None:
 		hwinjdetchar = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = detcharhwinj_bitmask, status_out = pow(2,no_detchar_inj_bitnum))
@@ -2792,13 +2763,6 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either DetCharHWInjBitmask or DetcharHWInjOffBitmask")
 	hwinjdetchar = pipeparts.mkcapsfilter(pipeline, hwinjdetchar, calibstate_caps)
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		hwinjdetchar = pipeparts.mktee(pipeline, hwinjdetchar)
-		hwinjdetchar_latency = pipeparts.mklatency(pipeline, hwinjdetchar, name = "%s_hwinjdetchar" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			hwinjdetchar_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, hwinjdetchar_latency)
 
 	if stochhwinj_bitmask is not None:
 		hwinjstoch = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = stochhwinj_bitmask, status_out = pow(2,no_stoch_inj_bitnum))
@@ -2807,13 +2771,6 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either StochHWInjBitmask or StochHWInjOffBitmask")
 	hwinjstoch = pipeparts.mkcapsfilter(pipeline, hwinjstoch, calibstate_caps)
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		hwinjstoch = pipeparts.mktee(pipeline, hwinjstoch)
-		hwinjstoch_latency = pipeparts.mklatency(pipeline, hwinjstoch, name = "%s_hwinjstoch" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			hwinjstoch_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, hwinjstoch_latency)
 
 	#
 	# EPICS BITS
@@ -2906,13 +2863,6 @@ if compute_calib_statevector:
 	all_bits_list.extend(epics_bits_list)
 
 	calibstatevector = calibration_parts.mkadder(pipeline, tuple(all_bits_list))
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_allotherbits" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 
 #
 # SUBTRACTION OF LINES AND NOISE
@@ -3046,9 +2996,9 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	mid_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_mid_max) / numpy.log(2) + 1.01))
 
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
-	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
+	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = "lowfreq")
 	# Compute the RMS of the cleaned strain in a low-frequency range
-	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
+	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'clean_lowfreq')
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_lowfreq = calibration_parts.complex_division(pipeline, strain_rms_lowfreq, clean_strain_rms_lowfreq)
 	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector = pow(2,line_sub_bitnum), threshold=1.0)
@@ -3056,9 +3006,9 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	clean_hoft_ok_lowfreq = pipeparts.mktee(pipeline, clean_hoft_ok_lowfreq)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
-	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
+	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'midfreq')
 	# Compute the RMS of the cleaned strain in a mid-frequency range
-	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
+	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'clean_midfreq')
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
 	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector = pow(2,noise_sub_bitnum), threshold=1.0)
@@ -3068,13 +3018,6 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	if compute_calib_statevector:
 		# Add these into the CALIB_STATE_VECTOR
 		calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
-		if test_latency or InputConfigs["datasource"] == "lvshm":
-			calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-			calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_cleaningbits" % OutputConfigs["frametype"], silent = silent)
-			if kafka_server is not None:
-				# Dump latency info to kafka
-				calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 	if pick_cleanest_strain_channel:
 		noise_sub_ok_bitmask = pow(2,line_sub_bitnum) + pow(2,noise_sub_bitnum)
 		noise_sub_state_vector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, clean_hoft_ok_lowfreq, clean_hoft_ok_midfreq))
