@@ -3062,13 +3062,6 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 # Check if we gated the cleaning with any ODC bits, and if so, add that to the CALIB_STATE_VECTOR
 if noisesubgatetee is not None:
 	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, noisesubgatetee))
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_noisesubgate" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 
 if compute_calib_statevector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
