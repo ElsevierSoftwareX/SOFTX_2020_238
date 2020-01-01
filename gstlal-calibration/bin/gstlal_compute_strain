@@ -3002,6 +3002,14 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
 	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = "lowfreq")
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		strain_rms_lowfreq = pipeparts.mktee(pipeline, strain_rms_lowfreq)
+		strain_rms_lowfreq_latency = pipeparts.mklatency(pipeline, strain_rms_lowfreq, name = "%s_strain_rms_lowfreq" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			strain_rms_lowfreq_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, strain_rms_lowfreq_latency)
+	
 	# Compute the RMS of the cleaned strain in a low-frequency range
 	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'clean_lowfreq')
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
@@ -3054,13 +3062,6 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 # Check if we gated the cleaning with any ODC bits, and if so, add that to the CALIB_STATE_VECTOR
 if noisesubgatetee is not None:
 	calibstatevector = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, calibstatevector, noisesubgatetee))
-	if test_latency or InputConfigs["datasource"] == "lvshm":
-		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
-		calibstatevector_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_noisesubgate" % OutputConfigs["frametype"], silent = silent)
-		if kafka_server is not None:
-			# Dump latency info to kafka
-			calibstatevector_latency.connect("notify::current-latency", handler.latency_new_buffer)
-		pipeparts.mkfakesink(pipeline, calibstatevector_latency)
 
 if compute_calib_statevector:
 	calibstatevector = pipeparts.mkprogressreport(pipeline, calibstatevector, "progress_calibstatevec_%s" % instrument)
