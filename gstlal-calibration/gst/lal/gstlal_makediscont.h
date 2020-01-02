@@ -41,11 +41,12 @@ struct _GSTLALMakeDiscont {
 	/* properties */
 	guint64 dropout_time;
 	guint64 data_time;
+	guint64 heartbeat_time;
+	double switch_probability;
 
 	/* filter memory */
-	gboolean current_data_state;
-	guint64 next_dropout_tstart;
-	guint64 next_data_tstart;
+	int current_data_state;
+	guint64 next_switch_time;
 
 	/* timestamp book-keeping */
 	GstClockTime t0;

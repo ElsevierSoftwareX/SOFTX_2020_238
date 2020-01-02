@@ -620,8 +620,8 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 	/* if buffer is zero length and we are filling in discontinuities, fill it in, unless it has no valid timestamp. */
 	if(element->fill_discont && (GST_BUFFER_DURATION(sinkbuf) == 0 || GST_BUFFER_OFFSET(sinkbuf) == GST_BUFFER_OFFSET_END(sinkbuf))) {
+		g_mutex_lock(&element->mutex);
 		if(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_PTS(sinkbuf) > element->last_sinkbuf_ets) {
-			g_mutex_lock(&element->mutex);
 			switch(element->data_type) {
 			case GSTLAL_INSERTGAP_U32:
 				result = process_inbuf_guint32(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE, TRUE);
@@ -641,11 +641,11 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 			default:
 				g_assert_not_reached();
 			}
-			g_mutex_unlock(&element->mutex);
 		} else {
 			GST_DEBUG_OBJECT(element, "dropping zero length buffer at timestamp %lu seconds", (long unsigned) GST_TIME_AS_SECONDS(GST_BUFFER_PTS(sinkbuf)));
 			gst_buffer_unref(sinkbuf);
 		}
+		g_mutex_unlock(&element->mutex);
 		goto done;
 	}
 

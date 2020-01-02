@@ -24,6 +24,8 @@
 
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
 
 
 /*
@@ -85,6 +87,8 @@ G_DEFINE_TYPE_WITH_CODE(
 enum property {
 	ARG_DROPOUT_TIME = 1,
 	ARG_DATA_TIME,
+	ARG_HEARTBEAT_TIME,
+	ARG_SWITCH_PROBABILITY,
 	ARG_FAKE
 };
 
@@ -140,31 +144,90 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
 	if(G_UNLIKELY(GST_BUFFER_IS_DISCONT(buf) || GST_BUFFER_OFFSET(buf) != element->next_in_offset || !GST_CLOCK_TIME_IS_VALID(element->t0))) {
 		element->t0 = GST_BUFFER_PTS(buf);
 		element->offset0 = GST_BUFFER_OFFSET(buf);
-		element->current_data_state = TRUE;
-		element->next_dropout_tstart = element->t0 + element->data_time;
+		element->current_data_state = 0;
+		element->next_switch_time = element->t0 + element->data_time;
 	}
 	element->next_in_offset = GST_BUFFER_OFFSET_END(buf);
 
-	if(element->current_data_state) {
-		/* Check if we need to start a dropout */
-		if(GST_BUFFER_PTS(buf) >= element->next_dropout_tstart) {
-			element->current_data_state = FALSE;
-			element->next_data_tstart = GST_BUFFER_PTS(buf) + element->dropout_time;
+	if(element->switch_probability && element->t0 != GST_BUFFER_PTS(buf)) {
+		srand(time(0));
+		if(rand() < RAND_MAX * element->switch_probability) {
+			int prob1 = rand();
+			int prob2 = RAND_MAX - prob1;
+			switch(element->current_data_state) {
+			case 0:
+				if((double) element->heartbeat_time * prob1 > (double) element->dropout_time * prob2)
+					element->current_data_state = 1;
+				else
+					element->current_data_state = 2;
+				break;
+			case 1:
+				if((double) element->data_time * prob1 > (double) element->dropout_time * prob2)
+					element->current_data_state = 0;
+				else
+					element->current_data_state = 2;
+				break;
+			case 2:
+				if((double) element->data_time * prob1 > (double) element->heartbeat_time * prob2)
+					element->current_data_state = 0;
+				else
+					element->current_data_state = 1;
+				break;
+			default:
+				g_assert_not_reached();
+			}
 		}
-	} else {
-		/* Check if we need to start a new data segment */
-		if(GST_BUFFER_PTS(buf) >= element->next_data_tstart) {
-			element->current_data_state = TRUE;
-			element->next_dropout_tstart = GST_BUFFER_PTS(buf) + element->data_time;
+	/* Check if we need to switch to a different state */
+	} else if(GST_BUFFER_PTS(buf) >= element->next_switch_time) {
+		switch(element->current_data_state) {
+		case 0:
+			if(element->heartbeat_time > 0) {
+				element->current_data_state = 1;
+				element->next_switch_time = GST_BUFFER_PTS(buf) + element->heartbeat_time;
+			} else if(element->dropout_time > 0) {
+				element->current_data_state = 2;
+				element->next_switch_time = GST_BUFFER_PTS(buf) + element->dropout_time;
+			}
+			break;
+		case 1:
+			if(element->dropout_time > 0) {
+				element->current_data_state = 2;
+				element->next_switch_time = GST_BUFFER_PTS(buf) + element->dropout_time;
+			} else if(element->data_time > 0) {
+				element->current_data_state = 0;
+				element->next_switch_time = GST_BUFFER_PTS(buf) + element->data_time;
+			}
+			break;
+		case 2:
+			if(element->data_time > 0) {
+				element->current_data_state = 0;
+				element->next_switch_time = GST_BUFFER_PTS(buf) + element->data_time;
+			} else if(element->heartbeat_time > 0) {
+				element->current_data_state = 1;
+				element->next_switch_time = GST_BUFFER_PTS(buf) + element->heartbeat_time;
+			}
+			break;
+		default:
+			g_assert_not_reached();
 		}
 	}
-
-	if(element->current_data_state)
+	if(element->current_data_state == 0) {
 		/* Push out the incoming buffer without touching it */
 		return gst_pad_push(element->srcpad, buf);
-	else
+	} else if(element->current_data_state == 1) {
+		GstBuffer *newbuf = gst_buffer_new();
+		GST_BUFFER_PTS(newbuf) = GST_BUFFER_PTS(buf);
+		GST_BUFFER_DURATION(newbuf) = 0;
+		GST_BUFFER_OFFSET(newbuf) = GST_BUFFER_OFFSET(buf);
+		GST_BUFFER_OFFSET_END(newbuf) = GST_BUFFER_OFFSET(newbuf);
+		gst_buffer_unref(buf);
+		return gst_pad_push(element->srcpad, newbuf);
+	} else if(element->current_data_state == 2) {
 		/* Don't push a buffer, and trick GStreamer into thinking everything is ok */
+		gst_buffer_unref(buf);
 		return GST_FLOW_OK;
+	} else
+		g_assert_not_reached();
 }
 
 
@@ -194,6 +257,12 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_DATA_TIME:
 		element->data_time = g_value_get_uint64(value);
 		break;
+	case ARG_HEARTBEAT_TIME:
+		element->heartbeat_time = g_value_get_uint64(value);
+		break;
+	case ARG_SWITCH_PROBABILITY:
+		element->switch_probability = g_value_get_double(value);
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -219,6 +288,12 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 	case ARG_DATA_TIME:
 		g_value_set_uint64(value, element->data_time);
+		break;
+	case ARG_HEARTBEAT_TIME:
+		g_value_set_uint64(value, element->heartbeat_time);
+		break;
+	case ARG_SWITCH_PROBABILITY:
+		g_value_set_double(value, element->switch_probability);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
@@ -270,6 +345,25 @@ static void gstlal_makediscont_class_init(GSTLALMakeDiscontClass * klass) {
 		0, G_MAXUINT64, 10000000000,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_HEARTBEAT_TIME] = g_param_spec_uint64(
+		"heartbeat-time",
+		"Heartbeat time",
+		"The minimum length in nanoseconds of each data segment that is replaced with\n\t\t\t"
+		"heartbeat buffers (zero-length buffers).  Each data segment is an integer number\n\t\t\t"
+		"of buffers, so the actual length of a segment may be longer.  The start of stream\n\t\t\t"
+		"is not dropped.  Default is to produce no heartbeat buffers.",
+		0, G_MAXUINT64, 0,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_SWITCH_PROBABILITY] = g_param_spec_double(
+		"switch-probability",
+		"State change probability",
+		"If set, the output will be random - each input buffer could be passed downstream,\n\t\t\t"
+		"dropped, or replaced with a heartbeat buffer.  The probability per buffer of a\n\t\t\t"
+		"change of state is given by this property.",
+		0.0, 1.0, 0.0,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 
 
 	g_object_class_install_property(
@@ -281,6 +375,16 @@ static void gstlal_makediscont_class_init(GSTLALMakeDiscontClass * klass) {
 		gobject_class,
 		ARG_DATA_TIME,
 		properties[ARG_DATA_TIME]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_HEARTBEAT_TIME,
+		properties[ARG_HEARTBEAT_TIME]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SWITCH_PROBABILITY,
+		properties[ARG_SWITCH_PROBABILITY]
 	);
 }
 
@@ -308,9 +412,8 @@ static void gstlal_makediscont_init(GSTLALMakeDiscont * element) {
 	GST_PAD_SET_PROXY_SCHEDULING(element->srcpad);
 	gst_element_add_pad(GST_ELEMENT(element), element->srcpad);
 
-	element->current_data_state = TRUE;
-	element->next_dropout_tstart = G_MAXUINT64;
-	element->next_data_tstart = G_MAXUINT64;
+	element->current_data_state = 0;
+	element->next_switch_time = G_MAXUINT64;
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
