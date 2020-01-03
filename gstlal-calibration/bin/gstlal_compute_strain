@@ -1136,6 +1136,7 @@ if not verbose:
 
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
 	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = input_frame_duration)
+	src = pipeparts.mkgeneric(pipeline, src, "lal_makediscont", data_time = 1000000000, dropout_time = 1000000000, heartbeat_time = 1000000000, switch_probability = 0.2, sleep_time = 5 * 1000000000)
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument, use_mmap = True)
 
@@ -2863,6 +2864,13 @@ if compute_calib_statevector:
 	all_bits_list.extend(epics_bits_list)
 
 	calibstatevector = calibration_parts.mkadder(pipeline, tuple(all_bits_list))
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+		calibstatevector_allbits_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_allbits" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			calibstatevector_allbits_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, calibstatevector_allbits_latency)
 
 #
 # SUBTRACTION OF LINES AND NOISE
