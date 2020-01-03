@@ -1136,6 +1136,7 @@ if not verbose:
 
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
 	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = input_frame_duration)
+	src = pipeparts.mkgeneric(pipeline, src, "lal_makediscont", data_time = 1000000000, dropout_time = 1000000000, heartbeat_time = 1000000000, switch_probability = 0.2, sleep_time = 5 * 1000000000)
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument, use_mmap = True)
 
@@ -2863,6 +2864,13 @@ if compute_calib_statevector:
 	all_bits_list.extend(epics_bits_list)
 
 	calibstatevector = calibration_parts.mkadder(pipeline, tuple(all_bits_list))
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		calibstatevector = pipeparts.mktee(pipeline, calibstatevector)
+		calibstatevector_allbits_latency = pipeparts.mklatency(pipeline, calibstatevector, name = "%s_allbits" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			calibstatevector_allbits_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, calibstatevector_allbits_latency)
 
 #
 # SUBTRACTION OF LINES AND NOISE
@@ -3017,6 +3025,13 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector = pow(2,line_sub_bitnum), threshold=1.0)
 	clean_hoft_ok_lowfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_lowfreq, calibstate_caps)
 	clean_hoft_ok_lowfreq = pipeparts.mktee(pipeline, clean_hoft_ok_lowfreq)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		clean_hoft_ok_lowfreq = pipeparts.mktee(pipeline, clean_hoft_ok_lowfreq)
+		clean_hoft_ok_lowfreq_latency = pipeparts.mklatency(pipeline, clean_hoft_ok_lowfreq, name = "%s_cleanhoftok_lowfreq" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			clean_hoft_ok_lowfreq_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, clean_hoft_ok_lowfreq_latency)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
 	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'midfreq')
@@ -3027,6 +3042,13 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector = pow(2,noise_sub_bitnum), threshold=1.0)
 	clean_hoft_ok_midfreq = pipeparts.mkcapsfilter(pipeline, clean_hoft_ok_midfreq, calibstate_caps)
 	clean_hoft_ok_midfreq = pipeparts.mktee(pipeline, clean_hoft_ok_midfreq)
+	if test_latency or InputConfigs["datasource"] == "lvshm":
+		clean_hoft_ok_midfreq = pipeparts.mktee(pipeline, clean_hoft_ok_midfreq)
+		clean_hoft_ok_midfreq_latency = pipeparts.mklatency(pipeline, clean_hoft_ok_midfreq, name = "%s_cleanhoftok_midfreq" % OutputConfigs["frametype"], silent = silent)
+		if kafka_server is not None:
+			# Dump latency info to kafka
+			clean_hoft_ok_midfreq_latency.connect("notify::current-latency", handler.latency_new_buffer)
+		pipeparts.mkfakesink(pipeline, clean_hoft_ok_midfreq_latency)
 
 	if compute_calib_statevector:
 		# Add these into the CALIB_STATE_VECTOR
