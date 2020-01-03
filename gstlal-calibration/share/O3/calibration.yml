@@ -155,18 +155,10 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
-      - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   H1_latency_redundant:
     measurement: H1_latency_redundant
@@ -192,6 +184,11 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
+
+  H1_latency_redundant:
 
   H1_latency_redundant:
 
@@ -227,6 +224,9 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   H1_latency_other:
     measurement: H1_latency_other
@@ -252,6 +252,9 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_production:
     measurement: L1_latency_production
@@ -277,6 +280,9 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_redundant:
     measurement: L1_latency_redundant
@@ -302,6 +308,9 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_testing:
     measurement: L1_latency_testing
@@ -327,6 +336,9 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   L1_latency_other:
     measurement: L1_latency_other
@@ -352,6 +364,9 @@ schemas:
       - allotherbits
       - calibstatevec
       - sink
+      - calibstatevec_noisesubgate
+      - calibstatevec_cleaningbits
+      - calibstatevec_allotherbits
 
   H1_statevector_bit_check_production:
     measurement: H1_statevector_bit_check_production
