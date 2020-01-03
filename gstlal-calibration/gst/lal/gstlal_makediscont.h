@@ -43,6 +43,7 @@ struct _GSTLALMakeDiscont {
 	guint64 data_time;
 	guint64 heartbeat_time;
 	double switch_probability;
+	double sleep_probability;
 	guint64 sleep_time;
 
 	/* filter memory */

@@ -94,6 +94,7 @@ enum property {
 	ARG_DATA_TIME,
 	ARG_HEARTBEAT_TIME,
 	ARG_SWITCH_PROBABILITY,
+	ARG_SLEEP_PROBABILITY,
 	ARG_SLEEP_TIME,
 	ARG_FAKE
 };
@@ -218,7 +219,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
 		}
 	}
 
-	if(element->sleep_time > 0) {
+	if(element->sleep_probability > 0) {
 
 		GstDateTime *current_gst_time;
 		gchar *current_utc_time;
@@ -241,15 +242,12 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
 		guint64 t_behind = current_time - (GST_BUFFER_PTS(buf) + GST_BUFFER_DURATION(buf));
 		if(t_behind > element->sleep_time)
 			t_behind = element->sleep_time;
-		guint64 t_to_spare = element->sleep_time - t_behind;
 
-		/* Probability of sleeping decreases the farther behind we are already */
-		double prob = 0.25 * t_to_spare / element->sleep_time;
 		/* Probability of sleeping decreases for very short buffers */
 		double buffer_dur_factor = (double) GST_BUFFER_DURATION(buf) / element->sleep_time;
 		if(buffer_dur_factor > 1.0)
 			buffer_dur_factor = 1.0;
-		prob *= buffer_dur_factor;
+		double prob = element->sleep_probability * buffer_dur_factor;
 
 		srand(time(0));
 		if((double) rand() / RAND_MAX < prob) {
@@ -313,6 +311,9 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 	case ARG_SWITCH_PROBABILITY:
 		element->switch_probability = g_value_get_double(value);
 		break;
+	case ARG_SLEEP_PROBABILITY:
+		element->sleep_probability = g_value_get_double(value);
+		break;
 	case ARG_SLEEP_TIME:
 		element->sleep_time = g_value_get_uint64(value);
 		break;
@@ -347,6 +348,9 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		break;
 	case ARG_SWITCH_PROBABILITY:
 		g_value_set_double(value, element->switch_probability);
+		break;
+	case ARG_SLEEP_PROBABILITY:
+		g_value_set_double(value, element->sleep_probability);
 		break;
 	case ARG_SLEEP_TIME:
 		g_value_set_uint64(value, element->sleep_time);
@@ -420,11 +424,20 @@ static void gstlal_makediscont_class_init(GSTLALMakeDiscontClass * klass) {
 		0.0, 1.0, 0.0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_SLEEP_PROBABILITY] = g_param_spec_double(
+		"sleep-probability",
+		"Sleep probability",
+		"If set, the output buffers have a probability of being delayed, roughly set by\n\t\t\t"
+		"this value.",
+		0.0, G_MAXDOUBLE, 0.0,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_SLEEP_TIME] = g_param_spec_uint64(
 		"sleep-time",
 		"Sleep time",
-		"If set, element will sleep before passing buffers downstream.  It sleeps a random\n\t\t\t"
-		"number of nanoseconds between 0 and this number.",
+		"If sleep-probability is nonzero, this property determines how long the output is\n\t\t\t"
+		"delayed.  The element sleeps a random number of nanoseconds between 0 and this\n\t\t\t"
+		"number.",
 		0, G_MAXUINT64, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -449,6 +462,11 @@ static void gstlal_makediscont_class_init(GSTLALMakeDiscontClass * klass) {
 		gobject_class,
 		ARG_SWITCH_PROBABILITY,
 		properties[ARG_SWITCH_PROBABILITY]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_SLEEP_PROBABILITY,
+		properties[ARG_SLEEP_PROBABILITY]
 	);
 	g_object_class_install_property(
 		gobject_class,
