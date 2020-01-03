@@ -31,19 +31,16 @@ import gzip
 import json
 import logging
 from optparse import OptionParser
-import signal
 import StringIO
 import sys
 import time
-import timeit
 
-from confluent_kafka import Producer, Consumer, KafkaError
 import numpy
 
 from ligo.segments import segment
 from ligo.gracedb.rest import GraceDb, HTTPError
 from ligo.gracedb.rest import DEFAULT_SERVICE_URL as DEFAULT_GRACEDB_URL
-from ligo.scald import utils
+from ligo.scald import events, utils
 
 from lal import LIGOTimeGPS
 
@@ -80,30 +77,29 @@ def parse_command_line():
 #					Classes
 #-------------------------------------------------
 
-class EventUploader(object):
+class EventUploader(events.EventProcessor):
 	"""
 	manages handling of incoming events, selecting the best and uploading to GraceDB.
 	"""
+	_name = 'event_uploader'
+
 	def __init__(self, options):
-		logging.info('setting up...')
+		logging.info('setting up event uploader...')
+
+		events.EventProcessor.__init__(
+			self,
+			process_cadence=options.processing_cadence,
+			request_timeout=options.request_timeout,
+			num_messages=options.num_jobs,
+			kafka_server=options.kafka_server,
+			input_topic=options.input_topic,
+			tag=options.tag
+		)
 
 		### initialize timing options
-		self.processing_cadence = options.processing_cadence
-		self.request_timeout = options.request_timeout
 		self.max_event_time = options.max_event_time
 		self.retries = 5
 		self.retry_delay = 1
-		self.is_running = False
-
-		### kafka settings
-		self.kafka_settings = {'bootstrap.servers': options.kafka_server}
-
-		### initialize consumer
-		consumer_kafka_settings = self.kafka_settings
-		consumer_kafka_settings['group.id'] = '-'.join(['uploader', options.tag])
-		self.consumer = Consumer(consumer_kafka_settings)
-		self.consumer.subscribe([options.input_topic])
-		self.num_jobs = options.num_jobs
 
 		### initialize gracedb client
 		if options.gracedb_service_url.startswith("file"):
@@ -123,21 +119,14 @@ class EventUploader(object):
 		self.public_far_threshold = options.far_threshold / options.far_trials_factor
 
 
-	def fetch_data(self):
+	def ingest(self, message):
 		"""
-		requests for a new event from a topic,
-		and add to candidate list
+		parse a message containing a candidate event
 		"""
-		messages = self.consumer.consume(num_messages=self.num_jobs, timeout=self.request_timeout)
-
-		for message in messages:
-			### only add to queue if no errors in receiving data
-			if message and not message.error():
-
-				### process candidate event
-				candidate = json.loads(message.value())
-				candidate['time'] = LIGOTimeGPS(candidate['time'], candidate.pop('time_ns'))
-				self.process_candidate(candidate)
+		### process candidate event
+		candidate = json.loads(message.value())
+		candidate['time'] = LIGOTimeGPS(candidate['time'], candidate.pop('time_ns'))
+		self.process_candidate(candidate)
 
 
 	def process_candidate(self, candidate):
@@ -180,13 +169,13 @@ class EventUploader(object):
 			'num_sent': 0,
 			'time_sent': None,
 			'favored': None,
-			'candidates': deque(maxlen = self.num_jobs)
+			'candidates': deque(maxlen = self.num_messages)
 		}
 
 
-	def process_events(self):
+	def handle(self):
 		"""
-		process events stored, selecting the best candidate.
+		handle events stored, selecting the best candidate.
 		upload if a new favored event is found
 		"""
 		for key, event in sorted(self.events.items(), reverse=True):
@@ -364,34 +353,6 @@ class EventUploader(object):
 		return event['time_sent'] + numpy.power(4, event['num_sent'])
 
 
-	def process(self):
-		"""
-		fetch events and process them at the specified cadence
-		"""
-		while self.is_running:
-			self.fetch_data()
-			self.process_events()
-			time.sleep(self.processing_cadence)
-
-
-	def start(self):
-		"""
-		start the event loop
-		"""
-		logging.info('starting event uploader for {:d} inspiral jobs...'.format(self.num_jobs))
-		self.is_running = True
-		self.process()
-
-
-	def stop(self):
-		"""
-		stop the event loop
-		"""
-		logging.info('shutting down...')
-		### FIXME: should also handle pushing rest of data in buffer
-		self.is_running = False
-
-
 	@staticmethod
 	def to_ordinal(n):
 		"""
@@ -402,21 +363,6 @@ class EventUploader(object):
 		https://stackoverflow.com/a/20007730
 		"""
 		return "%d%s" % (n,"tsnrhtdd"[(n/10%10!=1)*(n%10<4)*n%10::4])
-
-
-class SignalHandler(object):
-	"""
-	helper class to shut down the event uploader gracefully before exiting
-	"""
-	def __init__(self, event_uploader, signals = [signal.SIGINT, signal.SIGTERM]):
-		self.event_uploader = event_uploader
-		for sig in signals:
-			signal.signal(sig, self)
-
-	def __call__(self, signum, frame):
-		logging.info("SIG {:d} received, attempting graceful shutdown...".format(signum))
-		self.event_uploader.stop()
-		sys.exit(0)
 
 
 #-------------------------------------------------
@@ -434,9 +380,6 @@ if __name__ == '__main__':
 
 	# create event uploader instance
 	event_uploader = EventUploader(options)
-
-	# install signal handler
-	SignalHandler(event_uploader)
 
 	# start up
 	event_uploader.start()
