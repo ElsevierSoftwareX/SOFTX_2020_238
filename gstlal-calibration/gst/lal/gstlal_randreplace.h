@@ -89,8 +89,8 @@ struct _GSTLALRandReplace {
 
 	/* properties */
 	double replace_probability;
-        double replace_max;
-        double replace_min_magnitude;
+        double max_value;
+        double min_value;
         guint64 max_replace_samples;
 };
 

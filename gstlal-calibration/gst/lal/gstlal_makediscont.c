@@ -157,7 +157,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
 	element->next_in_offset = GST_BUFFER_OFFSET_END(buf);
 
 	if(element->switch_probability && element->t0 != GST_BUFFER_PTS(buf)) {
-		srand(time(0));
 		if(rand() < RAND_MAX * element->switch_probability) {
 			int prob1 = rand();
 			int prob2 = RAND_MAX - prob1;
@@ -249,7 +248,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
 			buffer_dur_factor = 1.0;
 		double prob = element->sleep_probability * buffer_dur_factor;
 
-		srand(time(0));
 		if((double) rand() / RAND_MAX < prob) {
 			struct timespec sleep_time;
 			guint64 sleep_nsec = (guint64) ((double) element->sleep_time * rand() / RAND_MAX);
@@ -504,6 +502,8 @@ static void gstlal_makediscont_init(GSTLALMakeDiscont * element) {
 	element->t0 = GST_CLOCK_TIME_NONE;
 	element->offset0 = GST_BUFFER_OFFSET_NONE;
 	element->next_in_offset = GST_BUFFER_OFFSET_NONE;
+
+	srand(time(0));
 }
 
 

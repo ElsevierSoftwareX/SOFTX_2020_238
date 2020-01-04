@@ -116,8 +116,6 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE(
 #define DEFINE_RANDOM_REPLACE(DTYPE, COMPLEX) \
 static void random_replace_ ## DTYPE ## COMPLEX(COMPLEX DTYPE *data, guint64 total_samples, double min, double max, guint64 max_replace_samples, enum gstlal_randreplace_data_type data_type) { \
  \
-	srand(time(0)); \
- \
 	guint64 replace_samples, i = 0; \
 	COMPLEX DTYPE *end, replacement; \
 	int sign; \
@@ -245,51 +243,51 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if(!strcmp(name, GST_AUDIO_NE(U32))) {
 		element->data_type = GSTLAL_RANDREPLACE_U32;
 		g_assert_cmpuint(unit_size, ==, 4 * (guint) channels);
-		if(element->replace_max > G_MAXUINT32) {
-			GST_INFO_OBJECT(element, "Stream is unsigned integers, so replace-max must not be greater than %u.  Setting replace-max to %u.", G_MAXUINT32, G_MAXUINT32);
-			element->replace_max = G_MAXUINT32;
+		if(element->max_value > G_MAXUINT32) {
+			GST_INFO_OBJECT(element, "Stream is unsigned integers, so max-value must not be greater than %u.  Setting max-value to %u.", G_MAXUINT32, G_MAXUINT32);
+			element->max_value = G_MAXUINT32;
 		}
-		if(element->replace_min_magnitude > G_MAXUINT32) {
-			GST_INFO_OBJECT(element, "Stream is unsigned integers, so replace-min-magnitude must not be greater than %u.  Setting replace-min-magnitude to %u.", G_MAXUINT32, G_MAXUINT32);
-			element->replace_min_magnitude = G_MAXUINT32;
+		if(element->min_value > G_MAXUINT32) {
+			GST_INFO_OBJECT(element, "Stream is unsigned integers, so min-value must not be greater than %u.  Setting min-value to %u.", G_MAXUINT32, G_MAXUINT32);
+			element->min_value = G_MAXUINT32;
 		}
 		/* Truncate it so that the default value is zero. */
-		element->replace_min_magnitude = (double) ((guint64) element->replace_min_magnitude);
+		element->min_value = (double) ((guint64) element->min_value);
 	} else if(!strcmp(name, GST_AUDIO_NE(F32))) {
 		element->data_type = GSTLAL_RANDREPLACE_F32;
 		g_assert_cmpuint(unit_size, ==, 4 * (guint) channels);
-		if(element->replace_max > G_MAXFLOAT) {
-			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values greater than %e.  Setting replace-max to %e", G_MAXFLOAT, G_MAXFLOAT);
-			element->replace_max = G_MAXFLOAT;
+		if(element->max_value > G_MAXFLOAT) {
+			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values greater than %e.  Setting max-value to %e", G_MAXFLOAT, G_MAXFLOAT);
+			element->max_value = G_MAXFLOAT;
 		}
-		if(element->replace_min_magnitude < G_MINFLOAT) {
-			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values smaller in magnitude than %e.  Setting replace-min-magnitude to %e", G_MINFLOAT, G_MINFLOAT);
-			element->replace_min_magnitude = G_MINFLOAT;
+		if(element->min_value < G_MINFLOAT) {
+			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values smaller in magnitude than %e.  Setting min-value to %e", G_MINFLOAT, G_MINFLOAT);
+			element->min_value = G_MINFLOAT;
 		}
 	} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
 		element->data_type = GSTLAL_RANDREPLACE_F64;
 		g_assert_cmpuint(unit_size, ==, 8 * (guint) channels);
-		if(element->replace_min_magnitude < G_MINDOUBLE) {
-			GST_INFO_OBJECT(element, "Double-precision floating point stream cannot take values smaller in magnitude than %e.  Setting replace-min-magnitude to %e", G_MINDOUBLE, G_MINDOUBLE);
-			element->replace_min_magnitude = G_MINFLOAT;
+		if(element->min_value < G_MINDOUBLE) {
+			GST_INFO_OBJECT(element, "Double-precision floating point stream cannot take values smaller in magnitude than %e.  Setting min-value to %e", G_MINDOUBLE, G_MINDOUBLE);
+			element->min_value = G_MINFLOAT;
 		}
 	} else if(!strcmp(name, GST_AUDIO_NE(Z64))) {
 		element->data_type = GSTLAL_RANDREPLACE_Z64;
 		g_assert_cmpuint(unit_size, ==, 8 * (guint) channels);
-		if(element->replace_max > G_MAXFLOAT) {
-			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values greater than %e.  Setting replace-max to %e", G_MAXFLOAT, G_MAXFLOAT);
-			element->replace_max = G_MAXFLOAT;
+		if(element->max_value > G_MAXFLOAT) {
+			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values greater than %e.  Setting max-value to %e", G_MAXFLOAT, G_MAXFLOAT);
+			element->max_value = G_MAXFLOAT;
 		}
-		if(element->replace_min_magnitude < G_MINFLOAT) {
-			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values smaller in magnitude than %e.  Setting replace-min-magnitude to %e", G_MINFLOAT, G_MINFLOAT);
-			element->replace_min_magnitude = G_MINFLOAT;
+		if(element->min_value < G_MINFLOAT) {
+			GST_INFO_OBJECT(element, "Single-precision floating point stream cannot take values smaller in magnitude than %e.  Setting min-value to %e", G_MINFLOAT, G_MINFLOAT);
+			element->min_value = G_MINFLOAT;
 		}
 	} else if(!strcmp(name, GST_AUDIO_NE(Z128))) {
 		element->data_type = GSTLAL_RANDREPLACE_Z128;
 		g_assert_cmpuint(unit_size, ==, 16 * (guint) channels);
-		if(element->replace_min_magnitude < G_MINDOUBLE) {
-			GST_INFO_OBJECT(element, "Double-precision floating point stream cannot take values smaller in magnitude than %e.  Setting replace-min-magnitude to %e", G_MINDOUBLE, G_MINDOUBLE);
-			element->replace_min_magnitude = G_MINFLOAT;
+		if(element->min_value < G_MINDOUBLE) {
+			GST_INFO_OBJECT(element, "Double-precision floating point stream cannot take values smaller in magnitude than %e.  Setting min-value to %e", G_MINDOUBLE, G_MINDOUBLE);
+			element->min_value = G_MINFLOAT;
 		}
 	} else
 		g_assert_not_reached();
@@ -298,11 +296,11 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	element->unit_size = unit_size;
 
 	/* Some checks */
-	if(element->replace_max < element->replace_min_magnitude) {
-		GST_WARNING_OBJECT(element, "replace-max should be greater than replace-min-magnitude (replace-max=%e, replace-min=%e).  Switching them.", element->replace_max, element->replace_min_magnitude);
-		double max = element->replace_min_magnitude;
-		element->replace_min_magnitude = element->replace_max;
-		element->replace_max = max;
+	if(element->max_value < element->min_value) {
+		GST_WARNING_OBJECT(element, "max should be greater than min (max=%e, replace-min=%e).  Switching them.", element->max_value, element->min_value);
+		double max = element->min_value;
+		element->min_value = element->max_value;
+		element->max_value = max;
 	}
 
 	return TRUE;
@@ -319,8 +317,7 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 	GSTLALRandReplace *element = GSTLAL_RANDREPLACE(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 
-	srand(time(0));
-	if((double) rand() / RAND_MAX < element->replace_probability) {
+	if((double) rand() / RAND_MAX <= element->replace_probability) {
 
 		GstMapInfo mapinfo;
 		gst_buffer_map(buf, &mapinfo, GST_MAP_READWRITE);
@@ -328,23 +325,23 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 		switch(element->data_type) {
 
 		case GSTLAL_RANDREPLACE_U32:
-			random_replace_guint32((void *) mapinfo.data, mapinfo.size / element->unit_size, element->replace_min_magnitude, element->replace_max, element->max_replace_samples, element->data_type);
+			random_replace_guint32((void *) mapinfo.data, mapinfo.size / element->unit_size, element->min_value, element->max_value, element->max_replace_samples, element->data_type);
 			break;
 
 		case GSTLAL_RANDREPLACE_F32:
-			random_replace_float((void *) mapinfo.data, mapinfo.size / element->unit_size, element->replace_min_magnitude, element->replace_max, element->max_replace_samples, element->data_type);
+			random_replace_float((void *) mapinfo.data, mapinfo.size / element->unit_size, element->min_value, element->max_value, element->max_replace_samples, element->data_type);
 			break;
 
 		case GSTLAL_RANDREPLACE_F64:
-			random_replace_double((void *) mapinfo.data, mapinfo.size / element->unit_size, element->replace_min_magnitude, element->replace_max, element->max_replace_samples, element->data_type);
+			random_replace_double((void *) mapinfo.data, mapinfo.size / element->unit_size, element->min_value, element->max_value, element->max_replace_samples, element->data_type);
 			break;
 
 		case GSTLAL_RANDREPLACE_Z64:
-			random_replace_floatcomplex((void *) mapinfo.data, mapinfo.size / element->unit_size, element->replace_min_magnitude, element->replace_max, element->max_replace_samples, element->data_type);
+			random_replace_floatcomplex((void *) mapinfo.data, mapinfo.size / element->unit_size, element->min_value, element->max_value, element->max_replace_samples, element->data_type);
 			break;
 
 		case GSTLAL_RANDREPLACE_Z128:
-			random_replace_doublecomplex((void *) mapinfo.data, mapinfo.size / element->unit_size, element->replace_min_magnitude, element->replace_max, element->max_replace_samples, element->data_type);
+			random_replace_doublecomplex((void *) mapinfo.data, mapinfo.size / element->unit_size, element->min_value, element->max_value, element->max_replace_samples, element->data_type);
 			break;
 
 		default:
@@ -369,9 +366,9 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 
 enum property {
 	ARG_REPLACE_PROBABILITY = 1,
-	ARG_REPLACE_MAX,
-	ARG_REPLACE_MIN_MAGNITUDE,
-	ARG_MAX_REPLACE_SAMPLES
+	ARG_MAX_VALUE,
+	ARG_MIN_VALUE_MAGNITUDE,
+	ARG_MAX_VALUE_REPLACE_SAMPLES
 };
 
 
@@ -391,15 +388,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		element->replace_probability = g_value_get_double(value);
 		break;
 
-	case ARG_REPLACE_MAX:
-		element->replace_max = g_value_get_double(value);
+	case ARG_MAX_VALUE:
+		element->max_value = g_value_get_double(value);
 		break;
 
-	case ARG_REPLACE_MIN_MAGNITUDE:
-		element->replace_min_magnitude = g_value_get_double(value);
+	case ARG_MIN_VALUE_MAGNITUDE:
+		element->min_value = g_value_get_double(value);
 		break;
 
-	case ARG_MAX_REPLACE_SAMPLES:
+	case ARG_MAX_VALUE_REPLACE_SAMPLES:
 		element->max_replace_samples = g_value_get_uint64(value);
 		break;
 
@@ -428,15 +425,15 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		g_value_set_double(value, element->replace_probability);
 		break;
 
-	case ARG_REPLACE_MAX:
-		g_value_set_double(value, element->replace_max);
+	case ARG_MAX_VALUE:
+		g_value_set_double(value, element->max_value);
 		break;
 
-	case ARG_REPLACE_MIN_MAGNITUDE:
-		g_value_set_double(value, element->replace_min_magnitude);
+	case ARG_MIN_VALUE_MAGNITUDE:
+		g_value_set_double(value, element->min_value);
 		break;
 
-	case ARG_MAX_REPLACE_SAMPLES:
+	case ARG_MAX_VALUE_REPLACE_SAMPLES:
 		g_value_set_uint64(value, element->max_replace_samples);
 		break;
 
@@ -478,28 +475,28 @@ static void gstlal_randreplace_class_init(GSTLALRandReplaceClass *klass) {
 			"replace-probability",
 			"Replace probability",
 			"Probability that a given buffer gets replaced",
-			0, G_MAXDOUBLE, 0.5,
+			0, 1.0, 0.5,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_REPLACE_MAX,
+		ARG_MAX_VALUE,
 		g_param_spec_double(
-			"replace-max",
-			"Replace maximum",
+			"max-value",
+			"Maximum value",
 			"Maximum value that can data can be replaced with.  For signed streams, the\n\t\t\t"
-			"minumum is -replace-max.",
+			"minumum is -max.",
 			0, G_MAXDOUBLE, G_MAXDOUBLE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_REPLACE_MIN_MAGNITUDE,
+		ARG_MIN_VALUE_MAGNITUDE,
 		g_param_spec_double(
-			"replace-min-magnitude",
-			"Replace minimum magnitude",
+			"min-value",
+			"Minimum value",
 			"Minimum magnitude of value that can data can be replaced with.  For integer\n\t\t\t"
 			"streams, this will be truncated to an integer.",
 			0, G_MAXDOUBLE, G_MINDOUBLE,
@@ -508,7 +505,7 @@ static void gstlal_randreplace_class_init(GSTLALRandReplaceClass *klass) {
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_MAX_REPLACE_SAMPLES,
+		ARG_MAX_VALUE_REPLACE_SAMPLES,
 		g_param_spec_uint64(
 			"max-replace-samples",
 			"Maximum replace samples",
@@ -535,6 +532,7 @@ static void gstlal_randreplace_class_init(GSTLALRandReplaceClass *klass) {
 
 static void gstlal_randreplace_init(GSTLALRandReplace *element) {
 
+	srand(time(0));
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
 
