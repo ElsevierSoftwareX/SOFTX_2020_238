@@ -250,7 +250,7 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *buf) {
 
 		if((double) rand() / RAND_MAX < prob) {
 			struct timespec sleep_time;
-			guint64 sleep_nsec = (guint64) ((double) element->sleep_time * rand() / RAND_MAX);
+			guint64 sleep_nsec = (guint64) ((double) (element->sleep_time - t_behind) * rand() / RAND_MAX);
 			sleep_time.tv_sec = (time_t) (sleep_nsec / 1000000000);
 			sleep_time.tv_nsec = (long) (sleep_nsec % 1000000000);
 			nanosleep(&sleep_time, NULL);
