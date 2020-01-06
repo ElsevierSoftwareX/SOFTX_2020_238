@@ -664,6 +664,12 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	GstClockTime sinkbuf_dur = GST_BUFFER_DURATION(sinkbuf);
 	GstClockTime sinkbuf_pts = GST_BUFFER_PTS(sinkbuf);
 
+	/* If we're not filling discontinuities and this is a discontinuity, reset the timestamp and offset bookkeeping. */
+	if(sinkbuf_discont && !element->fill_discont && GST_BUFFER_PTS_IS_VALID(sinkbuf)) {
+		element->offset0 = element->next_out_offset = sinkbuf_offset;
+		element->t0 = GST_BUFFER_PTS(sinkbuf);
+	}
+
 	if(sinkbuf_pts >= element->last_sinkbuf_ets) {
 		GstMapInfo inmap;
 		gst_buffer_map(sinkbuf, &inmap, GST_MAP_READ);
