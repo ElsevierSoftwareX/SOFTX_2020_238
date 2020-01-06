@@ -94,6 +94,7 @@ struct _GSTLALInsertGap {
 	gboolean remove_inf;
 	gboolean fill_discont;
 	double replace_value;
+	double replace_value_imag;
 	double *bad_data_intervals;
 	gint array_length;
 	guint64 chop_length;
