@@ -171,6 +171,42 @@ static void set_metadata(GSTLALInsertGap *element, GstBuffer *buf, guint64 outsa
 }
 
 
+static GstFlowReturn push_srcbuf(GSTLALInsertGap *element, const gint8 *data, guint64 num_samples, gint dtype_size, gboolean srcbuf_gap, gboolean need_discont, gboolean single_sample) {
+
+	GstFlowReturn result = GST_FLOW_OK;
+	guint64 srcbuf_data_size = num_samples * element->unit_size;
+	GstBuffer *srcbuf;
+	gint8 *srcbuf_data;
+	srcbuf_data = g_malloc(srcbuf_data_size);
+
+	if(single_sample) {
+		/* This means *data only contains one number which should fill the src buffer */
+		gint8 *ptr, *end = srcbuf_data + srcbuf_data_size;
+		for(ptr = srcbuf_data; ptr < end; ptr += dtype_size)
+			memcpy(ptr, data, dtype_size);
+	} else
+		memcpy(srcbuf_data, data, srcbuf_data_size);
+
+	srcbuf = gst_buffer_new_wrapped(srcbuf_data, srcbuf_data_size);
+
+	if(G_UNLIKELY(!srcbuf)) {
+		GST_ERROR_OBJECT(element, "failure creating sub-buffer");
+		result = GST_FLOW_ERROR;
+	}
+
+	/* set flags, offsets, and timestamps. */
+	set_metadata(element, srcbuf, num_samples, srcbuf_gap, need_discont);
+
+	/* push buffer downstream */
+	GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf));
+	result = gst_pad_push(element->srcpad, srcbuf);
+	if(G_UNLIKELY(result != GST_FLOW_OK))
+		GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result));
+
+	return result;
+}
+
+
 #define DEFINE_CHECK_DATA(DTYPE) \
 static gboolean check_data_ ## DTYPE(DTYPE *data, double *bad_data_intervals, int array_length, int num_checks, gboolean remove_nan, gboolean remove_inf) { \
 	int i, j; \
@@ -196,7 +232,7 @@ DEFINE_CHECK_DATA(guint32);
 
 
 #define DEFINE_PROCESS_INBUF(DTYPE,COMPLEX) \
-static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *indata, DTYPE COMPLEX *outdata, GSTLALInsertGap *element, gboolean sinkbuf_gap, gboolean sinkbuf_discont, guint64 sinkbuf_offset, guint64 sinkbuf_offset_end, GstClockTime sinkbuf_dur, GstClockTime sinkbuf_pts, gboolean complex_data, gboolean empty_sinkbuf) \
+static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *indata, DTYPE COMPLEX *outdata, GSTLALInsertGap *element, gboolean sinkbuf_gap, gboolean sinkbuf_discont, guint64 sinkbuf_offset, guint64 sinkbuf_offset_end, GstClockTime sinkbuf_dur, GstClockTime sinkbuf_pts, DTYPE COMPLEX complex_factor, gboolean empty_sinkbuf) \
 { \
 	GstFlowReturn result = GST_FLOW_OK; \
 	guint64 blocks, max_block_length; \
@@ -206,7 +242,7 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	 */ \
 	if(element->fill_discont && (element->last_sinkbuf_ets != 0) && (sinkbuf_pts != element->last_sinkbuf_ets)) { \
  \
-		guint64 standard_blocks, last_block_length, buffer_num, sample_num, missing_samples = 0; \
+		guint64 standard_blocks, last_block_length, buffer_num, missing_samples = 0; \
 		DTYPE COMPLEX sample_value; \
  \
 		/* Track discont length and number of zero-length buffers */ \
@@ -228,68 +264,23 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
  \
 		standard_blocks = missing_samples / max_block_length; \
 		last_block_length = missing_samples % max_block_length; \
-		if(complex_data) \
-			sample_value = (element->replace_value < G_MAXDOUBLE) ? ((DTYPE) (element->replace_value)) * (1 + I) : 0; \
-		else \
-			sample_value = (element->replace_value < G_MAXDOUBLE) ? ((DTYPE) (element->replace_value)) : 0; \
+ \
+		sample_value = (element->replace_value < G_MAXDOUBLE) ? ((DTYPE) (element->replace_value)) * complex_factor : 0; \
  \
 		/* first make and push any buffers of size max_buffer_size */ \
 		if(standard_blocks != 0) { \
 			for(buffer_num = 0; buffer_num < standard_blocks; buffer_num++) { \
-				GstBuffer *discont_buf; \
-				DTYPE COMPLEX *discont_buf_data; \
-				discont_buf_data = g_malloc(max_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
-				for(sample_num = 0; sample_num < max_block_length * element->channels; sample_num++) { \
-					*discont_buf_data = sample_value; \
-					discont_buf_data++; \
-				} \
-				discont_buf = gst_buffer_new_wrapped((discont_buf_data - max_block_length * element->channels), max_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
-				if(G_UNLIKELY(!discont_buf)) { \
-					GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
-					result = GST_FLOW_ERROR; \
+				result = push_srcbuf(element, (void *) &sample_value, max_block_length, sizeof(DTYPE COMPLEX), element->insert_gap, FALSE, TRUE); \
+				if(G_UNLIKELY(result != GST_FLOW_OK)) \
 					goto done; \
-				} \
- \
-				/* set flags, offsets, and timestamps. */ \
-				set_metadata(element, discont_buf, max_block_length, element->insert_gap, FALSE); \
- \
-				/* push buffer downstream */ \
-				GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(discont_buf)); \
-				result = gst_pad_push(element->srcpad, discont_buf); \
-				if(G_UNLIKELY(result != GST_FLOW_OK)) { \
-					GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result)); \
-					goto done; \
-				} \
 			} \
 		} \
  \
 		/* then make and push the remainder buffer */ \
 		if(last_block_length != 0) { \
-			GstBuffer *last_discont_buf; \
-			DTYPE COMPLEX *last_discont_buf_data; \
-			last_discont_buf_data = g_malloc(last_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
-			guint sample_num; \
-			for(sample_num = 0; sample_num < last_block_length * element->channels; sample_num++) { \
-				*last_discont_buf_data = sample_value; \
-				last_discont_buf_data++; \
-			} \
-			last_discont_buf = gst_buffer_new_wrapped((last_discont_buf_data - last_block_length * element->channels), last_block_length * element->channels * sizeof(DTYPE COMPLEX)); \
-			if(G_UNLIKELY(!last_discont_buf)) { \
-				GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
-				result = GST_FLOW_ERROR; \
+			result = push_srcbuf(element, (void *) &sample_value, last_block_length, sizeof(DTYPE COMPLEX), element->insert_gap, FALSE, TRUE); \
+			if(G_UNLIKELY(result != GST_FLOW_OK)) \
 				goto done; \
-			} \
- \
-			/* set flags, offsets, and timestamps. */ \
-			set_metadata(element, last_discont_buf, last_block_length, element->insert_gap, FALSE); \
- \
-			/* push buffer downstream */ \
-			GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(last_discont_buf)); \
-			result = gst_pad_push(element->srcpad, last_discont_buf); \
-			if(G_UNLIKELY(result != GST_FLOW_OK)) { \
-				GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result)); \
-				goto done; \
-			} \
 		} \
 	} \
 	if(!sinkbuf_dur) \
@@ -302,7 +293,7 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	/*
 	 * Now, use data on input buffer to make next output buffer(s)
 	 */ \
-	gboolean data_is_bad, srcbuf_gap, srcbuf_gap_next; \
+	gboolean data_is_bad, channel_is_bad, srcbuf_gap, srcbuf_gap_next; \
 	guint64 offset, length, current_srcbuf_length = 0; \
 	int i; \
  \
@@ -313,19 +304,18 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 	max_block_length = (length + blocks - 1) / blocks; /* ceil */ \
 	g_assert_cmpuint(max_block_length, >, 0); \
  \
-	/* Check first sample */ \
-	data_is_bad = !check_data_ ## DTYPE((DTYPE *) indata, element->bad_data_intervals, element->array_length, (1 + (int) complex_data) * element->channels, element->remove_nan, element->remove_inf); \
-	srcbuf_gap = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
 	for(offset = 0; offset < length; offset++) { \
-		data_is_bad = !check_data_ ## DTYPE((DTYPE *) indata, element->bad_data_intervals, element->array_length, (1 + (int) complex_data) * element->channels, element->remove_nan, element->remove_inf); \
-		srcbuf_gap_next = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
-		if(complex_data) { \
-			for(i = 0; i < element->channels; i++) \
-				outdata[i] = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? ((DTYPE) (element->replace_value)) * (1 + I) : indata[i]; \
-		} else { \
-			for(i = 0; i < element->channels; i++) \
-				outdata[i] = (((element->replace_value) < G_MAXDOUBLE) && data_is_bad) ? (DTYPE) (element->replace_value) : indata[i]; \
+		data_is_bad = FALSE; \
+		for(i = 0; i < element->channels; i++) { \
+			channel_is_bad = !check_data_ ## DTYPE((DTYPE *) (indata + i), element->bad_data_intervals, element->array_length, (1 + (int) cimag((complex double) complex_factor)) * element->channels, element->remove_nan, element->remove_inf); \
+			outdata[i] = (((element->replace_value) < G_MAXDOUBLE) && channel_is_bad) ? (((DTYPE) (element->replace_value)) * complex_factor) : indata[i]; \
+			data_is_bad |= channel_is_bad; \
 		} \
+ \
+		srcbuf_gap_next = (sinkbuf_gap && (!(element->remove_gap))) || ((element->insert_gap) && data_is_bad); \
+		if(offset == 0) \
+			srcbuf_gap = srcbuf_gap_next; \
+ \
 		current_srcbuf_length++; \
 		indata += element->channels; \
 		outdata += element->channels; \
@@ -349,25 +339,15 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 				indata -= element->channels; \
 				outdata -= element->channels; \
 			} \
-			GstBuffer *srcbuf; \
-			DTYPE COMPLEX *srcbuf_data; \
-			srcbuf_data = g_malloc(current_srcbuf_length * element->channels * sizeof(DTYPE COMPLEX)); \
-			memcpy(srcbuf_data, (outdata - current_srcbuf_length * element->channels), current_srcbuf_length * element->channels * sizeof(DTYPE COMPLEX)); \
-			srcbuf = gst_buffer_new_wrapped(srcbuf_data, current_srcbuf_length * element->channels * sizeof(DTYPE COMPLEX)); \
- \
-			if(G_UNLIKELY(!srcbuf)) { \
-				GST_ERROR_OBJECT(element, "failure creating sub-buffer"); \
-				result = GST_FLOW_ERROR; \
-				goto done; \
-			} \
- \
 			/*
 			 * only the first subbuffer of a buffer flagged as a
 			 * discontinuity is a discontinuity.
 			 */ \
 			gboolean need_discont = sinkbuf_discont && (offset + 1 - current_srcbuf_length == 0) && ((!(element->fill_discont)) || (element->last_sinkbuf_ets == 0)); \
-			/* set flags, offsets, and timestamps. */ \
-			set_metadata(element, srcbuf, current_srcbuf_length, srcbuf_gap, need_discont); \
+			/* push buffer downstream */ \
+			result = push_srcbuf(element, (void *) (outdata - current_srcbuf_length * element->channels), current_srcbuf_length, sizeof(DTYPE COMPLEX), srcbuf_gap, need_discont, FALSE); \
+			if(G_UNLIKELY(result != GST_FLOW_OK)) \
+				goto done; \
  \
 			if(srcbuf_gap_next != srcbuf_gap) { \
 				/* We need to reset our place in the input buffer */ \
@@ -376,16 +356,14 @@ static GstFlowReturn process_inbuf_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *ind
 				outdata += element->channels; \
 				current_srcbuf_length = 1; \
 				srcbuf_gap = srcbuf_gap_next; \
+				if(offset == length - 1) { \
+					/* Then we are on the last sample and we need to push it in a buffer now. */ \
+					result = push_srcbuf(element, (void *) (outdata - current_srcbuf_length * element->channels), current_srcbuf_length, sizeof(DTYPE COMPLEX), srcbuf_gap, FALSE, FALSE); \
+					if(G_UNLIKELY(result != GST_FLOW_OK)) \
+						goto done; \
+				} \
 			} else \
 				current_srcbuf_length = 0; \
- \
-			/* push buffer downstream */ \
-			GST_DEBUG_OBJECT(element, "pushing sub-buffer %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_BOUNDARIES_ARGS(srcbuf)); \
-			result = gst_pad_push(element->srcpad, srcbuf); \
-			if(G_UNLIKELY(result != GST_FLOW_OK)) { \
-				GST_WARNING_OBJECT(element, "push failed: %s", gst_flow_get_name(result)); \
-				goto done; \
-			} \
 		} \
 	} \
 done: \
@@ -459,19 +437,19 @@ naptime:
 			GstFlowReturn result;
 			switch(element->data_type) {
 			case GSTLAL_INSERTGAP_U32:
-				result = process_inbuf_guint32(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, FALSE, FALSE);
+				result = process_inbuf_guint32(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, 1, FALSE);
 				break;
 			case GSTLAL_INSERTGAP_F32:
-				result = process_inbuf_float(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, FALSE, FALSE);
+				result = process_inbuf_float(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, 1, FALSE);
 				break;
 			case GSTLAL_INSERTGAP_F64:
-				result = process_inbuf_double(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, FALSE, FALSE);
+				result = process_inbuf_double(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, 1, FALSE);
 				break;
 			case GSTLAL_INSERTGAP_Z64:
-				result = process_inbuf_floatcomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, TRUE, FALSE);
+				result = process_inbuf_floatcomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, 1 + I, FALSE);
 				break;
 			case GSTLAL_INSERTGAP_Z128:
-				result = process_inbuf_doublecomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, TRUE, FALSE);
+				result = process_inbuf_doublecomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, ets_min, 1 + I, FALSE);
 				break;
 			default:
 				g_assert_not_reached();
@@ -624,19 +602,19 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 		if(GST_BUFFER_PTS_IS_VALID(sinkbuf) && GST_BUFFER_PTS(sinkbuf) > element->last_sinkbuf_ets) {
 			switch(element->data_type) {
 			case GSTLAL_INSERTGAP_U32:
-				result = process_inbuf_guint32(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE, TRUE);
+				result = process_inbuf_guint32(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), 1, TRUE);
 				break;
 			case GSTLAL_INSERTGAP_F32:
-				result = process_inbuf_float(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE, TRUE);
+				result = process_inbuf_float(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), 1, TRUE);
 				break;
 			case GSTLAL_INSERTGAP_F64:
-				result = process_inbuf_double(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), FALSE, TRUE);
+				result = process_inbuf_double(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), 1, TRUE);
 				break;
 			case GSTLAL_INSERTGAP_Z64:
-				result = process_inbuf_floatcomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), TRUE, TRUE);
+				result = process_inbuf_floatcomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), 1 + I, TRUE);
 				break;
 			case GSTLAL_INSERTGAP_Z128:
-				result = process_inbuf_doublecomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), TRUE, TRUE);
+				result = process_inbuf_doublecomplex(NULL, NULL, element, TRUE, TRUE, 0, 0, 0, GST_BUFFER_PTS(sinkbuf), 1 + I, TRUE);
 				break;
 			default:
 				g_assert_not_reached();
@@ -659,12 +637,6 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	GstClockTime sinkbuf_dur = GST_BUFFER_DURATION(sinkbuf);
 	GstClockTime sinkbuf_pts = GST_BUFFER_PTS(sinkbuf);
 
-	/* If we're not filling discontinuities, reset the timestamp and offset bookkeeping. */
-	if(!element->fill_discont && element->t0 != GST_CLOCK_TIME_NONE) {
-		element->offset0 = element->next_out_offset = GST_BUFFER_OFFSET(sinkbuf);
-		element->t0 = GST_BUFFER_PTS(sinkbuf);
-	}
-
 	if(sinkbuf_pts >= element->last_sinkbuf_ets) {
 		GstMapInfo inmap;
 		gst_buffer_map(sinkbuf, &inmap, GST_MAP_READ);
@@ -679,19 +651,19 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 
 		switch(element->data_type) {
 		case GSTLAL_INSERTGAP_U32:
-			result = process_inbuf_guint32((guint32 *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE, FALSE);
+			result = process_inbuf_guint32((guint32 *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, 1, FALSE);
 			break;
 		case GSTLAL_INSERTGAP_F32:
-			result = process_inbuf_float((float *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE, FALSE);
+			result = process_inbuf_float((float *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, 1, FALSE);
 			break;
 		case GSTLAL_INSERTGAP_F64:
-			result = process_inbuf_double((double *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, FALSE, FALSE);
+			result = process_inbuf_double((double *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, 1, FALSE);
 			break;
 		case GSTLAL_INSERTGAP_Z64:
-			result = process_inbuf_floatcomplex((float complex *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, TRUE, FALSE);
+			result = process_inbuf_floatcomplex((float complex *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, 1 + I, FALSE);
 			break;
 		case GSTLAL_INSERTGAP_Z128:
-			result = process_inbuf_doublecomplex((double complex *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, TRUE, FALSE);
+			result = process_inbuf_doublecomplex((double complex *) inmap.data, outdata, element, sinkbuf_gap, sinkbuf_discont, sinkbuf_offset, sinkbuf_offset_end, sinkbuf_dur, sinkbuf_pts, 1 + I, FALSE);
 			break;
 
 		default:
