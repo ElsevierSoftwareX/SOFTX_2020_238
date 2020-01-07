@@ -397,6 +397,13 @@ class EventUploader(events.EventProcessor):
 		return event['time_sent'] + numpy.power(self.common_ratio_time, event['num_sent'])
 
 
+	def finish(self):
+		"""
+		send remaining events before shutting down
+		"""
+		self.handle()
+
+
 	@staticmethod
 	def to_ordinal(n):
 		"""
