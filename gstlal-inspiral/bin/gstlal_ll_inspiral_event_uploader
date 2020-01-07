@@ -191,7 +191,9 @@ class EventUploader(events.EventProcessor):
 						key[0], key[1],
 					)
 				)
-				self.upload_event(event)
+				sent = self.upload_event(event)
+				if sent:
+					event['num_sent'] += 1
 
 			elif event['candidates'] and utils.gps_now() >= self.next_event_upload(event):
 				updated, event = self.process_candidates(event)
@@ -205,7 +207,9 @@ class EventUploader(events.EventProcessor):
 							key[0], key[1]
 						)
 					)
-					self.upload_event(event)
+					sent = self.upload_event(event)
+					if sent:
+						event['num_sent'] += 1
 
 		# clean out old events
 		current_time = utils.gps_now()
@@ -273,7 +277,6 @@ class EventUploader(events.EventProcessor):
 		"""
 		if not event['time_sent']:
 			event['time_sent'] = utils.gps_now()
-		event['num_sent'] += 1
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.createEvent(
@@ -309,6 +312,7 @@ class EventUploader(events.EventProcessor):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} failed".format(filename))
+			return False
 
 		# gzip and upload psd
 		psd_fobj = StringIO.StringIO()
@@ -316,6 +320,7 @@ class EventUploader(events.EventProcessor):
 			f.write(event['favored']['psd'])
 		self.upload_file("strain PSDs", "psd.xml.gz", "psd", psd_fobj.getvalue(), graceid)
 		del psd_fobj
+		return True
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
@@ -344,6 +349,7 @@ class EventUploader(events.EventProcessor):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} for ID {} failed".format(filename, graceid))
+			return False
 
 
 	def next_event_upload(self, event):
