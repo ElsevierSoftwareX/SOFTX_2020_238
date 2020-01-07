@@ -210,35 +210,40 @@ static GstFlowReturn push_srcbuf(GSTLALInsertGap *element, const gint8 *data, gu
 #define DEFINE_CHECK_DATA(DTYPE, COMPLEX) \
 static gboolean check_data_ ## DTYPE ## COMPLEX(const DTYPE COMPLEX *data, double *bad_data_intervals, int array_length, int num_checks, gboolean remove_nan, gboolean remove_inf, gint complex_factor) { \
 	int i, j; \
-	gboolean result = TRUE; \
+	gboolean result_real, result_imag; \
 	if(complex_factor) { \
 		for(i = 0; i < num_checks; i++) { \
 			if(bad_data_intervals) { \
-				result = FALSE; \
+				result_real = FALSE; \
+				result_imag = FALSE; \
 				for(j = 0; j < array_length; j += 4) { \
-					result |= creal(data[i]) > bad_data_intervals[j] && creal(data[i]) < bad_data_intervals[j + 2]; \
-					result |= cimag(data[i]) > bad_data_intervals[j + 1] && cimag(data[i]) < bad_data_intervals[j + 3]; \
+					result_real |= creal(data[i]) > bad_data_intervals[j] && creal(data[i]) < bad_data_intervals[j + 2]; \
+					result_imag |= cimag(data[i]) > bad_data_intervals[j + 1] && cimag(data[i]) < bad_data_intervals[j + 3]; \
 				} \
+				if(!(result_real && result_imag)) \
+					return FALSE; \
 			} \
-			if(remove_nan) \
-				result &= !isnan(creal(data[i])) && !isnan(cimag(data[i])); \
-			if(remove_inf) \
-				result &= !isinf(creal(data[i])) && !isinf(cimag(data[i])); \
+			if(remove_nan && (isnan(creal(data[i])) || isnan(cimag(data[i])))) \
+				return FALSE; \
+			if(remove_inf && (isinf(creal(data[i])) || isinf(cimag(data[i])))) \
+				return FALSE; \
 		} \
 	} else { \
 		for(i = 0; i < num_checks; i++) { \
 			if(bad_data_intervals) { \
-				result = FALSE; \
+				result_real = FALSE; \
 				for(j = 0; j < array_length; j += 2) \
-					result |= (DTYPE) data[i] > bad_data_intervals[j] && (DTYPE) data[i] < bad_data_intervals[j + 1]; \
+					result_real |= (DTYPE) data[i] > bad_data_intervals[j] && (DTYPE) data[i] < bad_data_intervals[j + 1]; \
+				if(!result_real) \
+					return FALSE; \
 			} \
-			if(remove_nan) \
-				result &= !isnan((double) data[i]); \
-			if(remove_inf) \
-				result &= !isinf((double) data[i]); \
+			if(remove_nan && isnan((double) data[i])) \
+				return FALSE; \
+			if(remove_inf && isinf((double) data[i])) \
+				return FALSE; \
 		} \
 	} \
-	return result; \
+	return TRUE; \
 }
 
 
@@ -663,6 +668,12 @@ static GstFlowReturn chain(GstPad *pad, GstObject *parent, GstBuffer *sinkbuf)
 	guint64 sinkbuf_offset_end = GST_BUFFER_OFFSET_END(sinkbuf);
 	GstClockTime sinkbuf_dur = GST_BUFFER_DURATION(sinkbuf);
 	GstClockTime sinkbuf_pts = GST_BUFFER_PTS(sinkbuf);
+
+	/* If we're not filling discontinuities and this is a discontinuity, reset the timestamp and offset bookkeeping. */
+	if(sinkbuf_discont && !element->fill_discont && GST_BUFFER_PTS_IS_VALID(sinkbuf)) {
+		element->offset0 = element->next_out_offset = sinkbuf_offset;
+		element->t0 = GST_BUFFER_PTS(sinkbuf);
+	}
 
 	if(sinkbuf_pts >= element->last_sinkbuf_ets) {
 		GstMapInfo inmap;

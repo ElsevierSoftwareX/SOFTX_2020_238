@@ -58,6 +58,7 @@ def parse_command_line():
 	parser.add_option("--num-jobs", type = int, default = 10, help="number of jobs to listen to")
 	parser.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
 	parser.add_option("--max-event-time", type = "int", default = 7200, help = "Maximum time to keep around an event. Default = 2 hours.")
+	parser.add_option("--common-ratio-time", type = "int", default = 4, help = "Common ratio time T for sending out subsequent events for the same event window. First event gets sent T seconds later, second event gets sent T^2 seconds later, etc. Default = 4.")
 	parser.add_option("--far-threshold", type = "float", default = 3.84e-07, help = "FAR threshold considered for an event to be public, not including a trials factor. Default = 1 / month")
 	parser.add_option("--far-trials-factor", type = "int", default = 1, help = "Trials factor for number of CBC pipelines uploading events to GraceDB. Default = 1.")
 	parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the event uploader acquires and processes data. Default = 0.1 seconds.")
@@ -111,12 +112,15 @@ class EventUploader(events.EventProcessor):
 		self.gracedb_group = options.gracedb_group
 		self.gracedb_pipeline = options.gracedb_pipeline
 		self.gracedb_search = options.gracedb_search
+		self.common_ratio_time = options.common_ratio_time
 
 		### initialize event store
 		self.events = OrderedDict()
 
 		### favored event settings
 		self.public_far_threshold = options.far_threshold / options.far_trials_factor
+		self.favored_event_topic = 'favored_events'
+		self.p_astro_topic = 'p_astro'
 
 
 	def ingest(self, message):
@@ -191,7 +195,11 @@ class EventUploader(events.EventProcessor):
 						key[0], key[1],
 					)
 				)
-				self.upload_event(event)
+				self.send_favored_event(event, key)
+				self.send_p_astro(event, key)
+				sent = self.upload_event(event)
+				if sent:
+					event['num_sent'] += 1
 
 			elif event['candidates'] and utils.gps_now() >= self.next_event_upload(event):
 				updated, event = self.process_candidates(event)
@@ -205,7 +213,11 @@ class EventUploader(events.EventProcessor):
 							key[0], key[1]
 						)
 					)
-					self.upload_event(event)
+					self.send_favored_event(event, key)
+					self.send_p_astro(event, key)
+					sent = self.upload_event(event)
+					if sent:
+						event['num_sent'] += 1
 
 		# clean out old events
 		current_time = utils.gps_now()
@@ -267,13 +279,42 @@ class EventUploader(events.EventProcessor):
 			return candidates[snr_idx]
 
 
+	def send_p_astro(self, event, event_window):
+		"""
+		send p(astro) via Kafka
+		"""
+		p_astro = {
+			'event_window': list(event_window),
+			'time': event['time'][0],
+			'time_ns': event['time'][1],
+			'p_astro': event['p_astro']
+		}
+		self.producer.produce(topic=self.p_astro_topic, value=p_astro)
+		self.producer.poll(0)
+
+
+	def send_favored_event(self, event, event_window):
+		"""
+		send a favored event via Kafka
+		"""
+		favored_event = {
+			'event_window': list(event_window),
+			'time': event['time'][0],
+			'time_ns': event['time'][1],
+			'snr': event['snr'],
+			'far': event['far'],
+			'coinc': event['coinc']
+		}
+		self.producer.produce(topic=self.favored_event_topic, value=favored_event)
+		self.producer.poll(0)
+
+
 	def upload_event(self, event):
 		"""
 		upload a new event + auxiliary files
 		"""
 		if not event['time_sent']:
 			event['time_sent'] = utils.gps_now()
-		event['num_sent'] += 1
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.createEvent(
@@ -309,6 +350,7 @@ class EventUploader(events.EventProcessor):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} failed".format(filename))
+			return False
 
 		# gzip and upload psd
 		psd_fobj = StringIO.StringIO()
@@ -316,6 +358,7 @@ class EventUploader(events.EventProcessor):
 			f.write(event['favored']['psd'])
 		self.upload_file("strain PSDs", "psd.xml.gz", "psd", psd_fobj.getvalue(), graceid)
 		del psd_fobj
+		return True
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
@@ -344,13 +387,21 @@ class EventUploader(events.EventProcessor):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} for ID {} failed".format(filename, graceid))
+			return False
 
 
 	def next_event_upload(self, event):
 		"""
 		check whether enough time has elapsed to send an updated event
 		"""
-		return event['time_sent'] + numpy.power(4, event['num_sent'])
+		return event['time_sent'] + numpy.power(self.common_ratio_time, event['num_sent'])
+
+
+	def finish(self):
+		"""
+		send remaining events before shutting down
+		"""
+		self.handle()
 
 
 	@staticmethod
