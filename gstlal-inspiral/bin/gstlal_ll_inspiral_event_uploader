@@ -58,6 +58,7 @@ def parse_command_line():
 	parser.add_option("--num-jobs", type = int, default = 10, help="number of jobs to listen to")
 	parser.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
 	parser.add_option("--max-event-time", type = "int", default = 7200, help = "Maximum time to keep around an event. Default = 2 hours.")
+	parser.add_option("--common-ratio-time", type = "int", default = 4, help = "Common ratio time T for sending out subsequent events for the same event window. First event gets sent T seconds later, second event gets sent T^2 seconds later, etc. Default = 4.")
 	parser.add_option("--far-threshold", type = "float", default = 3.84e-07, help = "FAR threshold considered for an event to be public, not including a trials factor. Default = 1 / month")
 	parser.add_option("--far-trials-factor", type = "int", default = 1, help = "Trials factor for number of CBC pipelines uploading events to GraceDB. Default = 1.")
 	parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the event uploader acquires and processes data. Default = 0.1 seconds.")
@@ -111,6 +112,7 @@ class EventUploader(events.EventProcessor):
 		self.gracedb_group = options.gracedb_group
 		self.gracedb_pipeline = options.gracedb_pipeline
 		self.gracedb_search = options.gracedb_search
+		self.common_ratio_time = options.common_ratio_time
 
 		### initialize event store
 		self.events = OrderedDict()
@@ -392,7 +394,7 @@ class EventUploader(events.EventProcessor):
 		"""
 		check whether enough time has elapsed to send an updated event
 		"""
-		return event['time_sent'] + numpy.power(4, event['num_sent'])
+		return event['time_sent'] + numpy.power(self.common_ratio_time, event['num_sent'])
 
 
 	@staticmethod
