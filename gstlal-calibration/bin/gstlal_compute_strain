@@ -1136,7 +1136,6 @@ if not verbose:
 
 if InputConfigs["datasource"] == "lvshm": # Data is to be read from shared memory; "low-latency" mode
 	src = pipeparts.mklvshmsrc(pipeline, shm_name = InputConfigs["shmpartition"], assumed_duration = input_frame_duration)
-	src = pipeparts.mkgeneric(pipeline, src, "lal_makediscont", data_time = 1000000000, dropout_time = 1000000000, heartbeat_time = 1000000000, switch_probability = 0.2, sleep_time = 5 * 1000000000)
 elif InputConfigs["datasource"] == "frames": # Data is to be read from frame files; "offline" mode
 	src = pipeparts.mklalcachesrc(pipeline, location = options.frame_cache, cache_dsc_regex = instrument, use_mmap = True)
 
