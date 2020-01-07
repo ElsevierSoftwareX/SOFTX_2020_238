@@ -117,6 +117,8 @@ class EventUploader(events.EventProcessor):
 
 		### favored event settings
 		self.public_far_threshold = options.far_threshold / options.far_trials_factor
+		self.favored_event_topic = 'favored_events'
+		self.p_astro_topic = 'p_astro'
 
 
 	def ingest(self, message):
@@ -191,6 +193,8 @@ class EventUploader(events.EventProcessor):
 						key[0], key[1],
 					)
 				)
+				self.send_favored_event(event, key)
+				self.send_p_astro(event, key)
 				sent = self.upload_event(event)
 				if sent:
 					event['num_sent'] += 1
@@ -207,6 +211,8 @@ class EventUploader(events.EventProcessor):
 							key[0], key[1]
 						)
 					)
+					self.send_favored_event(event, key)
+					self.send_p_astro(event, key)
 					sent = self.upload_event(event)
 					if sent:
 						event['num_sent'] += 1
@@ -269,6 +275,36 @@ class EventUploader(events.EventProcessor):
 			candidates = [c for c in candidates if c['far'] <= self.public_far_threshold]
 			snr_idx = numpy.argmax([c['snr'] for c in candidates])
 			return candidates[snr_idx]
+
+
+	def send_p_astro(self, event, event_window):
+		"""
+		send p(astro) via Kafka
+		"""
+		p_astro = {
+			'event_window': list(event_window),
+			'time': event['time'][0],
+			'time_ns': event['time'][1],
+			'p_astro': event['p_astro']
+		}
+		self.producer.produce(topic=self.p_astro_topic, value=p_astro)
+		self.producer.poll(0)
+
+
+	def send_favored_event(self, event, event_window):
+		"""
+		send a favored event via Kafka
+		"""
+		favored_event = {
+			'event_window': list(event_window),
+			'time': event['time'][0],
+			'time_ns': event['time'][1],
+			'snr': event['snr'],
+			'far': event['far'],
+			'coinc': event['coinc']
+		}
+		self.producer.produce(topic=self.favored_event_topic, value=favored_event)
+		self.producer.poll(0)
 
 
 	def upload_event(self, event):
