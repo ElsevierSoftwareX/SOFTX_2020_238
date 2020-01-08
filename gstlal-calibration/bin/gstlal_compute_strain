@@ -180,7 +180,10 @@ try:
 	kafka_server = MonitorConfigs["kafkaserver"]
 except:
 	kafka_server = None
-
+try:
+	latency_suffix = MonitorConfigs["latencysuffix"]
+except:
+	latency_suffix = None
 
 # Sanity checks for command line options
 data_sources = set(("frames", "lvshm"))
@@ -1117,7 +1120,7 @@ if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_
 pipeline = Gst.Pipeline(name="gstlal_compute_strain")
 mainloop = GObject.MainLoop()
 if kafka_server is not None:
-	handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server, verbose = verbose)
+	handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server, verbose = verbose, latency_suffix = latency_suffix)
 else:
 	print("Using simple handler")
 	handler = simplehandler.Handler(mainloop, pipeline)

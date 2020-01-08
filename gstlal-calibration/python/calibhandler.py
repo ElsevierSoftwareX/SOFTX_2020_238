@@ -62,7 +62,7 @@ class Handler(simplehandler.Handler):
 
 	Implements...
 	"""
-	def __init__(self, mainloop, pipeline, kafka_server = None, verbose = False):
+	def __init__(self, mainloop, pipeline, kafka_server = None, verbose = False, latency_suffix = None):
 		super(Handler, self).__init__(mainloop, pipeline)
 		#
 		# initialize
@@ -94,7 +94,10 @@ class Handler(simplehandler.Handler):
 			elif "dmt0" in socket.gethostname():
 				self.machine = "production"
 			else:
-				self.machine = "other"
+				if latency_suffix is not None:
+					self.machine = "other_%s" % latency_suffix
+				else:
+					self.machine = "other_1"
 
 	def appsink_statevector_new_buffer(self, elem, ifo, bitmaskdict):
 		if self.kafka_server is not None:
