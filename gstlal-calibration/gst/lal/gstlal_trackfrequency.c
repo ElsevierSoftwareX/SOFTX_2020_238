@@ -108,7 +108,8 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 		*num_stored = 0; \
 	} \
  \
-	do { \
+	while(i < size - 1) { \
+ \
 		gboolean shift = FALSE; \
 		while(*check_step) { \
 			if(*sign * src[i] < 0) { \
@@ -131,15 +132,7 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
 		} \
  \
 		/* At this point, we are either after a +/- transition or at the end of the buffer */ \
-		if(size == 1) { \
-			/* There is only one input sample, and we need to check if there is a transition */ \
-			*dst = (DTYPE) *current_frequency; \
-			j++; \
-			if(*src * *last_buffer_end < 0) { \
-				fractional_sample = *src / (*src - *last_buffer_end); \
-				update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts - (guint64) (fractional_sample * (double) GST_SECOND / rate + 0.5)); \
-			} \
-		} else if(i == 0) { \
+		if(i == 0) { \
 			/* There is a transition at the beginning of a buffer */ \
 			*dst = (DTYPE) *current_frequency; \
 			j++; \
@@ -165,8 +158,7 @@ static void trackfrequency_ ## DTYPE(const DTYPE *src, DTYPE *dst, gint64 size, 
  \
 		/* Reset the step size to search the next cycle */ \
 		*check_step = (int) (0.2 * rate / *current_frequency + 0.61) > 1 ? (int) (0.2 * rate / *current_frequency + 0.61) : 1; \
-	} while(i < size - 1); \
- \
+	} \
 	/* We should be at the end of the output buffer now */ \
 	g_assert_cmpint(size, == , j); \
  \
@@ -209,7 +201,8 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 		*num_stored = 0; \
 	} \
  \
-	do { \
+	while(i < size - 1) { \
+ \
 		gboolean shift = FALSE; \
 		while(*check_step) { \
 			if(*sign * creal ## F_OR_BLANK(src[i]) < 0) { \
@@ -232,18 +225,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
 		} \
  \
 		/* At this point, we are either after a +/- transition or at the end of the buffer */ \
-		if(size == 1) { \
-			/* There is only one input sample, and we need to check if there is a transition */ \
-			*dst = (DTYPE) *current_frequency; \
-			j++; \
-			if(creal ## F_OR_BLANK(*src) * creal ## F_OR_BLANK(*last_buffer_end) < 0) { \
-				fractional_sample = creal ## F_OR_BLANK(*src) / (creal ## F_OR_BLANK(*src) - *last_buffer_end); \
-				update_frequency(current_frequency, crossover_times, num_halfcycles, num_stored, pts - (guint64) (fractional_sample * (double) GST_SECOND / rate + 0.5)); \
-				/* Check if the frequency is negative */ \
-				if(creal ## F_OR_BLANK(*src) * cimag ## F_OR_BLANK(*src) > 0) \
-					*current_frequency = -(*current_frequency); \
-			} \
-		} else if(i == 0) { \
+		if(i == 0) { \
 			/* There is a transition at the beginning of a buffer */ \
 			*dst = (DTYPE) *current_frequency; \
 			j++; \
@@ -275,8 +257,7 @@ static void trackfrequency_complex_ ## DTYPE(const DTYPE complex *src, DTYPE *ds
  \
 		/* Reset the step size to search the next cycle */ \
 		*check_step = (int) (0.2 * rate / fabs(*current_frequency) + 0.61) > 1 ? (int) (0.2 * rate / fabs(*current_frequency) + 0.61) : 1; \
-	} while(i < size - 1); \
- \
+	} \
 	/* We should be at the end of the output buffer now */ \
 	g_assert_cmpint(size, == , j); \
  \

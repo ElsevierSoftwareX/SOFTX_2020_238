@@ -22,8 +22,7 @@ lib@GSTPLUGINPREFIX@gstlalcalibration_la_SOURCES = \
 	gstlal_typecast.c gstlal_typecast.h \
 	gstlal_matrixsolver.c gstlal_matrixsolver.h \
 	gstlal_sensingtdcfs.c gstlal_sensingtdcfs.h \
-	gstlal_makediscont.c gstlal_makediscont.h \
-	gstlal_randreplace.c gstlal_randreplace.h
+	gstlal_makediscont.c gstlal_makediscont.h
 lib@GSTPLUGINPREFIX@gstlalcalibration_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
 lib@GSTPLUGINPREFIX@gstlalcalibration_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
 lib@GSTPLUGINPREFIX@gstlalcalibration_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSTLAL_LIBS) $(PYTHON_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)

@@ -2599,22 +2599,22 @@ if compute_calib_statevector:
 	# KAPPATST BITS BRANCH
 	#
 	if compute_kappatst:
-		ktstSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_ktsttee, expected_kappatst_real, expected_kappatst_imag, kappatst_real_var, kappatst_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,ktst_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		ktstSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_ktstRtee, smooth_ktstItee, expected_kappatst_real, expected_kappatst_imag, kappatst_real_var, kappatst_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,ktst_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# KAPPAPUM/KAPPAPU BITS BRANCH
 	#
 	if compute_kappapum:
-		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpumtee, expected_kappapum_real, expected_kappapum_imag, kappapum_real_var, kappapum_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kpum_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpumRtee, smooth_kpumItee, expected_kappapum_real, expected_kappapum_imag, kappapum_real_var, kappapum_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kpum_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	elif compute_kappapu:
-		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kputee, expected_kappapu_real, expected_kappapu_imag, kappapu_real_var, kappapu_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kpum_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kpumSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kpuRtee, smooth_kpuItee, expected_kappapu_real, expected_kappapu_imag, kappapu_real_var, kappapu_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kpum_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# KAPPAUIM BITS BRANCH
 	#
 	if compute_kappauim:
-		kuimSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kuimtee, expected_kappauim_real, expected_kappauim_imag, kappauim_real_var, kappauim_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kuim_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		kuimSmoothInRange = calibration_parts.compute_kappa_bits(pipeline, smooth_kuimRtee, smooth_kuimItee, expected_kappauim_real, expected_kappauim_imag, kappauim_real_var, kappauim_imag_var, median_smoothing_samples, factors_average_samples, status_out_smooth = pow(2,kuim_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# KAPPAC BITS BRANCH

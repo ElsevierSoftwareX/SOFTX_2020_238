@@ -8,9 +8,9 @@ IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1239984268 - 256 | bc)
+START = $(shell echo 1249981184 - 256 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1239984268 + 64542 + 256 | bc)
+END = $(shell echo 1249981184 + 2048 + 256 | bc)
 #1240048818
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
@@ -20,7 +20,7 @@ PLOT_COOLDOWN_TIME = 256
 GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1252081818_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
-DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_1239472998.ini
+DCSCONFIGS = Filters/O3/GDSFilters/L1DCS_C01_1249927218_test_noTDCFs.ini
 EXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_exactKappas_1239472998.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
@@ -29,12 +29,12 @@ GDSTESTCONFIGS = Filters/O3/GDSFilters/H1GDS_1239476409_testAllCorrections.ini
 DCSTESTCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1252083618_AllCorrectionsTest.ini
 DCSREALKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1252083618_RealKappasTest.ini
 DCSREALKAPPASSRCCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1252083618_RealKappasSRCTest.ini
-GDSSHMCONFIGS = Filters/O3/GDSFilters/H1GDS_1258216456_testing.ini
+GDSSHMCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: increasing_latency_test
+all: filters_tf_DCS
 
 ###############################################
 ### These commands should change less often ###
@@ -118,9 +118,6 @@ $(IFO)1_hoft_DCS_FCC_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesd
 $(IFO)1_hoft_GDS_SHM_frames.cache: filters framesdir
 	-GST_DEBUG=3 timeout $(SHMRUNTIME) gstlal_compute_strain --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=1 --frames-per-file=1 --wings=0 --config-file $(GDSSHMCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/GDS/$(IFO)-$(IFO)1GDS_SHM*.gwf | lalapps_path2cache > $@
-
-increasing_latency_test: filters framesdir
-	GST_DEBUG=3 gstlal_compute_strain --frame-duration=1 --frames-per-file=1 --config-file $(GDSSHMCONFIGS)
 
 $(IFO)1_hoft_GDS_OLD_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSOLDCONFIGS)
