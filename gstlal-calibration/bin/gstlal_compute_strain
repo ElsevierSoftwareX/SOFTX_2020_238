@@ -3011,7 +3011,7 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 	mid_rms_rate = pow(2, int(numpy.log(2 * cleaning_check_range_mid_max) / numpy.log(2) + 1.01))
 
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
-	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = "lowfreq")
+	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	if test_latency or InputConfigs["datasource"] == "lvshm":
 		strain_rms_lowfreq = pipeparts.mktee(pipeline, strain_rms_lowfreq)
 		strain_rms_lowfreq_latency = pipeparts.mklatency(pipeline, strain_rms_lowfreq, name = "%s_strain_rms_lowfreq" % OutputConfigs["frametype"], silent = silent)
@@ -3021,7 +3021,7 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 		pipeparts.mkfakesink(pipeline, strain_rms_lowfreq_latency)
 	
 	# Compute the RMS of the cleaned strain in a low-frequency range
-	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'clean_lowfreq')
+	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_lowfreq = calibration_parts.complex_division(pipeline, strain_rms_lowfreq, clean_strain_rms_lowfreq)
 	clean_hoft_ok_lowfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_lowfreq, bit_vector = pow(2,line_sub_bitnum), threshold=1.0)
@@ -3036,9 +3036,9 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 		pipeparts.mkfakesink(pipeline, clean_hoft_ok_lowfreq_latency)
 
 	# Compute the RMS of the uncleaned strain in a mid-frequency range to test subtraction of noise and/or the ~300 Hz pcal line
-	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'midfreq')
+	strain_rms_midfreq = calibration_parts.compute_rms(pipeline, straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Compute the RMS of the cleaned strain in a mid-frequency range
-	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td, handler = handler, name = 'clean_midfreq')
+	clean_strain_rms_midfreq = calibration_parts.compute_rms(pipeline, clean_straintee, mid_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_mid_min, f_max = cleaning_check_range_mid_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
 	clean_hoft_ok_midfreq = calibration_parts.complex_division(pipeline, strain_rms_midfreq, clean_strain_rms_midfreq)
 	clean_hoft_ok_midfreq = pipeparts.mkbitvectorgen(pipeline, clean_hoft_ok_midfreq, bit_vector = pow(2,noise_sub_bitnum), threshold=1.0)
