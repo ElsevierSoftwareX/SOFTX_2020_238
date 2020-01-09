@@ -268,15 +268,10 @@ class EventUploader(events.EventProcessor):
 		    * FAR >  public threshold, choose lowest FAR
 		    * FAR <= public threshold, choose highest SNR
 		"""
-		candidates = list(candidates)
-		far_idx = numpy.argmin([c['far'] for c in candidates])
-		lowest_far = candidates[far_idx]
-		if lowest_far['far'] > self.public_far_threshold:
-			return lowest_far
-		else:
-			candidates = [c for c in candidates if c['far'] <= self.public_far_threshold]
-			snr_idx = numpy.argmax([c['snr'] for c in candidates])
-			return candidates[snr_idx]
+		def keyfunc(candidate):
+		    return (candidate['far'] <= self.public_far_threshold), candidate['snr']
+
+		return max(candidates, key=keyfunc)
 
 
 	def send_p_astro(self, event, event_window):
