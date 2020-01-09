@@ -285,11 +285,11 @@ class EventUploader(events.EventProcessor):
 		"""
 		p_astro = {
 			'event_window': list(event_window),
-			'time': event['time'][0],
-			'time_ns': event['time'][1],
-			'p_astro': event['p_astro']
+			'time': event['favored']['time'].gpsSeconds,
+			'time_ns': event['favored']['time'].gpsNanoSeconds,
+			'p_astro': event['favored']['p_astro']
 		}
-		self.producer.produce(topic=self.p_astro_topic, value=p_astro)
+		self.producer.produce(topic=self.p_astro_topic, value=json.dumps(p_astro))
 		self.producer.poll(0)
 
 
@@ -299,13 +299,13 @@ class EventUploader(events.EventProcessor):
 		"""
 		favored_event = {
 			'event_window': list(event_window),
-			'time': event['time'][0],
-			'time_ns': event['time'][1],
-			'snr': event['snr'],
-			'far': event['far'],
-			'coinc': event['coinc']
+			'time': event['favored']['time'].gpsSeconds,
+			'time_ns': event['favored']['time'].gpsNanoSeconds,
+			'snr': event['favored']['snr'],
+			'far': event['favored']['far'],
+			'coinc': event['favored']['coinc']
 		}
-		self.producer.produce(topic=self.favored_event_topic, value=favored_event)
+		self.producer.produce(topic=self.favored_event_topic, value=json.dumps(favored_event))
 		self.producer.poll(0)
 
 
