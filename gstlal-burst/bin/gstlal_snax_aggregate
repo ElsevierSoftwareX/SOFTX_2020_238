@@ -26,21 +26,15 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
 from collections import defaultdict, deque
 import json
-from multiprocessing.dummy import Pool as ThreadPool
+import logging
 import optparse
-import os
-import signal
-import sys
-import time
 
 import numpy
 
-from confluent_kafka import Consumer, KafkaError
-
-from ligo.scald import utils as scald_utils
+from ligo.scald import events
+from ligo.scald import utils
 from ligo.scald.io import hdf5, influx
 
-from gstlal.snax import utils
 
 #-------------------------------------------------
 #                  Functions
@@ -74,45 +68,42 @@ def parse_command_line():
 
     return options, args
 
+
 #-------------------------------------------------
 #                   Classes
 #-------------------------------------------------
 
-class StreamAggregator(object):
+class StreamAggregator(events.EventProcessor):
     """
     Ingests and aggregates incoming streaming features, collects job metrics.
     """
-    def __init__(self, logger, options):
-        logger.info('setting up feature aggregator...')
+    _name = 'aggregator'
 
-        ### initialize timing options
-        self.request_timeout = options.request_timeout
-        self.processing_cadence = options.processing_cadence
-        self.sample_rate = options.sample_rate
-        self.is_running = False
+    def __init__(self, options):
+        logging.info('setting up feature aggregator...')
 
-        ### kafka settings
-        self.kafka_settings = {
-            'bootstrap.servers': options.kafka_server,
-            'group.id': 'aggregator_%s_%s'%(options.tag, options.jobs[0])
-        }
+        self.jobs = options.jobs
+        input_topics = ['%s_%s'%(options.input_topic_basename, job) for job in self.jobs]
+        events.EventProcessor.__init__(
+            self,
+            process_cadence=options.processing_cadence,
+            request_timeout=options.request_timeout,
+            num_messages=len(self.jobs),
+            kafka_server=options.kafka_server,
+            input_topic=input_topics,
+            tag='aggregator_%s_%s'%(options.tag, self.jobs[0])
+        )
 
         ### other aggregator options
         self.data_type = options.data_type
-        self.last_save = scald_utils.gps_now()
-
-        ### initialize consumers
-        self.jobs = options.jobs
-        self.consumer_names = ['%s_%s' % (options.input_topic_basename, job) for job in self.jobs]
-        self.job_consumers = [(job, Consumer(self.kafka_settings)) for job, topic in zip(self.jobs, self.consumer_names)]
-        for topic, job_consumer in zip(self.consumer_names, self.job_consumers):
-            job_consumer[1].subscribe([topic])
+        self.last_save = utils.gps_now()
+        self.sample_rate = options.sample_rate
 
         ### initialize 30 second queue for incoming buffers
         self.feature_queue = {job: deque(maxlen = 30 * self.sample_rate) for job in self.jobs}
 
         ### set up aggregator 
-        logger.info("setting up aggregator with backend: %s"%options.data_backend)
+        logging.info("setting up aggregator with backend: %s"%options.data_backend)
         if options.data_backend == 'influx':
             self.agg_sink = influx.Aggregator(
                 hostname=options.influx_hostname,
@@ -130,40 +121,40 @@ class StreamAggregator(object):
             )
 
         ### define measurements to be stored from aggregators
-        self.agg_sink.register_schema('latency', columns='data', column_key='data', tags='job', tag_key='job')
-        self.agg_sink.register_schema('snr', columns='data', column_key='data', tags=('channel', 'subsystem'), tag_key='channel')
+        self.agg_sink.register_schema(
+            'latency',
+             columns='data',
+             column_key='data',
+             tags='job',
+             tag_key='job'
+        )
+        self.agg_sink.register_schema(
+            'snr',
+            columns='data',
+            column_key='data',
+            tags=('channel', 'subsystem'),
+            tag_key='channel'
+        )
 
-    def fetch_data(self, job_consumer):
-        """
-        requests for a new message from an individual topic,
-        and add to the feature queue
-        """
-        job, consumer = job_consumer
-        message = consumer.poll(timeout=self.request_timeout)
 
-        ### only add to queue if no errors in receiving data
-        if message and not message.error():
+    def ingest(self, message):
+        """
+        parse a message containing feature data
+        """
+        _, job = message.topic().rsplit('_', 1)
+        feature_subset = json.loads(message.value())
+        self.feature_queue[job].appendleft((
+            feature_subset['timestamp'],
+            feature_subset['features']
+        ))
 
-            ### decode json and parse data
-            feature_subset = json.loads(message.value())
-            self.feature_queue[job].appendleft((feature_subset['timestamp'], feature_subset['features']))
 
-    def fetch_all_data(self):
+    def handle(self):
         """
-        requests for a new message from all topics, and add
-        to the feature queue
+        process and aggregate features from feature extraction jobs
         """
-        pool = ThreadPool(len(self.job_consumers))
-        result = pool.map_async(self.fetch_data, self.job_consumers)
-        result.wait()
-        pool.close()
-
-    def process_queue(self):
-        """
-        process and aggregate features from feature extraction jobs on a regular cadence
-        """
-        if utils.in_new_epoch(scald_utils.gps_now(), self.last_save, 1):
-            self.last_save = scald_utils.gps_now()
+        if utils.in_new_epoch(utils.gps_now(), self.last_save, 1):
+            self.last_save = utils.gps_now()
 
             ### format incoming packets into metrics and timeseries
             feature_packets = [(job, self.feature_queue[job].pop()) for job in self.jobs for i in range(len(self.feature_queue[job]))]
@@ -179,9 +170,10 @@ class StreamAggregator(object):
 
             try:
                 max_latency = max(max(metrics['latency']) for metrics in all_metrics.values())
-                logger.info('processed features at time %d, highest latency is %.3f' % (self.last_save, max_latency))
+                logging.info('processed features at time %d, highest latency is %.3f' % (self.last_save, max_latency))
             except:
-                logger.info('no features to process at time %d' % self.last_save)
+                logging.info('no features to process at time %d' % self.last_save)
+
 
     def packets_to_timeseries(self, packets):
         """
@@ -194,7 +186,7 @@ class StreamAggregator(object):
         for job, packet in packets:
             timestamp, features = packet
             metrics[job]['time'].append(timestamp)
-            metrics[job]['latency'].append(utils.gps2latency(timestamp))
+            metrics[job]['latency'].append(utils.gps_to_latency(timestamp))
             for channel, row in features.items():
                 channel_rows[channel].extend(row) 
 
@@ -205,26 +197,6 @@ class StreamAggregator(object):
 
         return timeseries, metrics
 
-    def start(self):
-        """
-        starts ingestion and aggregation of features
-        """
-        logger.info('starting feature aggregator...')
-        self.is_running = True
-        while self.is_running:
-            ### ingest incoming features
-            self.fetch_all_data()
-            ### push combined features downstream
-            self.process_queue()
-            ### repeat with processing cadence
-            time.sleep(self.processing_cadence)
-
-    def stop(self):
-        """
-        shut down gracefully
-        """
-        logger.info('shutting down feature aggregator...')
-        self.is_running = False
 
     @staticmethod
     def _channel_to_subsystem(channel):
@@ -233,41 +205,19 @@ class StreamAggregator(object):
         """
         return channel.split(':')[1].split('-')[0]
 
-class SignalHandler(object):
-    """
-    helper class to shut down the stream aggregator gracefully before exiting
-    """
-    def __init__(self, aggregator_sink, signals = [signal.SIGINT, signal.SIGTERM]):
-        self.aggregator_sink = aggregator_sink
-        for sig in signals:
-            signal.signal(sig, self)
-
-    def __call__(self, signum, frame):
-        self.aggregator_sink.stop()
-        sys.exit(0)
-
 
 #-------------------------------------------------
 #                    Main
 #-------------------------------------------------
 
 if __name__ == '__main__':
-    # parse arguments
     options, args = parse_command_line()
 
     ### set up logging
-    logger = utils.get_logger(
-        '-'.join([options.tag, 'feature_aggregator', options.jobs[0]]),
-        log_level=options.log_level,
-        rootdir=options.rootdir,
-        verbose=options.verbose
-    )
+    log_level = logging.DEBUG if options.verbose else logging.INFO
+    logging.basicConfig(format='%(asctime)s | snax_aggregate : %(levelname)s : %(message)s')
+    logging.getLogger().setLevel(log_level)
 
-    # create summary instance
-    aggregator_sink = StreamAggregator(logger, options=options)
-
-    # install signal handler
-    SignalHandler(aggregator_sink)
-
-    # start up listener
-    aggregator_sink.start()
+    # start up aggregator
+    aggregator = StreamAggregator(options)
+    aggregator.start()
