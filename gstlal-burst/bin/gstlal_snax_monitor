@@ -26,19 +26,15 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
 from collections import defaultdict, deque
 import json
+import logging
 import optparse
-import os
-import signal
-import sqlite3
-import sys
-import time
 
-from confluent_kafka import Consumer, KafkaError
-
+from ligo.scald import events
+from ligo.scald import utils
 from ligo.scald.io import hdf5, influx
 
 from gstlal.snax import multichannel_datasource
-from gstlal.snax import utils
+
 
 #-------------------------------------------------
 #                  Functions
@@ -75,32 +71,32 @@ def parse_command_line():
 
     return options, args
 
+
 #-------------------------------------------------
 #                   Classes
 #-------------------------------------------------
 
-class StreamMonitor(object):
+class StreamMonitor(events.EventProcessor):
     """
-    Listens to incoming streaming features, collects metrics and pushes relevant metrics to sqlite.
+    Listens to incoming streaming features, collects metrics and pushes relevant metrics to a data store.
     """
-    def __init__(self, logger, options):
-        logger.info('setting up feature monitor...')
+    _name = 'feature_monitor'
 
-        ### initialize timing options
-        self.request_timeout = options.request_timeout
-        self.processing_cadence = options.processing_cadence
-        self.sample_rate = options.sample_rate
-        self.is_running = False
+    def __init__(self, options):
+        logging.info('setting up feature monitor...')
 
-        ### kafka settings
-        self.kafka_settings = {'bootstrap.servers': options.kafka_server,
-                               'group.id': 'monitor_%s'%options.tag}
-
-        ### initialize consumers
-        self.consumer = Consumer(self.kafka_settings)
-        self.consumer.subscribe([options.input_topic_basename])
+        events.EventProcessor.__init__(
+            self,
+            process_cadence=options.processing_cadence,
+            request_timeout=options.request_timeout,
+            num_messages=options.sample_rate,
+            kafka_server=options.kafka_server,
+            input_topic=options.input_topic_basename,
+            tag=options.tag
+        )
 
         ### initialize queues
+        self.sample_rate = options.sample_rate
         self.feature_queue = deque(maxlen = 60 * self.sample_rate)
 
         ### other settings
@@ -109,7 +105,6 @@ class StreamMonitor(object):
         else:
             self.target_channel = '%s:CAL-DELTAL_EXTERNAL_DQ'%options.instrument
         self.num_channels = options.num_channels
-
         self.data_type = options.data_type
 
         ### keep track of last timestamp processed and saved
@@ -117,7 +112,7 @@ class StreamMonitor(object):
         self.timestamp = None
 
         ### set up aggregator 
-        logger.info("setting up monitor with backend: %s"%options.data_backend)
+        logging.info("setting up monitor with backend: {}".format(options.data_backend))
         if options.data_backend == 'influx':
             self.agg_sink = influx.Aggregator(
                 hostname=options.influx_hostname,
@@ -142,26 +137,20 @@ class StreamMonitor(object):
         for metric in ('target_snr', 'synchronizer_latency', 'percent_missed'):
             self.agg_sink.register_schema(metric, columns='data', column_key='data', tags='job', tag_key='job')
 
-    def fetch_data(self):
-        """
-        requests for a new message from an individual topic,
-        and add to the feature queue
-        """
-        message = self.consumer.poll(timeout=self.request_timeout)
 
-        ### only add to queue if no errors in receiving data
-        if message and not message.error():
-            features = json.loads(message.value())
-            self.add_to_queue(features['timestamp'], features['features'])
-
-    def add_to_queue(self, timestamp, data):
+    def ingest(self, message):
         """
-        add a set of features for a given timestamp to the feature queue
+        parse a message containing feature data
         """
-        self.feature_queue.appendleft((timestamp, data))
-        self.timestamp = timestamp
+        features = json.loads(message.value())
+        self.feature_queue.appendleft((
+            features['timestamp'],
+            features['features']
+        ))
+        self.timestamp = features['timestamp']
 
-    def process_queue(self):
+
+    def handle(self):
         """
         process features and generate metrics from synchronizer on a regular cadence
         """
@@ -175,11 +164,12 @@ class StreamMonitor(object):
                 while len(self.feature_queue) > 0:
                     ### remove data with oldest timestamp and process
                     timestamp, features = self.feature_queue.pop()
-                    latency = utils.gps2latency(timestamp) 
+                    latency = utils.gps_to_latency(timestamp) 
 
                     ### check for missing channels
                     these_channels = set(features.keys())
                     missing_channels = self.channels - these_channels
+
                     ### generate metrics
                     metrics['time'].append(timestamp)
                     metrics['synchronizer_latency'].append(latency)
@@ -198,43 +188,17 @@ class StreamMonitor(object):
                     self.agg_sink.store_columns('target_snr', {'synchronizer': data}, aggregate=self.data_type)
 
                 self.last_save = timestamp
-                logger.info('processed features up to timestamp %.3f, max latency = %.3f s, percent missing channels = %.3f' % (timestamp, max(metrics['synchronizer_latency']), max(metrics['percent_missed'])))
+                logging.info(
+                    'processed features up to timestamp {:.3f}, '
+                    'max latency = {:.3f} s, '
+                    'percent missing channels = {:.3f}'.format(
+                        timestamp,
+                        max(metrics['synchronizer_latency']),
+                        max(metrics['percent_missed'])
+                    )
+                )
                 if missing_channels:
-                    logger.info('channels missing @ timestamp=%.3f: %s' % (timestamp, repr(list(missing_channels))))
-
-
-    def start(self):
-        """
-        starts ingesting features and monitoring and pushes metrics to sqlite
-        """
-        logger.info('starting feature monitor...')
-        self.is_running = True
-        while self.is_running:
-            ### ingest incoming features
-            self.fetch_data()
-            ### store and aggregate generated metrics
-            self.process_queue()
-            ### repeat with processing cadence
-            time.sleep(self.processing_cadence)
-
-    def stop(self):
-        """
-        shut down gracefully
-        """
-        logger.info('shutting down feature monitor...')
-
-class SignalHandler(object):
-    """
-    helper class to shut down the stream monitor gracefully before exiting
-    """
-    def __init__(self, monitor, signals = [signal.SIGINT, signal.SIGTERM]):
-        self.monitor = monitor
-        for sig in signals:
-            signal.signal(sig, self)
-
-    def __call__(self, signum, frame):
-        self.monitor.stop()
-        sys.exit(0)
+                    logging.info('channels missing @ timestamp={:.3f}: {}'.format(timestamp, repr(list(missing_channels))))
 
 
 #-------------------------------------------------
@@ -242,22 +206,13 @@ class SignalHandler(object):
 #-------------------------------------------------
 
 if __name__ == '__main__':
-    # parse arguments
     options, args = parse_command_line()
 
     ### set up logging
-    logger = utils.get_logger(
-        '-'.join([options.tag, 'feature_monitor']),
-        log_level=options.log_level,
-        rootdir=options.rootdir,
-        verbose=options.verbose
-    )
-
-    # create summary instance
-    monitor = StreamMonitor(logger, options=options)
-
-    # install signal handler
-    SignalHandler(monitor)
+    log_level = logging.DEBUG if options.verbose else logging.INFO
+    logging.basicConfig(format='%(asctime)s | snax_monitor : %(levelname)s : %(message)s')
+    logging.getLogger().setLevel(log_level)
 
     # start up monitor
+    monitor = StreamMonitor(options=options)
     monitor.start()
