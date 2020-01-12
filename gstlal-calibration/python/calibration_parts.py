@@ -588,7 +588,7 @@ def linear_phase_filter(pipeline, head, shift_samples, num_samples = 256, gain =
 			filter_update.connect("notify::filter-endtime", update_property_simple, head, "filter_endtime", "kernel_endtime", 1)
 	return head
 
-def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True, handler = None, name = None):
+def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
 	# Find the root mean square amplitude of a signal between two frequencies
 	# Downsample to save computational cost
 	head = mkresample(pipeline, head, 4, filter_latency == 0.0, rate)
