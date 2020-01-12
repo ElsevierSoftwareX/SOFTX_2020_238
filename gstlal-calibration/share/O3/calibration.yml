@@ -170,6 +170,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 
@@ -185,6 +195,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 
@@ -200,6 +220,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 
@@ -215,6 +245,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 
@@ -230,6 +270,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 
@@ -245,6 +295,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 
@@ -260,6 +320,16 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
+      - hwinjstoch
+      - hwinjburst
+      - hwinjcbc
+      - hwinjdetchar
+      - higherbits
+      - hoftok
+      - cleaningbits
+      - noisesubgate
+      - cleaningbits
+      - allotherbits
       - calibstatevec
       - sink
 

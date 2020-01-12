@@ -180,7 +180,10 @@ try:
 	kafka_server = MonitorConfigs["kafkaserver"]
 except:
 	kafka_server = None
-
+try:
+	latency_suffix = MonitorConfigs["latencysuffix"]
+except:
+	latency_suffix = None
 
 # Sanity checks for command line options
 data_sources = set(("frames", "lvshm"))
@@ -1117,7 +1120,7 @@ if compute_calib_statevector and (any(line_witness_channel_list) or any(witness_
 pipeline = Gst.Pipeline(name="gstlal_compute_strain")
 mainloop = GObject.MainLoop()
 if kafka_server is not None:
-	handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server, verbose = verbose)
+	handler = calibhandler.Handler(mainloop, pipeline, kafka_server = kafka_server, verbose = verbose, latency_suffix = latency_suffix)
 else:
 	print("Using simple handler")
 	handler = simplehandler.Handler(mainloop, pipeline)
@@ -2423,6 +2426,12 @@ except KeyError:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/3994.5)
 
 strain = pipeparts.mkprogressreport(pipeline, strain, "progress_hoft_%s" % instrument)
+
+# Put the units back to strain before writing to frames
+straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
+straintee = pipeparts.mktee(pipeline, strain)
+if not pick_cleanest_strain_channel:
+	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 if test_latency or InputConfigs["datasource"] == "lvshm":
 	strain = pipeparts.mktee(pipeline, strain)
 	strain_latency = calibration_parts.mkresample(pipeline, strain, 0, False, latency_metrics_caps)
@@ -2430,12 +2439,6 @@ if test_latency or InputConfigs["datasource"] == "lvshm":
 	if kafka_server is not None:
 		strain_latency.connect("notify::current-latency", handler.latency_new_buffer)
 	pipeparts.mkfakesink(pipeline, strain_latency)
-
-# Put the units back to strain before writing to frames
-straintagstr = "units=strain,channel-name=%sCALIB_STRAIN%s,instrument=%s" % (chan_prefix, chan_suffix, instrument)
-straintee = pipeparts.mktee(pipeline, strain)
-if not pick_cleanest_strain_channel:
-	strain = pipeparts.mktaginject(pipeline, straintee, straintagstr)
 
 #
 # CALIB_STATE_VECTOR BRANCH
@@ -2742,7 +2745,6 @@ if compute_calib_statevector:
 	else:
 		raise ValueError("Must set either CBCHWInjBitmask or CBCHWInjOffBitmask")
 	hwinjcbc = pipeparts.mkcapsfilter(pipeline, hwinjcbc, calibstate_caps)
-
 	if bursthwinj_bitmask is not None:
 		hwinjburst = pipeparts.mkgeneric(pipeline, hwinjchanneltee, "lal_logicalundersample", required_on = bursthwinj_bitmask, status_out = pow(2,no_burst_inj_bitnum))
 	elif bursthwinj_offbitmask is not None:
@@ -2992,6 +2994,7 @@ if (compute_calib_statevector or pick_cleanest_strain_channel) and (remove_cal_l
 
 	# Compute the RMS of the uncleaned strain in a low-frequency range to test subtraction of actuation lines
 	strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
+	
 	# Compute the RMS of the cleaned strain in a low-frequency range
 	clean_strain_rms_lowfreq = calibration_parts.compute_rms(pipeline, clean_straintee, low_rms_rate, cleaning_check_rms_time, f_min = cleaning_check_range_low_min, f_max = cleaning_check_range_low_max, filter_latency = min(filter_latency_factor, 0.5), rate_out = calibstate_sr, td = td)
 	# Require that ratio RMS(strain) / RMS(clean_strain) > 1.0
