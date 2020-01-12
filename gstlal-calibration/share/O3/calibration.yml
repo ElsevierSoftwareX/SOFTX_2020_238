@@ -183,18 +183,6 @@ schemas:
       - calibstatevec
       - sink
 
-  H1_latency_redundant:
-
-  H1_latency_redundant:
-
-  H1_latency_redundant:
-
-  H1_latency_redundant:
-
-  H1_latency_redundant:
-
-  H1_latency_redundant:
-
   H1_latency_testing:
     measurement: H1_latency_testing
     column: data
