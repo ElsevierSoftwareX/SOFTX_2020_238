@@ -76,7 +76,10 @@ pages:
     lookback: 600
     delay: 10
     plots:
-      - plot: H1_latency_timeseries_other
+      - plot: H1_latency_timeseries_other_1
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: H1_latency_timeseries_other_2
         grid: {x: 0, y: 0, h: 8, w: 12}
         visible: true
       - plot: H1_statevector_other
@@ -132,7 +135,10 @@ pages:
     lookback: 600
     delay: 10
     plots:
-      - plot: L1_latency_timeseries_other
+      - plot: L1_latency_timeseries_other_1
+        grid: {x: 0, y: 0, h: 8, w: 12}
+        visible: true
+      - plot: L1_latency_timeseries_other_2
         grid: {x: 0, y: 0, h: 8, w: 12}
         visible: true
       - plot: L1_statevector_other
@@ -170,16 +176,6 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
       - calibstatevec
       - sink
 
@@ -195,21 +191,11 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
       - calibstatevec
       - sink
 
-  H1_latency_other:
-    measurement: H1_latency_other
+  H1_latency_other_1:
+    measurement: H1_latency_other_1
     column: data
     aggregate: max
     tag: stage
@@ -220,16 +206,21 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
+      - calibstatevec
+      - sink
+
+  H1_latency_other_2:
+    measurement: H1_latency_other_2
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
       - calibstatevec
       - sink
 
@@ -245,16 +236,6 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
       - calibstatevec
       - sink
 
@@ -270,16 +251,6 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
       - calibstatevec
       - sink
 
@@ -295,21 +266,11 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
       - calibstatevec
       - sink
 
-  L1_latency_other:
-    measurement: L1_latency_other
+  L1_latency_other_1:
+    measurement: L1_latency_other_1
     column: data
     aggregate: max
     tag: stage
@@ -320,16 +281,21 @@ schemas:
       - hoft
       - hoft_cleaned
       - ctrl
-      - hwinjstoch
-      - hwinjburst
-      - hwinjcbc
-      - hwinjdetchar
-      - higherbits
-      - hoftok
-      - cleaningbits
-      - noisesubgate
-      - cleaningbits
-      - allotherbits
+      - calibstatevec
+      - sink
+  
+  L1_latency_other_2:
+    measurement: L1_latency_other_2
+    column: data
+    aggregate: max
+    tag: stage
+    tag_key: stage
+    stage:
+      - src
+      - res
+      - hoft
+      - hoft_cleaned
+      - ctrl
       - calibstatevec
       - sink
 
@@ -439,10 +405,17 @@ plots:
     layout:
       yaxis: {title: {text: 'Latency [s]'}}
 
-  H1_latency_timeseries_other:
-    title: Latency at various stages for H1 h(t) data production (other machine)
+  H1_latency_timeseries_other_1:
+    title: Latency at various stages for H1 h(t) data production (other machine, master)
     type: TimeSeries
-    schema: H1_latency_other
+    schema: H1_latency_other_1
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  H1_latency_timeseries_other_2:
+    title: Latency at various stages for H1 h(t) data production (other machine, pre-insertgap bugfix)
+    type: TimeSeries
+    schema: H1_latency_other_2
     layout:
       yaxis: {title: {text: 'Latency [s]'}}
 
@@ -467,10 +440,17 @@ plots:
     layout:
       yaxis: {title: {text: 'Latency [s]'}}
 
-  L1_latency_timeseries_other:
-    title: Latency at various stages for L1 h(t) data production (other machine)
+  L1_latency_timeseries_other_1:
+    title: Latency at various stages for L1 h(t) data production (other machine, master)
     type: TimeSeries
-    schema: L1_latency_other
+    schema: L1_latency_other_1
+    layout:
+      yaxis: {title: {text: 'Latency [s]'}}
+
+  L1_latency_timeseries_other_2:
+    title: Latency at various stages for L1 h(t) data production (other machine, pre-insertgap bugfix)
+    type: TimeSeries
+    schema: L1_latency_other_2
     layout:
       yaxis: {title: {text: 'Latency [s]'}}
 
