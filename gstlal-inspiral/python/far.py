@@ -735,7 +735,7 @@ WHERE
 		# get the zerolag counts.
 		# we model the tail of the distribution - top 0.1 - 1% - where
 		# clustering only effects the result at a < 1% level.
-		if zl_counts.sum() < 100 * 1000:
+		if zl_counts.sum() < 100 * 300:
 			tail_zl_counts = zl_counts.sum() * 0.99
 		else:
 			tail_zl_counts = zl_counts.sum() - 300
