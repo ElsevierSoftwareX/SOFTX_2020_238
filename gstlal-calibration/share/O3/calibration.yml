@@ -329,8 +329,8 @@ schemas:
       - monitor_on
       - TDCFs_valid
 
-  H1_statevector_bit_check_other:
-    measurement: H1_statevector_bit_check_other
+  H1_statevector_bit_check_other_1:
+    measurement: H1_statevector_bit_check_other_1
     column: data
     aggregate: max
     tag: check
@@ -369,8 +369,8 @@ schemas:
       - monitor_on
       - TDCFs_valid
 
-  L1_statevector_bit_check_other:
-    measurement: L1_statevector_bit_check_other
+  L1_statevector_bit_check_other_1:
+    measurement: L1_statevector_bit_check_other_1
     column: data
     aggregate: max
     tag: check
@@ -473,7 +473,7 @@ plots:
   H1_statevector_other:
     title: 'H1 state vector check (other machine)'
     type: TimeSeries
-    schema: H1_statevector_bit_check_other
+    schema: H1_statevector_bit_check_other_1
 
   L1_statevector_prod:
     title: 'L1 state vector check (production machine)'
@@ -493,7 +493,7 @@ plots:
   L1_statevector_other:
     title: 'L1 state vector check (other machine)'
     type: TimeSeries
-    schema: L1_statevector_bit_check_other
+    schema: L1_statevector_bit_check_other_1
 
 
 #--------------------------------------------------------------
