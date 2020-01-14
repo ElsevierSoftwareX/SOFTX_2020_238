@@ -1,3 +1,14 @@
+gstlal-calibration (1.2.12-1) unstable; urgency=low
+
+  * Bug fix in lal_resample related to latency issues
+  * Bug fix in lal_insertgap related to latency issues
+  * Simplification of kappa bit calculation in statevector
+  * Remove kafka dependency
+  * Introduction of new elements used for debugging
+  * Improvements to metrics tracking of gstlal_compute_strain
+ 
+ -- Madeline Wade <madeline.wade@ligo.org>  Tue, 14 Jan 2020 17:10:02 -0400
+
 gstlal-calibration (1.2.11-1) unstable; urgency=low
 
   * Added ability of calibration pipeline to only wait for data for a set
