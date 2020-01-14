@@ -19,6 +19,7 @@ Requires: h5py
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
+Requires: lalapps
 Requires: ligo-gracedb >= 1.11
 Requires: python >= @MIN_PYTHON_VERSION@
 Requires: python-%{gstreamername}
@@ -26,7 +27,7 @@ Requires: python2-lal >= @MIN_LAL_VERSION@
 Requires: python2-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
 Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
-Requires: python2-ligo-scald
+Requires: python2-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
 Requires: numpy >= @MIN_NUMPY_VERSION@
 Requires: scipy
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@

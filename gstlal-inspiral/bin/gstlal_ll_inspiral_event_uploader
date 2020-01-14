@@ -31,19 +31,16 @@ import gzip
 import json
 import logging
 from optparse import OptionParser
-import signal
 import StringIO
 import sys
 import time
-import timeit
 
-from confluent_kafka import Producer, Consumer, KafkaError
 import numpy
 
 from ligo.segments import segment
 from ligo.gracedb.rest import GraceDb, HTTPError
 from ligo.gracedb.rest import DEFAULT_SERVICE_URL as DEFAULT_GRACEDB_URL
-from ligo.scald import utils
+from ligo.scald import events, utils
 
 from lal import LIGOTimeGPS
 
@@ -61,6 +58,9 @@ def parse_command_line():
 	parser.add_option("--num-jobs", type = int, default = 10, help="number of jobs to listen to")
 	parser.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
 	parser.add_option("--max-event-time", type = "int", default = 7200, help = "Maximum time to keep around an event. Default = 2 hours.")
+	parser.add_option("--common-ratio-time", type = "int", default = 4, help = "Common ratio time T for sending out subsequent events for the same event window. First event gets sent T seconds later, second event gets sent T^2 seconds later, etc. Default = 4.")
+	parser.add_option("--far-threshold", type = "float", default = 3.84e-07, help = "FAR threshold considered for an event to be public, not including a trials factor. Default = 1 / month")
+	parser.add_option("--far-trials-factor", type = "int", default = 1, help = "Trials factor for number of CBC pipelines uploading events to GraceDB. Default = 1.")
 	parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the event uploader acquires and processes data. Default = 0.1 seconds.")
 	parser.add_option("--request-timeout", type = "float", default = 0.2, help = "Timeout for requesting messages from a topic. Default = 0.2 seconds.")
 	parser.add_option("--kafka-server", metavar = "string", help = "Sets the server url that the kafka topic is hosted on. Required.")
@@ -78,30 +78,29 @@ def parse_command_line():
 #					Classes
 #-------------------------------------------------
 
-class EventUploader(object):
+class EventUploader(events.EventProcessor):
 	"""
 	manages handling of incoming events, selecting the best and uploading to GraceDB.
 	"""
+	_name = 'event_uploader'
+
 	def __init__(self, options):
-		logging.info('setting up...')
+		logging.info('setting up event uploader...')
+
+		events.EventProcessor.__init__(
+			self,
+			process_cadence=options.processing_cadence,
+			request_timeout=options.request_timeout,
+			num_messages=options.num_jobs,
+			kafka_server=options.kafka_server,
+			input_topic=options.input_topic,
+			tag=options.tag
+		)
 
 		### initialize timing options
-		self.processing_cadence = options.processing_cadence
-		self.request_timeout = options.request_timeout
 		self.max_event_time = options.max_event_time
 		self.retries = 5
 		self.retry_delay = 1
-		self.is_running = False
-
-		### kafka settings
-		self.kafka_settings = {'bootstrap.servers': options.kafka_server}
-
-		### initialize consumer
-		consumer_kafka_settings = self.kafka_settings
-		consumer_kafka_settings['group.id'] = '-'.join(['uploader', options.tag])
-		self.consumer = Consumer(consumer_kafka_settings)
-		self.consumer.subscribe([options.input_topic])
-		self.num_jobs = options.num_jobs
 
 		### initialize gracedb client
 		if options.gracedb_service_url.startswith("file"):
@@ -113,27 +112,25 @@ class EventUploader(object):
 		self.gracedb_group = options.gracedb_group
 		self.gracedb_pipeline = options.gracedb_pipeline
 		self.gracedb_search = options.gracedb_search
+		self.common_ratio_time = options.common_ratio_time
 
 		### initialize event store
 		self.events = OrderedDict()
 
+		### favored event settings
+		self.public_far_threshold = options.far_threshold / options.far_trials_factor
+		self.favored_event_topic = 'favored_events'
+		self.p_astro_topic = 'p_astro'
 
 
-	def fetch_data(self):
+	def ingest(self, message):
 		"""
-		requests for a new event from a topic,
-		and add to candidate list
+		parse a message containing a candidate event
 		"""
-		messages = self.consumer.consume(num_messages=self.num_jobs, timeout=self.request_timeout)
-
-		for message in messages:
-			### only add to queue if no errors in receiving data
-			if message and not message.error():
-
-				### process candidate event
-				candidate = json.loads(message.value())
-				candidate['time'] = LIGOTimeGPS(candidate['time'], candidate.pop('time_ns'))
-				self.process_candidate(candidate)
+		### process candidate event
+		candidate = json.loads(message.value())
+		candidate['time'] = LIGOTimeGPS(candidate['time'], candidate.pop('time_ns'))
+		self.process_candidate(candidate)
 
 
 	def process_candidate(self, candidate):
@@ -175,42 +172,52 @@ class EventUploader(object):
 		return {
 			'num_sent': 0,
 			'time_sent': None,
-			'preferred': None,
-			'candidates': deque(maxlen = self.num_jobs)
+			'favored': None,
+			'candidates': deque(maxlen = self.num_messages)
 		}
 
 
-	def process_events(self):
+	def handle(self):
 		"""
-		process events stored, selecting the best candidate.
-		upload if a new preferred event is found
+		handle events stored, selecting the best candidate.
+		upload if a new favored event is found
 		"""
 		for key, event in sorted(self.events.items(), reverse=True):
 			if event['num_sent'] == 0:
 				updated, event = self.process_candidates(event)
 				assert updated
 				logging.info(
-					'uploading {} candidate with far = {:.3E} for event: '
-					'[{:.1f}, {:.1f}]'.format(
+					'uploading {} candidate with FAR = {:.3E}, '
+					'SNR = {:2.1f} for event: [{:.1f}, {:.1f}]'.format(
 						self.to_ordinal(1),
-						event['preferred']['far'],
+						event['favored']['far'],
+						event['favored']['snr'],
 						key[0], key[1],
 					)
 				)
-				self.upload_event(event)
+				self.send_favored_event(event, key)
+				self.send_p_astro(event, key)
+				sent = self.upload_event(event)
+				if sent:
+					event['num_sent'] += 1
 
 			elif event['candidates'] and utils.gps_now() >= self.next_event_upload(event):
 				updated, event = self.process_candidates(event)
 				if updated:
 					logging.info(
-						'uploading {} candidate with far = {:.3E} for event: '
-						'[{:.1f}, {:.1f}]'.format(
+						'uploading {} candidate with FAR = {:.3E}, '
+						'SNR = {:2.1f} for event: [{:.1f}, {:.1f}]'.format(
 							self.to_ordinal(event['num_sent'] + 1),
-							event['preferred']['far'],
+							event['favored']['far'],
+							event['favored']['snr'],
 							key[0], key[1]
 						)
 					)
-					self.upload_event(event)
+					self.send_favored_event(event, key)
+					self.send_p_astro(event, key)
+					sent = self.upload_event(event)
+					if sent:
+						event['num_sent'] += 1
 
 		# clean out old events
 		current_time = utils.gps_now()
@@ -222,64 +229,79 @@ class EventUploader(object):
 
 	def process_candidates(self, event):
 		"""
-		process candidates and update the preferred event
+		process candidates and update the favored event
 		if needed
 
-		returns event and whether the preferred event was updated
+		returns event and whether the favored event was updated
 		"""
-		preferred = self.select_best(event['candidates'])
+		favored = self.select_favored_event(event['candidates'])
 		event['candidates'].clear()
 
-		### no preferred event yet
-		if not event['preferred']:
-			logging.info('found candidate with far: {:.3E}'.format(preferred['far']))
-			event['preferred'] = preferred
-			return True, event
-
-		### preferred event is more significant
-		if preferred['far'] < event['preferred']['far']:
+		### no favored event yet
+		if not event['favored']:
 			logging.info(
-				'found new preferred candidate with far: '
-				'{:.3E}, previous far: {:.3E}'.format(preferred['far'], event['preferred']['far'])
+				'found candidate with FAR: {:.3E}, '
+				'SNR: {:2.1f}'.format(favored['far'], favored['snr'])
 			)
-			event['preferred'] = preferred
+			event['favored'] = favored
 			return True, event
 
-		### preferred far is better:
-		### update far in coinc, far in event, keep rest
-		### FIXME: turned off for now
-		#elif preferred['far'] < event['preferred']['far']:
-		#	event['preferred']['far'] = preferred['far']
-		#	self.update_coinc_far(event['preferred']['coinc'], preferred['far'])
-		#	return True, event
+		### favored event is more significant
+		elif favored == self.select_favored_event([event['favored'], favored]):
+			logging.info(
+				'found new favored candidate with FAR: {:.3E}, '
+				'SNR: {:2.1f}'.format(favored['far'], favored['snr'])
+			)
+			event['favored'] = favored
+			return True, event
 
-		### preferred snr is better:
-		### update coinc except far
-		### FIXME: turned off for now
-		#elif preferred['snr'] > event['preferred']['snr']:
-		#	far = event['preferred']['far']
-		#	event['preferred']['coinc'] = preferred['coinc']
-		#	self.update_coinc_far(event['preferred']['coinc'], far)
-		#	return True, event
-
-		### previous preferred is better
+		### previous favored is better
 		else:
 			return False, event
 
 
-	def select_best(self, candidates):
+	def select_favored_event(self, candidates):
 		"""
 		select the best event out of the candidates
+
+		selection process is as follows:
+		    * FAR >  public threshold, choose lowest FAR
+		    * FAR <= public threshold, choose highest SNR
 		"""
-		candidates = list(candidates)
-		far_idx = numpy.argmin([c['far'] for c in candidates])
-		best = candidates[far_idx]
-		### FIXME: selecting best snr independently turned off for now
-		#min_far = min(c['far'] for c in candidates)
-		#snr_idx = numpy.argmax([c['snr'] for c in candidates])
-		#best = candidates[snr_idx]
-		#best['far'] = min_far
-		return best
+		def keyfunc(candidate):
+		    return (candidate['far'] <= self.public_far_threshold), candidate['snr']
+
+		return max(candidates, key=keyfunc)
+
+
+	def send_p_astro(self, event, event_window):
+		"""
+		send p(astro) via Kafka
+		"""
+		p_astro = {
+			'event_window': list(event_window),
+			'time': event['favored']['time'].gpsSeconds,
+			'time_ns': event['favored']['time'].gpsNanoSeconds,
+			'p_astro': event['favored']['p_astro']
+		}
+		self.producer.produce(topic=self.p_astro_topic, value=json.dumps(p_astro))
+		self.producer.poll(0)
+
+
+	def send_favored_event(self, event, event_window):
+		"""
+		send a favored event via Kafka
+		"""
+		favored_event = {
+			'event_window': list(event_window),
+			'time': event['favored']['time'].gpsSeconds,
+			'time_ns': event['favored']['time'].gpsNanoSeconds,
+			'snr': event['favored']['snr'],
+			'far': event['favored']['far'],
+			'coinc': event['favored']['coinc']
+		}
+		self.producer.produce(topic=self.favored_event_topic, value=json.dumps(favored_event))
+		self.producer.poll(0)
 
 
 	def upload_event(self, event):
@@ -288,14 +310,13 @@ class EventUploader(object):
 		"""
 		if not event['time_sent']:
 			event['time_sent'] = utils.gps_now()
-		event['num_sent'] += 1
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.createEvent(
 					self.gracedb_group,
 					self.gracedb_pipeline,
 					'coinc.xml',
-					filecontents = event['preferred']['coinc'],
+					filecontents = event['favored']['coinc'],
 					search = self.gracedb_search
 				)
 			except HTTPError as resp:
@@ -309,7 +330,7 @@ class EventUploader(object):
 						"GstLAL internally computed p-astro",
 						"p_astro.json",
 						"p_astro",
-						event['preferred']['p_astro'],
+						event['favored']['p_astro'],
 						graceid
 					)
 					try:
@@ -324,13 +345,15 @@ class EventUploader(object):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} failed".format(filename))
+			return False
 
 		# gzip and upload psd
 		psd_fobj = StringIO.StringIO()
 		with gzip.GzipFile(fileobj=psd_fobj, mode="wb", compresslevel=3) as f:
-			f.write(event['preferred']['psd'])
+			f.write(event['favored']['psd'])
 		self.upload_file("strain PSDs", "psd.xml.gz", "psd", psd_fobj.getvalue(), graceid)
 		del psd_fobj
+		return True
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
@@ -359,49 +382,21 @@ class EventUploader(object):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} for ID {} failed".format(filename, graceid))
+			return False
 
 
 	def next_event_upload(self, event):
 		"""
 		check whether enough time has elapsed to send an updated event
 		"""
-		return event['time_sent'] + numpy.power(4, event['num_sent'])
+		return event['time_sent'] + numpy.power(self.common_ratio_time, event['num_sent'])
 
 
-	def update_coinc_far(self, coinc, far):
+	def finish(self):
 		"""
-		update the far in the coinc.xml file
+		send remaining events before shutting down
 		"""
-		### FIXME: actually update the coinc
-		return coinc
-
-
-	def process(self):
-		"""
-		fetch events and process them at the specified cadence
-		"""
-		while self.is_running:
-			self.fetch_data()
-			self.process_events()
-			time.sleep(self.processing_cadence)
-
-
-	def start(self):
-		"""
-		start the event loop
-		"""
-		logging.info('starting event uploader for {:d} inspiral jobs...'.format(self.num_jobs))
-		self.is_running = True
-		self.process()
-
-
-	def stop(self):
-		"""
-		stop the event loop
-		"""
-		logging.info('shutting down...')
-		### FIXME: should also handle pushing rest of data in buffer
-		self.is_running = False
+		self.handle()
 
 
 	@staticmethod
@@ -414,21 +409,6 @@ class EventUploader(object):
 		https://stackoverflow.com/a/20007730
 		"""
 		return "%d%s" % (n,"tsnrhtdd"[(n/10%10!=1)*(n%10<4)*n%10::4])
-
-
-class SignalHandler(object):
-	"""
-	helper class to shut down the event uploader gracefully before exiting
-	"""
-	def __init__(self, event_uploader, signals = [signal.SIGINT, signal.SIGTERM]):
-		self.event_uploader = event_uploader
-		for sig in signals:
-			signal.signal(sig, self)
-
-	def __call__(self, signum, frame):
-		logging.info("SIG {:d} received, attempting graceful shutdown...".format(signum))
-		self.event_uploader.stop()
-		sys.exit(0)
 
 
 #-------------------------------------------------
@@ -446,9 +426,6 @@ if __name__ == '__main__':
 
 	# create event uploader instance
 	event_uploader = EventUploader(options)
-
-	# install signal handler
-	SignalHandler(event_uploader)
 
 	# start up
 	event_uploader.start()

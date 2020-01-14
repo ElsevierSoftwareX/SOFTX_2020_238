@@ -1,3 +1,14 @@
+gstlal (1.5.1-1) unstable; urgency=low
+
+  * Fix issue in gstlal_play with sanity checking options
+  * Fix issue in gstlal_fake_frames that caused whitening to always be done
+  * Port gstlal_fake_frames_pipe to work with updated upstream packages
+  * gstlal_simulation.c: add missing header files
+  * matplotlibhelper.py: fix Gst errors when importing module
+  * Port pipeline.py from lscsoft-glue
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Tue, 10 Dec 2019 13:34:56 -0800
+
 gstlal (1.5.0-1) unstable; urgency=low
 
   * Pre-ER14 Release
