@@ -96,7 +96,7 @@ if __name__ == '__main__':
 
 	# Read in ifo specific options
 	ifo = CalibrationConfigs["ifo"]
-	topics = ['%s_latency_production' % ifo, '%s_latency_redundant' % ifo, '%s_latency_testing' % ifo, '%s_latency_other_1' % ifo, '%s_latency_other_2' % ifo, '%s_statevector_bit_check_production' % ifo, '%s_statevector_bit_check_redundant' % ifo, '%s_statevector_bit_check_testing' % ifo, '%s_statevector_bit_check_other' % ifo]
+	topics = ['%s_latency_production' % ifo, '%s_latency_redundant' % ifo, '%s_latency_testing' % ifo, '%s_latency_other_1' % ifo, '%s_latency_other_2' % ifo, '%s_statevector_bit_check_production' % ifo, '%s_statevector_bit_check_redundant' % ifo, '%s_statevector_bit_check_testing' % ifo, '%s_statevector_bit_check_other_1' % ifo]
 	channel = OutputConfigs["frametype"]
 	statevector_tags = ['TDCFs_valid', 'monitor_on']
 
