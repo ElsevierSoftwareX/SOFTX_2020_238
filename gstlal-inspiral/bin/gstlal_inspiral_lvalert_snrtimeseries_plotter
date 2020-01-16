@@ -132,7 +132,7 @@ for gid in gid_list:
 	for i, bank in enumerate(banks.values()[0]):
 		for j, row in enumerate(bank.sngl_inspiral_table):
 			# The templates should all have the same template_id, so just grab one
-			if row.template_id == eventid_trigger_dict.values()[0].template_id:
+			if row.Gamma0 == eventid_trigger_dict.values()[0].Gamma0:
 				banknum = i
 				tmpltnum = j
 				break
