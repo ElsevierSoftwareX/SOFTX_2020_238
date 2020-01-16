@@ -44,13 +44,25 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy
 
 
-import pygtk
-pygtk.require("2.0")
-import gobject
-import pygst
-pygst.require('0.10')
-import gst
+# import pygtk
+# pygtk.require("2.0")
+# import GObject
+# import pygst
+# pygst.require('0.10')
+# import gst
 
+import gi
+gi.require_version('Gst', '1.0')
+gi.require_version('GstAudio', '1.0')
+gi.require_version('GstBase', '1.0')
+from gi.repository import GObject
+from gi.repository import Gst
+from gi.repository import GstAudio
+from gi.repository import GstBase
+
+
+GObject.threads_init()
+Gst.init(None)
 
 from gstlal import pipeio
 from gstlal import reference_psd
@@ -71,8 +83,8 @@ __date__ = "FIXME"
 #
 
 
-class lal_spectrumplot(gst.BaseTransform):
-	__gstdetails__ = (
+class lal_spectrumplot(GstBase.BaseTransform):
+	__gstmetadata__ = (
 		"Power spectrum plot",
 		"Plots",
 		"Generates a video showing a power spectrum (e.g., as measured by lal_whiten)",
@@ -81,26 +93,26 @@ class lal_spectrumplot(gst.BaseTransform):
 
 	__gproperties__ = {
 		"f-min": (
-			gobject.TYPE_DOUBLE,
+			GObject.TYPE_DOUBLE,
 			"f_{min}",
 			"Lower bound of plot in Hz.",
-			0, gobject.G_MAXDOUBLE, 10.0,
-			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+			0, GObject.G_MAXDOUBLE, 10.0,
+			GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT
 		),
 		"f-max": (
-			gobject.TYPE_DOUBLE,
+			GObject.TYPE_DOUBLE,
 			"f_{max}",
 			"Upper bound of plot in Hz.",
-			0, gobject.G_MAXDOUBLE, 4000.0,
-			gobject.PARAM_READWRITE | gobject.PARAM_CONSTRUCT
+			0, GObject.G_MAXDOUBLE, 4000.0,
+			GObject.PARAM_READWRITE | GObject.PARAM_CONSTRUCT
 		)
 	}
 
 	__gsttemplates__ = (
-		gst.PadTemplate("sink",
-			gst.PAD_SINK,
-			gst.PAD_ALWAYS,
-			gst.caps_from_string(
+		Gst.PadTemplate.new("sink",
+			Gst.PadDirection.SINK,
+			Gst.PadPresence.ALWAYS,
+			Gst.caps_from_string(
 				"audio/x-raw-float, " +
 				"delta-f = (double) [0, MAX], " +
 				"channels = (int) [1, MAX], " +
@@ -109,10 +121,10 @@ class lal_spectrumplot(gst.BaseTransform):
 				"width = (int) 64"
 			)
 		),
-		gst.PadTemplate("src",
-			gst.PAD_SRC,
-			gst.PAD_ALWAYS,
-			gst.caps_from_string(
+		Gst.PadTemplate.new("src",
+			Gst.PadDirection.SRC,
+			Gst.PadPresence.ALWAYS,
+			Gst.caps_from_string(
 				matplotlibcaps + ", " +
 				"width = (int) [1, MAX], " +
 				"height = (int) [1, MAX], " +
@@ -123,7 +135,7 @@ class lal_spectrumplot(gst.BaseTransform):
 
 
 	def __init__(self):
-		gst.BaseTransform.__init__(self)
+		super(lal_spectrumplot, self).__init__()
 		self.channels = None
 		self.delta_f = None
 		self.out_width = 320	# default
@@ -152,11 +164,34 @@ class lal_spectrumplot(gst.BaseTransform):
 
 
 	def do_set_caps(self, incaps, outcaps):
-		self.channels = incaps[0]["channels"]
-		self.delta_f = incaps[0]["delta-f"]
-		self.out_width = outcaps[0]["width"]
-		self.out_height = outcaps[0]["height"]
-		return True
+		# self.channels = incaps[0]["channels"]
+		# self.delta_f = incaps[0]["delta-f"]
+		# self.out_width = outcaps[0]["width"]
+		# self.out_height = outcaps[0]["height"]
+		# return True
+		info = GstAudio.AudioInfo()
+		if info.from_caps(incaps):
+			self.unit_size = info.bpf
+			self.units_per_second = info.rate
+			return True
+		s = incaps.get_structure(0)
+		if not s or s.get_name() != "audio/x-raw":
+			return False
+		success, chnls = s.get_int("channels")
+		if success:
+			success, rate = s.get_int("rate")
+		if not success:
+			return False
+		fmt = s.get_string("format")
+		if fmt == "Z64LE":
+			self.unit_size = 8 * chnls
+			self.units_per_second = rate
+			return True
+		elif fmt == "Z128LE":
+			self.unit_size = 16 * chnls
+			self.units_per_second = rate
+			return True
+		return False
 
 
 	def do_get_unit_size(self, caps):
@@ -164,7 +199,7 @@ class lal_spectrumplot(gst.BaseTransform):
 
 
 	def do_event(self, event):
-		if event.type == gst.EVENT_TAG:
+		if event.type == Gst.EVENT_TAG:
 			tags = pipeio.parse_framesrc_tags(event.parse_tag())
 			self.instrument = tags["instrument"]
 			self.channel_name = tags["channel-name"]
@@ -193,7 +228,7 @@ class lal_spectrumplot(gst.BaseTransform):
 
 		axes.grid(True)
 		axes.set_xlim((self.f_min, self.f_max))
-		axes.set_title(r"Spectral Density at %.11g s" % (float(inbuf.timestamp) / gst.SECOND))
+		axes.set_title(r"Spectral Density at %.11g s" % (float(inbuf.timestamp) / Gst.SECOND))
 		axes.set_xlabel(r"Frequency (Hz)")
 		axes.set_ylabel(r"Spectral Density (%s)" % self.sample_units)
 		axes.legend(loc = "lower left")
@@ -217,38 +252,38 @@ class lal_spectrumplot(gst.BaseTransform):
 		# set metadata on output buffer
 		#
 
-		outbuf.offset_end = outbuf.offset = gst.BUFFER_OFFSET_NONE
+		outbuf.offset_end = outbuf.offset = Gst.BUFFER_OFFSET_NONE
 		outbuf.timestamp = inbuf.timestamp
-		outbuf.duration = gst.CLOCK_TIME_NONE
+		outbuf.duration = Gst.CLOCK_TIME_NONE
 
 		#
 		# done
 		#
 
-		return gst.FLOW_OK
+		return Gst.FlowReturn.OK
 
 
 	def do_transform_caps(self, direction, caps):
-		if direction == gst.PAD_SRC:
+		if direction == Gst.PAD_SRC:
 			#
 			# convert src pad's caps to sink pad's
 			#
 
 			rate, = [struct["framerate"] for struct in caps]
-			result = gst.Caps()
+			result = Gst.Caps()
 			for struct in self.get_pad("sink").get_pad_template_caps():
 				struct = struct.copy()
 				struct["rate"] = rate
 				result.append_structure(struct)
 			return result
 
-		elif direction == gst.PAD_SINK:
+		elif direction == Gst.PAD_SINK:
 			#
 			# convert sink pad's caps to src pad's
 			#
 
 			rate, = [struct["rate"] for struct in caps]
-			result = gst.Caps()
+			result = Gst.Caps()
 			for struct in self.get_pad("src").get_pad_template_caps():
 				struct = struct.copy()
 				struct["framerate"] = rate
@@ -259,7 +294,7 @@ class lal_spectrumplot(gst.BaseTransform):
 
 
 	def do_transform_size(self, direction, caps, size, othercaps):
-		if direction == gst.PAD_SRC:
+		if direction == Gst.PadDirection.SRC:
 			#
 			# compute frame count on src pad
 			#
@@ -277,7 +312,7 @@ class lal_spectrumplot(gst.BaseTransform):
 				return 0
 			return 1
 
-		elif direction == gst.PAD_SINK:
+		elif direction == Gst.PadDirection.SINK:
 			#
 			# any buffer on sink pad is turned into exactly
 			# one frame on source pad
@@ -296,10 +331,10 @@ class lal_spectrumplot(gst.BaseTransform):
 #
 
 
-gobject.type_register(lal_spectrumplot)
+GObject.type_register(lal_spectrumplot)
 
 __gstelementfactory__ = (
 	lal_spectrumplot.__name__,
-	gst.RANK_NONE,
+	Gst.Rank.NONE,
 	lal_spectrumplot
 )
