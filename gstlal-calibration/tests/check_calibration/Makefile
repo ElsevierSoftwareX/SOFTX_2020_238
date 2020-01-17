@@ -4,20 +4,20 @@
 #################################
 
 # which interferometer (H or L)
-IFO = L
+IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1239984268 - 256 | bc)
+START = $(shell echo 1262638969 - 50 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1239984268 + 64542 + 256 | bc)
+END = $(shell echo 1262638969 + 178 + 50 | bc)
 #1240048818
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
-PLOT_WARMUP_TIME = 256
-PLOT_COOLDOWN_TIME = 256
+PLOT_WARMUP_TIME = 50
+PLOT_COOLDOWN_TIME = 50
 
-GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1252081818_test.ini
+GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1258216456_testing.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_1239472998.ini
@@ -34,7 +34,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: increasing_latency_test
+all: pcal_GDS_transfer_functions
 
 ###############################################
 ### These commands should change less often ###

@@ -330,6 +330,10 @@ for i in range(0, len(labels)):
 		magnitude.append(abs(tf_at_f))
 		phase.append(numpy.angle(tf_at_f) * 180.0 / numpy.pi)
 
+	# Save txt file with the "corrected" data
+	os.system('rm %s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
+	numpy.savetxt('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration), numpy.transpose([frequency, magnitude, phase]), fmt = '%8e', delimiter = "   ", header = "Freq. (Hz)	Magnitude	Phase (deg)")
+
 	# Make plots
 	freq_scale = 'log' if options.frequency_min > 0.0 and options.frequency_max / options.frequency_min > 10 else 'linear'
 	mag_scale = 'log' if options.magnitude_min > 0.0 and options.magnitude_max / options.magnitude_min > 10 else 'linear'
@@ -346,7 +350,11 @@ for i in range(0, len(labels)):
 		plt.ylabel(r'${\rm Magnitude}$')
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.magnitude_min, options.magnitude_max)
+	plt.gca().set_yticks(numpy.arange(options.magnitude_min, options.magnitude_max + 0.001, (options.magnitude_max - options.magnitude_min) / 4.0))
+	plt.gca().set_yticks(numpy.arange(options.magnitude_min, options.magnitude_max + 0.001, (options.magnitude_max - options.magnitude_min) / 20.0), minor = True)
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	plt.gca().grid(which='minor', alpha=0.8)
+	plt.gca().grid(which='major', alpha=4.0)
 	ax = plt.subplot(212)
 	ax.set_xscale(freq_scale)
 	plt.plot(frequency, phase, colors[i % 6], linewidth = 0.75)
@@ -355,7 +363,11 @@ for i in range(0, len(labels)):
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
 	plt.xlim(options.frequency_min, options.frequency_max)
 	plt.ylim(options.phase_min, options.phase_max)
+	ax.set_yticks(numpy.arange(options.phase_min, options.phase_max + 0.01, (options.phase_max - options.phase_min) / 6.0))
+	ax.set_yticks(numpy.arange(options.phase_min, options.phase_max + 0.01, (options.phase_max - options.phase_min) / 24.0), minor = True)
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
+	ax.grid(which='minor', alpha=0.8)
+	ax.grid(which='major', alpha=4.0)
 plt.savefig('%s_%s_over_%s_%d-%d.pdf' % (ifo, numerator_channel_list[-1], options.denominator_channel_name, options.gps_start_time, data_duration))
 plt.savefig('%s_%s_over_%s_%d-%d.png' % (ifo, numerator_channel_list[-1], options.denominator_channel_name, options.gps_start_time, data_duration))
 
