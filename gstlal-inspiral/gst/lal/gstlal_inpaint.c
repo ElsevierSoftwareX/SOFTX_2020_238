@@ -260,6 +260,7 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 	}
 
 	case ARG_PSD: {
+		// FIXME GValueArray is deprecated, switch to GArray once the rest of gstlal does
 		GValueArray *va = g_value_get_boxed(value);
 
 		// FIXME Should lalDimensionlessUnit be a member of the inpaint struct?
@@ -297,7 +298,9 @@ static void gstlal_inpaint_get_property(GObject * object, enum property id, GVal
 		if(inpaint->psd)
 			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(inpaint->psd->data->data, inpaint->psd->data->length));
 		else
-			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
+			// FIXME Switch from g_value_array_new once gstlal moves from the deprecated GValueArray to GValue
+			g_value_take_boxed(value, g_value_array_new(0));
+			//g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
 		break;
 
 	default:
