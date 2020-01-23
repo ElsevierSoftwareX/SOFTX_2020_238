@@ -299,6 +299,7 @@ class EventUploader(events.EventProcessor):
 			'time_ns': event['favored']['time'].gpsNanoSeconds,
 			'snr': event['favored']['snr'],
 			'far': event['favored']['far'],
+			'psd': event['favored']['psd'],
 			'coinc': event['favored']['coinc']
 		}
 		self.producer.produce(topic=self.favored_event_topic, value=json.dumps(favored_event))
