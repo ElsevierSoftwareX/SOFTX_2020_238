@@ -46,7 +46,6 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-//#include <gst/audio/audio.h> 
 
 /*
  * our own stuff
@@ -62,7 +61,12 @@
  */
 
 #include <lal/Date.h>
+#include <lal/FrequencySeries.h>
 
+// FIXME Figure out why I need this
+static const LIGOTimeGPS GPS_ZERO = {0, 0};
+
+#define DEFAULT_FFT_LENGTH_SECONDS 8.0
 
 /*
  * ============================================================================
@@ -226,6 +230,83 @@ static GstFlowReturn gstlal_inpaint_transform_ip(GstBaseTransform *trans, GstBuf
  */
 
 
+enum property {
+	ARG_FFT_LENGTH = 1,
+	ARG_PSD
+};
+
+
+static void gstlal_inpaint_set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
+{
+	GSTLALInpaint *inpaint = GSTLAL_INPAINT(object);
+
+	GST_OBJECT_LOCK(inpaint);
+
+	switch (id) {
+	case ARG_FFT_LENGTH: {
+		double fft_length_seconds = g_value_get_double(value);
+		if(fft_length_seconds != inpaint->fft_length_seconds) {
+			/*
+			 * record new value
+			 */
+
+			inpaint->fft_length_seconds = fft_length_seconds;
+
+			// FIXME Set up notification handlers to deal with
+			// fft_length changing, since other elements (e.g.
+			// lal_whiten) allow for this to happen
+		}
+		break;
+	}
+
+	case ARG_PSD: {
+		GValueArray *va = g_value_get_boxed(value);
+
+		// FIXME Should lalDimensionlessUnit be a member of the inpaint struct?
+		LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
+		inpaint->psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, 0.0, 1.0 / inpaint->fft_length_seconds, &psd_units, va->n_values);
+		if(!inpaint->psd) {
+			GST_ERROR("XLALCreateREAL8FrequencySeries() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+			XLALClearErrno();
+		}
+		gstlal_doubles_from_g_value_array(va, inpaint->psd->data->data, NULL);
+		break;
+	}
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(inpaint);
+}
+
+
+static void gstlal_inpaint_get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
+{
+	GSTLALInpaint *inpaint = GSTLAL_INPAINT(object);
+
+	GST_OBJECT_LOCK(inpaint);
+
+	switch (id) {
+	case ARG_FFT_LENGTH:
+		g_value_set_double(value, inpaint->fft_length_seconds);
+		break;
+
+	case ARG_PSD:
+		if(inpaint->psd)
+			g_value_take_boxed(value, gstlal_g_value_array_from_doubles(inpaint->psd->data->data, inpaint->psd->data->length));
+		else
+			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
+		break;
+
+	default:
+		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
+		break;
+	}
+
+	GST_OBJECT_UNLOCK(inpaint);
+}
 
 /*
  * finalize()
@@ -239,6 +320,9 @@ static void gstlal_inpaint_finalize(GObject * object)
 	free(inpaint->instrument);
 	free(inpaint->channel_name);
 	free(inpaint->units);
+
+	XLALDestroyREAL8FrequencySeries(inpaint->psd);
+	inpaint->psd = NULL;
 
 	G_OBJECT_CLASS(gstlal_inpaint_parent_class)->finalize(object);
 }
@@ -264,8 +348,8 @@ static void gstlal_inpaint_class_init(GSTLALInpaintClass *klass)
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
 
-	//gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
-	//gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
+	gobject_class->set_property = GST_DEBUG_FUNCPTR(gstlal_inpaint_set_property);
+	gobject_class->get_property = GST_DEBUG_FUNCPTR(gstlal_inpaint_get_property);
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(gstlal_inpaint_finalize);
 
 	transform_class->sink_event = GST_DEBUG_FUNCPTR(gstlal_inpaint_sink_event);
@@ -277,6 +361,36 @@ static void gstlal_inpaint_class_init(GSTLALInpaintClass *klass)
 		"Filter",
 		"A routine that replaces replaces glitchy data with data based on the surrounding times.",
 		"Cody Messick <cody.messick@ligo.org>"
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FFT_LENGTH,
+		g_param_spec_double(
+			"fft-length",
+			"FFT length",
+			"Total length of the FFT convolution (including zero padding) in seconds",
+			0, G_MAXDOUBLE, DEFAULT_FFT_LENGTH_SECONDS,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+
+	g_object_class_install_property(
+		gobject_class,
+		ARG_PSD,
+		g_param_spec_value_array(
+			"psd",
+			"PSD",
+			"Power spectral density that describes the data at the time of the hole being inpainted.  First bin is at 0 Hz, last bin is at f-nyquist, bin spacing is delta-f.",
+			g_param_spec_double(
+				"bin",
+				"Bin",
+				"Power spectral density bin",
+				0, G_MAXDOUBLE, 1.0,
+				G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+			),
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
 	);
 
 	gst_element_class_add_pad_template(
@@ -311,4 +425,7 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint)
 	inpaint->instrument = NULL;
 	inpaint->channel_name = NULL;
 	inpaint->units = NULL;
+
+	inpaint->fft_length_seconds = 0;
+	inpaint->psd = NULL;
 }

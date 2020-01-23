@@ -23,9 +23,18 @@
 #ifndef __GSTLAL_INPAINT_H__
 #define __GSTLAL_INPAINT_H__
 
+/*
+ * stuff from gstreamer
+ */
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+
+/*
+ * stuff from LAL
+ */
+
+#include <lal/FrequencySeries.h>
 
 G_BEGIN_DECLS
 
@@ -55,6 +64,13 @@ typedef struct {
 	char *instrument;
 	char *channel_name;
 	char *units;
+
+	/*
+	 * PSD stuff
+	 */
+
+	double fft_length_seconds;
+	REAL8FrequencySeries *psd;
 } GSTLALInpaint;
 
 
