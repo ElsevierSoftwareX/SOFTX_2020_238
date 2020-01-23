@@ -1,3 +1,14 @@
+gstlal (1.6.0-1) unstable; urgency=low
+
+  * ezligolw.c: fix edge case when last token of last row is NULL
+  * httpinterface: allow service discovery to be disabled explicitly
+  * plotutil: change ifo color scheme to match commonly used colors
+  * dagparts: preserve order for jobs in condor DAGs
+  * pipeparts: allow additional properties in capsfilter
+  * add dag utilities (groups, flatten, cache_to_instruments) in dagparts
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 23 Jan 2020 12:20:57 -0800
+
 gstlal (1.5.1-1) unstable; urgency=low
 
   * Fix issue in gstlal_play with sanity checking options
