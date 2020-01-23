@@ -10,6 +10,7 @@ pkgpythondir = $(pkgpyexecdir)
 
 pkgpython_PYTHON = \
 	aggregator.py \
+	events.py \
 	metric.py \
 	tree.py
 
