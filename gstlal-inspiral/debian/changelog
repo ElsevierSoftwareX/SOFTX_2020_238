@@ -1,3 +1,20 @@
+gstlal-inspiral (1.7.0-1) unstable; urgency=low
+
+  * gstlal_ll_inspiral_event_uploader: expose upload time option,
+    update time sent after upload, fix edge case with multiple
+    events with identical FAR
+  * add gstlal_inspiral_calc_snr and svd_bank_snr module to
+    recalculate SNR for gstlal candidates
+  * improve approximation of the covariance matrix used in dtdphi
+  * improve treatment of single detector candidates
+  * enable linear gating in online analyses
+  * performed snr/chisq tuning including tighter signal models and
+    variable autocorrelation length for chisq calculations
+  * refactor of lal_itacac
+  * added monitoring capabilities for segment tracking
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 23 Jan 2020 15:02:08 -0800
+
 gstlal-inspiral (1.6.9-1) unstable; urgency=low
 
   * add option in online DAG to aggregate events rather than
