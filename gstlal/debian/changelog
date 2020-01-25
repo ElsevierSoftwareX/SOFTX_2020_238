@@ -1,3 +1,10 @@
+gstlal (1.6.0-1.2) unstable; urgency=low
+
+  * fix python-numpy build dependency
+  * add python-ligo-lw build dependency
+
+ -- Steffen Grunewald <steffen.grunewald@ligo.org>  Fri, 24 Jan 2020 09:50:00 +0100
+
 gstlal (1.6.0-1) unstable; urgency=low
 
   * ezligolw.c: fix edge case when last token of last row is NULL
