@@ -103,12 +103,8 @@ LALSIM_TARGET=$(INSTALL_DIR)/lib/liblalsimulation.so
 LALMETAIO_TARGET=$(INSTALL_DIR)/lib/liblalmetaio.so
 LALFRAME_TARGET=$(INSTALL_DIR)/lib/liblalframe.so
 LAL_TARGET=$(INSTALL_DIR)/lib/liblal.so
-GDS_TARGET=$(INSTALL_DIR)/lib/libwpipe.so
-LDASTOOLSFRAMECPP_TARGET=$(INSTALL_DIR)/lib/libframecpp.so
-LDASTOOLSAL_TARGET=$(INSTALL_DIR)/lib/libldastoolsal.so
 SWIG_TARGET=$(INSTALL_DIR)/bin/swig
 METAIO_TARGET=$(INSTALL_DIR)/lib/libmetaio.so
-LIBFRAME_TARGET=$(INSTALL_DIR)/lib/libFrame.so
 GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
 GSTGOOD_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpng.so
 GSTBASE_TARGET=$(INSTALL_DIR)/lib/libgstapp-1.0.so
@@ -136,12 +132,8 @@ LALSIM_TAR_TARGET=$(TAR_DIR)/$(LALSIMULATION).tar.xz
 LALMETAIO_TAR_TARGET=$(TAR_DIR)/$(LALMETAIO).tar.xz
 LALFRAME_TAR_TARGET=$(TAR_DIR)/$(LALFRAME).tar.xz
 LAL_TAR_TARGET=$(TAR_DIR)/$(LAL).tar.xz
-GDS_TAR_TARGET=$(TAR_DIR)/$(GDS).tar.gz
-LDASTOOLSFRAMECPP_TAR_TARGET=$(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz
-LDASTOOLSAL_TAR_TARGET=$(TAR_DIR)/$(LDASTOOLSAL).tar.gz
 SWIG_TAR_TARGET=$(TAR_DIR)/$(SWIG).tar.gz
 METAIO_TAR_TARGET=$(TAR_DIR)/$(METAIO).tar.gz
-LIBFRAME_TAR_TARGET=$(TAR_DIR)/$(LIBFRAME).tar.gz
 GSTPYTHON_TAR_TARGET=$(TAR_DIR)/$(GSTPYTHON).tar.xz
 GSTGOOD_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz
 GSTBASE_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz
@@ -153,9 +145,6 @@ FFTW_TAR_TARGET=$(TAR_DIR)/$(FFTW).tar.gz
 # git repos
 GSTLAL_GIT_TARGET=$(GSTLAL_REPO)/TODO.md
 LIGOSCALD_GIT_TARGET=$(LIGOSCALD_REPO)/README.md
-LIGOSEGMENTS_GIT_TARGET=$(LIGOSEGMENTS_REPO)/README.rst
-PYTHONLIGOLW_GIT_TARGET=$(PYTHONLIGOLW_REPO)/MANIFEST.in
-GLUE_GIT_TARGET=$(GLUE_REPO)/README
 LALSUITE_GIT_TARGET=$(LALSUITE_REPO)/lal/README
 
 # Specify how many processors to run on
@@ -379,7 +368,7 @@ $(LIBRDKAFKA_TARGET) : $(LALAPPS_TARGET)
 # lalsuite
 lalsuite : $(LOGS_DIR)/lalsuite.txt
 
-$(LOGS_DIR)/lalsuite.txt : $(LOGS_DIR)/gds.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET)
+$(LOGS_DIR)/lalsuite.txt : $(LOGS_DIR)/swig.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 # lalapps
@@ -506,7 +495,7 @@ $(LALFRAME_TARGET) : $(LAL_TARGET)
 	fi ;
 
 # lal
-$(LAL_TARGET) : $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL_TARGET)  $(LDASTOOLSFRAMECPP_TARGET) $(GDS_TARGET)
+$(LAL_TARGET) : $(METAIO_TARGET) $(SWIG_TARGET)
 	@echo $(GREEN)lal$(WHITE) 1>&2
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
@@ -519,42 +508,6 @@ $(LAL_TARGET) : $(LIBFRAME_TARGET) $(METAIO_TARGET) $(SWIG_TARGET) $(LDASTOOLSAL
 		cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --without-doxygen --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
-
-# gds
-gds : $(LOGS_DIR)/gds.txt
-
-$(LOGS_DIR)/gds.txt : $(LOGS_DIR)/ldas-tools-framecpp.txt $(GDS_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(GDS_TARGET) : $(LDASTOOLSFRAMECPP_TARGET)
-	@echo $(GREEN)gds$(WHITE) 1>&2
-	tar -xzf $(TAR_DIR)/$(GDS).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR) CC="gcc" CXX="g++" CFLAGS="$(GCCFLAGS) -lfftw3_threads -lfftw3f_threads"
-	cd $(SRC_DIR)/$(GDS) && make -j$(CORES) && make install -j$(CORES)
-
-# ldas-tools-framecpp
-ldas-tools-framecpp : $(LOGS_DIR)/ldas-tools-framecpp.txt
-
-$(LOGS_DIR)/ldas-tools-framecpp.txt : $(LOGS_DIR)/ldas-tools-al.txt $(LDASTOOLSFRAMECPP_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(LDASTOOLSFRAMECPP_TARGET) : $(LDASTOOLSAL_TARGET)
-	@echo $(GREEN)ldas-tools-frmecpp$(WHITE) 1>&2
-	tar -xf $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen CC="gcc" CXX="g++" CFLAGS="$(GCCFLAGS)"
-	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && make DESTDIR=/ -j$(CORES) && make install DESTDIR=/ -j$(CORES)
-
-# ldas-tools-al
-ldas-tools-al : $(LOGS_DIR)/ldas-tools-al.txt
-
-$(LOGS_DIR)/ldas-tools-al.txt : $(LOGS_DIR)/swig.txt $(LDASTOOLSAL_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(LDASTOOLSAL_TARGET) : $(SWIG_TARGET)
-	@echo $(GREEN)ldas-tools-al$(WHITE) 1>&2
-	tar -xf $(TAR_DIR)/$(LDASTOOLSAL).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LDASTOOLSAL) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen CC="gcc" CXX="g++" CFLAGS="$(GCCFLAGS)"
-	cd $(SRC_DIR)/$(LDASTOOLSAL) && make -j$(CORES) && make install -j$(CORES)
 
 # swig
 swig : $(LOGS_DIR)/swig.txt
@@ -571,27 +524,15 @@ $(SWIG_TARGET) : $(METAIO_TARGET)
 # metaio
 metaio : $(LOGS_DIR)/metaio.txt
 
-$(LOGS_DIR)/metaio.txt : $(LOGS_DIR)/libframe.txt $(METAIO_TARGET)
+$(LOGS_DIR)/metaio.txt : $(LOGS_DIR)/gstreamer.txt $(METAIO_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(METAIO_TARGET) : $(LIBFRAME_TARGET)
+$(METAIO_TARGET) : $(GSTPYTHON_TARGET)
 	@echo $(GREEN)metaio$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(METAIO).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(METAIO) && ./configure --prefix=$(INSTALL_DIR) --with-matlab=no
 	cd $(SRC_DIR)/$(METAIO) && make -j$(CORES) && make install -j$(CORES)
 	# Needed with-matlab option for intel_haswell test
-
-# libframe
-libframe : $(LOGS_DIR)/libframe.txt
-
-$(LOGS_DIR)/libframe.txt : $(LOGS_DIR)/gstreamer.txt $(LIBFRAME_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(LIBFRAME_TARGET) : $(GSTPYTHON_TARGET)
-	@echo $(GREEN)libframe$(WHITE) 1>&2
-	tar -xf $(TAR_DIR)/$(LIBFRAME).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LIBFRAME) && ./configure --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(LIBFRAME) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer (all)
 gstreamer : $(LOGS_DIR)/gstreamer.txt
@@ -686,32 +627,20 @@ $(LOGS_DIR)/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-$(LOGS_DIR)/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
+$(LOGS_DIR)/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LIBRDKAFKA_TAR_TARGET) $(KAFKA_PYTHON_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(KAFKA_PYTHON_TAR_TARGET) : $(LIBRDKAFKA_TAR_TARGET)
 	wget --no-check-certificate https://github.com/confluentinc/confluent-kafka-python/archive/v$(KAFKA_PYTHON).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -nc
 
-$(LIBRDKAFKA_TAR_TARGET) : $(GDS_TAR_TARGET)
+$(LIBRDKAFKA_TAR_TARGET) : $(SWIG_TAR_TARGET)
 	wget --no-check-certificate https://github.com/edenhill/librdkafka/archive/v$(LIBRDKAFKA).tar.gz --directory-prefix=$(TAR_DIR) -O $(TAR_DIR)/librdkafka-$(LIBRDKAFKA).tar.gz -nc
-
-$(GDS_TAR_TARGET) : $(LDASTOOLSFRAMECPP_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GDS).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(LDASTOOLSFRAMECPP_TAR_TARGET) : $(LDASTOOLSAL_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSFRAMECPP).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(LDASTOOLSAL_TAR_TARGET) : $(SWIG_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(SWIG_TAR_TARGET) : $(METAIO_TAR_TARGET)
 	wget --no-check-certificate http://downloads.sourceforge.net/project/swig/swig/$(SWIG)/$(SWIG).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
-$(METAIO_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
+$(METAIO_TAR_TARGET) : $(GSTPYTHON_TAR_TARGET)
 	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
-
-$(LIBFRAME_TAR_TARGET) : $(GSTPYTHON_TAR_TARGET)
-	wget --no-check-certificate http://lappweb.in2p3.fr/virgo/FrameL/$(LIBFRAME).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSTPYTHON_TAR_TARGET) : $(GSTGOOD_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-python/$(GSTPYTHON).tar.xz --directory-prefix=$(TAR_DIR) -nc
@@ -805,23 +734,11 @@ clean-librdkafka :
 clean-lalsuite :
 	rm -rf $(LOGS_DIR)/lalsuite.txt $(LAL_TARGET) $(LALFRAME_TARGET) $(LALMETAIO_TARGET) $(LALSIM_TARGET) $(LALBURST_TARGET) $(LALINSPIRAL_TARGET) $(LALPULSAR_TARGET) $(LALINFER_TARGET) $(LALAPPS_TARGET) $(GLUE_TARGET)
 
-clean-gds :
-	rm -rf $(LOGS_DIR)/gds.txt $(GDS_TARGET)
-
-clean-ldas-tools-framecpp :
-	rm -rf $(LOGS_DIR)/ldas-tools-framecpp.txt $(LDASTOOLSFRAMECPP_TARGET)
-
-clean-ldas-tools-al :
-	rm -rf $(LOGS_DIR)/ldas-tools-al.txt $(LDASTOOLSAL_TARGET)
-
 clean-swig :
 	rm -rf $(LOGS_DIR)/swig.txt $(SWIG_TARGET)
 
 clean-metaio :
 	rm -rf $(LOGS_DIR)/metaio.txt $(METAIO_TARGET)
-
-clean-libframe :
-	rm -rf $(LOGS_DIR)/libframe.txt $(LIBFRAME_TARGET)
 
 clean-gstreamer :
 	rm -rf $(LOGS_DIR)/gstreamer.txt $(GSTREAMER_TARGET) $(GSTBASE_TARGET) $(GSTGOOD_TARGET) $(GSTPYTHON_TARGET)
