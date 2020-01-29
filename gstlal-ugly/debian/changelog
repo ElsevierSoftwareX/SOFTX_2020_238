@@ -1,16 +1,28 @@
+gstlal-ugly (1.7.0-1) unstable; urgency=low
+
+  * add events module for event processing
+  * improvements, bug fixes in metric_overlap
+  * add lal_aggregator element to aggregate audio streams
+  * gstlal_latency: expose current timestamp, latency as properties
+  * gstlal_latency: fix issue with unsetting input flag
+  * gstlal_interpolator: fix bug in determining input size
+  * metric: add new coordinate system, pseudo match
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 23 Jan 2020 13:02:18 -0800
+
 gstlal-ugly (1.6.6-1) unstable; urgency=low
 
   * Ease off on excessive logging for monitoring processes
   * Fix issues in gstlal_ll_dq related to ligo-scald 0.7.0+
 
- -- Patrick Godwin <patrick.godwin@ligo.org> Tue, 10 Dec 2019 14:02:37 -0800
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Tue, 10 Dec 2019 14:02:37 -0800
 
 gstlal-ugly (1.6.5-1) unstable; urgency=low
 
   * gstlal_ll_inspiral_aggregator: remove unneccesary Pool, change how kafka
     topics/partitions are arranged, add --across-jobs option to allow leaders
 
- -- Alexander Pace <alexander.pace@ligo.org> Thu, 18 Jul 2019 08:47:13 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 18 Jul 2019 08:47:13 -0700
 
 gstlal-ugly (1.6.4-1) unstable; urgency=low
   
@@ -18,14 +30,14 @@ gstlal-ugly (1.6.4-1) unstable; urgency=low
   * add gstlal_ll_inspiral_trigger_aggregator to gstlal-ugly, add job to
     gstlal_ll_inspiral_pipe
 
- -- Alexander Pace <alexander.pace@ligo.org> Wed, 05 Jun 2019 12:24:02 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Wed, 05 Jun 2019 12:24:02 -0700
 
 gstlal-ugly (1.6.3-1) unstable; urgency=low
 
   * gstlal_kafka_dag: add condor universe option into kafka/zookeeper jobs
   * rough tool to estimate background collected among ifo combos
 
- -- Alexander Pace <alexander.pace@ligo.org> Thu, 28 Mar 2019 07:44:55 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Thu, 28 Mar 2019 07:44:55 -0700
 
 gstlal-ugly (1.6.2-1) unstable; urgency=low
 
@@ -36,7 +48,7 @@ gstlal-ugly (1.6.2-1) unstable; urgency=low
     have file clashes
   * Bug fixes and performance improvements
 
- -- Alexander Pace <alexander.pace@ligo.org> Sun, 17 Mar 2019 09:37:07 -0700
+ -- Alexander Pace <alexander.pace@ligo.org>  Sun, 17 Mar 2019 09:37:07 -0700
 
 gstlal-ugly (1.6.1-1) unstable; urgency=low
 

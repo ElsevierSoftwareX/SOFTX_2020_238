@@ -40,10 +40,11 @@ import numpy
 from ligo.segments import segment
 from ligo.gracedb.rest import GraceDb, HTTPError
 from ligo.gracedb.rest import DEFAULT_SERVICE_URL as DEFAULT_GRACEDB_URL
-from ligo.scald import events, utils
+from ligo.scald import utils
 
 from lal import LIGOTimeGPS
 
+from gstlal import events
 from gstlal import inspiral
 
 #-------------------------------------------------
@@ -298,6 +299,7 @@ class EventUploader(events.EventProcessor):
 			'time_ns': event['favored']['time'].gpsNanoSeconds,
 			'snr': event['favored']['snr'],
 			'far': event['favored']['far'],
+			'psd': event['favored']['psd'],
 			'coinc': event['favored']['coinc']
 		}
 		self.producer.produce(topic=self.favored_event_topic, value=json.dumps(favored_event))

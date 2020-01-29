@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[1.6.6],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_INIT([gstlal-ugly],[1.7.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -406,7 +406,7 @@ AC_SUBST([MIN_LIGO_SEGMENTS_VERSION], [1.2.0])
 AX_PYTHON_LIGO_SEGMENTS([$MIN_LIGO_SEGMENTS_VERSION])
 AC_SUBST([MIN_LIGO_LW_VERSION], [1.5.3])
 AX_PYTHON_LIGO_LW([$MIN_LIGO_LW_VERSION])
-AC_SUBST([MIN_LIGO_SCALD_VERSION], [0.7.1])
+AC_SUBST([MIN_LIGO_SCALD_VERSION], [0.7.2])
 
 
 #
@@ -414,7 +414,7 @@ AC_SUBST([MIN_LIGO_SCALD_VERSION], [0.7.1])
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.5.1])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.6.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
