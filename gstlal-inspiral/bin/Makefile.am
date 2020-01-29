@@ -9,6 +9,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
 	gstlal_inspiral_coinc_extractor \
+	gstlal_inspiral_coinc_extractor_dag \
 	gstlal_inspiral_compute_dtdphideff_cov_matrix \
 	gstlal_inspiral_compress_ranking_stat \
 	gstlal_inspiral_add_dt_dphi_snr_ratio_pdfs \

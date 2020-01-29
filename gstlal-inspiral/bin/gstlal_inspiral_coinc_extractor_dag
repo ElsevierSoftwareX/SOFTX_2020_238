@@ -420,15 +420,13 @@ for job_id, (bankid, process_id, sid) in enumerate(s_row, start=1):
 	this_input_dict["ranking-stat-input"] = ranking_stat_pdf
 
 	# just name the output the same as the input
-	#outdir = "lloid_files/%d_%d_%d" % (job_id, bankid, process_id)
-	outdir = "lloid_files/%s" % (str(this_opts_dict["gps-end-time"][0])[:5])
+	outdir = "lloid_files/%d_%d_%d" % (job_id, bankid, process_id)
 	try:
 		os.mkdir(outdir)
 	except OSError:
 		pass
 
-	#output_file_name = "%s/%d_%d_%d_lloid.xml.gz" % (outdir, job_id, bankid, process_id)
-	output_file_name = "%s/%s_lloid.xml.gz" % (outdir, str(this_opts_dict["gps-end-time"][0]))
+	output_file_name = "%s/%d_%d_%d_lloid.xml.gz" % (outdir, job_id, bankid, process_id)
 	this_output_dict["output"] = output_file_name
 
 	this_opts_dict["gracedb-service-url"] = "file://%s/%s" % (os.getcwd(), outdir)
