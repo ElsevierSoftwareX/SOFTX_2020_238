@@ -270,7 +270,10 @@ class EventUploader(events.EventProcessor):
 		    * FAR <= public threshold, choose highest SNR
 		"""
 		def keyfunc(candidate):
-		    return (candidate['far'] <= self.public_far_threshold), candidate['snr']
+			if candidate['far'] <= self.public_far_threshold:
+				return True, candidate['snr'], 1. / candidate['far']
+			else:
+				return False, 1. / candidate['far'], candidate['snr']
 
 		return max(candidates, key=keyfunc)
 
