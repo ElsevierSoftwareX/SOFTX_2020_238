@@ -184,41 +184,10 @@ class EventUploader(events.EventProcessor):
 		upload if a new favored event is found
 		"""
 		for key, event in sorted(self.events.items(), reverse=True):
-			if event['num_sent'] == 0:
-				updated, event = self.process_candidates(event)
-				assert updated
-				logging.info(
-					'uploading {} candidate with FAR = {:.3E}, '
-					'SNR = {:2.1f} for event: [{:.1f}, {:.1f}]'.format(
-						self.to_ordinal(1),
-						event['favored']['far'],
-						event['favored']['snr'],
-						key[0], key[1],
-					)
-				)
-				self.send_favored_event(event, key)
-				self.send_p_astro(event, key)
-				sent = self.upload_event(event)
-				if sent:
-					event['num_sent'] += 1
-
-			elif event['candidates'] and utils.gps_now() >= self.next_event_upload(event):
-				updated, event = self.process_candidates(event)
-				if updated:
-					logging.info(
-						'uploading {} candidate with FAR = {:.3E}, '
-						'SNR = {:2.1f} for event: [{:.1f}, {:.1f}]'.format(
-							self.to_ordinal(event['num_sent'] + 1),
-							event['favored']['far'],
-							event['favored']['snr'],
-							key[0], key[1]
-						)
-					)
-					self.send_favored_event(event, key)
-					self.send_p_astro(event, key)
-					sent = self.upload_event(event)
-					if sent:
-						event['num_sent'] += 1
+			if event['num_sent'] == 0 or (
+				event['candidates'] and utils.gps_now() >= self.next_event_upload(event)
+			):
+				self.process_event(event, key)
 
 		# clean out old events
 		current_time = utils.gps_now()
@@ -226,6 +195,31 @@ class EventUploader(events.EventProcessor):
 			if current_time - key[0] >= self.max_event_time:
 				logging.info('removing stale event [{:.1f}, {:.1f}]'.format(*key))
 				self.events.pop(key)
+
+
+	def process_event(self, event, window):
+		"""
+		handle a single event, selecting the best candidate.
+		upload if a new favored event is found
+		"""
+		updated, event = self.process_candidates(event)
+		if event['num_sent'] == 0:
+			assert updated
+		if updated:
+			logging.info(
+				'uploading {} candidate with FAR = {:.3E}, '
+				'SNR = {:2.1f} for event: [{:.1f}, {:.1f}]'.format(
+					self.to_ordinal(event['num_sent'] + 1),
+					event['favored']['far'],
+					event['favored']['snr'],
+					window[0], window[1]
+				)
+			)
+			self.send_favored_event(event, window)
+			self.send_p_astro(event, window)
+			sent = self.upload_event(event)
+			if sent:
+				event['num_sent'] += 1
 
 
 	def process_candidates(self, event):
