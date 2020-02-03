@@ -242,7 +242,7 @@ class EventUploader(events.EventProcessor):
 			return True, event
 
 		### favored event is more significant
-		elif favored == self.select_favored_event([event['favored'], favored]):
+		elif self.rank_candidate(favored) > self.rank_candidate(event['favored']):
 			logging.info(
 				'found new favored candidate with FAR: {:.3E}, '
 				'SNR: {:2.1f}'.format(favored['far'], favored['snr'])
@@ -258,18 +258,21 @@ class EventUploader(events.EventProcessor):
 	def select_favored_event(self, candidates):
 		"""
 		select the best event out of the candidates
+		"""
+		return max(candidates, key=self.rank_candidate)
 
-		selection process is as follows:
+
+	def rank_candidate(self, candidate):
+		"""
+		rank a candidate based on the following criterion:
+
 		    * FAR >  public threshold, choose lowest FAR
 		    * FAR <= public threshold, choose highest SNR
 		"""
-		def keyfunc(candidate):
-			if candidate['far'] <= self.public_far_threshold:
-				return True, candidate['snr'], 1. / candidate['far']
-			else:
-				return False, 1. / candidate['far'], candidate['snr']
-
-		return max(candidates, key=keyfunc)
+		if candidate['far'] <= self.public_far_threshold:
+			return True, candidate['snr'], 1. / candidate['far']
+		else:
+			return False, 1. / candidate['far'], candidate['snr']
 
 
 	def send_p_astro(self, event, event_window):
