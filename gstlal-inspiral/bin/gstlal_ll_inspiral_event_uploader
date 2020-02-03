@@ -399,7 +399,8 @@ class EventUploader(events.EventProcessor):
 		send remaining events before shutting down
 		"""
 		for key, event in sorted(self.events.items(), reverse=True):
-			self.process_event(event, key)
+			if event['candidates']:
+				self.process_event(event, key)
 
 
 	@staticmethod
