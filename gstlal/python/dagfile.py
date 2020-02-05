@@ -1029,7 +1029,7 @@ def optimize(dag):
 	for name, node in dag.nodes.items():
 		parents_of.setdefault(frozenset(node.children), set()).add(node)
 
-	# to work-around this scaling problem we insert no-op jobs bewteen
+	# to work around this scaling problem we insert no-op jobs between
 	# the parents and children to replace the n*m edges with n+m edges
 	# plus one new node.
 	for children, parents in parents_of.items():
