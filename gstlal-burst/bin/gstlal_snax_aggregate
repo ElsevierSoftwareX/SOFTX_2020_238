@@ -31,9 +31,10 @@ import optparse
 
 import numpy
 
-from ligo.scald import events
 from ligo.scald import utils
 from ligo.scald.io import hdf5, influx
+
+from gstlal import events
 
 
 #-------------------------------------------------

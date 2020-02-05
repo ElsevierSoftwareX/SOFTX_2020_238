@@ -29,9 +29,10 @@ import json
 import logging
 import optparse
 
-from ligo.scald import events
 from ligo.scald import utils
 from ligo.scald.io import hdf5, influx
+
+from gstlal import events
 
 from gstlal.snax import multichannel_datasource
 

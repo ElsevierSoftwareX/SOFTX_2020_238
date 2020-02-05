@@ -35,9 +35,8 @@ import shutil
 import h5py
 import numpy
 
-from ligo.scald import events
-
 from gstlal import aggregator
+from gstlal import events
 
 from gstlal.snax import multichannel_datasource
 from gstlal.snax import utils

@@ -32,8 +32,9 @@ from collections import deque
 from Queue import PriorityQueue
 from optparse import OptionParser
 
-from ligo.scald import events
 from ligo.scald import utils
+
+from gstlal import events
 
 
 #-------------------------------------------------
