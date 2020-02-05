@@ -80,12 +80,7 @@ if __name__ == "__main__":
 	options, args = parse_command_line()
 
     ### set up logging
-	logger = utils.get_logger(
-		'-'.join([options.tag, 'combiner']),
-		log_level=options.log_level,
-		rootdir=options.rootdir,
-		verbose=options.verbose
-	)
+	logger = utils.get_logger('snax_combine', verbose=options.verbose)
 
 	### define gps bounds to grab features
 	start_time = options.start_time if options.start_time else -infinity()
