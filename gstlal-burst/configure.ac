@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-burst],[0.2.0],[gstlal-discuss@ligo.org],[gstlal-burst])
+AC_INIT([gstlal-burst],[0.2.1],[gstlal-discuss@ligo.org],[gstlal-burst])
 AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -254,7 +254,7 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GLUE_VERSION], [1.59.3])
+AC_SUBST([MIN_GLUE_VERSION], [2.0.0])
 AX_PYTHON_GLUE([$MIN_GLUE_VERSION])
 AC_SUBST([MIN_LIGO_SEGMENTS_VERSION], [1.2.0])
 AX_PYTHON_LIGO_SEGMENTS([$MIN_LIGO_SEGMENTS_VERSION])
