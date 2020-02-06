@@ -1,4 +1,4 @@
-AM_CPPFLAGS = -I..
+AM_CPPFLAGS = -I$(abs_srcdir)/..
 
 EXTRA_DIST =
 CLEANFILES =
