@@ -185,9 +185,6 @@ class SNR(object):
 	def start(self):
 		"""float: The approximate start time of all SNRs timeseries based on the buffer timestamp.
 
-		Note:
-			This start time is not precise because the 'end_time' of each template was not added here.
-			Please refer to the epoch of each timeseries object for precise start time.
 		"""
 		try:
 			self.finish()
@@ -198,11 +195,8 @@ class SNR(object):
 
 	@property
 	def end(self):
-		"""float: The approximate end time of all SNRs timeseries calculated from buffer timestamp and data.
+		"""float: The end time of all SNRs timeseries calculated from buffer timestamp and data.
 
-		Note:
-			This end time is not precise because the 'end_time' of each template was not added here.
-			Please refer to the epoch of each timeseries object for precise end time.
 		"""
 		try:
 			self.finish()
@@ -266,7 +260,7 @@ class SNR(object):
 		tmp_snrs = tmp_snrs[s:e].T if COMPLEX else numpy.abs(tmp_snrs[s:e].T)
 
 		# parse data to tseries object
-		self.data = [self._make_series(array, self.epoch + row.end) for array, row in zip(tmp_snrs, self.sngl_inspiral_table)]
+		self.data = [self._make_series(array, self.epoch) for array in tmp_snrs]
 
 		# .finish() again is forbidden
 		def finish():
@@ -321,8 +315,8 @@ class SNRHandlerMixin(object):
 			buf = sample.get_buffer()
 			if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
 				return Gst.FlowReturn.OK
-
-			cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts)
+			# add the time offset of template end time here, this offset should be the same for each templates
+			cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts) + self.snr_document.snrdict[instrument].sngl_inspiral_table[0].end
 
 			if self.snr_document.snrdict[instrument].s >= cur_time_stamp and self.snr_document.snrdict[instrument].e > cur_time_stamp:
 				# record the first timestamp closet to start time
