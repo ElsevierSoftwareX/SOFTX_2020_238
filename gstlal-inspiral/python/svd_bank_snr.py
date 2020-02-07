@@ -98,9 +98,7 @@ class SignalNoiseRatioDocument(object):
 			root.appendChild(ligolw_param.Param.from_pyvalue('instrument', instrument))
 
 			# add SNR and autocorrelation branches
-			branch = root.appendChild(ligolw.LIGO_LW())
-			branch.Name = "SNR_and_autocorrelation"
-			self._append_content(branch, snrs, instrument, row_number=row_number)
+			self._append_content(root, snrs, instrument, row_number=row_number)
 
 			if row_number is None:
 				outname = "%s-%s_SNR_%d-%d-%d.xml.gz" % (instrument, snrs.method, snrs.bank_number, snrs.start, snrs.duration)
@@ -110,10 +108,13 @@ class SignalNoiseRatioDocument(object):
 				write_url(xmldoc, os.path.join(outdir, outname), verbose = self.verbose)
 		return xmldoc
 
-	def _append_content(self, branch, snrs, instrument, row_number=None):
+	def _append_content(self, root, snrs, instrument, row_number=None):
 		"""For internal use only."""
 		if row_number is None:
 			for row, template_id, snr in zip(range(len(snrs)), self.template_ids, snrs):
+				branch = root.appendChild(ligolw.LIGO_LW())
+				branch.Name = "SNR_and_autocorrelation"
+
 				# append timeseries and templates autocorrelation
 				if snr.data.data.dtype == numpy.float32:
 					tseries = branch.appendChild(lal.series.build_REAL4TimeSeries(snr))
@@ -130,6 +131,9 @@ class SignalNoiseRatioDocument(object):
 				branch.appendChild(ligolw_param.Param.from_pyvalue('template_id', template_id))
 				branch.appendChild(ligolw_array.Array.build('autocorrelation_bank', self.banks_dict[instrument][self.bank_number].autocorrelation_bank[row]))
 		else:
+			branch = root.appendChild(ligolw.LIGO_LW())
+			branch.Name = "SNR_and_autocorrelation"
+
 			# append timeseries and template autocorrelation
 			snr = snrs[row_number]
 			if snr.data.data.dtype == numpy.float32:
@@ -627,7 +631,7 @@ def read_xmldoc(xmldoc, root_name = u"gstlal_inspiral_snr"):
 			tseries = lal.series.parse_COMPLEX16TimeSeries(snr_elem)
 			snrdict[instrument].append(tseries)
 
-		autocorrelation_dict[instrument].append(ligolw_array.get_array(root, "autocorrelation_bank").array)
+		autocorrelation_dict[instrument].append(ligolw_array.get_array(elem, "autocorrelation_bank").array)
 
 	assert snrdict is not None, "xmldoc contains no LAL Series or LAL Series is unsupported"
 
