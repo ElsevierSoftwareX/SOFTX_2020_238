@@ -302,6 +302,18 @@ def aggregator_layer(dag, jobs, options, job_tags):
 			else:
 				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], opts = these_options)
 
+	# Trigger counting
+	trigcount_options = {
+		"output-period": 300,
+		"num-jobs": len(job_tags),
+		"num-threads": 2,
+		"job-start": 0,
+		"kafka-server": options.output_kafka_server,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-pipeline": options.gracedb_pipeline,
+	}
+	dagparts.DAGNode(jobs['trigcount'], dag, [], opts = trigcount_options)
+
 	# Trigger aggregation
 	trigagg_options = {
 		"dump-period": 0,
