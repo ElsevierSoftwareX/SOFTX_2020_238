@@ -96,6 +96,7 @@ def set_up_jobs(options):
 	jobs['agg'] = dagparts.DAGJob("gstlal_ll_inspiral_aggregator", condor_commands = non_inspiral_condor_commands)
 	jobs['aggLeader'] = dagparts.DAGJob("gstlal_ll_inspiral_aggregator", tag_base = "gstlal_ll_inspiral_aggregator_leader", condor_commands = non_inspiral_condor_commands)
 	jobs['trigagg'] = dagparts.DAGJob("gstlal_ll_inspiral_trigger_aggregator", condor_commands = non_inspiral_condor_commands)
+	jobs['trigcount'] = dagparts.DAGJob("gstlal_ll_inspiral_trigger_counter", condor_commands = non_inspiral_condor_commands)
 
 	# DQ job
 	jobs['dq'] = dagparts.DAGJob("gstlal_ll_dq", condor_commands = non_inspiral_condor_commands)
