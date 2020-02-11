@@ -67,7 +67,7 @@
 // FIXME Figure out why I need this
 static const LIGOTimeGPS GPS_ZERO = {0, 0};
 
-#define DEFAULT_FFT_LENGTH_SECONDS 8.0
+#define DEFAULT_FFT_LENGTH_SECONDS 32.0
 
 /*
  * ============================================================================
@@ -529,6 +529,6 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint)
 	inpaint->t0 = GST_CLOCK_TIME_NONE;
 	inpaint->outbuf_length = 0;
 
-	inpaint->fft_length_seconds = 0;
+	inpaint->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	inpaint->psd = NULL;
 }
