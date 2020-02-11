@@ -31,6 +31,12 @@
 #include <gst/base/gstbasetransform.h>
 
 /*
+ * our own stuff
+ */
+
+#include <gstlal/gstaudioadapter.h>
+
+/*
  * stuff from LAL
  */
 
@@ -64,6 +70,16 @@ typedef struct {
 	char *instrument;
 	char *channel_name;
 	char *units;
+	guint rate;
+	GstAudioAdapter *adapter;
+	double *transformed_data;
+
+	/*
+	 * Buffer time tracking
+	 */
+	guint64 initial_offset;
+	guint64 outbuf_length;
+	GstClockTime t0;
 
 	/*
 	 * PSD stuff

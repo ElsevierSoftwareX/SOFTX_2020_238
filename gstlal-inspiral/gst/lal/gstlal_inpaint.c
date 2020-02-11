@@ -55,6 +55,7 @@
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_inpaint.h>
+#include <gstlal/gstaudioadapter.h>
 
 /*
  * stuff from LAL
@@ -107,6 +108,18 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
         return TRUE;
 }
 
+static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter) {
+	guint size;
+	g_object_get(adapter, "size", &size, NULL);
+	return size;
+}
+
+void free_data(double *data)
+{
+	free(data);
+}
+
+
 /*
  * sink_event()
  */
@@ -120,6 +133,16 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 	GST_DEBUG_OBJECT(trans, "Got %s event on sink pad", GST_EVENT_TYPE_NAME (event));
 
 	switch (GST_EVENT_TYPE(event)) {
+		case GST_EVENT_CAPS:
+		{
+			GstCaps *caps;
+			gint rate;
+			gst_event_parse_caps(event, &caps);
+			GstStructure *str = gst_caps_get_structure(caps, 0);
+			gst_structure_get_int(str, "rate", &rate);
+			inpaint->rate = (guint) rate;
+			break;
+		}
 		case GST_EVENT_TAG:
 		{
 			GstTagList *taglist;
@@ -143,8 +166,8 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 				free(inpaint->units);
 				inpaint->units = units;
 			}
-		}
                         break;
+		}
 		default:
 			break;
 	}
@@ -159,58 +182,120 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 
 
 /*
- * chain()
+ * transform()
  */
 
+static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
+{
+	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
+	gsize unit_size = sizeof(double);
 
-static GstFlowReturn gstlal_inpaint_transform_ip(GstBaseTransform *trans, GstBuffer *buf)
+	switch(direction) {
+	case GST_PAD_SRC:
+		// Keep the sample count the same
+
+		*othersize = size;
+		break;
+
+	case GST_PAD_SINK:
+		/* number of samples available */
+		*othersize = size / unit_size + gst_audioadapter_available_samples(inpaint->adapter);
+		/* number of output bytes to be generated */
+		// FIXME Dont hardcode
+		if(*othersize < inpaint->rate*2)
+			*othersize = 0;
+		else
+			*othersize *= sizeof(double);
+		break;
+
+	case GST_PAD_UNKNOWN:
+		GST_ELEMENT_ERROR(trans, CORE, NEGOTIATION, (NULL), ("invalid direction GST_PAD_UNKNOWN"));
+		return FALSE;
+	}
+
+	return TRUE;
+
+}
+
+static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
 {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
 	GstFlowReturn result = GST_FLOW_OK;
-	GstMapInfo info;
-	REAL8TimeSeries *hoft;
 	LIGOTimeGPS gate_start, gate_end, hoft_start, hoft_end, t_idx;
-	guint idx;
+	gint idx;
 
 	// Prototype: Just set h(t) during GW170817 gate to zero in L1 (test to
 	// make sure I understand how these pieces fit together since this is
 	// my first transform element)
 	// GW170817 gate: 1187008881.37875 to 1187008881.44125
-	if(strcmp(inpaint->instrument, "L1") != 0)
-		return result;
 
-	hoft = gstlal_buffer_map_REAL8TimeSeries(buf, gst_pad_get_current_caps(GST_BASE_TRANSFORM_SINK_PAD(trans)), &info, inpaint->instrument, inpaint->channel_name, inpaint->units);
-	if(!hoft) {
-		GST_ERROR_OBJECT(GST_ELEMENT(trans), "failure wrapping buffer in REAL8TimeSeries");
+	if(inpaint->t0 == GST_CLOCK_TIME_NONE) {
+		inpaint->t0 = GST_BUFFER_PTS(inbuf);
+		inpaint->initial_offset = GST_BUFFER_OFFSET(inbuf);
+	}
+	GstClockTime t1 = GST_BUFFER_PTS(inbuf) + GST_BUFFER_DURATION(inbuf);
+	gst_buffer_ref(inbuf); // If this is not called, buffer will be unref'd by calling code
+	gst_audioadapter_push(inpaint->adapter, inbuf);
+	//FIXME Dont hardcode everything for specific test case
+	if(t1<1187008882000000000) {
+		// Only going to produce an empty output file for now
+		GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
+		GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset;
+		GST_BUFFER_PTS(outbuf) = inpaint->t0;
+		GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, 0, inpaint->rate);
+		return result;
+	}
+
+	gint n_samples = (gint) inpaint->rate * 2;
+	//FIXME Dont hardcode everything for specific test case
+	g_assert(gst_audioadapter_available_samples(inpaint->adapter) == (guint) n_samples);
+	inpaint->outbuf_length = n_samples;
+	inpaint->transformed_data = calloc(n_samples, sizeof(double));
+	if(!inpaint->transformed_data) {
+		GST_ERROR_OBJECT(GST_ELEMENT(trans), "failure allocating memory");
 		result = GST_FLOW_ERROR;
 		return result;
 	}
+	//FIXME Dont hardcode everything for specific test case
+	gst_audioadapter_copy_samples(inpaint->adapter, inpaint->transformed_data, n_samples, NULL, NULL);
 
+	//FIXME Dont hardcode everything for specific test case
 	XLALGPSSet(&gate_start, 1187008881, 378750000);
 	XLALGPSSet(&gate_end, 1187008881, 441250000);
-	hoft_start = hoft->epoch;
-	hoft_end = hoft_start;
-	// hoft_end is timestamp of first sample not included in buffer
-	XLALGPSAdd(&hoft_end, hoft->data->length * hoft->deltaT); 
+	XLALGPSSet(&hoft_start, 1187008880, 0);
+	XLALGPSSet(&hoft_end, 1187008883, 0);
 
-	// If the gate is completely disjoint with the buffer, free refs and move on
+	// If the gate is completely disjoint with the data, free refs and move on
 	// NOTE Assumes all segments are the half-inclusive interval [start, end)
 	if(XLALGPSCmp(&gate_start, &hoft_end) >= 0 || XLALGPSCmp(&gate_end, &hoft_start) == -1) { 
-		gstlal_buffer_unmap_REAL8TimeSeries(buf, &info, hoft);
+		free(inpaint->transformed_data);
 		return result;
 	}
-	
-	for(idx=0; idx < hoft->data->length; idx++) {
+
+	//FIXME Dont hardcode everything for specific test case
+	double dt = 1./ (double) inpaint->rate;
+	for(idx=0; idx < n_samples; idx++) {
 		if(idx == 0)
 			t_idx = hoft_start;
 		else
-			XLALGPSAdd(&t_idx, hoft->deltaT);
+			XLALGPSAdd(&t_idx, dt);
 
-		if(XLALGPSCmp(&t_idx, &gate_start) >= 0 && XLALGPSCmp(&t_idx, &gate_end) == -1)
-			hoft->data->data[idx] = 0;
+		if(XLALGPSCmp(&t_idx, &gate_start) >= 0 && XLALGPSCmp(&t_idx, &gate_end) == -1) {
+			inpaint->transformed_data[idx] = 0;
+		}
 	}
 
-	gstlal_buffer_unmap_REAL8TimeSeries(buf, &info, hoft);
+	GstMapInfo mapinfo;
+	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
+	memcpy(mapinfo.data, inpaint->transformed_data, inpaint->outbuf_length * sizeof(double));
+	gst_buffer_unmap(outbuf, &mapinfo);
+
+	gst_audioadapter_flush_samples(inpaint->adapter, n_samples);
+	GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
+	GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset + inpaint->outbuf_length;
+	GST_BUFFER_PTS(outbuf) = inpaint->t0;
+	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, inpaint->outbuf_length, inpaint->rate);
+
 
 	return result;
 }
@@ -311,6 +396,7 @@ static void gstlal_inpaint_get_property(GObject * object, enum property id, GVal
 	GST_OBJECT_UNLOCK(inpaint);
 }
 
+
 /*
  * finalize()
  */
@@ -324,8 +410,15 @@ static void gstlal_inpaint_finalize(GObject * object)
 	free(inpaint->channel_name);
 	free(inpaint->units);
 
+	gst_audioadapter_clear(inpaint->adapter);
+	g_object_unref(inpaint->adapter);
+	inpaint->adapter = NULL;
+
 	XLALDestroyREAL8FrequencySeries(inpaint->psd);
 	inpaint->psd = NULL;
+
+	free(inpaint->transformed_data);
+	inpaint->transformed_data = NULL;
 
 	G_OBJECT_CLASS(gstlal_inpaint_parent_class)->finalize(object);
 }
@@ -356,7 +449,8 @@ static void gstlal_inpaint_class_init(GSTLALInpaintClass *klass)
 	gobject_class->finalize = GST_DEBUG_FUNCPTR(gstlal_inpaint_finalize);
 
 	transform_class->sink_event = GST_DEBUG_FUNCPTR(gstlal_inpaint_sink_event);
-	transform_class->transform_ip = GST_DEBUG_FUNCPTR(gstlal_inpaint_transform_ip);
+	transform_class->transform = GST_DEBUG_FUNCPTR(gstlal_inpaint_transform);
+	transform_class->transform_size = GST_DEBUG_FUNCPTR(gstlal_inpaint_transform_size);
 
 	gst_element_class_set_metadata(
 		element_class,
@@ -428,6 +522,12 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint)
 	inpaint->instrument = NULL;
 	inpaint->channel_name = NULL;
 	inpaint->units = NULL;
+	inpaint->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, "unit-size", sizeof(double), NULL);
+	inpaint->transformed_data = NULL;
+
+	inpaint->initial_offset = 0;
+	inpaint->t0 = GST_CLOCK_TIME_NONE;
+	inpaint->outbuf_length = 0;
 
 	inpaint->fft_length_seconds = 0;
 	inpaint->psd = NULL;
