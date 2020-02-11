@@ -40,6 +40,8 @@ matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
 
+import find_minor_ticks
+
 from optparse import OptionParser, Option
 
 parser = OptionParser()
@@ -65,6 +67,7 @@ parser.add_option("--ratio-phase-max", metavar = "degrees", type = float, defaul
 
 options, filenames = parser.parse_args()
 
+
 # FIXME: Hard-coded CALCS dewhitening stuff.  We should have a file with a history of this for H1 and L1, or something like that.
 zeros = [30+0j,30+0j,30+0j,30+0j,30+0j,30+0j,-3.009075115760242e3+3.993177550236464e3j,-3.009075115760242e3+-3.993177550236464e3j,-5.839434764093102e2+6.674504477214695e3j,-5.839434764093102e2-6.674504477214695e3j]
 poles = [0.3+0j,0.3+0j,0.3+0j,0.3+0j,0.3+0j,0.3+0j,1.431097327857237e2+8.198751100282409e3j,1.431097327857237e2-8.198751100282409e3j,8.574723070843939e2+1.636154629741894e4j,8.574723070843939e2-1.636154629741894e4j]
@@ -83,17 +86,20 @@ if len(calcs_tf_file):
 
 # Move response function transfer function to the end so they can be plotted together
 for i in range(0, len(tf_files)):
-	if '_response_' in tf_files[i] and "CALCS" in tf_files[i]:
+	if '_response_filters_transfer_function_' in tf_files[i] and "CALCS" in tf_files[i]:
 		response_file = tf_files.pop(i)
 		tf_files.append(response_file)
 for i in range(0, len(tf_files)):
-	if '_response_' in tf_files[i] and "GDS" in tf_files[i]:
+	if '_response_filters_transfer_function_' in tf_files[i] and "GDS" in tf_files[i]:
 		response_file = tf_files.pop(i)
 		tf_files.append(response_file)
 for i in range(0, len(tf_files)):
-	if '_response_' in tf_files[i] and "DCS" in tf_files[i]:
+	if '_response_filters_transfer_function_' in tf_files[i] and "DCS" in tf_files[i]:
 		response_file = tf_files.pop(i)
 		tf_files.append(response_file)
+
+response_file = tf_files.pop(len(tf_files) - 2)
+tf_files.append(response_file)
 
 found_response = False
 response_count = 0
@@ -101,7 +107,7 @@ for tf_file in tf_files:
 	filters_name = None
 	if '_npz' in tf_file:
 		filters_name = tf_file.split('_npz')[0] + '.npz'
-	elif '_response_' in tf_file:
+	elif '_response_filters_transfer_function_' in tf_file:
 		for tf_file_backup in tf_files:
 			if '_npz' in tf_file_backup:
 				filters_name = tf_file_backup.split('_npz')[0] + '.npz'
@@ -110,15 +116,7 @@ for tf_file in tf_files:
 		filters_paths = []
 		print("\nSearching for %s ..." % filters_name)
 		# Check the user's home directory
-		for dirpath, dirs, files in os.walk(os.environ['HOME']):
-			if filters_name in files:
-				# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
-				if dirpath.count("GDSFilters") > 0:
-					filters_paths.insert(0, os.path.join(dirpath, filters_name))
-				else:
-					filters_paths.append(os.path.join(dirpath, filters_name))
-		# Check if there is a checkout of the entire calibration SVN
-		for dirpath, dirs, files in os.walk('/ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/'):
+		for dirpath, dirs, files in os.walk(os.environ['PWD'] + '/Filters'):
 			if filters_name in files:
 				# We prefer filters that came directly from a GDSFilters directory of the calibration SVN
 				if dirpath.count("GDSFilters") > 0:
@@ -139,32 +137,32 @@ for tf_file in tf_files:
 		model_name = "tst_model" if "tst_model" in filters else None
 	elif '_tst_' in tf_file and 'GDS' in tf_file:
 		plot_title = "TST Correction Transfer Function"
-		model_name = "ctrl_corr_model" if "ctrl_corr_model" in filters else None
+		model_name = "tst_model" if "tst_model" in filters else "TST_corr_model" if "TST_corr_model" in filters else "ctrl_corr_model" if "ctrl_corr_model" in filters else None
 	elif '_pum_' in tf_file and 'DCS' in tf_file:
 		plot_title = "PUM Transfer Function"
 		model_name = "pum_model" if "pum_model" in filters else None
 	elif '_pum_' in tf_file and 'GDS' in tf_file:
 		plot_title = "PUM Correction Transfer Function"
-		model_name = "ctrl_corr_model" if "ctrl_corr_model" in filters else None
+		model_name = "pum_model" if "pum_model" in filters else "PUM_corr_model" if "PUM_corr_model" in filters else "ctrl_corr_model" if "ctrl_corr_model" in filters else None
 	elif '_uim_' in tf_file and 'DCS' in tf_file:
 		plot_title = "UIM Transfer Function"
 		model_name = "uim_model" if "uim_model" in filters else None
 	elif '_uim_' in tf_file and 'GDS' in tf_file:
 		plot_title = "UIM Correction Transfer Function"
-		model_name = "ctrl_corr_model" if "ctrl_corr_model" in filters else None
+		model_name = "uim_model" if "uim_model" in filters else "UIM_corr_model" if "UIM_corr_model" in filters else "ctrl_corr_model" if "ctrl_corr_model" in filters else None
 	elif '_pumuim_' in tf_file and 'DCS' in tf_file:
 		plot_title = "PUM/UIM Transfer Function"
 		model_name = "pumuim_model" if "pumuim_model" in filters else None
 	elif '_pumuim_' in tf_file and 'GDS' in tf_file:
 		plot_title = "PUM/UIM Correction Transfer Function"
-		model_name = "ctrl_corr_model" if "ctrl_corr_model" in filters else None
+		model_name = "pumuim_model" if "pumuim_model" in filters else "ctrl_corr_model" if "ctrl_corr_model" in filters else None
 	elif '_res_' in tf_file and 'DCS' in tf_file:
 		plot_title = "Inverse Sensing Transfer Function"
 		model_name = "invsens_model" if "invsens_model" in filters else None
 	elif '_res_' in tf_file and 'GDS' in tf_file:
 		plot_title = "Inverse Sensing Correction Transfer Function"
-		model_name = "res_corr_model" if "res_corr_model" in filters else None
-	elif '_response_' in tf_file:
+		model_name = "invsens_model" if "invsens_model" in filters else "res_corr_model" if "res_corr_model" in filters else None
+	elif '_response_filters_transfer_function_' in tf_file:
 		found_response = True
 		plot_title = "Response Function"
 		model_name = "response_function" if "response_function" in filters else None
@@ -203,7 +201,7 @@ for tf_file in tf_files:
 		component = 'TST'
 	elif '_res_' in tf_file:
 		component = 'C inv'
-	elif '_response_' in tf_file:
+	elif '_response_filters_transfer_function_' in tf_file:
 		component = 'Response'
 
 	# Remove unwanted lines from transfer function file, and re-format wanted lines
@@ -277,6 +275,9 @@ for tf_file in tf_files:
 				ratio_phase.append(numpy.angle(ratio[index]) * 180.0 / numpy.pi)
 				index += 1
 
+		numpy.savetxt(tf_file.replace('.txt', '_ratio_magnitude.txt'), numpy.transpose(numpy.array([frequency, ratio_magnitude])), fmt='%.5e', delimiter='\t')
+		numpy.savetxt(tf_file.replace('.txt', '_ratio_phase.txt'), numpy.transpose(numpy.array([frequency, ratio_phase])), fmt='%.5f', delimiter='\t')
+
 	# Filter transfer function plots
 	if not response_count:
 		plt.figure(figsize = (10, 8))
@@ -289,21 +290,31 @@ for tf_file in tf_files:
 		plt.gca().set_yscale(options.tf_magnitude_scale)
 		#plt.title(plot_title)
 		plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
+		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+		plt.gca().grid(which='minor', alpha=6)
+		plt.gca().grid(which='major', alpha=12)
 		if options.tf_frequency_max > 0:
 			plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 		if options.tf_magnitude_max > 0:
 			plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
-		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		ax = plt.subplot(223)
 		ax.set_xscale(options.tf_frequency_scale)
 		plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0)
 		plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
+		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+		plt.gca().grid(which='minor', alpha=6)
+		plt.gca().grid(which='major', alpha=12)
 		if options.tf_frequency_max > 0:
 			plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 		if options.tf_phase_max < 1000:
 			plt.ylim(options.tf_phase_min, options.tf_phase_max)
-		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	plt.subplot(221)
 	plt.plot(frequency, magnitude, color, linewidth = 1.0, label = r'${\rm %s \ %s \ %s}$' % (ifo, cal_version, component))
 	leg = plt.legend(fancybox = True)
@@ -311,21 +322,31 @@ for tf_file in tf_files:
 	plt.gca().set_xscale(options.tf_frequency_scale)
 	plt.gca().set_yscale(options.tf_magnitude_scale)
 	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
+	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+	plt.gca().grid(which='minor', alpha=6)
+	plt.gca().grid(which='major', alpha=12)
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 	if options.tf_magnitude_max > 0:
 		plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
-	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax = plt.subplot(223)
 	ax.set_xscale(options.tf_frequency_scale)
 	plt.plot(frequency, phase, color, linewidth = 1.0)
 	plt.ylabel(r'${\rm Phase [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
+	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+	plt.gca().grid(which='minor', alpha=6)
+	plt.gca().grid(which='major', alpha=12)
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 	if options.tf_phase_max < 1000:
 		plt.ylim(options.tf_phase_min, options.tf_phase_max)
-	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 
 	# Plots of the ratio filters / model
 	if model_name is not None:
@@ -338,52 +359,72 @@ for tf_file in tf_files:
 		plt.gca().set_yscale(options.ratio_magnitude_scale)
 		#plt.title(plot_title)
 		#plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
+		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+		plt.gca().grid(which='minor', alpha=6)
+		plt.gca().grid(which='major', alpha=12)
 		if options.ratio_frequency_max > 0:
 			plt.xlim(options.ratio_frequency_min, options.ratio_frequency_max)
 		if options.ratio_magnitude_max > 0:
 			plt.ylim(options.ratio_magnitude_min, options.ratio_magnitude_max)
-		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 		ax = plt.subplot(224)
 		ax.set_xscale(options.ratio_frequency_scale)
 		plt.plot(frequency, ratio_phase, color, linewidth = 1.0)
 		#plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
+		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+		plt.gca().grid(which='minor', alpha=6)
+		plt.gca().grid(which='major', alpha=12)
 		if options.ratio_frequency_max > 0:
 			plt.xlim(options.ratio_frequency_min, options.ratio_frequency_max)
 		if options.ratio_phase_max < 1000:
 			plt.ylim(options.ratio_phase_min, options.ratio_phase_max)
-		plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
-		if not ('_response_' in tf_file):
+		if not ('_response_filters_transfer_function_' in tf_file):
 			plt.savefig(tf_file.replace('.txt', '_ratio.png'))
 			plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
-	if '_response_' in tf_file:
+	if '_response_filters_transfer_function_' in tf_file:
 		response_count += 1
 
 if response_count:
 	# Now add the model response function
 	plt.subplot(221)
-	plt.plot(frequency, model_magnitude, 'orangered', linewidth = 1.0, linestyle = '--', label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
+	plt.plot(frequency, model_magnitude, 'orangered', linewidth = 1.0, ls = '--', label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
 	plt.gca().set_xscale(options.tf_frequency_scale)
 	plt.gca().set_yscale(options.tf_magnitude_scale)
 	#plt.title(plot_title)
 	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
+	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+	plt.gca().grid(which='minor', alpha=6)
+	plt.gca().grid(which='major', alpha=12)
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 	if options.tf_magnitude_max > 0:
 		plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
-	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax = plt.subplot(223)
 	ax.set_xscale(options.tf_frequency_scale)
-	plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0, linestyle = '--')
+	plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0, ls = '--')
 	plt.ylabel(r'${\rm Phase \ [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
+	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
+	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
+	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
+	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
+	plt.gca().grid(which='minor', alpha=6)
+	plt.gca().grid(which='major', alpha=12)
 	if options.tf_frequency_max > 0:
 		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
 	if options.tf_phase_max < 1000:
 		plt.ylim(options.tf_phase_min, options.tf_phase_max)
-	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 plt.savefig(tf_file.replace('.txt', '_ratio.png'))
 plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
 

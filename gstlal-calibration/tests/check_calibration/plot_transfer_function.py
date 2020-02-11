@@ -368,6 +368,6 @@ for i in range(0, len(labels)):
 	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
 	ax.grid(which='minor', alpha=0.8)
 	ax.grid(which='major', alpha=4.0)
-plt.savefig('%s_%s_over_%s_%d-%d.pdf' % (ifo, numerator_channel_list[-1], options.denominator_channel_name, options.gps_start_time, data_duration))
-plt.savefig('%s_%s_over_%s_%d-%d.png' % (ifo, numerator_channel_list[-1], options.denominator_channel_name, options.gps_start_time, data_duration))
+plt.savefig('%s_%s_%s_over_%s_%d-%d.pdf' % (ifo, numerator_channel_list[-1], labels[-1].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
+plt.savefig('%s_%s_%s_over_%s_%d-%d.png' % (ifo, numerator_channel_list[-1], labels[-1].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
 
