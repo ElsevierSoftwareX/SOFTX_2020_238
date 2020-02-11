@@ -24,7 +24,6 @@ AC_CONFIG_FILES([ \
 	lib/gstlal-burst/gstlal-burst.pc \
 	lib/gstlal-burst/Makefile \
 	python/Makefile \
-	python/excesspower/Makefile \
 	python/snax/Makefile \
 	share/Makefile
 ])
