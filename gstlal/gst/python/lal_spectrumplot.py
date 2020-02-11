@@ -113,11 +113,12 @@ class lal_spectrumplot(GstBase.BaseTransform):
 			Gst.PadDirection.SINK,
 			Gst.PadPresence.ALWAYS,
 			Gst.caps_from_string(
-				"audio/x-raw-float, " +
+				"audio/x-raw, " +
+				"rate = " + GstAudio.AUDIO_RATE_RANGE + ", " +
+				"channels = " + GstAudio.AUDIO_CHANNELS_RANGE + ", " +
+				"format = (string) { F64NE }, " +
 				"delta-f = (double) [0, MAX], " +
-				"channels = (int) [1, MAX], " +
 				"endianness = (int) BYTE_ORDER, " +
-				"rate = (fraction) [0/1, 2147483647/1], " +
 				"width = (int) 64"
 			)
 		),
