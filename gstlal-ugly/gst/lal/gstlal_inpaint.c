@@ -114,11 +114,6 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter) {
 	return size;
 }
 
-void free_data(double *data)
-{
-	free(data);
-}
-
 
 /*
  * sink_event()
