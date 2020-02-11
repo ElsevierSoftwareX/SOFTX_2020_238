@@ -1,7 +1,5 @@
 dist_bin_SCRIPTS = \
 	gstlal_cs_triggergen \
-	gstlal_excesspower \
-	gstlal_excesspower_trigvis \
 	gstlal_snax_aggregate \
 	gstlal_snax_bank_overlap \
 	gstlal_snax_combine \
