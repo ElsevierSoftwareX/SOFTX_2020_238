@@ -24,21 +24,19 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 #                  Preamble
 #-------------------------------------------------
 
+from collections import deque
 import itertools
 import json
+import logging
 import optparse
 import os
-import signal
-import sys
-import time
 import shutil
-from collections import deque
 
-from confluent_kafka import Consumer, KafkaError
 import h5py
 import numpy
 
 from gstlal import aggregator
+from gstlal import events
 
 from gstlal.snax import multichannel_datasource
 from gstlal.snax import utils
@@ -86,28 +84,23 @@ def parse_command_line():
 #                   Classes
 #-------------------------------------------------
 
-class HDF5StreamSink(object):
+class HDF5StreamSink(events.EventProcessor):
     """
     Handles the processing of incoming streaming features, saving datasets to disk in hdf5 format.
     """
-    def __init__(self, logger, options):
-        logger.info('setting up hdf5 stream sink...')
-        self.tag = options.tag
+    _name = 'hdf5_sink'
 
-        ### initialize timing options
-        self.request_timeout = options.request_timeout
-        self.processing_cadence = options.processing_cadence
-        self.is_running = False
+    def __init__(self, options):
+        logging.info('setting up hdf5 stream sink...')
 
-        ### kafka settings
-        self.kafka_settings = {
-            'bootstrap.servers': options.kafka_server,
-            'group.id': 'hdf5_sink_{}'.format(self.tag)
-        }
-
-        ### initialize consumers
-        self.consumer = Consumer(self.kafka_settings)
-        self.consumer.subscribe([options.input_topic_basename])
+        events.EventProcessor.__init__(
+            self,
+            process_cadence=options.processing_cadence,
+            request_timeout=options.request_timeout,
+            kafka_server=options.kafka_server,
+            input_topic=options.input_topic_basename,
+            tag=options.tag
+        )
 
         ### initialize queues
         self.feature_queue = deque(maxlen = 300)
@@ -145,6 +138,7 @@ class HDF5StreamSink(object):
         else:
             self.tmp_dir = os.environ['TMPDIR']
 
+
     def set_hdf_file_properties(self, start_time, duration):
         """
         Returns the file name, as well as locations of temporary and permanent locations of
@@ -165,27 +159,20 @@ class HDF5StreamSink(object):
         if os.path.isfile(tmp_file):
             os.remove(tmp_file)
 
-    def fetch_data(self):
+
+    def ingest(self, message):
         """
         requests for a new message from an individual topic,
         and add to the feature queue
         """
-        message = self.consumer.poll(timeout=self.request_timeout)
+        features = json.loads(message.value())
+        self.feature_queue.appendleft((
+            features['timestamp'],
+            features['features']
+        ))
 
-        ### only add to queue if no errors in receiving data
-        if message and not message.error():
 
-            ### parse and add to queue
-            features = json.loads(message.value())
-            self.add_to_queue(features['timestamp'], features['features'])
-
-    def add_to_queue(self, timestamp, data):
-        """
-        add a set of features for a given timestamp to the feature queue
-        """
-        self.feature_queue.appendleft((timestamp, data))
-
-    def process_queue(self):
+    def handle(self):
         """
         takes data from the queue and adds to datasets, periodically persisting to disk
         """
@@ -193,7 +180,7 @@ class HDF5StreamSink(object):
         while self.feature_queue:
             ### remove data with oldest timestamp and process
             self.timestamp, features = self.feature_queue.pop()
-            logger.info('processing features for timestamp %f' % self.timestamp)
+            logging.info('processing features for timestamp %f' % self.timestamp)
 
             # set save times and initialize specific saving properties if not already set
             if self.last_save_time is None:
@@ -204,20 +191,21 @@ class HDF5StreamSink(object):
 
             # Save triggers once per cadence if saving to disk
             if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_save_time, self.write_cadence):
-                logger.info("saving features to disk at timestamp = %f" % self.timestamp)
+                logging.info("saving features to disk at timestamp = %f" % self.timestamp)
                 save_time = utils.floor_div(self.last_save_time, self.write_cadence)
                 self.feature_data.dump(self.tmp_path, self.feature_name, save_time, tmp = True)
                 self.last_save_time = self.timestamp
 
             # persist triggers once per persist cadence if using hdf5 format
             if self.timestamp and utils.in_new_epoch(self.timestamp, self.last_persist_time, self.persist_cadence):
-                logger.info("persisting features to disk for gps range %f - %f" % (self.timestamp-self.persist_cadence, self.timestamp))
+                logging.info("persisting features to disk for gps range %f - %f" % (self.timestamp-self.persist_cadence, self.timestamp))
                 self.persist_to_disk()
                 self.last_persist_time = self.timestamp
                 self.set_hdf_file_properties(self.timestamp, self.persist_cadence)
 
             ### add new feature vector to dataset
             self.feature_data.append(self.timestamp, features)
+
 
     def persist_to_disk(self):
         """
@@ -227,64 +215,19 @@ class HDF5StreamSink(object):
         tmp_path = os.path.join(self.tmp_path, self.feature_name)+".h5.tmp"
         shutil.move(tmp_path, final_path)
 
-    def start(self):
-        """
-        starts ingesting data and saving features to disk
-        """
-        logger.info('starting streaming hdf5 sink...')
-        self.is_running = True
-        while self.is_running:
-            ### ingest and combine incoming feature subsets, dropping late data
-            self.fetch_data()
-            ### push combined features downstream
-            while self.feature_queue:
-                self.process_queue()
-            ### repeat with processing cadence
-            time.sleep(self.processing_cadence)
-
-    def stop(self):
-        """
-        stops ingesting data and save rest of features to disk
-        """
-        logger.info('shutting down hdf5 sink...')
-        self.persist_to_disk()
-        ### FIXME: should also handle pushing rest of data in buffer
-        self.is_running = False
-
-class SignalHandler(object):
-    """
-    helper class to shut down the hdf5 sink gracefully before exiting
-    """
-    def __init__(self, sink, signals = [signal.SIGINT, signal.SIGTERM]):
-        self.sink = sink
-        for sig in signals:
-            signal.signal(sig, self)
-
-    def __call__(self, signum, frame):
-        self.sink.stop()
-        sys.exit(0)
 
 #-------------------------------------------------
 #                    Main
 #-------------------------------------------------
 
 if __name__ == '__main__':
-    # parse arguments
     options, args = parse_command_line()
 
     ### set up logging
-    logger = utils.get_logger(
-        '-'.join([options.tag, 'hdf5_sink']),
-        log_level=options.log_level,
-        rootdir=options.rootdir,
-        verbose=options.verbose
-    )
-
-    # create hdf5 sink instance
-    sink = HDF5StreamSink(logger, options=options)
-
-    # install signal handler
-    SignalHandler(sink)
+    log_level = logging.DEBUG if options.verbose else logging.INFO
+    logging.basicConfig(format='%(asctime)s | snax_sink : %(levelname)s : %(message)s')
+    logging.getLogger().setLevel(log_level)
 
     # start up hdf5 sink
+    sink = HDF5StreamSink(options)
     sink.start()

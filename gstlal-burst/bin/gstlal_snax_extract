@@ -255,12 +255,7 @@ waveforms = {}
 # set up logging
 #
 
-duration = options.feature_end_time - options.feature_start_time
-logdir = os.path.join(options.out_path, 'logs', options.job_id)
-aggregator.makedir(logdir)
-
-logger = utils.get_logger('gstlal_snax_extract: %d-%d' % (options.feature_start_time, options.feature_end_time), rootdir=logdir, verbose=options.verbose)
-logger.info("writing log to %s" % logdir)
+logger = utils.get_logger('snax_extract', verbose=options.verbose)
 
 #
 # set up local frame caching, if specified
