@@ -197,7 +197,15 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 		*othersize = size / unit_size + gst_audioadapter_available_samples(inpaint->adapter);
 		/* number of output bytes to be generated */
 		// FIXME Dont hardcode
-		if(*othersize < inpaint->rate*2)
+		// FIXME Will have to think about this more carefully for
+		// general use. In theory, the procedure depends on exactly how
+		// you whiten the data, so e.g. for the non-FIR whitener the
+		// data may need to be inpainted in 2 steps and combined after
+		// (just like how the data are whitened). In practice, it *may*
+		// turn out that this is a negligible high level effect. For
+		// test case, make sure data being inpainted are in the center
+		// of the buffer
+		if(*othersize < inpaint->rate * (guint) inpaint->fft_length_seconds)
 			*othersize = 0;
 		else
 			*othersize *= sizeof(double);
@@ -216,7 +224,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
 	GstFlowReturn result = GST_FLOW_OK;
-	LIGOTimeGPS gate_start, gate_end, hoft_start, hoft_end, t_idx;
+	LIGOTimeGPS gate_start, gate_end, t0_GPS, t_idx;
 	gint idx;
 
 	// Prototype: Just set h(t) during GW170817 gate to zero in L1 (test to
@@ -228,12 +236,12 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 		inpaint->t0 = GST_BUFFER_PTS(inbuf);
 		inpaint->initial_offset = GST_BUFFER_OFFSET(inbuf);
 	}
-	GstClockTime t1 = GST_BUFFER_PTS(inbuf) + GST_BUFFER_DURATION(inbuf);
 	gst_buffer_ref(inbuf); // If this is not called, buffer will be unref'd by calling code
 	gst_audioadapter_push(inpaint->adapter, inbuf);
-	//FIXME Dont hardcode everything for specific test case
-	if(t1<1187008882000000000) {
-		// Only going to produce an empty output file for now
+
+	gint n_samples = (gint) gst_audioadapter_available_samples(inpaint->adapter);
+	if(n_samples < (gint) inpaint->rate * (gint) inpaint->fft_length_seconds) {
+		gst_buffer_set_size(outbuf,  0);
 		GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
 		GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset;
 		GST_BUFFER_PTS(outbuf) = inpaint->t0;
@@ -241,9 +249,6 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 		return result;
 	}
 
-	gint n_samples = (gint) inpaint->rate * 2;
-	//FIXME Dont hardcode everything for specific test case
-	g_assert(gst_audioadapter_available_samples(inpaint->adapter) == (guint) n_samples);
 	inpaint->outbuf_length = n_samples;
 	inpaint->transformed_data = calloc(n_samples, sizeof(double));
 	if(!inpaint->transformed_data) {
@@ -257,21 +262,13 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	//FIXME Dont hardcode everything for specific test case
 	XLALGPSSet(&gate_start, 1187008881, 378750000);
 	XLALGPSSet(&gate_end, 1187008881, 441250000);
-	XLALGPSSet(&hoft_start, 1187008880, 0);
-	XLALGPSSet(&hoft_end, 1187008883, 0);
-
-	// If the gate is completely disjoint with the data, free refs and move on
-	// NOTE Assumes all segments are the half-inclusive interval [start, end)
-	if(XLALGPSCmp(&gate_start, &hoft_end) >= 0 || XLALGPSCmp(&gate_end, &hoft_start) == -1) { 
-		free(inpaint->transformed_data);
-		return result;
-	}
+	XLALGPSSet(&t0_GPS, (INT4) (inpaint->t0 / 1000000000), 0);
 
 	//FIXME Dont hardcode everything for specific test case
 	double dt = 1./ (double) inpaint->rate;
 	for(idx=0; idx < n_samples; idx++) {
 		if(idx == 0)
-			t_idx = hoft_start;
+			t_idx = t0_GPS;
 		else
 			XLALGPSAdd(&t_idx, dt);
 
@@ -282,7 +279,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 
 	GstMapInfo mapinfo;
 	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-	memcpy(mapinfo.data, inpaint->transformed_data, inpaint->outbuf_length * sizeof(double));
+	memcpy(mapinfo.data, inpaint->transformed_data, n_samples * sizeof(double));
 	gst_buffer_unmap(outbuf, &mapinfo);
 
 	gst_audioadapter_flush_samples(inpaint->adapter, n_samples);
