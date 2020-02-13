@@ -1,0 +1,260 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2019 Alexander Pace,  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2020  Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+__usage__ = "gstlal_ll_inspiral_event_uploader [--options]"
+__description__ = "an executable to upload auxiliary files and plots for GraceDB events from gstlal_inspiral jobs"
+
+#-------------------------------------------------
+#				   Preamble
+#-------------------------------------------------
+
+from collections import deque, OrderedDict
+import httplib
+from itertools import chain
+import gzip
+import json
+import logging
+from optparse import OptionParser
+import StringIO
+import sys
+import time
+
+import numpy
+
+from ligo.segments import segment
+from ligo.gracedb.rest import GraceDb, HTTPError
+from ligo.gracedb.rest import DEFAULT_SERVICE_URL as DEFAULT_GRACEDB_URL
+from ligo.scald import utils
+
+from lal import LIGOTimeGPS
+
+from gstlal import events
+from gstlal import inspiral
+from gstlal import plotfar
+from gstlal import plotpsd
+
+import matplotlib
+matplotlib.rcParams.update({
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 100,
+	"savefig.dpi": 100,
+	"text.usetex": True
+})
+
+#-------------------------------------------------
+#				   Functions
+#-------------------------------------------------
+
+def parse_command_line():
+
+	parser = OptionParser(usage=__usage__, description=__description__)
+	parser.add_option("-v", "--verbose", default=False, action="store_true", help = "Be verbose.")
+	parser.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
+	parser.add_option("--max-event-time", type = "int", default = 7200, help = "Maximum time to keep around an event. Default = 2 hours.")
+	parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the event uploader acquires and processes data. Default = 0.1 seconds.")
+	parser.add_option("--request-timeout", type = "float", default = 0.2, help = "Timeout for requesting messages from a topic. Default = 0.2 seconds.")
+	parser.add_option("--kafka-server", metavar = "string", help = "Sets the server url that the kafka topic is hosted on. Required.")
+	parser.add_option("--gracedb-group", metavar = "name", default = "Test", help = "Gracedb group to which to upload events (default is Test).")
+	parser.add_option("--gracedb-pipeline", metavar = "name", default = "gstlal", help = "Name of pipeline to provide in GracedB uploads (default is gstlal).")
+	parser.add_option("--gracedb-search", metavar = "name", default = "LowMass", help = "Name of search to provide in GracedB uploads (default is LowMass).")
+	parser.add_option("--gracedb-service-url", metavar = "url", default = DEFAULT_GRACEDB_URL, help = "Override default GracedB service url (optional, default is {}).".format(DEFAULT_GRACEDB_URL))
+	parser.add_option("--max-snr", metavar = "SNR", type = "float", default = 200., help = "Set the upper bound of the SNR ranges in plots (default = 200).")
+	parser.add_option("--format", default = "png", help = "Set file format by selecting the extention (default = \"png\").")
+	parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = don't).")
+	parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
+	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
+
+	options, args = parser.parse_args()
+
+	if options.no_upload and options.output_path is None:
+		raise ValueError("--no-upload without setting --ouput-path disables all output")
+
+	return options, args
+
+#-------------------------------------------------
+#					Classes
+#-------------------------------------------------
+
+class EventPlotter(events.EventProcessor):
+	"""
+	manages plotting and file uploading for incoming events.
+	"""
+	_name = 'event_plotter'
+
+	def __init__(self, options):
+		logging.info('setting up event plotter...')
+
+		self.upload_topic = "uploads"
+		self.ranking_stat_topic = "ranking_stat"
+		events.EventProcessor.__init__(
+			self,
+			process_cadence=options.processing_cadence,
+			request_timeout=options.request_timeout,
+			kafka_server=options.kafka_server,
+			input_topic=[self.upload_topic, self.ranking_stat_topic],
+			tag=options.tag
+		)
+
+		### initialize timing options
+		self.max_event_time = options.max_event_time
+		self.retries = 5
+		self.retry_delay = 1
+
+		### initialize gracedb client
+		if options.gracedb_service_url.startswith("file"):
+			self.client = inspiral.FakeGracedbClient(options.gracedb_service_url)
+		else:
+			self.client = GraceDb(options.gracedb_service_url)
+
+		### gracedb settings
+		self.gracedb_group = options.gracedb_group
+		self.gracedb_pipeline = options.gracedb_pipeline
+		self.gracedb_search = options.gracedb_search
+
+		### initialize event store
+		self.events = OrderedDict()
+
+
+	def ingest(self, message):
+		"""
+		parse a message from a kafka topic
+		"""
+		payload = json.loads(message.value())
+		coinc = ligolw_utils.load_fileobj(payload['coinc'])
+		coinc_event_table = lsctables.CoincTable.get_table(coinc)
+		coinc_id = coinc_event_table.coinc_def_id
+
+		if coinc_id not in self.events:
+			logging.info('found new event with coinc_id: {}'.format(coinc_id))
+			self.events[coinc_id] = self.new_event(payload)
+
+		### read in GID and psd from preferred event
+		if message.topic() == self.upload_topic:
+			self.events['gid'] = payload['gid']
+			self.events['psd'] = ligolw_utils.load_fileobj(payload['psd'])
+
+		### read in ranking data file from path
+		elif message.topic() == self.ranking_stat_topic:
+			with open(payload['ranking_data_path'], 'r') as f:
+				self.events['ranking_data'] = ligolw_utils.load_fileobj(f.read())
+
+
+	def new_event(self, payload):
+		"""
+		returns the structure that defines an event
+		"""
+		coinc = ligolw_utils.load_fileobj(payload['coinc'])
+		coinc_event_table = lsctables.CoincTable.get_table(coinc)
+		return {
+			'time': LIGOTimeGPS(payload['time'], payload['time_ns']),
+			'coinc_id': coinc_event_table.coinc_def_id,
+			'coinc': coinc,
+            'gid': None,
+			'psd': None,
+			'ranking_data': None,
+			'uploaded': {'ranking_data': False, 'ranking_plots': False, 'psd_plots': False}
+		}
+
+
+	def handle(self):
+		"""
+		handle aux data and plot uploading, clearing out
+		old events as necessary.
+		"""
+		for event in self.events.values():
+			if not event['uploaded']['ranking_data'] and event['ranking_data']:
+				self.upload_ranking_data(event)
+				event['uploaded']['ranking_data'] = True
+			elif not event['uploaded']['ranking_plots'] and event['ranking_data']:
+				self.upload_ranking_plots(event)
+				event['uploaded']['ranking_plots'] = True
+			elif not event['uploaded']['psd_plots'] and event['psd']:
+				self.upload_psd_plots(event)
+				event['uploaded']['psd_plots'] = True
+
+		# clean out old events
+		current_time = utils.gps_now()
+		for coinc_id, event in self.events.items():
+			uploaded = event['uploaded']
+			if uploaded['ranking_data'] and uploaded['ranking_plots'] and uploaded['psd_plots']:
+				self.events.pop(coinc_id)
+			if current_time - event['time'] >= self.max_event_time:
+				logging.info('removing stale event: {}'.format(coinc_id))
+				self.events.pop(coinc_id)
+
+
+	def upload_file(self, message, filename, tag, contents, graceid):
+		"""
+		upload a file to gracedb
+		"""
+		logging.info("posting '{}' to gracedb ID {}".format(filename, graceid))
+		for attempt in range(1, self.retries + 1):
+			try:
+				resp = self.client.writeLog(
+					graceid,
+					message,
+					filename = filename,
+					filecontents = contents,
+					tagname = tag
+				)
+			except HTTPError as resp:
+				logging.warning(resp)
+			else:
+				if resp.status == httplib.CREATED:
+					break
+			logging.info(
+				"gracedb upload of {} for ID {} "
+				"failed on attempt {:d}/{:d}".format(filename, graceid, attempt, self.retries)
+			)
+			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
+		else:
+			logging.warning("gracedb upload of {} for ID {} failed".format(filename, graceid))
+			return False
+
+
+	def finish(self):
+		"""
+		upload remaining files/plots before shutting down
+		"""
+		self.handle()
+
+
+#-------------------------------------------------
+#					 Main
+#-------------------------------------------------
+
+if __name__ == '__main__':
+	# parse arguments
+	options, args = parse_command_line()
+
+	# set up logging
+	log_level = logging.DEBUG if options.verbose else logging.INFO
+	logging.basicConfig(format = '%(asctime)s | event_plotter : %(levelname)s : %(message)s')
+	logging.getLogger().setLevel(log_level)
+
+	# create event plotter instance
+	event_plotter = EventPlotter(options)
+
+	# start up
+	event_plotter.start()
