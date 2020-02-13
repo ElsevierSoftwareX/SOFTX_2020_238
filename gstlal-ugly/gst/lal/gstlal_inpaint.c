@@ -62,7 +62,10 @@
  */
 
 #include <lal/Date.h>
+#include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
+#include <lal/TimeFreqFFT.h>
+#include <lal/Units.h>
 
 // FIXME Figure out why I need this
 static const LIGOTimeGPS GPS_ZERO = {0, 0};
@@ -93,14 +96,38 @@ G_DEFINE_TYPE_WITH_CODE(
 /*
  * ============================================================================
  *
- *                         GstBaseTransform Overrides
+ *                           Utility Functions
  *
  * ============================================================================
  */
 
+// FIXME This function needs to be called each time a new psd is passed in
+static void inverse_fft_psd(GSTLALInpaint *inpaint) {
+	// Set up the units
+	// FIXME Add these to inpaint struct
+	LALUnit strain_unit = lalStrainUnit;
+	LALUnit sample_unit;
+	LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
+	XLALUnitMultiply(&sample_unit, &strain_unit, &strain_unit);
 
-static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest)
-{
+	COMPLEX16FrequencySeries *complex_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
+	REAL8TimeSeries *cov = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / inpaint->rate, &sample_unit, inpaint->rate * (guint) inpaint->fft_length_seconds);
+
+	guint i;
+	for(i=0; i<inpaint->psd->data->length; i++)
+		complex_psd->data->data[i] = (COMPLEX16) inpaint->psd->data->data[i];
+
+	REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(inpaint->rate * (guint) inpaint->fft_length_seconds, 1);
+	if(XLALREAL8FreqTimeFFT(cov, complex_psd, revplan)){
+		GST_ERROR_OBJECT(inpaint, "XLALREAL8FreqTimeFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+		XLALClearErrno();
+	}
+
+	inpaint->cov = cov;
+	XLALDestroyCOMPLEX16FrequencySeries(complex_psd);
+}
+
+static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest) {
 	if(!gst_tag_list_get_string(taglist, tagname, dest)) {
 		GST_WARNING_OBJECT(object, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
 		return FALSE;
@@ -114,14 +141,21 @@ static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter) {
 	return size;
 }
 
+/*
+ * ============================================================================
+ *
+ *                         GstBaseTransform Overrides
+ *
+ * ============================================================================
+ */
+
 
 /*
  * sink_event()
  */
 
 
-static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *event)
-{
+static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *event) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
 	gboolean result = TRUE;
 
@@ -177,11 +211,10 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 
 
 /*
- * transform()
+ * transform_size()
  */
 
-static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize)
-{
+static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, gsize size, GstCaps *othercaps, gsize *othersize) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
 	gsize unit_size = sizeof(double);
 
@@ -220,8 +253,11 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 
 }
 
-static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf)
-{
+/*
+ * transform()
+ */
+
+static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
 	GstFlowReturn result = GST_FLOW_OK;
 	LIGOTimeGPS gate_start, gate_end, t0_GPS, t_idx;
@@ -313,8 +349,7 @@ enum property {
 };
 
 
-static void gstlal_inpaint_set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec)
-{
+static void gstlal_inpaint_set_property(GObject * object, enum property id, const GValue * value, GParamSpec * pspec) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(object);
 
 	GST_OBJECT_LOCK(inpaint);
@@ -340,7 +375,7 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 		// FIXME GValueArray is deprecated, switch to GArray once the rest of gstlal does
 		GValueArray *va = g_value_get_boxed(value);
 
-		// FIXME Should lalDimensionlessUnit be a member of the inpaint struct?
+		// FIXME add units to inpaint struct
 		LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
 		inpaint->psd = XLALCreateREAL8FrequencySeries("PSD", &GPS_ZERO, 0.0, 1.0 / inpaint->fft_length_seconds, &psd_units, va->n_values);
 		if(!inpaint->psd) {
@@ -348,6 +383,8 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 			XLALClearErrno();
 		}
 		gstlal_doubles_from_g_value_array(va, inpaint->psd->data->data, NULL);
+
+		inverse_fft_psd(inpaint);
 		break;
 	}
 
@@ -360,8 +397,7 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 }
 
 
-static void gstlal_inpaint_get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec)
-{
+static void gstlal_inpaint_get_property(GObject * object, enum property id, GValue * value, GParamSpec * pspec) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(object);
 
 	GST_OBJECT_LOCK(inpaint);
@@ -394,8 +430,7 @@ static void gstlal_inpaint_get_property(GObject * object, enum property id, GVal
  */
 
 
-static void gstlal_inpaint_finalize(GObject * object)
-{
+static void gstlal_inpaint_finalize(GObject * object) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(object);
 
 	free(inpaint->instrument);
@@ -408,6 +443,8 @@ static void gstlal_inpaint_finalize(GObject * object)
 
 	XLALDestroyREAL8FrequencySeries(inpaint->psd);
 	inpaint->psd = NULL;
+	XLALDestroyREAL8TimeSeries(inpaint->cov);
+	inpaint->cov = NULL;
 
 	free(inpaint->transformed_data);
 	inpaint->transformed_data = NULL;
@@ -430,8 +467,7 @@ static void gstlal_inpaint_finalize(GObject * object)
 	"channel-mask = (bitmask) 0"
 
 
-static void gstlal_inpaint_class_init(GSTLALInpaintClass *klass)
-{
+static void gstlal_inpaint_class_init(GSTLALInpaintClass *klass) {
 	GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
 	GstElementClass *element_class = GST_ELEMENT_CLASS(klass);
 	GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS(klass);
@@ -509,8 +545,7 @@ static void gstlal_inpaint_class_init(GSTLALInpaintClass *klass)
  */
 
 
-static void gstlal_inpaint_init(GSTLALInpaint *inpaint)
-{
+static void gstlal_inpaint_init(GSTLALInpaint *inpaint) {
 	inpaint->instrument = NULL;
 	inpaint->channel_name = NULL;
 	inpaint->units = NULL;
@@ -523,4 +558,5 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint)
 
 	inpaint->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	inpaint->psd = NULL;
+	inpaint->cov = NULL;
 }

@@ -40,6 +40,7 @@
  * stuff from LAL
  */
 
+#include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
 
 G_BEGIN_DECLS
@@ -87,6 +88,7 @@ typedef struct {
 
 	double fft_length_seconds;
 	REAL8FrequencySeries *psd;
+	REAL8TimeSeries *cov;
 } GSTLALInpaint;
 
 
