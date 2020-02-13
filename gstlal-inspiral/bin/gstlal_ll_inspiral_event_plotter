@@ -156,8 +156,7 @@ class EventPlotter(events.EventProcessor):
 
 		### read in ranking data file from path
 		elif message.topic() == self.ranking_stat_topic:
-			with open(payload['ranking_data_path'], 'r') as f:
-				self.events['ranking_data'] = ligolw_utils.load_fileobj(f.read())
+			self.events['ranking_data_path'] = payload['ranking_data_path']
 
 
 	def new_event(self, payload):
@@ -172,7 +171,7 @@ class EventPlotter(events.EventProcessor):
 			'coinc': coinc,
             'gid': None,
 			'psd': None,
-			'ranking_data': None,
+			'ranking_data_path': None,
 			'uploaded': {'ranking_data': False, 'ranking_plots': False, 'psd_plots': False}
 		}
 
@@ -183,15 +182,16 @@ class EventPlotter(events.EventProcessor):
 		old events as necessary.
 		"""
 		for event in self.events.values():
-			if not event['uploaded']['ranking_data'] and event['ranking_data']:
-				self.upload_ranking_data(event)
-				event['uploaded']['ranking_data'] = True
-			elif not event['uploaded']['ranking_plots'] and event['ranking_data']:
-				self.upload_ranking_plots(event)
-				event['uploaded']['ranking_plots'] = True
-			elif not event['uploaded']['psd_plots'] and event['psd']:
-				self.upload_psd_plots(event)
-				event['uploaded']['psd_plots'] = True
+			if event['gid']:
+				if not event['uploaded']['ranking_data'] and event['ranking_data']:
+					self.upload_ranking_data(event)  # FIXME: need to define method
+					event['uploaded']['ranking_data'] = True
+				elif not event['uploaded']['ranking_plots'] and event['ranking_data']:
+					self.upload_ranking_plots(event)  # FIXME: need to define method
+					event['uploaded']['ranking_plots'] = True
+				elif not event['uploaded']['psd_plots'] and event['psd']:
+					self.upload_psd_plots(event)  # FIXME: need to define method
+					event['uploaded']['psd_plots'] = True
 
 		# clean out old events
 		current_time = utils.gps_now()
