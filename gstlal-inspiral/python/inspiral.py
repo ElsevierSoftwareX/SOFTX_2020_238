@@ -888,11 +888,11 @@ class GracedBWrapper(object):
 
 			# save event to disk
 			message.close()
-			try:
-				os.mkdir("gracedb_uploads")
-			except OSError:
-				pass
-			with open(os.path.join("gracedb_uploads", filename), "w") as fileobj:
+			gracedb_uploads_gps_dir = os.path.join("gracedb_uploads", str(end_time)[:5])
+			if not os.path.exists(gracedb_uploads_gps_dir):
+				os.makedirs(gracedb_uploads_gps_dir)
+
+			with open(os.path.join(gracedb_uploads_gps_dir, filename), "w") as fileobj:
 				ligolw_utils.write_fileobj(xmldoc, fileobj, gz = False)
 
 			xmldoc.unlink()
