@@ -116,9 +116,9 @@ def parse_command_line():
 #-------------------------------------------------
 
 class EventPlotter(events.EventProcessor):
-	'''
+	"""
 	manages plotting and file uploading for incoming events.
-	'''
+	"""
 	_name = 'event_plotter'
 
 	def __init__(self, options):
@@ -162,9 +162,9 @@ class EventPlotter(events.EventProcessor):
 
 
 	def ingest(self, message):
-		'''
+		"""
 		parse a message from a kafka topic
-		'''
+		"""
 		payload = json.loads(message.value())
 
 		time = LIGOTimeGPS(payload['time'], payload['time_ns'])
@@ -195,9 +195,9 @@ class EventPlotter(events.EventProcessor):
 
 
 	def new_event(self, time, bank_bin):
-		'''
+		"""
 		returns the structure that defines an event
-		'''
+		"""
 		return {
 			'time': time,
 			'bin': bank_bin,
@@ -210,10 +210,10 @@ class EventPlotter(events.EventProcessor):
 
 
 	def handle(self):
-		'''
+		"""
 		handle aux data and plot uploading, clearing out
 		old events as necessary.
-		'''
+		"""
 		for event in self.events.values():
 			if event['gid']:
 				if not event['uploaded']['ranking_data'] and event['ranking_data_path']:
@@ -246,9 +246,9 @@ class EventPlotter(events.EventProcessor):
 				self.events.pop(event_key)
 
 	def upload_file(self, message, filename, tag, contents, graceid):
-		'''
+		"""
 		upload a file to gracedb
-		'''
+		"""
 		logging.info('posting '{}' to gracedb ID {}'.format(filename, graceid))
 		for attempt in range(1, self.retries + 1):
 			try:
@@ -447,9 +447,9 @@ class EventPlotter(events.EventProcessor):
 
 
 	def finish(self):
-		'''
+		"""
 		upload remaining files/plots before shutting down
-		'''
+		"""
 		self.handle()
 
 
