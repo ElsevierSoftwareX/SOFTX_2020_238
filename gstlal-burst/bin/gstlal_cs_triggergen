@@ -31,7 +31,6 @@ from ligo.lw import utils as ligolw_utils
 import lal
 from lal import series
 from lal import LIGOTimeGPS
-from lalburst import CoincBurstTable
 from lalburst import stringutils
 import lalsimulation
 
