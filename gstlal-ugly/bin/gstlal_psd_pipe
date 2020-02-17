@@ -37,56 +37,28 @@ from gstlal import datasource
 # Classes for generating reference psds
 #
 
-class gstlal_reference_psd_job(dagparts.CondorDAGJob):
-	"""
-	A gstlal_reference_psd job
-	"""
-	def __init__(self, executable=dagparts.which('gstlal_reference_psd'), tag_base='gstlal_reference_psd'):
-		"""
-		A gstlal_reference_psd job
-		"""
-		dagparts.CondorDAGJob.__init__(self, executable, tag_base)
+def set_up_jobs(options):
+	jobs = {}
 
+	# default condor options
+	default_condor_opts = {
+		'want_graceful_removal': "True",
+		'kill_sig': "15",
+		'request_memory': "2000"
+	}
 
-class gstlal_reference_psd_node(dagparts.CondorDAGNode):
-	"""
-	A gstlal_reference_psd node
-	"""
-	def __init__(self, job, dag, frame_cache, frame_segments_file, frame_segments_name, gps_start_time, gps_end_time, instruments, channel_dict, injections=None, p_node=[]):
-		dagparts.CondorDAGNode.__init__(self, job, dag, p_node)
-		self.add_var_opt("frame-cache", frame_cache)
-		self.add_var_opt("frame-segments-file", frame_segments_file)
-		self.add_var_opt("frame-segments-name", frame_segments_name)
-		self.add_var_opt("gps-start-time",gps_start_time)
-		self.add_var_opt("gps-end-time",gps_end_time)
-		self.add_var_opt("data-source", "frames")
-		self.add_var_opt("channel-name", datasource.pipeline_channel_list_from_channel_dict(channel_dict))
-		if injections: self.add_var_opt("injections", injections)
-		path = os.getcwd()
-		output_name = self.output_name = '%s/%s-%d-%d-reference_psd.xml.gz' % (path, "".join(sorted(channel_dict)), gps_start_time, gps_end_time)
-		self.add_var_opt("write-psd",output_name)
+	# job-specific condor options
+	ref_psd_condor_opts = default_condor_opts.copy()
+	ref_psd_condor_opts['request_cpus'] = "2"
 
+	# set condor commands
+	base_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, default_condor_opts)
+	ref_psd_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, ref_psd_condor_opts)
 
-class gstlal_median_of_psds_job(dagparts.CondorDAGJob):
-	"""
-	A gstlal_median_of_psds job
-	"""
-	def __init__(self, executable=dagparts.which('gstlal_median_of_psds'), tag_base='gstlal_median_of_psds'):
-		"""
-		A gstlal_median_of_psds job
-		"""
-		dagparts.CondorDAGJob.__init__(self, executable, tag_base)
+	jobs['refPSD'] = dagparts.DAGJob("gstlal_reference_psd", condor_commands = ref_psd_condor_commands)
+	jobs['medianPSD'] = dagparts.DAGJob("gstlal_median_of_psds", condor_commands = base_condor_commands)
 
-
-class gstlal_median_of_psds_node(dagparts.CondorDAGNode):
-	"""
-	A gstlal_median_of_psds node
-	"""
-	def __init__(self, job, dag, output_name = "median_psd.xml.gz", input_files = [], p_node = []):
-		dagparts.CondorDAGNode.__init__(self, job, dag, p_node)
-		self.add_var_opt("output-name", output_name)
-		for f in input_files:
-			self.add_file_arg(f)
+	return jobs
 
 
 def parse_command_line():
@@ -96,6 +68,7 @@ def parse_command_line():
 	datasource.append_options(parser)
 
 	parser.add_option("--max-segment-length", type="int", metavar = "dur", default = 30000, help = "Break up segments longer than dur seconds into shorter (contiguous, non-overlapping) segments. Default 30000 seconds.")
+	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	parser.add_option("--verbose", action = "store_true", help = "Be verbose")
 
 	options, filenames = parser.parse_args()
@@ -130,14 +103,13 @@ segs = dagparts.breakupsegs(segs, options.max_segment_length, 1024)
 
 try: os.mkdir("logs")
 except: pass
-dag = dagparts.CondorDAG("psd_pipe")
+dag = dagparts.DAG("psd_pipe")
 
 #
 # setup the job classes
 #
 
-refPSDJob = gstlal_reference_psd_job()
-medianPSDJob = gstlal_median_of_psds_job()
+jobs = set_up_jobs(options)
 
 #
 # Precompute the PSDs for each segment
@@ -149,9 +121,29 @@ def hash_seg(seg):
 
 psd_nodes = {}
 for seg in segs:
-	psd_nodes[hash_seg(seg)] = gstlal_reference_psd_node(refPSDJob, dag, options.frame_cache, options.frame_segments_file, options.frame_segments_name, seg[0].seconds, seg[1].seconds, channel_dict.keys(), channel_dict, injections=None, p_node=[])
+	psd_nodes[hash_seg(seg)] = dagparts.DAGNode(jobs['refPSD'], dag,
+		parent_nodes = [],
+		opts = {
+			"gps-start-time": int(seg[0]),
+			"gps-end-time": int(seg[1]),
+			"data-source": "frames",
+			"channel-name": datasource.pipeline_channel_list_from_channel_dict(channel_dict),
+			"frame-segments-name": options.frame_segments_name
+		},
+		input_files = {
+			"frame-cache": options.frame_cache,
+			"frame-segments-file": options.frame_segments_file
+		},
+		output_files = {
+			"write-psd": dagparts.T050017_filename("".join(sorted(channel_dict)), "REFERENCE_PSD", seg, '.xml.gz', path = os.getcwd())
+		},
+	)
 
-gstlal_median_of_psds_node(medianPSDJob, dag, output_name = "median_psd.xml.gz", input_files = [node.output_name for node in psd_nodes.values()], p_node = psd_nodes.values())
+median_psd_node = dagparts.DAGNode(jobs['medianPSD'], dag,
+	parent_nodes = psd_nodes.values(),
+	input_files = {"": [node.output_files["write-psd"] for node in psd_nodes.values()]},
+	output_files = {"output-name": "median_psd.xml.gz"}
+)
 
 dag.write_sub_files()
 dag.write_dag()
