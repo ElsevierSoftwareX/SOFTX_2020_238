@@ -2,10 +2,10 @@
 """
 Plotter for gstlal_inspiral_calc_snr
 """
+from optparse import OptionParser
+import numpy
 import os
 import sys
-from optparse import OptionParser
-
 
 from gstlal import plotsnr
 from gstlal import svd_bank_snr
@@ -70,12 +70,12 @@ acs_groups = zip(*autocorrelations_dict.values())
 #					Plot SNRs
 #
 #=============================================================================================
-for row, snrs_group in enumerate(snrs_groups):
+for snrs_group in snrs_groups:
 	figure = plotsnr.plot_snr(dict(zip(SNRs_dict.keys(), zip(snrs_group))), width = options.width, center = options.center, span = options.span, verbose = options.verbose)
 	if len(zip(*SNRs_dict.values())) == 1:
 		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + segment + suffix))
 	else:
-		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description + "_"+ str(row) + segment + suffix))
+		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(SNRs_dict.keys())) + description.replace("ALL_ALL", "_".join(snrs_group[0].name.split("_")[1:3])) + segment + suffix))
 
 
 if len(snrs_groups) != len(acs_groups):
@@ -86,14 +86,16 @@ if len(snrs_groups) != len(acs_groups):
 #				Plot SNRs with autocorrelation
 #
 #=============================================================================================
-row = 0
-for snrs_group, acs_group in zip(snrs_groups, acs_groups):
-	figure = plotsnr.plot_snr_with_ac(dict(zip(SNRs_dict.keys(), zip(snrs_group))), dict(zip(autocorrelations_dict.keys(), zip(acs_group))),  width = options.width, ref_trigger_time = options.center, verbose = options.verbose)
+# This is only useful when SNRs are complex time series.
+if numpy.iscomplexobj(SNRs_dict.values()[0][0].data.data):
+	row = 0
+	for snrs_group, acs_group in zip(snrs_groups, acs_groups):
+		figure = plotsnr.plot_snr_with_ac(dict(zip(SNRs_dict.keys(), zip(snrs_group))), dict(zip(autocorrelations_dict.keys(), zip(acs_group))),  width = options.width, ref_trigger_time = options.center, verbose = options.verbose)
 
-	all_instruments = set(SNRs_dict) & set(autocorrelations_dict)
-	# just pick one, they must be the same length
-	if len(zip(*SNRs_dict.values())) == 1:
-		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(all_instruments)) + description + "_with_autocorrlation" + segment+ suffix))
-	else:
-		figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(all_instruments)) + description + "_"+ str(row) + segment + suffix))
-	row += 1
+		all_instruments = set(SNRs_dict) & set(autocorrelations_dict)
+		# just pick one, they must be the same length
+		if len(zip(*SNRs_dict.values())) == 1:
+			figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(all_instruments)) + description + "_with_autocorrlation" + segment+ suffix))
+		else:
+			figure.savefig(os.path.join(options.outdir, "%s-" % "".join(sorted(all_instruments)) + description.replace("ALL_ALL", "_".join(snrs_group[0].name.split("_")[1:3])) + "_with_autocorrlation" + segment + suffix))
+		row += 1
