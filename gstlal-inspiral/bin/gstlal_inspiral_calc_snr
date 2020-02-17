@@ -92,6 +92,7 @@ $ gstlal_inspiral_calc_snr \
 --end 1251010532 \
 --verbose
 """
+from collections import defaultdict
 from optparse import OptionParser, OptionGroup, IndentedHelpFormatter
 import math
 import os
@@ -165,8 +166,10 @@ def parse_command_line():
 	group = OptionGroup(parser, "Template Options", "Choose a template from a SVD bank file / a bank file (see svd_bank_snr.Bank).")
 	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments (require)." )
 	group.add_option("--coinc", metavar = "filename", help = "The coinc.xml file associated with --svd-bank. This is used to find the --bank-number and --row-number for a particular event. If given, the --bank-number and --row-number will be overwritten. (optional)")
-	group.add_option("--bank-number", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (require).")
+	group.add_option("--bank-number", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (optional). SNRs in all banks will be used if it is not given.")
+	group.add_option("--bank-counts", type = "int", default = 1, help = "Number of banks to used; Counted from --bank-number; default = 1")
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
+	group.add_option("--row-counts", type = "int", default = 1, help = "Number of rows to be outputted; Counted from --row-number; default = 1")
 	group.add_option("--bank", metavar = "filename", help = "LIGO light-weight xml.gz file(s) containing only one template. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3. Expecting one template only for each file (require).")
 	parser.add_option_group(group)
 
@@ -300,14 +303,14 @@ def parse_command_line():
 	# Setting up SVD banks (mode 0 = LLOID) or template table (mode 1 = FIR)
 	#
 
+	assert options.bank_counts >= 1, "Number of banks to be used and outputted must be larger than or equals to 1." 
+	assert options.row_counts >= 1, "Number of rows to be outputted must be larger than or equals to 1." 
 	# Use LLOID method
 	if options.mode == 0:
 		missing_required_options = []
 		# Checking required options
 		if options.svd_bank is None:
 			missing_required_options.append("--svd-bank")
-		if options.bank_number is None and options.coinc is None:
-			missing_required_options.append("--bank-number")
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
@@ -325,12 +328,6 @@ def parse_command_line():
 		if options.coinc is not None:
 			coinc_xmldoc = ligolw_utils.load_url(options.coinc, verbose = options.verbose, contenthandler = ContentHandler)
 			options.bank_number, options.row_number = svd_bank_snr.scan_svd_banks_for_row(coinc_xmldoc, banks_dict)
-		# Check if --bank-number and --row-number is valid
-		for banks in banks_dict.values():
-			if not (0 <= options.bank_number < len(banks)) :
-				raise ValueError("Invaild --bank-number %d. Possible id [0-%d)\n" % (options.bank_number, len(banks)))
-			if options.row_number is not None and not (0 <= options.row_number < len(banks[options.bank_number].sngl_inspiral_table)):
-				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[options.bank_number].sngl_inspiral_table)))
 
 	# Use Finite Impulse Response
 	elif options.mode == 1:
@@ -338,8 +335,6 @@ def parse_command_line():
 		# Checking required options
 		if options.bank is None:
 			missing_required_options.append("--bank")
-		if options.bank_number is None and options.coinc is None:
-			missing_required_options.append("--bank-number")
 		# Raise VauleError is required option(s) is/are missing
 		if missing_required_options:
 			raise ValueError("Missing required option(s) %s" % ", ".join(sorted(missing_required_options)))
@@ -350,16 +345,30 @@ def parse_command_line():
 		# Check if there enough templates for GW data
 		if set(banks_dict) < set(gw_data_source_info.channel_dict):
 			raise ValueError("Missing table(s) for %s." % (", ".join(sorted(set(gw_data_source_info.channel_dict) - set(banks_dict)))))
-		# Check if --bank-number and --row-number is valid
-		for banks in banks_dict.values():
-			if not (0 <= options.bank_number < len(banks)) :
-				raise ValueError("Invaild --bank-number %d. Possible id [0-%d)\n" % (options.bank_number, len(banks)))
-			if options.row_number is not None and not (0 <= options.row_number < len(banks[options.bank_number].sngl_inspiral_table)):
-				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[options.bank_number].sngl_inspiral_table)))
 
 	# Unknown mode
 	else:
 		raise ValueError("Invalid mode: %d" % options.mode)
+
+	#
+	# Check if --bank-number and --row-number is valid
+	#
+	for banks in banks_dict.values():
+		if options.bank_number is not None and options.row_number is not None:
+			if not (0 <= options.bank_number < len(banks)) :
+				raise ValueError("Invaild --bank-number %d. Possible id [0-%d)\n" % (options.bank_number, len(banks)))
+			if not (0 <= options.row_number < len(banks[options.bank_number].sngl_inspiral_table)):
+				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[options.bank_number].sngl_inspiral_table)))
+		elif options.bank_number is None and options.row_number is not None:
+			# Just pick one bank
+			if not (0 <= options.row_number < len(banks[0].sngl_inspiral_table)):
+				raise ValueError("No such template: Invaild --row-number %d. Possible range [0-%d)\n" % (options.row_number, len(banks[0].sngl_inspiral_table)))
+		elif options.bank_number is not None and options.row_number is None:
+			if not (0 <= options.bank_number < len(banks)) :
+				raise ValueError("Invaild --bank-number %d. Possible id [0-%d)\n" % (options.bank_number, len(banks)))
+		else:
+			# Just to be clear
+			pass
 
 	return options, gw_data_source_info, banks_dict, psd
 
@@ -405,11 +414,15 @@ mainloop = GObject.MainLoop()
 # Construct Default Pipeline Handler
 #
 
-snr_document = svd_bank_snr.SignalNoiseRatioDocument(
-	dict((instrument, svd_bank_snr.SNR(options.start, options.end, instrument, banks_dict[instrument], bank_number = options.bank_number, method = "FIR" if options.mode else "LLOID")) for instrument in gw_data_source_info.channel_dict),
-	banks_dict,
-	verbose = options.verbose
-)
+
+bank_slicing = slice(None, None, None) if options.bank_number is None else slice(options.bank_number, options.bank_number+options.bank_counts, 1)
+bank_start = options.bank_number if options.bank_number is not None else 0
+bank_snrs_dict = defaultdict(list)
+for instrument in gw_data_source_info.channel_dict:
+	for num, bank in enumerate(banks_dict[instrument][bank_slicing], bank_start):
+		bank_snrs_dict[instrument].append(svd_bank_snr.Bank_SNR(options.start, options.end, instrument, bank, bank_number = num, method = "FIR" if options.mode else "LLOID"))
+
+snr_document = svd_bank_snr.SignalNoiseRatioDocument(bank_snrs_dict, verbose = options.verbose)
 
 if options.coinc_output == None:
 	handler = svd_bank_snr.SimpleSNRHandler(pipeline, mainloop, snr_document, verbose = options.verbose)
@@ -417,14 +430,17 @@ else:
 	handler = svd_bank_snr.Handler(snr_document, verbose = options.verbose)
 snr_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_snr_buffer)
 
+#
+# Construct Pipeline 
+#
+
 itacac_dict = {}
 for instrument in gw_data_source_info.channel_dict:
-	bank = banks_dict[instrument][options.bank_number]
 	src, statevector, dqvector = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, options.verbose)
 	hoft = multirate_datasource.mkwhitened_multirate_src(
 		pipeline,
 		src,
-		set(rate for rate in bank.get_rates()),
+		set(rate for bank_SNRs in bank_snrs_dict[instrument] for rate in bank_SNRs.bank.get_rates()),
 		instrument,
 		dqvector = dqvector,
 		fir_whiten_reference_psd = bank.processed_psd,
@@ -437,52 +453,54 @@ for instrument in gw_data_source_info.channel_dict:
 		width = options.output_width
 	)
 
-	if options.mode == 0:
-		snr = lloidparts.mkLLOIDhoftToSnrSlices(
-			pipeline,
-			hoft,
-			bank,
-			(None, None),
-			1 * Gst.SECOND,
-			control_peak_time = options.control_peak_time,
-			fir_stride = options.fir_stride,
-			logname = instrument,
-			nxydump_segment = None,
-			reconstruction_segment_list = reconstruction_segment_list,
-			snrslices = None,
-			verbose = options.verbose
-		)
-	else:
-		fir_matrix = []
-		for template in bank.templates:
-			fir_matrix += [template.real, template.imag]
-		snr = pipeparts.mktogglecomplex(
-			pipeline,
-			pipeparts.mkfirbank(
+	for index, bank_SNR in enumerate(bank_snrs_dict[instrument]):
+		bank = bank_SNR.bank
+		if options.mode == 0:
+			snr = lloidparts.mkLLOIDhoftToSnrSlices(
 				pipeline,
-				hoft[bank.sample_rate],
-				latency = 0,
-				fir_matrix = fir_matrix,
-				block_stride = 16 * bank.sample_rate,
-				time_domain = False
-				)
+				hoft,
+				bank,
+				(None, None),
+				1 * Gst.SECOND,
+				control_peak_time = options.control_peak_time,
+				fir_stride = options.fir_stride,
+				logname = instrument,
+				nxydump_segment = None,
+				reconstruction_segment_list = reconstruction_segment_list,
+				snrslices = None,
+				verbose = options.verbose
 			)
-	# Construct SNR handler by default and terminate the pipeline at here
-	if options.coinc_output == None:
-		snr_appsync.add_sink(pipeline, snr, name = instrument)
-	# Construct optional trigger generator
-	else:
-		snr = pipeparts.mktee(pipeline, snr)
-		snr_appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, snr), name = instrument)
+		else:
+			fir_matrix = []
+			for template in bank.templates:
+				fir_matrix += [template.real, template.imag]
+			snr = pipeparts.mktogglecomplex(
+				pipeline,
+				pipeparts.mkfirbank(
+					pipeline,
+					hoft[bank.sample_rate],
+					latency = 0,
+					fir_matrix = fir_matrix,
+					block_stride = 16 * bank.sample_rate,
+					time_domain = False
+					)
+				)
+		# Construct SNR handler by default and terminate the pipeline at here
+		if options.coinc_output == None:
+			snr_appsync.add_sink(pipeline, snr, name = "%s_%d" % (instrument, index))
+		# Construct optional trigger generator
+		else:
+			snr = pipeparts.mktee(pipeline, snr)
+			snr_appsync.add_sink(pipeline, pipeparts.mkqueue(pipeline, snr), name = "%s_%d" % (instrument, index))
 
-		nsamps_window = 1 * max(bank.get_rates())
-		if bank.bank_id not in itacac_dict:
-			itacac_dict[bank.bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
-		head = itacac_dict[bank.bank_id]
-		pad = head.get_request_pad("sink%d" % len(head.sinkpads))
-		for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
-			pad.set_property(prop, val)
-		pipeparts.mkqueue(pipeline, snr).srcpads[0].link(pad)
+			nsamps_window = 1 * max(bank.get_rates())
+			if bank.bank_id not in itacac_dict:
+				itacac_dict[bank.bank_id] = pipeparts.mkgeneric(pipeline, None, "lal_itacac")
+			head = itacac_dict[bank.bank_id]
+			pad = head.get_request_pad("sink%d" % len(head.sinkpads))
+			for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+				pad.set_property(prop, val)
+			pipeparts.mkqueue(pipeline, snr).srcpads[0].link(pad)
 
 #
 # Construct optional LLOID handler instead if --coinc-output is provided
@@ -571,10 +589,9 @@ if options.coinc_output != None:
 		verbose = options.verbose
 	)
 
-	# since only one template bank is being processed, there should not be more than one item in itacac_dict.
-	assert len(itacac_dict.values()) == 1
+	assert len(itacac_dict.keys()) >= 1
 	trigger_appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
-	trigger_appsync.add_sink(pipeline, itacac_dict.values()[0], caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "bank_%s_sink" % itacac_dict.keys()[0])
+	trigger_appsinks = set(trigger_appsync.add_sink(pipeline, src, caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "bank_%s_sink" % bank_id) for bank_id, src in itacac_dict.items())
 
 #
 # Run pipeline
@@ -604,5 +621,5 @@ if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 # Write outputs
 if options.coinc_output != None:
 	handler.write_output_url(url = options.coinc_output)
-handler.write_snrs(options.outdir, row_number = options.row_number, COMPLEX = options.complex)
+handler.write_snrs(options.outdir, row_number = options.row_number, counts = options.row_counts, COMPLEX = options.complex)
 

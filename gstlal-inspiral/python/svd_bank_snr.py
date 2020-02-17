@@ -67,89 +67,68 @@ class SignalNoiseRatioDocument(object):
 	This xml document contains the SNRs timeseries and their corresponding templates
 	autocorrelation. Some meta data are recorded in the xml document for
 	"""
-        def __init__(self, snrdict, banks_dict, verbose=False):
+        def __init__(self, bank_snrs_dict, verbose=False):
 		self.verbose = verbose
-		self.snrdict = snrdict
-		self.banks_dict = banks_dict
-		self.bank_number = snrdict.values()[0].bank_number
-		self.bank_id = banks_dict.values()[0][self.bank_number].bank_id
-		self.template_ids = [row.template_id for row in snrdict.values()[0].sngl_inspiral_table]
+		self.bank_snrs_dict = bank_snrs_dict
 
-	def write_output_url(self, outdir, row_number=None, root_name="gstlal_inspiral_snr"):
+	def write_output_url(self, outdir, row_number=None, counts=1, root_name="gstlal_inspiral_bank_SNRs"):
 		"""Writing the LIGO_LW xmldoc to disk.
 
 		Args:
 		    outdir (str): The output diretory.
 		    row_number (int, default=None): The row number of the SNR to be outputed. Default=None is to output all.
-		    root_name (str, default="gstlal_inspiral_snr"): The root name of the xml document.
+		    root_name (str, default="gstlal_inspiral_bank_SNRs"): The root name of the xml document.
 
 		Return:
 		    xmldoc: The file object representing the xmldoc.
 
 		"""
-		for instrument, snrs in self.snrdict.items():
+		assert counts >= 1, "Number of rows must be larger than or equals to 1."
+
+		for instrument, bank_SNRs in self.bank_snrs_dict.items():
 			# create root
 			xmldoc = ligolw.Document()
 			root = xmldoc.appendChild(ligolw.LIGO_LW())
 			root.Name = root_name
-			root.appendChild(ligolw_param.Param.from_pyvalue('bank_filename', self.banks_dict[instrument][0].template_bank_filename))
-			root.appendChild(ligolw_param.Param.from_pyvalue('bank_number', self.bank_number))
-			root.appendChild(ligolw_param.Param.from_pyvalue('bank_id', self.bank_id))
-			root.appendChild(ligolw_param.Param.from_pyvalue('instrument', instrument))
 
 			# add SNR and autocorrelation branches
-			self._append_content(root, snrs, instrument, row_number=row_number)
+			for bank_SNR in bank_SNRs:
+				branch = root.appendChild(ligolw.LIGO_LW())
+				branch.Name = "bank_SNR"
+				branch.appendChild(ligolw_param.Param.from_pyvalue('bank_id', bank_SNR.bank_id))
+				self._append_content(branch, bank_SNR, instrument, row_number=row_number, counts=counts)
 
-			if row_number is None:
-				outname = "%s-%s_SNR_%d-%d-%d.xml.gz" % (instrument, snrs.method, snrs.bank_number, snrs.start, snrs.duration)
-				write_url(xmldoc, os.path.join(outdir, outname), verbose = self.verbose)
+			if row_number is not None and len(bank_SNRs) == 1 and counts == 1:
+				outname = "%s-%s_bank_SNR_%d_%d-%d-%d.xml.gz" % (instrument, bank_SNRs[0].method, bank_SNRs[0].bank_number, row_number, bank_SNRs[0].start, bank_SNRs[0].duration)
 			else:
-				outname = "%s-%s_SNR_%d_%d-%d-%d.xml.gz" % (instrument, snrs.method, snrs.bank_number, row_number, snrs.start, snrs.duration)
-				write_url(xmldoc, os.path.join(outdir, outname), verbose = self.verbose)
+				outname = "%s-%s_bank_SNR_%s_%s-%d-%d.xml.gz" % (instrument, bank_SNRs[0].method, "ALL", "ALL", bank_SNRs[0].start, bank_SNRs[0].duration)
+			write_url(xmldoc, os.path.join(outdir, outname), verbose = self.verbose)
 		return xmldoc
 
-	def _append_content(self, root, snrs, instrument, row_number=None):
+	def _append_content(self, branch, bank_SNR, instrument, row_number=None, counts=1):
 		"""For internal use only."""
-		if row_number is None:
-			for row, template_id, snr in zip(range(len(snrs)), self.template_ids, snrs):
-				branch = root.appendChild(ligolw.LIGO_LW())
-				branch.Name = "SNR_and_autocorrelation"
+		slicing = slice(None, None, None) if row_number is None else slice(row_number, row_number+counts, 1)
+		for template_id, autocorrelation, snr in zip(bank_SNR.template_id[slicing], bank_SNR.bank.autocorrelation_bank[slicing], bank_SNR[slicing]):
+			# retrieve row number
+			row_number = int(snr.name.split("_")[1])
+			tmp_branch = branch.appendChild(ligolw.LIGO_LW())
+			tmp_branch.Name = "SNR_and_Autocorrelation"
+			tmp_branch.appendChild(ligolw_param.Param.from_pyvalue('template_id', template_id))
 
-				# append timeseries and templates autocorrelation
-				if snr.data.data.dtype == numpy.float32:
-					tseries = branch.appendChild(lal.series.build_REAL4TimeSeries(snr))
-				elif snr.data.data.dtype == numpy.float64:
-					tseries = branch.appendChild(lal.series.build_REAL8TimeSeries(snr))
-				elif snr.data.data.dtype == numpy.complex64:
-					tseries = branch.appendChild(lal.series.build_COMPLEX8TimeSeries(snr))
-				elif snr.data.data.dtype == numpy.complex128:
-					tseries = branch.appendChild(lal.series.build_COMPLEX16TimeSeries(snr))
-				else:
-					raise ValueError("unsupported type : %s" % snr.data.data.dtype)
-
-				# append template_id and autocorrelation_bank
-				branch.appendChild(ligolw_param.Param.from_pyvalue('template_id', template_id))
-				branch.appendChild(ligolw_array.Array.build('autocorrelation_bank', self.banks_dict[instrument][self.bank_number].autocorrelation_bank[row]))
-		else:
-			branch = root.appendChild(ligolw.LIGO_LW())
-			branch.Name = "SNR_and_autocorrelation"
-
-			# append timeseries and template autocorrelation
-			snr = snrs[row_number]
+			# append timeseries and templates autocorrelation
 			if snr.data.data.dtype == numpy.float32:
-				tseries = branch.appendChild(lal.series.build_REAL4TimeSeries(snr))
+				tseries = tmp_branch.appendChild(lal.series.build_REAL4TimeSeries(snr))
 			elif snr.data.data.dtype == numpy.float64:
-				tseries = branch.appendChild(lal.series.build_REAL8TimeSeries(snr))
+				tseries = tmp_branch.appendChild(lal.series.build_REAL8TimeSeries(snr))
 			elif snr.data.data.dtype == numpy.complex64:
-				tseries = branch.appendChild(lal.series.build_COMPLEX8TimeSeries(snr))
+				tseries = tmp_branch.appendChild(lal.series.build_COMPLEX8TimeSeries(snr))
 			elif snr.data.data.dtype == numpy.complex128:
-				tseries = branch.appendChild(lal.series.build_COMPLEX16TimeSeries(snr))
+				tseries = tmp_branch.appendChild(lal.series.build_COMPLEX16TimeSeries(snr))
 			else:
 				raise ValueError("unsupported type : %s" % snr.data.data.dtype)
 
-			# append template_id and autocorrelation_bank
-			branch.appendChild(ligolw_param.Param.from_pyvalue('template_id', self.template_ids[row_number]))
-			branch.appendChild(ligolw_array.Array.build('autocorrelation_bank', self.banks_dict[instrument][self.bank_number].autocorrelation_bank[row_number]))
+			# append autocorrelation_bank
+			tmp_branch.appendChild(ligolw_array.Array.build('autocorrelation_bank', autocorrelation))
 
 		return branch
 
@@ -158,18 +137,21 @@ class SignalNoiseRatioDocument(object):
 #					Pipeline Handler
 #
 #=============================================================================================
-class SNR(object):
+class Bank_SNR(object):
 	"""An data interface between the SNRPipelineHandler and the SNR pipeline.
 
 	This is a class that defines the approximate start time and end time for which
 	the SNR should be collected.
 	"""
-	def __init__(self, start, end, instrument, banks, bank_number=0, method="LLOID"):
+	def __init__(self, start, end, instrument, bank, bank_number=0, method="LLOID"):
 		if start >= end:
 			raise ValueError("Start time must be less than end time.")
 		self.method = method
+		self.bank = bank
+		self.bank_id = bank.bank_id
 		self.bank_number = bank_number
-		self.sngl_inspiral_table = banks[bank_number].sngl_inspiral_table
+		self.sngl_inspiral_table = bank.sngl_inspiral_table
+		self.template_id = [row.template_id for row in bank.sngl_inspiral_table]
 		self.s = start
 		self.e = end
 		self.epoch = None
@@ -260,16 +242,16 @@ class SNR(object):
 		tmp_snrs = tmp_snrs[s:e].T if COMPLEX else numpy.abs(tmp_snrs[s:e].T)
 
 		# parse data to tseries object
-		self.data = [self._make_series(array, self.epoch) for array in tmp_snrs]
+		self.data = [self._make_series(array, self.epoch, row_number) for row_number, array in enumerate(tmp_snrs)]
 
 		# .finish() again is forbidden
 		def finish():
 			raise NotImplementedError("Cannot .finish() because SNR has been .finish()ed.")
 		self.finish = finish
 
-	def _make_series(self, array, epoch):
+	def _make_series(self, array, epoch, row_number):
 		"""For internal use only."""
-		para = {"name" : self.instrument,
+		para = {"name" : "%s_%d_%d" % (self.instrument, self.bank_number, row_number),
 			"epoch" : epoch,
 			"deltaT" : self.deltaT,
 			"f0": 0,
@@ -296,8 +278,10 @@ class SNRHandlerMixin(object):
 	def appsink_new_snr_buffer(self, elem):
 		"""Callback function for SNR appsink."""
 		with self.lock:
-			# Note: be sure to set property="%s" % instrument, for appsink element
-			instrument = elem.name
+			# Note: be sure to set property="%s_%d" % (instrument, index) for appsink element
+			instrument = elem.name.split("_")[0]
+			index = int(elem.name.split("_")[1])
+			cur_bank = self.snr_document.bank_snrs_dict[instrument][index]
 
 			sample = elem.emit("pull-sample")
 			if sample is None:
@@ -306,35 +290,36 @@ class SNRHandlerMixin(object):
 			success, rate = sample.get_caps().get_structure(0).get_int("rate")
 			assert success == True
 
-			if self.snr_document.snrdict[instrument].deltaT is None:
-				self.snr_document.snrdict[instrument].deltaT = 1. / rate
+			if cur_bank.deltaT is None:
+				cur_bank.deltaT = 1. / rate
 			else:
 				# sampling rate should not be changing
-				assert self.snr_document.snrdict[instrument].deltaT == 1. / rate, "Data has different sampling rate."
+				assert cur_bank.deltaT == 1. / rate, "Data has different sampling rate."
 
 			buf = sample.get_buffer()
 			if buf.mini_object.flags & Gst.BufferFlags.GAP or buf.n_memory() == 0:
 				return Gst.FlowReturn.OK
 			# add the time offset of template end time here, this offset should be the same for each templates
-			cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts) + self.snr_document.snrdict[instrument].sngl_inspiral_table[0].end
+			cur_time_stamp = LIGOTimeGPS(0, sample.get_buffer().pts) + cur_bank.sngl_inspiral_table[0].end
 
-			if self.snr_document.snrdict[instrument].s >= cur_time_stamp and self.snr_document.snrdict[instrument].e > cur_time_stamp:
+			if cur_bank.s >= cur_time_stamp and cur_bank.e > cur_time_stamp:
 				# record the first timestamp closet to start time
-				self.snr_document.snrdict[instrument].epoch = cur_time_stamp
-				self.snr_document.snrdict[instrument].data = [pipeio.array_from_audio_sample(sample)]
-			elif self.snr_document.snrdict[instrument].s <= cur_time_stamp < self.snr_document.snrdict[instrument].e:
-				self.snr_document.snrdict[instrument].data.append(pipeio.array_from_audio_sample(sample))
+				cur_bank.epoch = cur_time_stamp
+				cur_bank.data = [pipeio.array_from_audio_sample(sample)]
+			elif cur_bank.s <= cur_time_stamp < cur_bank.e:
+				cur_bank.data.append(pipeio.array_from_audio_sample(sample))
 			else:
 				Gst.FlowReturn.OK
 
 			return Gst.FlowReturn.OK
 
-	def write_snrs(self, outdir, row_number=None, COMPLEX=False):
+	def write_snrs(self, outdir, row_number=None, counts=1, COMPLEX=False):
 		"""Writing SNRs timeseries to LIGO_LW xml files."""
-		for snrs in self.snr_document.snrdict.values():
+		for snrs in self.snr_document.bank_snrs_dict.values():
 			# make sure to call .finish()
-			snrs.finish(COMPLEX)
-		self.snr_document.write_output_url(outdir, row_number=row_number)
+			for snr in snrs:
+				snr.finish(COMPLEX)
+		self.snr_document.write_output_url(outdir, row_number=row_number, counts=counts)
 
 
 class SimpleSNRHandler(SNRHandlerMixin, simplehandler.Handler):
@@ -598,34 +583,35 @@ def parse_bank_files(bank_urls, verbose = False):
 
 #=============================================================================================
 #
-#					Output Utilities
+#					I/O Utilities
 #
 #=============================================================================================
-def read_xmldoc(xmldoc, root_name = u"gstlal_inspiral_snr"):
+def read_xmldoc(xmldoc, root_name = u"gstlal_inspiral_bank_SNRs"):
 	if root_name is not None:
 		root, = (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") if elem.Name == root_name)
 
-	instrument = ligolw_param.get_pyvalue(root, "instrument")
-
 	snrdict = defaultdict(list)
 	autocorrelation_dict = defaultdict(list)
-	for elem in (elem for elem in root.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "SNR_and_autocorrelation"):
+	for elem in (elem for elem in root.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "bank_SNR"):
 		# get the time series
-		snr_elem, = (elem for elem in elem.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name != "SNR_and_autocorrelation")
-		if snr_elem.Name == u"REAL4TimeSeries":
-			tseries = lal.series.parse_REAL4TimeSeries(snr_elem)
-			snrdict[instrument].append(tseries)
-		elif snr_elem.Name == u"REAL8TimeSeries":
-			tseries = lal.series.parse_REAL8TimeSeries(snr_elem)
-			snrdict[instrument].append(tseries)
-		elif snr_elem.Name == u"COMPLEX8TimeSeries":
-			tseries = lal.series.parse_COMPLEX8TimeSeries(snr_elem)
-			snrdict[instrument].append(tseries)
-		elif snr_elem.Name == u"COMPLEX16TimeSeries":
-			tseries = lal.series.parse_COMPLEX16TimeSeries(snr_elem)
-			snrdict[instrument].append(tseries)
-
-		autocorrelation_dict[instrument].append(ligolw_array.get_array(elem, "autocorrelation_bank").array)
+		for snr_acf_elem in (elem for elem in elem.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "SNR_and_Autocorrelation"):
+			snr_elem = snr_acf_elem.getElementsByTagName(ligolw.LIGO_LW.tagName)[0]
+			if snr_elem.Name == u"REAL4TimeSeries":
+				tseries = lal.series.parse_REAL4TimeSeries(snr_elem)
+				snrdict[tseries.name.split("_")[0]].append(tseries)
+				autocorrelation_dict[tseries.name.split("_")[0]].append(ligolw_array.get_array(snr_acf_elem, "autocorrelation_bank").array)
+			elif snr_elem.Name == u"REAL8TimeSeries":
+				tseries = lal.series.parse_REAL8TimeSeries(snr_elem)
+				snrdict[tseries.name.split("_")[0]].append(tseries)
+				autocorrelation_dict[tseries.name.split("_")[0]].append(ligolw_array.get_array(snr_acf_elem, "autocorrelation_bank").array)
+			elif snr_elem.Name == u"COMPLEX8TimeSeries":
+				tseries = lal.series.parse_COMPLEX8TimeSeries(snr_elem)
+				snrdict[tseries.name.split("_")[0]].append(tseries)
+				autocorrelation_dict[tseries.name.split("_")[0]].append(ligolw_array.get_array(snr_acf_elem, "autocorrelation_bank").array)
+			elif snr_elem.Name == u"COMPLEX16TimeSeries":
+				tseries = lal.series.parse_COMPLEX16TimeSeries(snr_elem)
+				snrdict[tseries.name.split("_")[0]].append(tseries)
+				autocorrelation_dict[tseries.name.split("_")[0]].append(ligolw_array.get_array(snr_acf_elem, "autocorrelation_bank").array)
 
 	assert snrdict is not None, "xmldoc contains no LAL Series or LAL Series is unsupported"
 
