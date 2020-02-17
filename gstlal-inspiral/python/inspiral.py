@@ -650,6 +650,15 @@ class GracedBWrapper(object):
 			filename = "%s-%s-%d-%d.xml" % (instruments, description, end_time, 1)
 
 			#
+			# make sure the directory where we will write the files to disk exists
+			#
+
+			gracedb_uploads_gps_dir = os.path.join("gracedb_uploads", str(end_time)[:5])
+			if not os.path.exists(gracedb_uploads_gps_dir):
+				os.makedirs(gracedb_uploads_gps_dir)
+
+
+			#
 			# construct message and send to gracedb.
 			# we go through the intermediate step of
 			# first writing the document into a string
@@ -860,6 +869,20 @@ class GracedBWrapper(object):
 					}
 				)
 				del psd_fobj
+				# Write ranking data to disk and send path to kafka
+				rankingstat_filename = os.path.join(gracedb_uploads_gps_dir, "%s-%s_%04d_RankingData-%d-%d.xml.gz" % (instruments, description, sngl_inspiral_table[0].Gamma1, end_time, 1))
+				with open(rankingstat_filename, "w") as fileobj:
+					ligolw_utils.write_fileobj(rankingstat_xmldoc_func(), fileobj, gz = True, verbose = True)
+
+				self.producer.send(
+					"ranking_stat",
+					value = {
+						"ranking_data_path": os.path.realpath(rankingstat_filename),
+						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
+						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,
+						"coinc": message.getvalue()
+					}
+				)
 
 			# upload events
 			if not self.delay_uploads:
@@ -888,10 +911,6 @@ class GracedBWrapper(object):
 
 			# save event to disk
 			message.close()
-			gracedb_uploads_gps_dir = os.path.join("gracedb_uploads", str(end_time)[:5])
-			if not os.path.exists(gracedb_uploads_gps_dir):
-				os.makedirs(gracedb_uploads_gps_dir)
-
 			with open(os.path.join(gracedb_uploads_gps_dir, filename), "w") as fileobj:
 				ligolw_utils.write_fileobj(xmldoc, fileobj, gz = False)
 
