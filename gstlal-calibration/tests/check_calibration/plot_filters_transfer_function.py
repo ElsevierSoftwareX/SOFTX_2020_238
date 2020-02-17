@@ -30,17 +30,17 @@ import numpy
 from math import pi
 import resource
 import matplotlib
+matplotlib.use('Agg')
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 16
 matplotlib.rcParams['legend.fontsize'] = 14
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
 
-import find_minor_ticks
+from ticks_and_grid import ticks_and_grid
 
 from optparse import OptionParser, Option
 
@@ -98,11 +98,23 @@ for i in range(0, len(tf_files)):
 		response_file = tf_files.pop(i)
 		tf_files.append(response_file)
 
-response_file = tf_files.pop(len(tf_files) - 2)
-tf_files.append(response_file)
-
 found_response = False
 response_count = 0
+
+# Plot limits
+freq_min = options.tf_frequency_min if options.tf_frequency_min > 0 else None
+freq_max = options.tf_frequency_max if options.tf_frequency_max > 0 else None
+mag_min = options.tf_magnitude_min if options.tf_magnitude_min > 0 else None
+mag_max = options.tf_magnitude_max if options.tf_magnitude_max > 0 else None
+phase_min = options.tf_phase_min if options.tf_phase_min < 1000 else None
+phase_max = options.tf_phase_max if options.tf_phase_max < 1000 else None
+ratio_freq_min = options.ratio_frequency_min if options.ratio_frequency_min > 0 else None
+ratio_freq_max = options.ratio_frequency_max if options.ratio_frequency_max > 0 else None
+ratio_mag_min = options.ratio_magnitude_min if options.ratio_magnitude_min > 0 else None
+ratio_mag_max = options.ratio_magnitude_max if options.ratio_magnitude_max > 0 else None
+ratio_phase_min = options.ratio_phase_min if options.ratio_phase_min < 1000 else None
+ratio_phase_max = options.ratio_phase_max if options.ratio_phase_max < 1000 else None
+
 for tf_file in tf_files:
 	filters_name = None
 	if '_npz' in tf_file:
@@ -181,8 +193,12 @@ for tf_file in tf_files:
 		cal_version = 'Front\\mbox{-}end'
 		color = 'silver'
 	elif 'GDS' in tf_file:
-		cal_version = 'GDS'
-		color = 'royalblue'
+		if '1257612389' in tf_file:
+			cal_version = 'GDS'
+			color = 'royalblue'
+		else:
+			cal_version = 'MoreTSTCorrections'
+			color = 'maroon'
 	elif 'DCS' in tf_file:
 		cal_version = 'DCS'
 		color = 'maroon'
@@ -286,67 +302,25 @@ for tf_file in tf_files:
 		plt.plot(frequency, model_magnitude, 'orangered', linewidth = 1.0, label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
-		plt.gca().set_xscale(options.tf_frequency_scale)
-		plt.gca().set_yscale(options.tf_magnitude_scale)
 		#plt.title(plot_title)
 		plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
-		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-		plt.gca().grid(which='minor', alpha=6)
-		plt.gca().grid(which='major', alpha=12)
-		if options.tf_frequency_max > 0:
-			plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
-		if options.tf_magnitude_max > 0:
-			plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
+		ticks_and_grid(plt.gca(), xmin = freq_min, xmax = freq_max, ymin = mag_min, ymax = mag_max, xscale = options.tf_frequency_scale, yscale = options.tf_magnitude_scale)
 		ax = plt.subplot(223)
-		ax.set_xscale(options.tf_frequency_scale)
 		plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0)
 		plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
-		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-		plt.gca().grid(which='minor', alpha=6)
-		plt.gca().grid(which='major', alpha=12)
-		if options.tf_frequency_max > 0:
-			plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
-		if options.tf_phase_max < 1000:
-			plt.ylim(options.tf_phase_min, options.tf_phase_max)
+		ticks_and_grid(plt.gca(), xmin = freq_min, xmax = freq_max, ymin = phase_min, ymax = phase_max, xscale = options.tf_frequency_scale)
 	plt.subplot(221)
 	plt.plot(frequency, magnitude, color, linewidth = 1.0, label = r'${\rm %s \ %s \ %s}$' % (ifo, cal_version, component))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
-	plt.gca().set_xscale(options.tf_frequency_scale)
-	plt.gca().set_yscale(options.tf_magnitude_scale)
 	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
-	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-	plt.gca().grid(which='minor', alpha=6)
-	plt.gca().grid(which='major', alpha=12)
-	if options.tf_frequency_max > 0:
-		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
-	if options.tf_magnitude_max > 0:
-		plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
+	ticks_and_grid(plt.gca(), xmin = freq_min, xmax = freq_max, ymin = mag_min, ymax = mag_max, xscale = options.tf_frequency_scale, yscale = options.tf_magnitude_scale)
 	ax = plt.subplot(223)
-	ax.set_xscale(options.tf_frequency_scale)
 	plt.plot(frequency, phase, color, linewidth = 1.0)
 	plt.ylabel(r'${\rm Phase [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
-	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-	plt.gca().grid(which='minor', alpha=6)
-	plt.gca().grid(which='major', alpha=12)
-	if options.tf_frequency_max > 0:
-		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
-	if options.tf_phase_max < 1000:
-		plt.ylim(options.tf_phase_min, options.tf_phase_max)
+	ticks_and_grid(plt.gca(), xmin = freq_min, xmax = freq_max, ymin = phase_min, ymax = phase_max, xscale = options.tf_frequency_scale)
 
 	# Plots of the ratio filters / model
 	if model_name is not None:
@@ -355,35 +329,14 @@ for tf_file in tf_files:
 		plt.plot(frequency, ratio_magnitude, color, linewidth = 1.0, label = r'${\rm %s \ %s / Model}$' % (ifo, cal_version))
 		leg = plt.legend(fancybox = True)
 		leg.get_frame().set_alpha(0.5)
-		plt.gca().set_xscale(options.ratio_frequency_scale)
-		plt.gca().set_yscale(options.ratio_magnitude_scale)
 		#plt.title(plot_title)
 		#plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
-		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-		plt.gca().grid(which='minor', alpha=6)
-		plt.gca().grid(which='major', alpha=12)
-		if options.ratio_frequency_max > 0:
-			plt.xlim(options.ratio_frequency_min, options.ratio_frequency_max)
-		if options.ratio_magnitude_max > 0:
-			plt.ylim(options.ratio_magnitude_min, options.ratio_magnitude_max)
+		ticks_and_grid(plt.gca(), xmin = ratio_freq_min, xmax = ratio_freq_max, ymin = ratio_mag_min, ymax = ratio_mag_max, xscale = options.ratio_frequency_scale, yscale = options.ratio_magnitude_scale)
 		ax = plt.subplot(224)
-		ax.set_xscale(options.ratio_frequency_scale)
 		plt.plot(frequency, ratio_phase, color, linewidth = 1.0)
 		#plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
-		plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-		plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-		plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-		plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-		plt.gca().grid(which='minor', alpha=6)
-		plt.gca().grid(which='major', alpha=12)
-		if options.ratio_frequency_max > 0:
-			plt.xlim(options.ratio_frequency_min, options.ratio_frequency_max)
-		if options.ratio_phase_max < 1000:
-			plt.ylim(options.ratio_phase_min, options.ratio_phase_max)
+		ticks_and_grid(plt.gca(), xmin = ratio_freq_min, xmax = ratio_freq_max, ymin = ratio_phase_min, ymax = ratio_phase_max, xscale = options.ratio_frequency_scale)
 		if not ('_response_filters_transfer_function_' in tf_file):
 			plt.savefig(tf_file.replace('.txt', '_ratio.png'))
 			plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
@@ -396,35 +349,14 @@ if response_count:
 	plt.plot(frequency, model_magnitude, 'orangered', linewidth = 1.0, ls = '--', label = r'${\rm %s \ Model \ %s}$' % (ifo, component))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.5)
-	plt.gca().set_xscale(options.tf_frequency_scale)
-	plt.gca().set_yscale(options.tf_magnitude_scale)
 	#plt.title(plot_title)
 	plt.ylabel(r'${\rm Magnitude \ [m/ct]}$')
-	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-	plt.gca().grid(which='minor', alpha=6)
-	plt.gca().grid(which='major', alpha=12)
-	if options.tf_frequency_max > 0:
-		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
-	if options.tf_magnitude_max > 0:
-		plt.ylim(options.tf_magnitude_min, options.tf_magnitude_max)
+	ticks_and_grid(plt.gca(), xmin = freq_min, xmax = freq_max, ymin = mag_min, ymax = mag_max, xscale = options.tf_frequency_scale, yscale = options.tf_magnitude_scale)
 	ax = plt.subplot(223)
-	ax.set_xscale(options.tf_frequency_scale)
 	plt.plot(frequency, model_phase, 'orangered', linewidth = 1.0, ls = '--')
 	plt.ylabel(r'${\rm Phase \ [deg]}$')
 	plt.xlabel(r'${\rm Frequency \ [Hz]}$')
-	plt.gca().set_yticks(find_minor_ticks.find_minor_ticks(plt.gca().get_yticks(), scale = plt.gca().get_yscale()), minor = True)
-	plt.gca().set_xticks(find_minor_ticks.find_minor_ticks(plt.gca().get_xticks(), scale = plt.gca().get_xscale()), minor = True)
-	plt.grid(True, which = "major", ls = '-', linewidth = 0.2, color = 'black')
-	plt.grid(True, which = "minor", ls = '-', linewidth = 0.1, color = 'black')
-	plt.gca().grid(which='minor', alpha=6)
-	plt.gca().grid(which='major', alpha=12)
-	if options.tf_frequency_max > 0:
-		plt.xlim(options.tf_frequency_min, options.tf_frequency_max)
-	if options.tf_phase_max < 1000:
-		plt.ylim(options.tf_phase_min, options.tf_phase_max)
+	ticks_and_grid(plt.gca(), xmin = freq_min, xmax = freq_max, ymin = phase_min, ymax = phase_max, xscale = options.tf_frequency_scale)
 plt.savefig(tf_file.replace('.txt', '_ratio.png'))
 plt.savefig(tf_file.replace('.txt', '_ratio.pdf'))
 

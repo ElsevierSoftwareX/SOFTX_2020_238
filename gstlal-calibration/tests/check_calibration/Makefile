@@ -4,22 +4,22 @@
 #################################
 
 # which interferometer (H or L)
-IFO = H
+IFO = L
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1263002240 | bc)
+START = $(shell echo 1257672576 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1263004800 | bc)
+END = $(shell echo 1257672576 + 1536 | bc)
 
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 256
 PLOT_COOLDOWN_TIME = 256
 
-GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1262900044_no_response_corr_test.ini
-#H1GDS_1262900044_no_response_corr_test.ini
-#H1GDS_1265142330_no_response_corr_test.ini
+GDSCONFIGS = Filters/O3/GDSFilters/L1GDS_1265490264_test.ini
+#L1GDS_1263670254_test.ini
+#L1GDS_1265490264_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_1239472998.ini
