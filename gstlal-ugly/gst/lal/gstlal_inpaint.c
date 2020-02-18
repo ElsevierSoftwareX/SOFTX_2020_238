@@ -170,6 +170,9 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 			GstStructure *str = gst_caps_get_structure(caps, 0);
 			gst_structure_get_int(str, "rate", &rate);
 			inpaint->rate = (guint) rate;
+			// FIXME Move elsewhere
+			if(inpaint->psd != NULL)
+				inverse_fft_psd(inpaint);
 			break;
 		}
 		case GST_EVENT_TAG:
@@ -383,8 +386,9 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 			XLALClearErrno();
 		}
 		gstlal_doubles_from_g_value_array(va, inpaint->psd->data->data, NULL);
-
-		inverse_fft_psd(inpaint);
+		// FIXME Move elsewhere
+		if(inpaint->rate != 0)
+			inverse_fft_psd(inpaint);
 		break;
 	}
 
@@ -551,6 +555,7 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint) {
 	inpaint->units = NULL;
 	inpaint->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, "unit-size", sizeof(double), NULL);
 	inpaint->transformed_data = NULL;
+	inpaint->rate = 0;
 
 	inpaint->initial_offset = 0;
 	inpaint->t0 = GST_CLOCK_TIME_NONE;
