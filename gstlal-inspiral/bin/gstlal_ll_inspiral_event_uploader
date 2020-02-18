@@ -122,6 +122,7 @@ class EventUploader(events.EventProcessor):
 		self.public_far_threshold = options.far_threshold / options.far_trials_factor
 		self.favored_event_topic = 'favored_events'
 		self.p_astro_topic = 'p_astro'
+		self.upload_topic = 'uploads'
 
 
 	def ingest(self, message):
@@ -217,9 +218,10 @@ class EventUploader(events.EventProcessor):
 			)
 			self.send_favored_event(event, window)
 			self.send_p_astro(event, window)
-			sent = self.upload_event(event)
-			if sent:
+			gid = self.upload_event(event)
+			if gid:
 				event['num_sent'] += 1
+				self.send_uploaded(event, gid)
 
 
 	def process_candidates(self, event):
@@ -306,6 +308,21 @@ class EventUploader(events.EventProcessor):
 		self.producer.poll(0)
 
 
+	def send_uploaded(self, event, gid):
+		"""
+		send an uploaded event via Kafka
+		"""
+		uploaded = {
+			'gid': gid,
+			'time': event['favored']['time'].gpsSeconds,
+			'time_ns': event['favored']['time'].gpsNanoSeconds,
+			'psd': event['favored']['psd'],
+			'coinc': event['favored']['coinc']
+		}
+		self.producer.produce(topic=self.upload_topic, value=json.dumps(uploaded))
+		self.producer.poll(0)
+
+
 	def upload_event(self, event):
 		"""
 		upload a new event + auxiliary files
@@ -347,7 +364,7 @@ class EventUploader(events.EventProcessor):
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
 			logging.warning("gracedb upload of {} failed".format(filename))
-			return False
+			return None
 
 		# gzip and upload psd
 		psd_fobj = StringIO.StringIO()
@@ -355,7 +372,7 @@ class EventUploader(events.EventProcessor):
 			f.write(event['favored']['psd'])
 		self.upload_file("strain PSDs", "psd.xml.gz", "psd", psd_fobj.getvalue(), graceid)
 		del psd_fobj
-		return True
+		return graceid
 
 
 	def upload_file(self, message, filename, tag, contents, graceid):
