@@ -88,7 +88,7 @@ typedef struct {
 
 	double fft_length_seconds;
 	REAL8FrequencySeries *psd;
-	REAL8TimeSeries *cov;
+	REAL8TimeSeries *inv_cov_series;
 } GSTLALInpaint;
 
 

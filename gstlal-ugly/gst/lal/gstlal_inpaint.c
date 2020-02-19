@@ -38,6 +38,16 @@
 #include <stdint.h>
 #include <string.h>
 
+/*
+ * stuff from gsl
+ */
+
+
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_permutation.h>
+#include <gsl/gsl_linalg.h>
+#include <gsl/gsl_blas.h>
 
 /*
  * stuff from gstreamer
@@ -70,7 +80,7 @@
 // FIXME Figure out why I need this
 static const LIGOTimeGPS GPS_ZERO = {0, 0};
 
-#define DEFAULT_FFT_LENGTH_SECONDS 32.0
+#define DEFAULT_FFT_LENGTH_SECONDS 8.0
 
 /*
  * ============================================================================
@@ -102,7 +112,7 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 // FIXME This function needs to be called each time a new psd is passed in
-static void inverse_fft_psd(GSTLALInpaint *inpaint) {
+static void inv_fft_psd(GSTLALInpaint *inpaint) {
 	// Set up the units
 	// FIXME Add these to inpaint struct
 	LALUnit strain_unit = lalStrainUnit;
@@ -110,21 +120,23 @@ static void inverse_fft_psd(GSTLALInpaint *inpaint) {
 	LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
 	XLALUnitMultiply(&sample_unit, &strain_unit, &strain_unit);
 
-	COMPLEX16FrequencySeries *complex_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
-	REAL8TimeSeries *cov = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / inpaint->rate, &sample_unit, inpaint->rate * (guint) inpaint->fft_length_seconds);
+	COMPLEX16FrequencySeries *complex_inv_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
+	REAL8TimeSeries *inv_cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / inpaint->rate, &sample_unit, inpaint->rate * (guint) inpaint->fft_length_seconds);
 
 	guint i;
-	for(i=0; i<inpaint->psd->data->length; i++)
-		complex_psd->data->data[i] = (COMPLEX16) inpaint->psd->data->data[i];
+	for(i=0; i < inpaint->psd->data->length; i++)
+		complex_inv_psd->data->data[i] = (COMPLEX16) 1. / inpaint->psd->data->data[i];
 
 	REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(inpaint->rate * (guint) inpaint->fft_length_seconds, 1);
-	if(XLALREAL8FreqTimeFFT(cov, complex_psd, revplan)){
+	if(XLALREAL8FreqTimeFFT(inv_cov_series, complex_inv_psd, revplan)){
 		GST_ERROR_OBJECT(inpaint, "XLALREAL8FreqTimeFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 	}
 
-	inpaint->cov = cov;
-	XLALDestroyCOMPLEX16FrequencySeries(complex_psd);
+	inpaint->inv_cov_series = inv_cov_series;
+	for(i=0; i < inpaint->inv_cov_series->data->length; i++);
+		inpaint->inv_cov_series->data->data[i] = 1. / inpaint->inv_cov_series->data->data[i];
+	XLALDestroyCOMPLEX16FrequencySeries(complex_inv_psd);
 }
 
 static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest) {
@@ -172,7 +184,7 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 			inpaint->rate = (guint) rate;
 			// FIXME Move elsewhere
 			if(inpaint->psd != NULL)
-				inverse_fft_psd(inpaint);
+				inv_fft_psd(inpaint);
 			break;
 		}
 		case GST_EVENT_TAG:
@@ -257,6 +269,157 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 }
 
 /*
+ * inpainting algorithm
+ */
+static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_start, guint data_end, guint hole_start, guint hole_end) {
+	fprintf(stderr, "in gstlal_inpaint_process...\n");
+	GstFlowReturn result = GST_FLOW_OK;
+	fprintf(stderr, "length = %u\n", inpaint->inv_cov_series->data->length);
+	g_assert(inpaint->inv_cov_series->data->length % 2 == 1);
+	g_assert(hole_end > hole_start);
+	gsl_matrix *F_trans_mat = gsl_matrix_alloc(inpaint->inv_cov_series->data->length / 2 + 1, inpaint->inv_cov_series->data->length / 2 + 1);
+	if(F_trans_mat == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+
+	gint i, j;
+	guint k;
+	// The covariance series we got from the fft is of length 2*(N-1),
+	// where N is the fft length in sample points. It is symmetric around
+	// the middle, and a circulant matrix since the noise is stationary.
+	// The value of a given element in the covariance matrix only depends
+	// on the difference between the row and column indices, with no
+	// difference corresponding to the middle of the covariance series.
+	// F_trans_mat will store the inverse covariance matrix until the end,
+	// when it will store the transformation matrix F.
+	for(i = 0; i < (gint) F_trans_mat->size1; i++) {
+		for(j = 0; j < (gint) F_trans_mat->size2; j++) {
+			k = (guint) fabs(i - j) + inpaint->inv_cov_series->data->length / 2;
+			gsl_matrix_set(F_trans_mat, (guint) i, (guint) j, inpaint->inv_cov_series->data->data[k]);
+		}
+	}
+
+	// Matrix A from inpainting paper
+	// A is size Nd x Nh, where Nd is the number of sample points in the
+	// data being transformed, and Nh is the number of holes to inpaint. A
+	// is zero except at points corresponding to a hole, where it is 1.
+	// e.g. If there are 8 sample points where points 5 and 6 are the holes
+	// to inpaint, then A is 1 at (4,0) and (5,1) and zero everywhere else:
+	// 0 0
+	// 0 0
+	// 0 0
+	// 0 0
+	// 1 0
+	// 0 1
+	// 0 0
+	// 0 0
+	gsl_matrix *A_hole_mat = gsl_matrix_calloc(F_trans_mat->size1, hole_end - hole_start);
+	if(A_hole_mat == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+
+	j = 0;
+	for(i = (gint) hole_start; i < (gint) hole_end; i++)
+		gsl_matrix_set(A_hole_mat, (guint) i, (guint) j++, 1);
+
+	// The matrices needed here are huge, so will allocate enough space for
+	// 2, one of which will be discarded in the end, and the other will
+	// store the final transformation matrix in the end.
+	// FIXME Need to find a less memory intensive way to do this.
+	gsl_matrix *mat_workspace1 = gsl_matrix_alloc(A_hole_mat->size1, A_hole_mat->size2);
+	if(mat_workspace1 == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_matrix *M_trans_mat = gsl_matrix_alloc(A_hole_mat->size2, A_hole_mat->size2);
+	if(M_trans_mat == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_matrix *M_inv_trans_mat = gsl_matrix_alloc(A_hole_mat->size2, A_hole_mat->size2);
+	if(M_inv_trans_mat == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+
+	// M = A^T * C^{-1} * A. This will be stored in mat_workspace1 and then inverted in-place
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, F_trans_mat, A_hole_mat, 0., mat_workspace1);
+	gsl_blas_dgemm(CblasTrans, CblasNoTrans, 1., A_hole_mat, mat_workspace1, 0., M_trans_mat);
+
+	// Initialize an identity permutation to use in an LU decomposition of M, which is used to compute the inverse
+	// gsl_linalg_LU_invx(x,p) will store the inverse of x in-place
+	gsl_permutation *identity_permutation = gsl_permutation_calloc(M_trans_mat->size1);
+	if(identity_permutation == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_linalg_LU_invert(M_trans_mat, identity_permutation, M_inv_trans_mat);
+	//gsl_linalg_LU_invx(M_inv_trans_mat, identity_permutation);
+	gsl_matrix_free(M_trans_mat);
+	gsl_permutation_free(identity_permutation);
+
+	// Perform A*M^{-1}*A^T*C^{-1}
+	gsl_matrix *mat_workspace2 = gsl_matrix_alloc(F_trans_mat->size1, F_trans_mat->size1);
+	if(mat_workspace2 == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1., A_hole_mat, M_inv_trans_mat, 0., mat_workspace1);
+	gsl_matrix_free(M_inv_trans_mat);
+	gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1., mat_workspace1, A_hole_mat, 0., mat_workspace2);
+	gsl_matrix_free(A_hole_mat);
+	gsl_matrix_free(mat_workspace1);
+	mat_workspace1 = gsl_matrix_alloc(F_trans_mat->size1, F_trans_mat->size1);
+	if(mat_workspace1 == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1., mat_workspace2, F_trans_mat, 0., mat_workspace1);
+	gsl_matrix_free(mat_workspace2);
+
+	// Subtract from identity to form F = 1 - A*M^{-1}*A^T*C^{-1}
+	gsl_matrix_set_identity(F_trans_mat);
+	gsl_matrix_sub(F_trans_mat, mat_workspace1);
+	gsl_matrix_free(mat_workspace1);
+
+	//gsl_blas_dgemv(CBLAS_TRANSPOSE_t TransA, double alpha, const gsl_matrix * A, const gsl_vector * x, double beta, gsl_vector * y)
+	// Load data into vector and then perform transformation
+	gsl_vector *hoft = gsl_vector_alloc(data_end - data_start);
+	if(hoft == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_vector *hoft_transformed = gsl_vector_alloc(data_end - data_start);
+	if(hoft_transformed == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	for(i = 0; i < (gint) hoft->size; i++)
+		gsl_vector_set(hoft, (guint) i, inpaint->transformed_data[(guint) i + data_start]);
+
+	gsl_blas_dgemv(CblasNoTrans, 1., F_trans_mat, hoft, 0.0, hoft_transformed);
+	gsl_matrix_free(F_trans_mat);
+	gsl_vector_free(hoft);
+	memcpy(inpaint->transformed_data + data_start, hoft_transformed->data, data_end - data_start);
+	gsl_vector_free(hoft_transformed);
+	fprintf(stderr, "gstlal_inpaint_process done\n");
+	return result;
+
+}
+
+/*
  * transform()
  */
 
@@ -305,6 +468,8 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 
 	//FIXME Dont hardcode everything for specific test case
 	double dt = 1./ (double) inpaint->rate;
+	guint gate_min = G_MAXUINT;
+	guint gate_max = 0;
 	for(idx=0; idx < n_samples; idx++) {
 		if(idx == 0)
 			t_idx = t0_GPS;
@@ -312,8 +477,13 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 			XLALGPSAdd(&t_idx, dt);
 
 		if(XLALGPSCmp(&t_idx, &gate_start) >= 0 && XLALGPSCmp(&t_idx, &gate_end) == -1) {
-			inpaint->transformed_data[idx] = 0;
+			gate_min = gate_min < (guint) idx ? gate_min : (guint) idx;
+			gate_max = (guint) idx;
 		}
+	}
+
+	if(gate_min < G_MAXUINT) {
+		result = gstlal_inpaint_process(inpaint, 0, n_samples, gate_min, ++gate_max);
 	}
 
 	GstMapInfo mapinfo;
@@ -388,7 +558,7 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 		gstlal_doubles_from_g_value_array(va, inpaint->psd->data->data, NULL);
 		// FIXME Move elsewhere
 		if(inpaint->rate != 0)
-			inverse_fft_psd(inpaint);
+			inv_fft_psd(inpaint);
 		break;
 	}
 
@@ -447,8 +617,8 @@ static void gstlal_inpaint_finalize(GObject * object) {
 
 	XLALDestroyREAL8FrequencySeries(inpaint->psd);
 	inpaint->psd = NULL;
-	XLALDestroyREAL8TimeSeries(inpaint->cov);
-	inpaint->cov = NULL;
+	XLALDestroyREAL8TimeSeries(inpaint->inv_cov_series);
+	inpaint->inv_cov_series = NULL;
 
 	free(inpaint->transformed_data);
 	inpaint->transformed_data = NULL;
@@ -563,5 +733,5 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint) {
 
 	inpaint->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	inpaint->psd = NULL;
-	inpaint->cov = NULL;
+	inpaint->inv_cov_series = NULL;
 }
