@@ -48,6 +48,7 @@ from lal import series
 from gstlal import events
 from gstlal import far
 from gstlal import inspiral
+from gstlal import lvalert_helper
 from gstlal import plotfar
 from gstlal import plotpsd
 
@@ -300,7 +301,7 @@ class EventPlotter(events.EventProcessor):
 					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.max_snr)
 				filename = '{}_{}_{}_snrchi.{}'.format(event['gid'], instrument, plot_type, self.format)
 				if not self.no_upload:
-					self.upload_file('{} SNR, chisq PDF'.format(instrument), filename, 'background', fig, event['gid'])
+					lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
 				if self.output_path is not None:
 					filename = os.path.join(self.output_path, filename)
 					logging.info('writing {} ...'.format(filename))
@@ -309,7 +310,7 @@ class EventPlotter(events.EventProcessor):
 		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
 		filename = '{}_likehoodratio_ccdf.{}'.format(event['gid'], self.format)
 		if not self.no_upload:
-			self.upload_file('Likelihood Ratio CCDF', filename, 'background', fig, event['gid'])
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
 		if self.output_path is not None:
 			filename = os.path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
@@ -319,7 +320,7 @@ class EventPlotter(events.EventProcessor):
 		fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (event['time'] - 14400., event['time']), tref = event['time'])
 		filename = '{}_horizon_distances.{}'.format(event['gid'], self.format)
 		if not self.no_upload:
-			self.upload_file('Horizon Distances', filename, 'psd', fig, event['gid'])
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "Horizon Distances", tagname = "psd")
 		if self.output_path is not None:
 			filename = os.path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
@@ -329,7 +330,7 @@ class EventPlotter(events.EventProcessor):
 		fig = plotfar.plot_rates(rankingstat)
 		filename = '{}_rates.{}'.format(event['gid'], self.format)
 		if not self.no_upload:
-			self.upload_file('Instrument combo rates', filename, 'background', fig, event['gid'])
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "Instrument combo rates", tagname = "background")
 		if self.output_path is not None:
 			filename = os.path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
@@ -354,7 +355,7 @@ class EventPlotter(events.EventProcessor):
 			logging.info('writing {} ...'.format(filename))
 			fig.savefig(filename)
 		else:
-			self.upload_file('strain spectral density plot', 'psd', filename, fig, event['gid'])
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "strain spectral density plot", tagname = "psd")
 
 		#
 		# Cumulative SNRs plot
@@ -368,12 +369,12 @@ class EventPlotter(events.EventProcessor):
 			logging.info('writing {} ...'.format(filename))
 			fig.savefig(filename)
 		else:
-			self.upload_file('cumulative SNRs plot', filename, 'psd', fig, event['gid'])
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
 
 		logging.info('finished processing psd plot for {}'.format(event['gid']))
 
 
-	def upload_snr_plots(self):
+	def upload_snr_plots(self, event):
 		# create two dicts keyed by event id: the first dict contains
 		# COMPLEX8TimeSeries which contain the snr time series, the second dict
 		# contains the template row
