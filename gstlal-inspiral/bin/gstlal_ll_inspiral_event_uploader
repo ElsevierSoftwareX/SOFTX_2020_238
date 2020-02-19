@@ -30,12 +30,14 @@ from itertools import chain
 import gzip
 import json
 import logging
+import math
 from optparse import OptionParser
 import StringIO
 import sys
 import time
 
 import numpy
+from scipy import random
 
 from ligo.segments import segment
 from ligo.gracedb.rest import GraceDb, HTTPError
@@ -359,11 +361,11 @@ class EventUploader(events.EventProcessor):
 					break
 			logging.warning(
 				"gracedb upload of {} "
-				"failed on attempt {:d}/{:d}".format(filename, attempt, self.retries)
+				"failed on attempt {:d}/{:d}".format('coinc.xml', attempt, self.retries)
 			)
 			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 		else:
-			logging.warning("gracedb upload of {} failed".format(filename))
+			logging.warning("gracedb upload of {} failed".format('coinc.xml'))
 			return None
 
 		# gzip and upload psd
