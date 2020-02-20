@@ -121,7 +121,7 @@ static void inv_fft_psd(GSTLALInpaint *inpaint) {
 	XLALUnitMultiply(&sample_unit, &strain_unit, &strain_unit);
 
 	COMPLEX16FrequencySeries *complex_inv_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
-	REAL8TimeSeries *inv_cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / inpaint->rate, &sample_unit, inpaint->rate * (guint) inpaint->fft_length_seconds);
+	REAL8TimeSeries *inv_cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / (double) inpaint->rate, &sample_unit, inpaint->rate * (guint) inpaint->fft_length_seconds);
 
 	guint i;
 	for(i=0; i < inpaint->psd->data->length; i++)
@@ -134,8 +134,6 @@ static void inv_fft_psd(GSTLALInpaint *inpaint) {
 	}
 
 	inpaint->inv_cov_series = inv_cov_series;
-	for(i=0; i < inpaint->inv_cov_series->data->length; i++);
-		inpaint->inv_cov_series->data->data[i] = 1. / inpaint->inv_cov_series->data->data[i];
 	XLALDestroyCOMPLEX16FrequencySeries(complex_inv_psd);
 }
 
@@ -253,7 +251,7 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 		// turn out that this is a negligible high level effect. For
 		// test case, make sure data being inpainted are in the center
 		// of the buffer
-		if(*othersize < inpaint->rate * (guint) inpaint->fft_length_seconds)
+		if(*othersize < inpaint->rate * (guint) inpaint->fft_length_seconds / 2)
 			*othersize = 0;
 		else
 			*othersize *= sizeof(double);
@@ -274,10 +272,9 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_start, guint data_end, guint hole_start, guint hole_end) {
 	fprintf(stderr, "in gstlal_inpaint_process...\n");
 	GstFlowReturn result = GST_FLOW_OK;
-	fprintf(stderr, "length = %u\n", inpaint->inv_cov_series->data->length);
-	g_assert(inpaint->inv_cov_series->data->length % 2 == 1);
+	g_assert(inpaint->inv_cov_series->data->length % 2 == 0);
 	g_assert(hole_end > hole_start);
-	gsl_matrix *F_trans_mat = gsl_matrix_alloc(inpaint->inv_cov_series->data->length / 2 + 1, inpaint->inv_cov_series->data->length / 2 + 1);
+	gsl_matrix *F_trans_mat = gsl_matrix_alloc(inpaint->inv_cov_series->data->length / 2, inpaint->inv_cov_series->data->length / 2);
 	if(F_trans_mat == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
@@ -286,14 +283,18 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 
 	gint i, j;
 	guint k;
-	// The covariance series we got from the fft is of length 2*(N-1),
-	// where N is the fft length in sample points. It is symmetric around
-	// the middle, and a circulant matrix since the noise is stationary.
-	// The value of a given element in the covariance matrix only depends
-	// on the difference between the row and column indices, with no
-	// difference corresponding to the middle of the covariance series.
+	// The covariance series we got from the fft is the length of the fft
+	// in sample points (N) while the length of the psd is N/2+1. The
+	// covariance series is symmetric around N/2+1, though it has one
+	// additional point before it than after it (i.e. index 1 and index N
+	// are the same, index 2 and index N-1 are the same, etc). It is a
+	// circulant matrix since the noise is stationary.  The value of a
+	// given element in the covariance matrix only depends on the
+	// difference between the row and column indices, with no difference
+	// corresponding to the middle (N/2+1) of the covariance series.
 	// F_trans_mat will store the inverse covariance matrix until the end,
 	// when it will store the transformation matrix F.
+	fprintf(stderr, "setting inverse covariance matrix\n");
 	for(i = 0; i < (gint) F_trans_mat->size1; i++) {
 		for(j = 0; j < (gint) F_trans_mat->size2; j++) {
 			k = (guint) fabs(i - j) + inpaint->inv_cov_series->data->length / 2;
@@ -323,6 +324,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	}
 
 	j = 0;
+	fprintf(stderr, "setting the a hole matrix\n");
 	for(i = (gint) hole_start; i < (gint) hole_end; i++)
 		gsl_matrix_set(A_hole_mat, (guint) i, (guint) j++, 1);
 
@@ -350,7 +352,9 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	}
 
 	// M = A^T * C^{-1} * A. This will be stored in mat_workspace1 and then inverted in-place
+	fprintf(stderr, "performing C^{-1} * A\n");
 	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, F_trans_mat, A_hole_mat, 0., mat_workspace1);
+	fprintf(stderr, "performing A^T*C^{-1}*A\n");
 	gsl_blas_dgemm(CblasTrans, CblasNoTrans, 1., A_hole_mat, mat_workspace1, 0., M_trans_mat);
 
 	// Initialize an identity permutation to use in an LU decomposition of M, which is used to compute the inverse
@@ -361,6 +365,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		result = GST_FLOW_ERROR;
 		return result;
 	}
+	fprintf(stderr, "inverting M\n");
 	gsl_linalg_LU_invert(M_trans_mat, identity_permutation, M_inv_trans_mat);
 	//gsl_linalg_LU_invx(M_inv_trans_mat, identity_permutation);
 	gsl_matrix_free(M_trans_mat);
@@ -373,8 +378,10 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		result = GST_FLOW_ERROR;
 		return result;
 	}
+	fprintf(stderr, "performing A*M^{-1}\n");
 	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1., A_hole_mat, M_inv_trans_mat, 0., mat_workspace1);
 	gsl_matrix_free(M_inv_trans_mat);
+	fprintf(stderr, "performing A*M^{-1}*A^T\n");
 	gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1., mat_workspace1, A_hole_mat, 0., mat_workspace2);
 	gsl_matrix_free(A_hole_mat);
 	gsl_matrix_free(mat_workspace1);
@@ -384,11 +391,13 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		result = GST_FLOW_ERROR;
 		return result;
 	}
+	fprintf(stderr, "Performing A*M^{-1}*A^T*C^{-1}\n");
 	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1., mat_workspace2, F_trans_mat, 0., mat_workspace1);
 	gsl_matrix_free(mat_workspace2);
 
 	// Subtract from identity to form F = 1 - A*M^{-1}*A^T*C^{-1}
 	gsl_matrix_set_identity(F_trans_mat);
+	fprintf(stderr, "Computing F\n");
 	gsl_matrix_sub(F_trans_mat, mat_workspace1);
 	gsl_matrix_free(mat_workspace1);
 
@@ -406,12 +415,15 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		result = GST_FLOW_ERROR;
 		return result;
 	}
+	fprintf(stderr, "setting hoft vector\n");
 	for(i = 0; i < (gint) hoft->size; i++)
 		gsl_vector_set(hoft, (guint) i, inpaint->transformed_data[(guint) i + data_start]);
 
+	fprintf(stderr, "computing Fd\n");
 	gsl_blas_dgemv(CblasNoTrans, 1., F_trans_mat, hoft, 0.0, hoft_transformed);
 	gsl_matrix_free(F_trans_mat);
 	gsl_vector_free(hoft);
+	fprintf(stderr, "copying inpainted data\n");
 	memcpy(inpaint->transformed_data + data_start, hoft_transformed->data, data_end - data_start);
 	gsl_vector_free(hoft_transformed);
 	fprintf(stderr, "gstlal_inpaint_process done\n");
@@ -442,7 +454,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	gst_audioadapter_push(inpaint->adapter, inbuf);
 
 	gint n_samples = (gint) gst_audioadapter_available_samples(inpaint->adapter);
-	if(n_samples < (gint) inpaint->rate * (gint) inpaint->fft_length_seconds) {
+	if(n_samples < (gint) inpaint->rate * (gint) inpaint->fft_length_seconds / 2) {
 		gst_buffer_set_size(outbuf,  0);
 		GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
 		GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset;
@@ -450,16 +462,17 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 		GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, 0, inpaint->rate);
 		return result;
 	}
+	guint outsamples = inpaint->rate * (guint) inpaint->fft_length_seconds / 2;
 
-	inpaint->outbuf_length = n_samples;
-	inpaint->transformed_data = calloc(n_samples, sizeof(double));
+	inpaint->outbuf_length = outsamples;
+	inpaint->transformed_data = calloc(outsamples, sizeof(double));
 	if(!inpaint->transformed_data) {
 		GST_ERROR_OBJECT(GST_ELEMENT(trans), "failure allocating memory");
 		result = GST_FLOW_ERROR;
 		return result;
 	}
 	//FIXME Dont hardcode everything for specific test case
-	gst_audioadapter_copy_samples(inpaint->adapter, inpaint->transformed_data, n_samples, NULL, NULL);
+	gst_audioadapter_copy_samples(inpaint->adapter, inpaint->transformed_data, outsamples, NULL, NULL);
 
 	//FIXME Dont hardcode everything for specific test case
 	XLALGPSSet(&gate_start, 1187008881, 378750000);
@@ -470,7 +483,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	double dt = 1./ (double) inpaint->rate;
 	guint gate_min = G_MAXUINT;
 	guint gate_max = 0;
-	for(idx=0; idx < n_samples; idx++) {
+	for(idx=0; idx < outsamples; idx++) {
 		if(idx == 0)
 			t_idx = t0_GPS;
 		else
@@ -483,19 +496,21 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	}
 
 	if(gate_min < G_MAXUINT) {
-		result = gstlal_inpaint_process(inpaint, 0, n_samples, gate_min, ++gate_max);
+		fprintf(stderr, "n_samples = %u, outsamples = %u, gate_min = %u, gate_max = %u, t0=%u + 1e-9*%u\n", n_samples, outsamples, gate_min, gate_max + 1, (guint) (inpaint->t0 / 1000000000), (guint) ( inpaint->t0 - 1000000000*(inpaint->t0 / 1000000000)));
+		result = gstlal_inpaint_process(inpaint, 0, outsamples, gate_min, ++gate_max);
 	}
 
 	GstMapInfo mapinfo;
 	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-	memcpy(mapinfo.data, inpaint->transformed_data, n_samples * sizeof(double));
+	memcpy(mapinfo.data, inpaint->transformed_data, outsamples * sizeof(double));
 	gst_buffer_unmap(outbuf, &mapinfo);
 
-	gst_audioadapter_flush_samples(inpaint->adapter, n_samples);
+	gst_audioadapter_flush_samples(inpaint->adapter, outsamples);
 	GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
 	GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset + inpaint->outbuf_length;
 	GST_BUFFER_PTS(outbuf) = inpaint->t0;
 	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, inpaint->outbuf_length, inpaint->rate);
+	inpaint->t0 += GST_BUFFER_DURATION(outbuf);
 
 
 	return result;
