@@ -230,6 +230,18 @@ def event_upload_layer(dag, jobs, options, job_tags):
 	return dagparts.DAGNode(jobs['eventUploader'], dag, [], opts = job_options)
 
 
+def event_plotter_layer(dag, jobs, options):
+	job_options = {
+		"kafka-server": options.output_kafka_server,
+		"gracedb-group": options.gracedb_group,
+		"gracedb-pipeline": options.gracedb_pipeline,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-service-url": options.gracedb_service_url,
+		"verbose": "",
+	}
+	return dagparts.DAGNode(jobs['eventPlotter'], dag, [], opts = job_options)
+
+
 def aggregator_layer(dag, jobs, options, job_tags):
 	# set up common settings for aggregation jobs
 	agg_options = {
