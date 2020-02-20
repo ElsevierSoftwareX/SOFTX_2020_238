@@ -836,6 +836,8 @@ class GracedBWrapper(object):
 				snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
 				xmldoc.childNodes[-1].appendChild(snr_time_series_element)
 
+			# get background bin from SnglInspiral objects while they're still available
+			background_bin = int(sngl_inspiral_table[0].Gamma1)
 			# translate IDs from integers to ilwd:char for
 			# backwards compatibility
 			ilwdify.do_it_to(xmldoc)
@@ -870,9 +872,9 @@ class GracedBWrapper(object):
 				)
 				del psd_fobj
 				# Write ranking data to disk and send path to kafka
-				rankingstat_filename = os.path.join(gracedb_uploads_gps_dir, "%s-%s_%04d_RankingData-%d-%d.xml.gz" % (instruments, description, sngl_inspiral_table[0].Gamma1, end_time, 1))
+				rankingstat_filename = os.path.join(gracedb_uploads_gps_dir, "%s-%s_%04d_RankingData-%d-%d.xml.gz" % (instruments, description, background_bin, end_time, 1))
 				with open(rankingstat_filename, "w") as fileobj:
-					ligolw_utils.write_fileobj(rankingstat_xmldoc_func(), fileobj, gz = True, verbose = True)
+					ligolw_utils.write_fileobj(rankingstat_xmldoc_func(), fileobj, gz = True)
 
 				self.producer.send(
 					"ranking_stat",
