@@ -57,7 +57,7 @@ from glue.ligolw import utils as ligolw_utils
 from glue.ligolw import lsctables
 from glue.ligolw import array as ligolw_array
 from glue.ligolw import param as ligolw_param
-from glue.ligolw.ligolw import LIGOLWContentHandler
+from glue.ligolw import ligolw
 
 import matplotlib
 matplotlib.rcParams.update({
@@ -72,7 +72,7 @@ matplotlib.rcParams.update({
 	'text.usetex': True
 })
 from matplotlib import figure
-from matploblib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 #-------------------------------------------------
 #				Content Handler
@@ -80,7 +80,7 @@ from matploblib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 @lsctables.use_in
 @ligolw_array.use_in
 @ligolw_param.use_in
-class ligolwcontenthandler(LIGOLWContentHandler):
+class ligolwcontenthandler(ligolw.LIGOLWContentHandler):
 	pass
 
 #-------------------------------------------------
@@ -169,7 +169,9 @@ class EventPlotter(events.EventProcessor):
 		payload = json.loads(message.value())
 
 		time = LIGOTimeGPS(payload['time'], payload['time_ns'])
-		xmldoc = ligolw_utils.load_fileobj(payload['coinc'], contenthandler=ligolwcontenthandler)[0]
+		coinc_fileobj = StringIO.StringIO(payload['coinc'])
+		xmldoc = ligolw_utils.load_fileobj(coinc_fileobj, contenthandler=ligolwcontenthandler)[0]
+		coinc_fileobj.close()
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 		bank_bin = '{:04}'.format(int(sngl_inspiral_table[0].Gamma1))
 		# No guarantee that the coinc event id will be unique between
@@ -191,8 +193,10 @@ class EventPlotter(events.EventProcessor):
 		### preferred event
 		elif message.topic() == self.upload_topic:
 			self.events[event_key]['gid'] = payload['gid']
-			self.events[event_key]['psd'] = ligolw_utils.load_fileobj(payload['psd'], contenthandler=series.PSDContentHandler)[0]
 			self.events[event_key]['coinc'] = xmldoc
+			psd_fileobj = StringIO.StringIO(payload['psd'])
+			self.events[event_key]['psd'] = ligolw_utils.load_fileobj(psd_fileobj, contenthandler=series.PSDContentHandler)[0]
+			psd_fileobj.close()
 
 
 	def new_event(self, time, bank_bin):
@@ -226,7 +230,7 @@ class EventPlotter(events.EventProcessor):
 				elif not event['uploaded']['psd_plots'] and event['psd']:
 					self.upload_psd_plots(event) 
 					event['uploaded']['psd_plots'] = True
-				elif not event['uploaded'['snr_plots'] and event['coinc']:
+				elif not event['uploaded']['snr_plots']:
 					self.upload_snr_plots(event)
 					event['uploaded']['snr_plots'] = True
 
@@ -234,7 +238,7 @@ class EventPlotter(events.EventProcessor):
 		current_time = utils.gps_now()
 		for event_key, event in self.events.items():
 			uploaded = event['uploaded']
-			if uploaded['ranking_data'] and uploaded['ranking_plots'] and uploaded['psd_plots']:
+			if uploaded['ranking_data'] and uploaded['ranking_plots'] and uploaded['psd_plots'] and uploaded['snr_plots']:
 				event['coinc'].unlink()
 				event['psd'].unlink()
 				self.events.pop(event_key)
@@ -250,7 +254,7 @@ class EventPlotter(events.EventProcessor):
 		"""
 		upload a file to gracedb
 		"""
-		logging.info('posting '{}' to gracedb ID {}'.format(filename, graceid))
+		logging.info('posting \'{}\' to gracedb ID {}'.format(filename, graceid))
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.writeLog(
@@ -274,18 +278,22 @@ class EventPlotter(events.EventProcessor):
 			logging.warning('gracedb upload of {} for ID {} failed'.format(filename, graceid))
 			return False
 
-	def upload_ranking_data(self):
-		self.upload_file('ranking statistic PDFs', 'ranking_data.xml.gz', 'ranking_statistic', xmldoc = ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingData.LIGOLWContentHandler), event['gid'])
+	def upload_ranking_data(self, event):
+		ranking_fobj = StringIO.StringIO()
+		ligolw_utils.write_fileobj(ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingStat.LIGOLWContentHandler), ranking_fobj, gz = True)
+		self.upload_file('ranking statistic PDFs', 'ranking_data.xml.gz', 'ranking_statistic', ranking_fobj.getvalue(), event['gid'])
+		ranking_fobj.close()
 
 	def upload_ranking_plots(self, event):
 		### load all of the information needed to generate plots
 		sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(event['coinc']))
+		coinc_event_table = lsctables.CoincTable.get_table(event['coinc'])
 		try:
 			coinc_event, = coinc_event_table
 		except ValueError:
 			raise ValueError('document does not contain exactly one candidate')
 
-		rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingData.LIGOLWContentHandler))
+		rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingStat.LIGOLWContentHandler))
 		rankingstat.finish()
 		fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 
@@ -295,13 +303,19 @@ class EventPlotter(events.EventProcessor):
 			for instrument in rankingstat.instruments:
 				if instrument in sngl_inspirals:
 					# place marker on plot
-					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
+					if sngl_inspirals[instrument].snr >= 4.:
+						snr = sngl_inspirals[instrument].snr
+						chisq = sngl_inspirals[instrument].chisq
+					else:
+						snr = None
+						chisq = None
+					fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, self.max_snr, event_snr = snr, event_chisq = chisq)
 				else:
 					# no sngl for this instrument
-					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.max_snr)
+					fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, self.max_snr)
 				filename = '{}_{}_{}_snrchi.{}'.format(event['gid'], instrument, plot_type, self.format)
 				if not self.no_upload:
-					lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
+					lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = '%s SNR, chisq PDF' % instrument, tagname = 'background')
 				if self.output_path is not None:
 					filename = os.path.join(self.output_path, filename)
 					logging.info('writing {} ...'.format(filename))
@@ -310,7 +324,7 @@ class EventPlotter(events.EventProcessor):
 		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
 		filename = '{}_likehoodratio_ccdf.{}'.format(event['gid'], self.format)
 		if not self.no_upload:
-			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'Likelihood Ratio CCDF', tagname = 'background')
 		if self.output_path is not None:
 			filename = os.path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
@@ -320,7 +334,7 @@ class EventPlotter(events.EventProcessor):
 		fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (event['time'] - 14400., event['time']), tref = event['time'])
 		filename = '{}_horizon_distances.{}'.format(event['gid'], self.format)
 		if not self.no_upload:
-			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "Horizon Distances", tagname = "psd")
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'Horizon Distances', tagname = 'psd')
 		if self.output_path is not None:
 			filename = os.path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
@@ -330,11 +344,12 @@ class EventPlotter(events.EventProcessor):
 		fig = plotfar.plot_rates(rankingstat)
 		filename = '{}_rates.{}'.format(event['gid'], self.format)
 		if not self.no_upload:
-			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "Instrument combo rates", tagname = "background")
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'Instrument combo rates', tagname = 'background')
 		if self.output_path is not None:
 			filename = os.path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
 			fig.savefig(filename)
+		logging.info('finished processing ranking data plots for {}'.format(event['gid']))
 
 
 	def upload_psd_plots(self, event):
@@ -355,7 +370,7 @@ class EventPlotter(events.EventProcessor):
 			logging.info('writing {} ...'.format(filename))
 			fig.savefig(filename)
 		else:
-			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "strain spectral density plot", tagname = "psd")
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'strain spectral density plot', tagname = 'psd')
 
 		#
 		# Cumulative SNRs plot
@@ -369,7 +384,7 @@ class EventPlotter(events.EventProcessor):
 			logging.info('writing {} ...'.format(filename))
 			fig.savefig(filename)
 		else:
-			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'cumulative SNRs plot', tagname = 'psd')
 
 		logging.info('finished processing psd plot for {}'.format(event['gid']))
 
@@ -378,12 +393,12 @@ class EventPlotter(events.EventProcessor):
 		# create two dicts keyed by event id: the first dict contains
 		# COMPLEX8TimeSeries which contain the snr time series, the second dict
 		# contains the template row
-		timeseries_ligolw_dict = dict((ligolw_param.get_pyvalue(elem, u'event_id'), lalseries.parse_COMPLEX8TimeSeries(elem)) for elem in event['coinc'].getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u'Name') and elem.Name == u'COMPLEX8TimeSeries')
+		timeseries_ligolw_dict = dict((ligolw_param.get_pyvalue(elem, u'event_id'), series.parse_COMPLEX8TimeSeries(elem)) for elem in event['coinc'].getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u'Name') and elem.Name == u'COMPLEX8TimeSeries')
 		eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(event['coinc']))
 
 		# Parse the bank files
 		# NOTE This assumes --svd-bank will also be provided once in the ProcessParamsTable
-		banks = inspiral.parse_bank_files(inspiral.parse_svdbank_string([row.value for row in lsctables.ProcessParamsTable.get_table(event['coinc']) if row.param == '--svd-bank'].pop()))
+		banks = inspiral.parse_bank_files(inspiral.parse_svdbank_string([row.value for row in lsctables.ProcessParamsTable.get_table(event['coinc']) if row.param == '--svd-bank'].pop()), verbose=False)
 
 
 		#
@@ -428,10 +443,10 @@ class EventPlotter(events.EventProcessor):
 			ax = fig.add_subplot(len(timeseries_ligolw_dict.items()),1,i+1)
 			ax.fill_between(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]-snrsigma, snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]+snrsigma, color='0.75')
 			#FIXME : This could potentially create an asymmetric plot. Since the peakoffset may not be the 'center' of snr timeseries but could be off by one index from the 'center'.
-			ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], 'k', label = r'$\mathrm{Measured}\,\rho(t)$')
+			ax.plot(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2 + 1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], 'k', label = r'$\mathrm{Measured}\,\rho(t)$')
 			ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], auto.real[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2]*maxsnr, 'b--', label = r'$\mathrm{Scaled\,Autocorrelation}$')
-			ax.set_ylabel(r'$\mathrm\{{}\}\,\rho(t)$'.format(ifo))
-			ax.set_xlabel(r'$\mathrm\{Time\,from\,{}\}$'.format(peaktime))
+			ax.set_ylabel(r'$\mathrm{{{}}}\,\rho(t)$'.format(ifo))
+			ax.set_xlabel(r'$\mathrm{{Time\,from\,{}}}$'.format(peaktime))
 			ax.legend(loc='best')
 			ax.grid()
 			
@@ -439,13 +454,15 @@ class EventPlotter(events.EventProcessor):
 		filename = '{}_snrtimeseries.{}'.format(event['gid'], self.format)
 
 		if not self.no_upload:
-			self.upload_file('SNR time series', filename, 'background', fig, event['gid'])
+			logging.info('writing {} ...'.format(filename))
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'SNR time series', tagname = 'background')
 
 		if self.output_path is not None:
 			filename = path.join(self.output_path, filename)
 			logging.info('writing {} ...'.format(filename))
 			fig.savefig(filename)
 
+		logging.info('finished processing SNR time series plot for {}'.format(event['gid']))
 
 	def finish(self):
 		"""
