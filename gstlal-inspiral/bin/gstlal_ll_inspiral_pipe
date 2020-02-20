@@ -85,8 +85,12 @@ def set_up_jobs(options):
 	# A local universe job that will run in a loop marginalizing all of the likelihoods
 	jobs['marg'] = dagparts.DAGJob('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = local_condor_commands)
 
-	# an lvalert_listen job
-	jobs['lvalertListen'] = dagparts.DAGJob('gstlal_inspiral_lvalert_uberplotter', universe = "local", condor_commands = local_condor_commands)
+	if options.delay_uploads:
+		# event plotter that works in tandem with the event uploader
+		jobs['eventPlotter'] = dagparts.DAGJob("gstlal_ll_inspiral_event_plotter", condor_commands = non_inspiral_condor_commands)
+	else:
+		# an lvalert_listen job
+		jobs['lvalertListen'] = dagparts.DAGJob('gstlal_inspiral_lvalert_uberplotter', universe = "local", condor_commands = local_condor_commands)
 
 	# aggregator job
 	jobs['agg'] = dagparts.DAGJob("gstlal_ll_inspiral_aggregator", condor_commands = non_inspiral_condor_commands)
@@ -270,9 +274,11 @@ jobs = set_up_jobs(options)
 # Setup the Node classes
 #
 
-listenNode = dagparts.DAGNode(jobs['lvalertListen'], dag, [],
-	opts = {"gracedb-service-url": options.gracedb_service_url, "lvalert-server-url": options.lvalert_server_url},
-)
+if not options.delay_uploads:
+	# set up lvalert-based uberplotter if not use kafka for event uploads and plots
+	listenNode = dagparts.DAGNode(jobs['lvalertListen'], dag, [],
+		opts = {"gracedb-service-url": options.gracedb_service_url, "lvalert-server-url": options.lvalert_server_url},
+	)
 
 
 # dq with default options
@@ -304,6 +310,7 @@ aggNodes = inspiral_pipe.aggregator_layer(dag, jobs, options, job_tags)
 
 if options.delay_uploads:
 	eventNodes = inspiral_pipe.event_upload_layer(dag, jobs, options, job_tags)
+	plotNodes = inspiral_pipe.event_plotter_layer(dag, jobs, options)
 
 # inspiral state backup
 
