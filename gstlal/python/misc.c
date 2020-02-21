@@ -35,6 +35,9 @@
 #include <gstlal/gstlal_cdf_weighted_chisq_P.h>
 
 
+#define MODULE_NAME "gstlal._misc"
+
+
 /*
  * ============================================================================
  *
@@ -125,8 +128,31 @@ static struct PyMethodDef methods[] = {
 };
 
 
-void init_misc(void)
+#if PY_MAJOR_VERSION < 3
+PyMODINIT_FUNC init_misc(void); /* Silence -Wmissing-prototypes */
+PyMODINIT_FUNC init_misc(void)
+#else
+PyMODINIT_FUNC PyInit__misc(void); /* Silence -Wmissing-prototypes */
+PyMODINIT_FUNC PyInit__misc(void)
+#endif
 {
-	(void) Py_InitModule("gstlal._misc", methods);
+#if PY_MAJOR_VERSION < 3
+	(void) Py_InitModule(MODULE_NAME, methods);
+#else
+	static struct PyModuleDef modef = {
+		PyModuleDef_HEAD_INIT,
+		.m_name = MODULE_NAME,
+		.m_size = -1,
+		.m_methods = methods,
+	};
+	PyObject *module = PyModule_Create(&modef);
+#endif
+
 	import_array();
+
+#if PY_MAJOR_VERSION < 3
+	return;
+#else
+	return module;
+#endif
 }
