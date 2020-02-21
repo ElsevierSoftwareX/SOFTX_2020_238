@@ -233,7 +233,7 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			/* Type casting unsigned int (guint) to int */
 			for(i = 0; i < (int)state->channels; i++)
 			{
-				current_val = fabsf(state->values.as_double[i]);
+				current_val = fabs(state->values.as_double[i]);
 				if(current_val > max_val)
 				{
 					max_val = current_val;
@@ -267,7 +267,7 @@ int gstlal_peak_max_over_channels(struct gstlal_peak_state *state)
 			/* Type casting unsigned int (guint) to int */
 			for(i = 0; i < (int)state->channels; i++)
 			{
-				current_val = cabsf(state->values.as_double_complex[i]);
+				current_val = cabs(state->values.as_double_complex[i]);
 				if(current_val > max_val)
 				{
 					max_val = current_val;
