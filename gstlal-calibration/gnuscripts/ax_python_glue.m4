@@ -6,7 +6,7 @@ AC_DEFUN([AX_PYTHON_GLUE],[
 	AX_PYTHON_MODULE([glue])
 	AS_IF([test "x$HAVE_PYMOD_GLUE" == "xyes"], [
 		AC_MSG_CHECKING(glue version)
-		GLUE_VERSION=`$PYTHON -c "from glue import __version__ ; print '.'.join(__version__.strip().split('.'))"`
+		GLUE_VERSION=`$PYTHON -c "from glue import __version__ ; print('.'.join(__version__.strip().split('.')))"`
 		AS_IF([test $? != "0"], [
 			AC_MSG_ERROR(["cannot determine version"])
 		])
@@ -28,7 +28,7 @@ AC_DEFUN([AX_PYTHON_LIGO_SEGMENTS],[
 	AX_PYTHON_MODULE([ligo.segments])
 	AS_IF([test "x$HAVE_PYMOD_LIGO_SEGMENTS" == "xyes"], [
 		AC_MSG_CHECKING(ligo.segments version)
-		LIGO_SEGMENTS_VERSION=`$PYTHON -c "from ligo.segments import __version__ ; print '.'.join(__version__.strip().split('.'))"`
+		LIGO_SEGMENTS_VERSION=`$PYTHON -c "from ligo.segments import __version__ ; print('.'.join(__version__.strip().split('.')))"`
 		AS_IF([test $? != "0"], [
 			AC_MSG_ERROR(["cannot determine version"])
 		])
