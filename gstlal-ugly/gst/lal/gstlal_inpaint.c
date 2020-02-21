@@ -398,10 +398,13 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	gsl_matrix_free(mat_workspace2);
 
 	// Subtract from identity to form F = 1 - A*M^{-1}*A^T*C^{-1}
+	gsl_matrix_free(F_trans_mat);
+	/*
 	gsl_matrix_set_identity(F_trans_mat);
 	fprintf(stderr, "Computing F\n");
 	gsl_matrix_sub(F_trans_mat, mat_workspace1);
 	gsl_matrix_free(mat_workspace1);
+	*/
 
 	//gsl_blas_dgemv(CBLAS_TRANSPOSE_t TransA, double alpha, const gsl_matrix * A, const gsl_vector * x, double beta, gsl_vector * y)
 	// Load data into vector and then perform transformation
@@ -422,11 +425,12 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		gsl_vector_set(hoft, (guint) i, inpaint->transformed_data[(guint) i + data_start]);
 
 	fprintf(stderr, "computing Fd\n");
-	gsl_blas_dgemv(CblasNoTrans, 1., F_trans_mat, hoft, 0.0, hoft_transformed);
-	gsl_matrix_free(F_trans_mat);
+	gsl_blas_dgemv(CblasNoTrans, 1., mat_workspace1, hoft, 0.0, hoft_transformed);
+	gsl_matrix_free(mat_workspace1);
 	gsl_vector_free(hoft);
 	fprintf(stderr, "copying inpainted data\n");
-	memcpy(inpaint->transformed_data + data_start, hoft_transformed->data, data_end - data_start);
+	for(i = (gint) data_start; i < (gint) (data_end - data_start); i++)
+		inpaint->transformed_data[(guint) i]  -= hoft_transformed->data[(guint) i];
 	gsl_vector_free(hoft_transformed);
 	fprintf(stderr, "gstlal_inpaint_process done\n");
 	return result;
@@ -485,7 +489,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	double dt = 1./ (double) inpaint->rate;
 	guint gate_min = G_MAXUINT;
 	guint gate_max = 0;
-	for(idx=0; idx < outsamples; idx++) {
+	for(idx=0; idx < (gint) outsamples; idx++) {
 		if(idx == 0)
 			t_idx = t0_GPS;
 		else
