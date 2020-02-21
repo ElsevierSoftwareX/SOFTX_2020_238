@@ -357,19 +357,21 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	fprintf(stderr, "performing A^T*C^{-1}*A\n");
 	gsl_blas_dgemm(CblasTrans, CblasNoTrans, 1., A_hole_mat, mat_workspace1, 0., M_trans_mat);
 
-	// Initialize an identity permutation to use in an LU decomposition of M, which is used to compute the inverse
-	// gsl_linalg_LU_invx(x,p) will store the inverse of x in-place
-	gsl_permutation *identity_permutation = gsl_permutation_calloc(M_trans_mat->size1);
-	if(identity_permutation == NULL) {
+	// Perform an LU decomposition of M, which is required to compute its
+	// inverse using the gsl function gsl_linalg_LU_invert
+	int signum;
+	gsl_permutation *permutation = gsl_permutation_alloc(M_trans_mat->size1);
+	if(permutation == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
 		return result;
 	}
+	fprintf(stderr, "Performing LU decomposition of M\n");
+	gsl_linalg_LU_decomp(M_trans_mat, permutation, &signum);
 	fprintf(stderr, "inverting M\n");
-	gsl_linalg_LU_invert(M_trans_mat, identity_permutation, M_inv_trans_mat);
-	//gsl_linalg_LU_invx(M_inv_trans_mat, identity_permutation);
+	gsl_linalg_LU_invert(M_trans_mat, permutation, M_inv_trans_mat);
 	gsl_matrix_free(M_trans_mat);
-	gsl_permutation_free(identity_permutation);
+	gsl_permutation_free(permutation);
 
 	// Perform A*M^{-1}*A^T*C^{-1}
 	gsl_matrix *mat_workspace2 = gsl_matrix_alloc(F_trans_mat->size1, F_trans_mat->size1);
