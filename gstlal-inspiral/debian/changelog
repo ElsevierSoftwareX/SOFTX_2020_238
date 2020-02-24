@@ -1,3 +1,13 @@
+gstlal-inspiral (1.7.2-1) unstable; urgency=low
+
+  * switch to using Kafka-based event plotter when event aggregator
+    is in operation
+  * Save ranking data file snapshots to disk for significant
+    candidates
+  * fix failure mode during failed uploads in event aggregator
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Mon, 24 Feb 2020 06:53:21 -0800
+
 gstlal-inspiral (1.7.1-1) unstable; urgency=low
 
   * fix issue, edge cases in preferred event logic for event aggregator
