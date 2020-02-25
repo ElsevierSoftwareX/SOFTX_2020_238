@@ -1,3 +1,9 @@
+gstlal-inspiral (1.7.3-1) unstable; urgency=low
+
+  * far.py: put singles penalty to 10 to match final o3a catalog config.
+
+ -- Alexander Pace <alexander.pace@ligo.org>  Tue, 25 Feb 2020 06:15:15 -0800
+
 gstlal-inspiral (1.7.2-1) unstable; urgency=low
 
   * switch to using Kafka-based event plotter when event aggregator
