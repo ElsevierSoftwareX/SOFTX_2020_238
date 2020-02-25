@@ -76,6 +76,7 @@
 #include <lal/FrequencySeries.h>
 #include <lal/TimeFreqFFT.h>
 #include <lal/Units.h>
+#include <lal/Window.h>
 
 // FIXME Figure out why I need this
 static const LIGOTimeGPS GPS_ZERO = {0, 0};
@@ -115,13 +116,15 @@ G_DEFINE_TYPE_WITH_CODE(
 static void inv_fft_psd(GSTLALInpaint *inpaint) {
 	// Set up the units
 	// FIXME Add these to inpaint struct
-	LALUnit strain_unit = lalStrainUnit;
-	LALUnit sample_unit;
+	LALUnit strain_units = lalStrainUnit;
+	LALUnit sample_units, sample_inv_units, psd_inv_units;
+	XLALUnitMultiply(&sample_units, &strain_units, &strain_units);
+	XLALUnitInvert(&sample_inv_units, &sample_units);
 	LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
-	XLALUnitMultiply(&sample_unit, &strain_unit, &strain_unit);
+	XLALUnitInvert(&psd_inv_units, &psd_units);
 
-	COMPLEX16FrequencySeries *complex_inv_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
-	REAL8TimeSeries *inv_cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / (double) inpaint->rate, &sample_unit, inpaint->rate * (guint) inpaint->fft_length_seconds);
+	COMPLEX16FrequencySeries *complex_inv_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_inv_units, inpaint->psd->data->length);
+	REAL8TimeSeries *inv_cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / (double) inpaint->rate, &sample_inv_units, inpaint->rate * (guint) inpaint->fft_length_seconds);
 
 	guint i;
 	for(i=0; i < inpaint->psd->data->length; i++)
@@ -133,8 +136,23 @@ static void inv_fft_psd(GSTLALInpaint *inpaint) {
 		XLALClearErrno();
 	}
 
+	// Multiply by sum of squares of window function. The covariance matrix
+	// would need be multiplied by 1 over this factor, so the inverse
+	// covariance matrix should be multiplied by the factor
+	// NOTE NOTE NOTE This will depend on the method used to construct the
+	// psd, the numbers used here assume the FIR whitener was not used
+	// FIXME Pass in zero pad length instead of hardcoding it
+	REAL8Window *hann_window = XLALCreateHannREAL8Window((guint) inpaint->fft_length_seconds * inpaint->rate - ((guint) inpaint->fft_length_seconds * inpaint->rate) / 2 + 1);
+	double window_sum_of_squares = 0;
+	for(i = 0; i < hann_window->data->length; i++)
+		window_sum_of_squares += pow(hann_window->data->data[i], 2);
+
+	for(i = 0; i < inv_cov_series->data->length; i++)
+		inv_cov_series->data->data[i] *= window_sum_of_squares;
+
 	inpaint->inv_cov_series = inv_cov_series;
 	XLALDestroyCOMPLEX16FrequencySeries(complex_inv_psd);
+	XLALDestroyREAL8Window(hann_window);
 }
 
 static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest) {
