@@ -176,6 +176,7 @@ def parse_command_line():
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--far-trials-factor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb")
+	parser.add_option("--cap-singles", action = "store_true", help = "Cap singles to 1 / livetime if computing FAR. No effect otherwise")
 	parser.add_option("--zookeeper-port", type = "int", metavar = "number", help = "Set the zookeeper port. default 2181", default = 2181)
 	parser.add_option("--output-kafka-server", metavar = "addr", help = "Set the kafka server hostname to send output data to - note, for now this must be the cluster facing ip address of the submit node. example = 10.14.0.112:9092")
 	parser.add_option("--delay-uploads", action = "store_true", help = "Choose whether to delay uploads to allow aggregation of events downstream from many gstlal_inspiral jobs (default is False).")

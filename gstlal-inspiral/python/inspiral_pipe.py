@@ -139,6 +139,7 @@ def online_inspiral_layer(dag, jobs, options):
 			"job-tag": job_tags[-1],
 			"likelihood-snapshot-interval": options.likelihood_snapshot_interval,
 			"far-trials-factor": options.far_trials_factor,
+			"cap-singles": options.cap_singles,
 			"min-instruments": options.min_instruments,
 			"time-slide-file": options.time_slide_file,
 			"output-kafka-server": options.output_kafka_server
