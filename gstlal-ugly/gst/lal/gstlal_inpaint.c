@@ -113,7 +113,7 @@ G_DEFINE_TYPE_WITH_CODE(
  */
 
 // FIXME This function needs to be called each time a new psd is passed in
-static void inv_fft_psd(GSTLALInpaint *inpaint) {
+static void fft_psd(GSTLALInpaint *inpaint) {
 	// Set up the units
 	// FIXME Add these to inpaint struct
 	LALUnit strain_units = lalStrainUnit;
@@ -123,22 +123,20 @@ static void inv_fft_psd(GSTLALInpaint *inpaint) {
 	LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
 	XLALUnitInvert(&psd_inv_units, &psd_units);
 
-	COMPLEX16FrequencySeries *complex_inv_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_inv_units, inpaint->psd->data->length);
-	REAL8TimeSeries *inv_cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / (double) inpaint->rate, &sample_inv_units, inpaint->rate * (guint) inpaint->fft_length_seconds);
+	COMPLEX16FrequencySeries *complex_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
+	REAL8TimeSeries *cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / (double) inpaint->rate, &sample_units, inpaint->rate * (guint) inpaint->fft_length_seconds);
 
 	guint i;
 	for(i=0; i < inpaint->psd->data->length; i++)
-		complex_inv_psd->data->data[i] = (COMPLEX16) 1. / inpaint->psd->data->data[i];
+		complex_psd->data->data[i] = (COMPLEX16) 1. / inpaint->psd->data->data[i];
 
 	REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(inpaint->rate * (guint) inpaint->fft_length_seconds, 1);
-	if(XLALREAL8FreqTimeFFT(inv_cov_series, complex_inv_psd, revplan)){
+	if(XLALREAL8FreqTimeFFT(cov_series, complex_psd, revplan)){
 		GST_ERROR_OBJECT(inpaint, "XLALREAL8FreqTimeFFT() failed: %s", XLALErrorString(XLALGetBaseErrno()));
 		XLALClearErrno();
 	}
 
-	// Multiply by sum of squares of window function. The covariance matrix
-	// would need be multiplied by 1 over this factor, so the inverse
-	// covariance matrix should be multiplied by the factor
+	// Multiply by sum of squares of window function.
 	// NOTE NOTE NOTE This will depend on the method used to construct the
 	// psd, the numbers used here assume the FIR whitener was not used
 	// FIXME Pass in zero pad length instead of hardcoding it
@@ -147,11 +145,11 @@ static void inv_fft_psd(GSTLALInpaint *inpaint) {
 	for(i = 0; i < hann_window->data->length; i++)
 		window_sum_of_squares += pow(hann_window->data->data[i], 2);
 
-	for(i = 0; i < inv_cov_series->data->length; i++)
-		inv_cov_series->data->data[i] *= window_sum_of_squares;
+	for(i = 0; i < cov_series->data->length; i++)
+		cov_series->data->data[i] *= window_sum_of_squares;
 
-	inpaint->inv_cov_series = inv_cov_series;
-	XLALDestroyCOMPLEX16FrequencySeries(complex_inv_psd);
+	inpaint->cov_series = cov_series;
+	XLALDestroyCOMPLEX16FrequencySeries(complex_psd);
 	XLALDestroyREAL8Window(hann_window);
 }
 
@@ -200,7 +198,7 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 			inpaint->rate = (guint) rate;
 			// FIXME Move elsewhere
 			if(inpaint->psd != NULL)
-				inv_fft_psd(inpaint);
+				fft_psd(inpaint);
 			break;
 		}
 		case GST_EVENT_TAG:
@@ -290,10 +288,16 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_start, guint data_end, guint hole_start, guint hole_end) {
 	fprintf(stderr, "in gstlal_inpaint_process...\n");
 	GstFlowReturn result = GST_FLOW_OK;
-	g_assert(inpaint->inv_cov_series->data->length % 2 == 0);
+	g_assert(inpaint->cov_series->data->length % 2 == 0);
 	g_assert(hole_end > hole_start);
-	gsl_matrix *F_trans_mat = gsl_matrix_alloc(inpaint->inv_cov_series->data->length / 2, inpaint->inv_cov_series->data->length / 2);
-	if(F_trans_mat == NULL) {
+	gsl_matrix *cov_mat = gsl_matrix_alloc(inpaint->cov_series->data->length / 2, inpaint->cov_series->data->length / 2);
+	if(cov_mat == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	gsl_matrix *inv_cov_mat = gsl_matrix_alloc(cov_mat->size1, cov_mat->size2);
+	if(inv_cov_mat == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
 		return result;
@@ -313,12 +317,30 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	// F_trans_mat will store the inverse covariance matrix until the end,
 	// when it will store the transformation matrix F.
 	fprintf(stderr, "setting inverse covariance matrix\n");
-	for(i = 0; i < (gint) F_trans_mat->size1; i++) {
-		for(j = 0; j < (gint) F_trans_mat->size2; j++) {
-			k = (guint) fabs(i - j) + inpaint->inv_cov_series->data->length / 2;
-			gsl_matrix_set(F_trans_mat, (guint) i, (guint) j, inpaint->inv_cov_series->data->data[k]);
+	for(i = 0; i < (gint) cov_mat->size1; i++) {
+		for(j = 0; j < (gint) cov_mat->size2; j++) {
+			k = (guint) fabs(i - j) + inpaint->cov_series->data->length / 2;
+			gsl_matrix_set(cov_mat, (guint) i, (guint) j, inpaint->cov_series->data->data[k]);
 		}
 	}
+
+	// Perform an LU decomposition of the covariance matrix, which is
+	// required to compute its inverse using the gsl function
+	// gsl_linalg_LU_invert
+	int signum;
+	gsl_permutation *permutation = gsl_permutation_alloc(cov_mat->size1);
+	if(permutation == NULL) {
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+		result = GST_FLOW_ERROR;
+		return result;
+	}
+	fprintf(stderr, "Performing LU decomposition of C\n");
+	gsl_linalg_LU_decomp(cov_mat, permutation, &signum);
+	fprintf(stderr, "inverting C\n");
+	gsl_linalg_LU_invert(cov_mat, permutation, inv_cov_mat);
+	gsl_matrix_free(cov_mat);
+	gsl_permutation_free(permutation);
+	permutation = NULL;
 
 	// Matrix A from inpainting paper
 	// A is size Nd x Nh, where Nd is the number of sample points in the
@@ -334,7 +356,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	// 0 1
 	// 0 0
 	// 0 0
-	gsl_matrix *A_hole_mat = gsl_matrix_calloc(F_trans_mat->size1, hole_end - hole_start);
+	gsl_matrix *A_hole_mat = gsl_matrix_calloc(inv_cov_mat->size1, hole_end - hole_start);
 	if(A_hole_mat == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
@@ -371,14 +393,13 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 
 	// M = A^T * C^{-1} * A. This will be stored in mat_workspace1 and then inverted in-place
 	fprintf(stderr, "performing C^{-1} * A\n");
-	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, F_trans_mat, A_hole_mat, 0., mat_workspace1);
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1, inv_cov_mat, A_hole_mat, 0., mat_workspace1);
 	fprintf(stderr, "performing A^T*C^{-1}*A\n");
 	gsl_blas_dgemm(CblasTrans, CblasNoTrans, 1., A_hole_mat, mat_workspace1, 0., M_trans_mat);
 
 	// Perform an LU decomposition of M, which is required to compute its
 	// inverse using the gsl function gsl_linalg_LU_invert
-	int signum;
-	gsl_permutation *permutation = gsl_permutation_alloc(M_trans_mat->size1);
+	permutation = gsl_permutation_alloc(M_trans_mat->size1);
 	if(permutation == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
@@ -392,7 +413,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	gsl_permutation_free(permutation);
 
 	// Perform A*M^{-1}*A^T*C^{-1}
-	gsl_matrix *mat_workspace2 = gsl_matrix_alloc(F_trans_mat->size1, F_trans_mat->size1);
+	gsl_matrix *mat_workspace2 = gsl_matrix_alloc(inv_cov_mat->size1, inv_cov_mat->size1);
 	if(mat_workspace2 == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
@@ -405,24 +426,16 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	gsl_blas_dgemm(CblasNoTrans, CblasTrans, 1., mat_workspace1, A_hole_mat, 0., mat_workspace2);
 	gsl_matrix_free(A_hole_mat);
 	gsl_matrix_free(mat_workspace1);
-	mat_workspace1 = gsl_matrix_alloc(F_trans_mat->size1, F_trans_mat->size1);
+	mat_workspace1 = gsl_matrix_alloc(inv_cov_mat->size1, inv_cov_mat->size1);
 	if(mat_workspace1 == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
 		return result;
 	}
 	fprintf(stderr, "Performing A*M^{-1}*A^T*C^{-1}\n");
-	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1., mat_workspace2, F_trans_mat, 0., mat_workspace1);
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, 1., mat_workspace2, inv_cov_mat, 0., mat_workspace1);
 	gsl_matrix_free(mat_workspace2);
-
-	// Subtract from identity to form F = 1 - A*M^{-1}*A^T*C^{-1}
-	gsl_matrix_free(F_trans_mat);
-	/*
-	gsl_matrix_set_identity(F_trans_mat);
-	fprintf(stderr, "Computing F\n");
-	gsl_matrix_sub(F_trans_mat, mat_workspace1);
-	gsl_matrix_free(mat_workspace1);
-	*/
+	gsl_matrix_free(inv_cov_mat);
 
 	//gsl_blas_dgemv(CBLAS_TRANSPOSE_t TransA, double alpha, const gsl_matrix * A, const gsl_vector * x, double beta, gsl_vector * y)
 	// Load data into vector and then perform transformation
@@ -432,7 +445,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		result = GST_FLOW_ERROR;
 		return result;
 	}
-	gsl_vector *hoft_transformed = gsl_vector_alloc(data_end - data_start);
+	gsl_vector *hoft_transformed = gsl_vector_alloc(hoft->size);
 	if(hoft_transformed == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
@@ -597,7 +610,7 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 		gstlal_doubles_from_g_value_array(va, inpaint->psd->data->data, NULL);
 		// FIXME Move elsewhere
 		if(inpaint->rate != 0)
-			inv_fft_psd(inpaint);
+			fft_psd(inpaint);
 		break;
 	}
 
@@ -656,8 +669,8 @@ static void gstlal_inpaint_finalize(GObject * object) {
 
 	XLALDestroyREAL8FrequencySeries(inpaint->psd);
 	inpaint->psd = NULL;
-	XLALDestroyREAL8TimeSeries(inpaint->inv_cov_series);
-	inpaint->inv_cov_series = NULL;
+	XLALDestroyREAL8TimeSeries(inpaint->cov_series);
+	inpaint->cov_series = NULL;
 
 	free(inpaint->transformed_data);
 	inpaint->transformed_data = NULL;
@@ -772,5 +785,5 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint) {
 
 	inpaint->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
 	inpaint->psd = NULL;
-	inpaint->inv_cov_series = NULL;
+	inpaint->cov_series = NULL;
 }
