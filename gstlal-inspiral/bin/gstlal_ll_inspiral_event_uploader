@@ -333,8 +333,7 @@ class EventUploader(events.EventProcessor):
 		"""
 		upload a new event + auxiliary files
 		"""
-		if not event['time_sent']:
-			event['time_sent'] = utils.gps_now()
+		# upload event
 		for attempt in range(1, self.retries + 1):
 			try:
 				resp = self.client.createEvent(
@@ -351,17 +350,8 @@ class EventUploader(events.EventProcessor):
 				if resp.status == httplib.CREATED:
 					graceid = resp_json['graceid']
 					logging.info("event assigned grace ID {}".format(graceid))
-					self.upload_file(
-						"GstLAL internally computed p-astro",
-						"p_astro.json",
-						"p_astro",
-						event['favored']['p_astro'],
-						graceid
-					)
-					try:
-						resp = self.client.writeLabel(graceid, 'PASTRO_READY')
-					except HTTPError as resp:
-						logging.warning(resp)
+					if not event['time_sent']:
+						event['time_sent'] = utils.gps_now()
 					break
 			logging.warning(
 				"gracedb upload of {} "
@@ -378,6 +368,20 @@ class EventUploader(events.EventProcessor):
 			f.write(event['favored']['psd'])
 		self.upload_file("strain PSDs", "psd.xml.gz", "psd", psd_fobj.getvalue(), graceid)
 		del psd_fobj
+
+		# upload p(astro)
+		self.upload_file(
+			"GstLAL internally computed p-astro",
+			"p_astro.json",
+			"p_astro",
+			event['favored']['p_astro'],
+			graceid
+		)
+		try:
+			resp = self.client.writeLabel(graceid, 'PASTRO_READY')
+		except HTTPError as resp:
+			logging.warning(resp)
+
 		return graceid
 
 
