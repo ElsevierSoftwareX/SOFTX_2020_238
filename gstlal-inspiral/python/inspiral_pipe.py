@@ -136,7 +136,7 @@ def online_inspiral_layer(dag, jobs, options):
 			"gracedb-search": options.gracedb_search,
 			"gracedb-label": options.gracedb_label,
 			"gracedb-service-url": options.gracedb_service_url,
-			"upload-time-before-merger" options.upload_time_before_merger,
+			"upload-time-before-merger": options.upload_time_before_merger,
 			"job-tag": job_tags[-1],
 			"likelihood-snapshot-interval": options.likelihood_snapshot_interval,
 			"far-trials-factor": options.far_trials_factor,
