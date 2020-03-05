@@ -342,9 +342,7 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = F
 	# put a copy of the processed PSD file in
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
-	# FIXME enable this again in the future, but right now we don't use it,
-	# and it makes the files very slow to read
-	#lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
+	lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
 
 	# Write to file
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
@@ -362,10 +360,7 @@ def read_banks(filename, contenthandler, verbose = False):
 	# this file, but we only put one in the file for now
 	# FIXME, right now there is only one instrument so we just pull out the
 	# only psd there is
-	# FIXME enable this again in the future, but right now we don't use it,
-	# and it makes the files very slow to read
-	#processed_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
-	processed_psd = None
+	processed_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
 
