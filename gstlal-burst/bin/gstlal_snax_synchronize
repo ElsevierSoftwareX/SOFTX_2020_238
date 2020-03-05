@@ -26,20 +26,16 @@ __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 
 import heapq
 import json
-import signal
-import sys
-import time
-import timeit
+import logging
 
 from collections import deque
 from Queue import PriorityQueue
 from optparse import OptionParser
 
-from lal import gpstime
+from ligo.scald import utils
 
-from confluent_kafka import Producer, Consumer, KafkaError
+from gstlal import events
 
-from gstlal.snax import utils
 
 #-------------------------------------------------
 #                  Functions
@@ -66,40 +62,38 @@ def parse_command_line():
 
     return options, args
 
+
 #-------------------------------------------------
 #                   Classes
 #-------------------------------------------------
 
-class StreamSynchronizer(object):
+class StreamSynchronizer(events.EventProcessor):
     """
     Handles the synchronization of several incoming streams, populating data queues
     and pushing feature vectors to a queue for downstream processing.
     """
-    def __init__(self, logger, options):
-        logger.info('setting up stream synchronizer...')
+    _name = 'synchronizer'
 
-        ### initialize timing options
-        self.processing_cadence = options.processing_cadence
-        self.request_timeout = options.request_timeout
-        self.latency_timeout = options.latency_timeout
-        self.sample_rate = options.sample_rate
-        self.no_drop = options.no_drop
-        self.is_running = False
+    def __init__(self, options):
+        logging.info('setting up stream synchronizer...')
 
-        ### kafka settings
-        self.kafka_settings = {'bootstrap.servers': options.kafka_server}
         self.num_topics = options.num_topics
-
-        ### initialize consumers
         self.topics = ['%s_%s' % (options.input_topic_basename, str(i).zfill(4)) for i in range(1, self.num_topics + 1)]
-        consumer_kafka_settings = self.kafka_settings
-        consumer_kafka_settings['group.id'] = '-'.join(['synchronizer', options.tag])
-        self.consumer = Consumer(consumer_kafka_settings)
-        self.consumer.subscribe([topic for topic in self.topics])
+        events.EventProcessor.__init__(
+            self,
+            process_cadence=options.processing_cadence,
+            request_timeout=options.request_timeout,
+            num_messages=self.num_topics,
+            kafka_server=options.kafka_server,
+            input_topic=self.topics,
+            tag=options.tag
+        )
 
-        ### initialize producer
+        ### synchronizer settings
+        self.sample_rate = options.sample_rate
+        self.latency_timeout = options.latency_timeout
         self.producer_name = options.output_topic_basename
-        self.producer = Producer(self.kafka_settings)
+        self.no_drop = options.no_drop
 
         ### initialize queues
         self.last_timestamp = 0
@@ -108,35 +102,27 @@ class StreamSynchronizer(object):
         # 5 minute queue for outgoing buffers
         self.feature_buffer = deque(maxlen = 300)
 
-    def fetch_data(self):
+
+    def ingest(self, message):
         """
-        requests for a new message from an individual topic,
+        parse a new message from a feature extractor,
         and add to the feature queue
         """
-        messages = self.consumer.consume(num_messages=len(self.topics), timeout=self.request_timeout)
+        ### decode json and parse data
+        feature_subset = json.loads(message.value())
 
-        for message in messages:
-            ### only add to queue if no errors in receiving data
-            if message and not message.error():
+        ### add to queue if timestamp is within timeout
+        if self.no_drop or (feature_subset['timestamp'] >= self.max_timeout()):
+            self.feature_queue.put((
+                feature_subset['timestamp'],
+                feature_subset['features']
+            ))
 
-                ### decode json and parse data
-                feature_subset = json.loads(message.value())
 
-                ### add to queue if timestamp is within timeout
-                if self.no_drop or (feature_subset['timestamp'] >= self.max_timeout()):
-                    self.add_to_queue(feature_subset['timestamp'], feature_subset['features'])
-
-    def add_to_queue(self, timestamp, data):
+    def handle(self):
         """
-        add a set of features for a given timestamp to the feature queue
-        """
-        self.feature_queue.put((timestamp, data))
-
-    def process_queue(self):
-        """
-        checks if conditions are right to combine new features for a given timestamp,
-        and if so, takes subsets from the feature queue, combines them, and push the
-        result to a buffer
+        combines subsets from the feature queue at a given timestamp,
+        and send the resulting data downstream
         """
         ### clear out queue of any stale data
         while not self.feature_queue.empty() and self.last_timestamp >= self.feature_queue.queue[0][0]:
@@ -159,10 +145,18 @@ class StreamSynchronizer(object):
 
                 ### remove data with oldest timestamp and process
                 subsets = [self.feature_queue.get() for i in range(num_subsets)]
-                logger.info('combining %d / %d feature subsets for timestamp %f' % (len(subsets),self.num_topics,timestamps[0]))
+                logging.info(
+                    'combining {:d} / {:d} feature subsets '
+                    'for timestamp {:f}'.format(len(subsets), self.num_topics, timestamps[0])
+                )
                 features = self.combine_subsets(subsets)
                 self.feature_buffer.appendleft((timestamps[0], features))
                 self.last_timestamp = timestamps[0]
+
+        ### push combined features downstream
+        while self.feature_buffer:
+            self.push_features()
+
 
     def combine_subsets(self, subsets):
         """
@@ -171,6 +165,7 @@ class StreamSynchronizer(object):
         datum = [subset[1] for subset in subsets]
         return {ch: rows for channel_subsets in datum for ch, rows in channel_subsets.items()}
 
+
     def push_features(self):
         """
         pushes any features that have been combined downstream in an outgoing topic
@@ -178,83 +173,38 @@ class StreamSynchronizer(object):
         # push full feature vector to producer if buffer isn't empty
         if self.feature_buffer:
             timestamp, features = self.feature_buffer.pop()
-            logger.info('pushing features with timestamp %f downstream, latency is %.3f' % (timestamp, utils.gps2latency(timestamp)))
+            logging.info(
+                'pushing features with timestamp {:f} downstream, '
+                'latency is {:.3f}'.format(timestamp, utils.gps_to_latency(timestamp))
+            )
             feature_packet = {'timestamp': timestamp, 'features': features}
-            self.producer.produce(timestamp = timestamp, topic = self.producer_name, value = json.dumps(feature_packet))
+            self.producer.produce(
+                timestamp=timestamp,
+                topic=self.producer_name,
+                value=json.dumps(feature_packet)
+            )
             self.producer.poll(0)
+
 
     def max_timeout(self):
         """
         calculates the oldest timestamp allowed for incoming data
         """
-        return float(gpstime.tconvert('now')) + (timeit.default_timer() % 1) - self.latency_timeout
+        return utils.gps_now() - self.latency_timeout
 
-    def synchronize(self):
-        """
-        puts all the synchronization steps together and adds a timer based on the
-        processing cadence to run periodically
-        """
-        while self.is_running:
-            ### ingest and combine incoming feature subsets, dropping late data
-            self.fetch_data()
-            self.process_queue()
-            ### push combined features downstream
-            while self.feature_buffer:
-                self.push_features()
-            ### repeat with processing cadence
-            time.sleep(self.processing_cadence)
-
-    def start(self):
-        """
-        starts the synchronization sequence
-        """
-        logger.info('starting stream synchronizer for %d incoming feature streams...' % self.num_topics)
-        self.is_running = True
-        self.synchronize()
-
-    def stop(self):
-        """
-        stops the synchronization sequence
-        """
-        logger.info('shutting down stream synchronizer...')
-        ### FIXME: should also handle pushing rest of data in buffer
-        self.is_running = False
-
-class SignalHandler(object):
-    """
-    helper class to shut down the synchronizer gracefully before exiting
-    """
-    def __init__(self, synchronizer, signals = [signal.SIGINT, signal.SIGTERM]):
-        self.synchronizer = synchronizer
-        for sig in signals:
-            signal.signal(sig, self)
-
-    def __call__(self, signum, frame):
-        print >>sys.stderr, "SIG %d received, attempting graceful shutdown..." % signum
-        self.synchronizer.stop()
-        sys.exit(0)
 
 #-------------------------------------------------
 #                    Main
 #-------------------------------------------------
 
 if __name__ == '__main__':
-    # parse arguments
     options, args = parse_command_line()
 
     ### set up logging
-    logger = utils.get_logger(
-        '-'.join([options.tag, 'synchronizer']),
-        log_level=options.log_level,
-        rootdir=options.rootdir,
-        verbose=options.verbose
-    )
-
-    # create ETG synchronizer instance
-    synchronizer = StreamSynchronizer(logger, options=options)
-
-    # install signal handler
-    SignalHandler(synchronizer)
+    log_level = logging.DEBUG if options.verbose else logging.INFO
+    logging.basicConfig(format='%(asctime)s | snax_synchronize : %(levelname)s : %(message)s')
+    logging.getLogger().setLevel(log_level)
 
     # start up synchronizer
+    synchronizer = StreamSynchronizer(options=options)
     synchronizer.start()

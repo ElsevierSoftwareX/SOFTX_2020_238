@@ -1,0 +1,491 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2019 Alexander Pace,  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2020 Patrick Godwin, Cody Messick
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+__usage__ = 'gstlal_ll_inspiral_event_plotter [--options]'
+__description__ = 'an executable to upload auxiliary files and plots for GraceDB events from gstlal_inspiral jobs'
+
+#-------------------------------------------------
+#				   Preamble
+#-------------------------------------------------
+
+from collections import deque, OrderedDict
+import httplib
+from itertools import chain
+import gzip
+import json
+import logging
+from optparse import OptionParser
+import StringIO
+import sys
+import time
+
+import numpy
+
+from ligo.segments import segment
+from ligo.gracedb.rest import GraceDb, HTTPError
+from ligo.gracedb.rest import DEFAULT_SERVICE_URL as DEFAULT_GRACEDB_URL
+from ligo.scald import utils
+
+from lal import LIGOTimeGPS
+from lal import series
+
+from gstlal import events
+from gstlal import far
+from gstlal import inspiral
+from gstlal import lvalert_helper
+from gstlal import plotfar
+from gstlal import plotpsd
+
+# FIXME Replace glue with ligo.lw once gracedb uploads no longer use ilwdchar
+from glue.ligolw import utils as ligolw_utils
+from glue.ligolw import lsctables
+from glue.ligolw import array as ligolw_array
+from glue.ligolw import param as ligolw_param
+from glue.ligolw import ligolw
+
+import matplotlib
+matplotlib.rcParams.update({
+	'font.size': 10.0,
+	'axes.titlesize': 10.0,
+	'axes.labelsize': 10.0,
+	'xtick.labelsize': 8.0,
+	'ytick.labelsize': 8.0,
+	'legend.fontsize': 8.0,
+	'figure.dpi': 100,
+	'savefig.dpi': 100,
+	'text.usetex': True
+})
+from matplotlib import figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+
+#-------------------------------------------------
+#				Content Handler
+#-------------------------------------------------
+@lsctables.use_in
+@ligolw_array.use_in
+@ligolw_param.use_in
+class ligolwcontenthandler(ligolw.LIGOLWContentHandler):
+	pass
+
+#-------------------------------------------------
+#				   Functions
+#-------------------------------------------------
+
+def parse_command_line():
+
+	parser = OptionParser(usage=__usage__, description=__description__)
+	parser.add_option('-v', '--verbose', default=False, action='store_true', help = 'Be verbose.')
+	parser.add_option('--tag', metavar = 'string', default = 'test', help = 'Sets the name of the tag used. Default = \'test\'')
+	parser.add_option('--max-event-time', type = 'int', default = 7200, help = 'Maximum time to keep around an event. Default = 2 hours.')
+	parser.add_option('--processing-cadence', type = 'float', default = 0.1, help = 'Rate at which the event plotter acquires and processes data. Default = 0.1 seconds.')
+	parser.add_option('--request-timeout', type = 'float', default = 0.2, help = 'Timeout for requesting messages from a topic. Default = 0.2 seconds.')
+	parser.add_option('--kafka-server', metavar = 'string', help = 'Sets the server url that the kafka topic is hosted on. Required.')
+	parser.add_option('--gracedb-group', metavar = 'name', default = 'Test', help = 'Gracedb group to which to upload events (default is Test).')
+	parser.add_option('--gracedb-pipeline', metavar = 'name', default = 'gstlal', help = 'Name of pipeline to provide in GracedB uploads (default is gstlal).')
+	parser.add_option('--gracedb-search', metavar = 'name', default = 'LowMass', help = 'Name of search to provide in GracedB uploads (default is LowMass).')
+	parser.add_option('--gracedb-service-url', metavar = 'url', default = DEFAULT_GRACEDB_URL, help = 'Override default GracedB service url (optional, default is {}).'.format(DEFAULT_GRACEDB_URL))
+	parser.add_option('--max-snr', metavar = 'SNR', type = 'float', default = 200., help = 'Set the upper bound of the SNR ranges in plots (default = 200).')
+	parser.add_option('--format', default = 'png', help = 'Set file format by selecting the extention (default = \'png\').')
+	parser.add_option('--output-path', metavar = 'PATH', help = 'Write local copies of the plots to this directory (default = don\'t).')
+	parser.add_option('--no-upload', action = 'store_true', help = 'Disable upload of plots to gracedb, e.g., for testing new plots.')
+
+	options, args = parser.parse_args()
+
+	if options.no_upload and options.output_path is None:
+		raise ValueError('--no-upload without setting --ouput-path disables all output')
+
+	return options, args
+
+#-------------------------------------------------
+#					Classes
+#-------------------------------------------------
+
+class EventPlotter(events.EventProcessor):
+	"""
+	manages plotting and file uploading for incoming events.
+	"""
+	_name = 'event_plotter'
+
+	def __init__(self, options):
+		logging.info('setting up event plotter...')
+
+		self.upload_topic = 'uploads'
+		self.ranking_stat_topic = 'ranking_stat'
+		events.EventProcessor.__init__(
+			self,
+			process_cadence=options.processing_cadence,
+			request_timeout=options.request_timeout,
+			kafka_server=options.kafka_server,
+			input_topic=[self.upload_topic, self.ranking_stat_topic],
+			tag=options.tag
+		)
+
+		### initialize timing options
+		self.max_event_time = options.max_event_time
+		self.retries = 5
+		self.retry_delay = 1
+
+		### initialize gracedb client
+		if options.gracedb_service_url.startswith('file'):
+			self.client = inspiral.FakeGracedbClient(options.gracedb_service_url)
+		else:
+			self.client = GraceDb(options.gracedb_service_url)
+
+		### gracedb settings
+		self.gracedb_group = options.gracedb_group
+		self.gracedb_pipeline = options.gracedb_pipeline
+		self.gracedb_search = options.gracedb_search
+
+		### initialize event storage
+		self.events = OrderedDict()
+
+		### initialize plotting options
+		self.max_snr = options.max_snr
+		self.format = options.format
+		self.output_path = options.output_path
+		self.no_upload = options.no_upload
+
+
+	def ingest(self, message):
+		"""
+		parse a message from a kafka topic
+		"""
+		payload = json.loads(message.value())
+
+		time = LIGOTimeGPS(payload['time'], payload['time_ns'])
+		coinc_fileobj = StringIO.StringIO(payload['coinc'])
+		xmldoc = ligolw_utils.load_fileobj(coinc_fileobj, contenthandler=ligolwcontenthandler)[0]
+		coinc_fileobj.close()
+		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+		bank_bin = '{:04}'.format(int(sngl_inspiral_table[0].Gamma1))
+		# No guarantee that the coinc event id will be unique between
+		# bins, so use int(time) and the bank bin as an identifier,
+		# which should be unique as only one event / second / bin may
+		# be uploaded
+		event_key = '{}_{}'.format(payload['time'], bank_bin)
+
+		if event_key not in self.events:
+			logging.info('found new event at {} from bin {}'.format(time, bank_bin))
+			self.events[event_key] = self.new_event(time, bank_bin)
+
+		### ranking stat 
+		if message.topic() == self.ranking_stat_topic:
+			self.events[event_key]['ranking_data_path'] = payload['ranking_data_path']
+			# we'll just take the xmldoc from the preferred event, which will be identical
+			xmldoc.unlink()
+
+		### preferred event
+		elif message.topic() == self.upload_topic:
+			self.events[event_key]['gid'] = payload['gid']
+			self.events[event_key]['coinc'] = xmldoc
+			psd_fileobj = StringIO.StringIO(payload['psd'])
+			self.events[event_key]['psd'] = ligolw_utils.load_fileobj(psd_fileobj, contenthandler=series.PSDContentHandler)[0]
+			psd_fileobj.close()
+
+
+	def new_event(self, time, bank_bin):
+		"""
+		returns the structure that defines an event
+		"""
+		return {
+			'time': time,
+			'bin': bank_bin,
+			'coinc': None,
+			'gid': None,
+			'psd': None,
+			'ranking_data_path': None,
+			'uploaded': {'ranking_data': False, 'ranking_plots': False, 'psd_plots': False, 'snr_plots': False}
+		}
+
+
+	def handle(self):
+		"""
+		handle aux data and plot uploading, clearing out
+		old events as necessary.
+		"""
+		for event in self.events.values():
+			if event['gid']:
+				if not event['uploaded']['ranking_data'] and event['ranking_data_path']:
+					self.upload_ranking_data(event)
+					event['uploaded']['ranking_data'] = True
+				elif not event['uploaded']['ranking_plots'] and event['ranking_data_path']:
+					self.upload_ranking_plots(event)
+					event['uploaded']['ranking_plots'] = True
+				elif not event['uploaded']['psd_plots'] and event['psd']:
+					self.upload_psd_plots(event) 
+					event['uploaded']['psd_plots'] = True
+				elif not event['uploaded']['snr_plots']:
+					self.upload_snr_plots(event)
+					event['uploaded']['snr_plots'] = True
+
+		# clean out old events
+		current_time = utils.gps_now()
+		for event_key, event in self.events.items():
+			uploaded = event['uploaded']
+			if uploaded['ranking_data'] and uploaded['ranking_plots'] and uploaded['psd_plots'] and uploaded['snr_plots']:
+				event['coinc'].unlink()
+				event['psd'].unlink()
+				self.events.pop(event_key)
+			if current_time - event['time'] >= self.max_event_time:
+				logging.info('removing stale event from {} and bin {}'.format(event['time'], event['bin']))
+				if event['coinc'] is not None:
+					logging.info('Did not receive path of ranking data file associated with event from {} and bin {}'.format(event['time'], event['bin']))
+					event['coinc'].unlink()
+					event['psd'].unlink()
+				self.events.pop(event_key)
+
+	def upload_file(self, message, filename, tag, contents, graceid):
+		"""
+		upload a file to gracedb
+		"""
+		logging.info('posting \'{}\' to gracedb ID {}'.format(filename, graceid))
+		for attempt in range(1, self.retries + 1):
+			try:
+				resp = self.client.writeLog(
+					graceid,
+					message,
+					filename = filename,
+					filecontents = contents,
+					tagname = tag
+				)
+			except HTTPError as resp:
+				logging.warning(resp)
+			else:
+				if resp.status == httplib.CREATED:
+					break
+			logging.info(
+				'gracedb upload of {} for ID {} '
+				'failed on attempt {:d}/{:d}'.format(filename, graceid, attempt, self.retries)
+			)
+			time.sleep(random.lognormal(math.log(self.retry_delay), .5))
+		else:
+			logging.warning('gracedb upload of {} for ID {} failed'.format(filename, graceid))
+			return False
+
+	def upload_ranking_data(self, event):
+		ranking_fobj = StringIO.StringIO()
+		ligolw_utils.write_fileobj(ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingStat.LIGOLWContentHandler), ranking_fobj, gz = True)
+		self.upload_file('ranking statistic PDFs', 'ranking_data.xml.gz', 'ranking_statistic', ranking_fobj.getvalue(), event['gid'])
+		ranking_fobj.close()
+
+	def upload_ranking_plots(self, event):
+		### load all of the information needed to generate plots
+		sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(event['coinc']))
+		coinc_event_table = lsctables.CoincTable.get_table(event['coinc'])
+		try:
+			coinc_event, = coinc_event_table
+		except ValueError:
+			raise ValueError('document does not contain exactly one candidate')
+
+		rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingStat.LIGOLWContentHandler))
+		rankingstat.finish()
+		fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
+
+
+		### generate and upload plots
+		for plot_type in ['background_pdf', 'injection_pdf', 'zero_lag_pdf', 'LR']:
+			for instrument in rankingstat.instruments:
+				if instrument in sngl_inspirals:
+					# place marker on plot
+					if sngl_inspirals[instrument].snr >= 4.:
+						snr = sngl_inspirals[instrument].snr
+						chisq = sngl_inspirals[instrument].chisq
+					else:
+						snr = None
+						chisq = None
+					fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, self.max_snr, event_snr = snr, event_chisq = chisq)
+				else:
+					# no sngl for this instrument
+					fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, self.max_snr)
+				filename = '{}_{}_{}_snrchi.{}'.format(event['gid'], instrument, plot_type, self.format)
+				if not self.no_upload:
+					lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = '%s SNR, chisq PDF' % instrument, tagname = 'background')
+				if self.output_path is not None:
+					filename = os.path.join(self.output_path, filename)
+					logging.info('writing {} ...'.format(filename))
+					fig.savefig(filename)
+
+		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
+		filename = '{}_likehoodratio_ccdf.{}'.format(event['gid'], self.format)
+		if not self.no_upload:
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'Likelihood Ratio CCDF', tagname = 'background')
+		if self.output_path is not None:
+			filename = os.path.join(self.output_path, filename)
+			logging.info('writing {} ...'.format(filename))
+			fig.savefig(filename)
+
+
+		fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (event['time'] - 14400., event['time']), tref = event['time'])
+		filename = '{}_horizon_distances.{}'.format(event['gid'], self.format)
+		if not self.no_upload:
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'Horizon Distances', tagname = 'psd')
+		if self.output_path is not None:
+			filename = os.path.join(self.output_path, filename)
+			logging.info('writing {} ...'.format(filename))
+			fig.savefig(filename)
+
+
+		fig = plotfar.plot_rates(rankingstat)
+		filename = '{}_rates.{}'.format(event['gid'], self.format)
+		if not self.no_upload:
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'Instrument combo rates', tagname = 'background')
+		if self.output_path is not None:
+			filename = os.path.join(self.output_path, filename)
+			logging.info('writing {} ...'.format(filename))
+			fig.savefig(filename)
+		logging.info('finished processing ranking data plots for {}'.format(event['gid']))
+
+
+	def upload_psd_plots(self, event):
+		psds = series.read_psd_xmldoc(event['psd'])
+		if psds is None:
+			logging.info('Could not get_psds, exiting loop')
+			return
+
+		#
+		# PSD plot
+		#
+
+		fig = plotpsd.plot_psds(psds, event['coinc'], plot_width = 800)
+		fig.tight_layout()
+
+		filename = '{}_psd.{}'.format(event['gid'], self.format)
+		if self.no_upload:
+			logging.info('writing {} ...'.format(filename))
+			fig.savefig(filename)
+		else:
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'strain spectral density plot', tagname = 'psd')
+
+		#
+		# Cumulative SNRs plot
+		#
+
+		fig = plotpsd.plot_cumulative_snrs(psds, event['coinc'], plot_width = 800)
+		fig.tight_layout()
+
+		filename = '{}_cumulative_snrs.{}'.format(event['gid'], self.format)
+		if self.no_upload:
+			logging.info('writing {} ...'.format(filename))
+			fig.savefig(filename)
+		else:
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'cumulative SNRs plot', tagname = 'psd')
+
+		logging.info('finished processing psd plot for {}'.format(event['gid']))
+
+
+	def upload_snr_plots(self, event):
+		# create two dicts keyed by event id: the first dict contains
+		# COMPLEX8TimeSeries which contain the snr time series, the second dict
+		# contains the template row
+		timeseries_ligolw_dict = dict((ligolw_param.get_pyvalue(elem, u'event_id'), series.parse_COMPLEX8TimeSeries(elem)) for elem in event['coinc'].getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u'Name') and elem.Name == u'COMPLEX8TimeSeries')
+		eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(event['coinc']))
+
+		# Parse the bank files
+		# NOTE This assumes --svd-bank will also be provided once in the ProcessParamsTable
+		banks = inspiral.parse_bank_files(inspiral.parse_svdbank_string([row.value for row in lsctables.ProcessParamsTable.get_table(event['coinc']) if row.param == '--svd-bank'].pop()), verbose=False)
+
+
+		#
+		# # Find the template (to retrieve the autocorrelation later)
+		#
+		banknum = None
+		for i, bank in enumerate(banks.values()[0]):
+			for j, row in enumerate(bank.sngl_inspiral_table):
+				# The templates should all have the same template_id, so just grab one
+				if row.Gamma0 == eventid_trigger_dict.values()[0].Gamma0:
+					banknum = i
+					tmpltnum = j
+					break
+			if banknum is not None:
+				break
+
+		if banknum is None:
+			raise ValueError('The svd banks in the process params table do not contain the template the event was found with')
+
+
+		#
+		# # Plot the time series and the expected snr
+		#
+		fig = figure.Figure()
+		FigureCanvas(fig)
+
+		for i, (eventid, complex8timeseries) in enumerate(timeseries_ligolw_dict.items()):
+			ifo = eventid_trigger_dict[eventid].ifo
+			complex_snr_timeseries = complex8timeseries.data.data
+			autocorr_length = complex8timeseries.data.length
+			time = numpy.linspace(float(complex8timeseries.epoch), float(complex8timeseries.epoch)+(autocorr_length-1)*complex8timeseries.deltaT, autocorr_length)
+
+			peakoffset = numpy.argmin(abs(time - eventid_trigger_dict[eventid].end))
+			phase = numpy.angle(complex_snr_timeseries[peakoffset])
+			snr = (complex_snr_timeseries * numpy.exp(-1.j * phase)).real
+			snrsigma = numpy.sqrt(2)
+			peaktime = time[peakoffset]
+			time -= peaktime
+			maxsnr = snr.max()
+			auto = banks[ifo][banknum].autocorrelation_bank[tmpltnum]
+
+			ax = fig.add_subplot(len(timeseries_ligolw_dict.items()),1,i+1)
+			ax.fill_between(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]-snrsigma, snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]+snrsigma, color='0.75')
+			#FIXME : This could potentially create an asymmetric plot. Since the peakoffset may not be the 'center' of snr timeseries but could be off by one index from the 'center'.
+			ax.plot(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2 + 1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], 'k', label = r'$\mathrm{Measured}\,\rho(t)$')
+			ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], auto.real[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2]*maxsnr, 'b--', label = r'$\mathrm{Scaled\,Autocorrelation}$')
+			ax.set_ylabel(r'$\mathrm{{{}}}\,\rho(t)$'.format(ifo))
+			ax.set_xlabel(r'$\mathrm{{Time\,from\,{}}}$'.format(peaktime))
+			ax.legend(loc='best')
+			ax.grid()
+			
+		fig.tight_layout()
+		filename = '{}_snrtimeseries.{}'.format(event['gid'], self.format)
+
+		if not self.no_upload:
+			logging.info('writing {} ...'.format(filename))
+			lvalert_helper.upload_fig(fig, self.client, event['gid'], filename = filename, log_message = 'SNR time series', tagname = 'background')
+
+		if self.output_path is not None:
+			filename = path.join(self.output_path, filename)
+			logging.info('writing {} ...'.format(filename))
+			fig.savefig(filename)
+
+		logging.info('finished processing SNR time series plot for {}'.format(event['gid']))
+
+	def finish(self):
+		"""
+		upload remaining files/plots before shutting down
+		"""
+		self.handle()
+
+
+#-------------------------------------------------
+#					 Main
+#-------------------------------------------------
+
+if __name__ == '__main__':
+	# parse arguments
+	options, args = parse_command_line()
+
+	# set up logging
+	log_level = logging.DEBUG if options.verbose else logging.INFO
+	logging.basicConfig(format = '%(asctime)s | event_plotter : %(levelname)s : %(message)s')
+	logging.getLogger().setLevel(log_level)
+
+	# create event plotter instance
+	event_plotter = EventPlotter(options)
+
+	# start up
+	event_plotter.start()

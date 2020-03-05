@@ -1,3 +1,10 @@
+gstlal-inspiral (1.7.1-1) unstable; urgency=low
+
+  * fix issue, edge cases in preferred event logic for event aggregator
+  * fix issue with online analysis under-reporting FARs
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Mon, 10 Feb 2020 09:01:14 -0800
+
 gstlal-inspiral (1.7.0-1) unstable; urgency=low
 
   * gstlal_ll_inspiral_event_uploader: expose upload time option,

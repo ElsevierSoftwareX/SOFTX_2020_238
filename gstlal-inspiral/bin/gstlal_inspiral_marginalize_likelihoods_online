@@ -106,7 +106,7 @@ while true ; do
 	# the zero-lag counts have the density estimation transform
 	# applied.
 	ZEROLAG_COUNTS_URLS=
-	for REG in "$@" ; do
+	for REG in gstlal_ll_inspiral_trigger_counter_registry.txt ; do
 		SERVER=$(cat ${REG}) || exit 1
 		ZEROLAG_COUNTS_URLS="${ZEROLAG_COUNTS_URLS} ${SERVER}${ZEROLAG_COUNTS_PATH}"
 	done || break
@@ -114,6 +114,7 @@ while true ; do
 	if [ -f ${OUTPUT} ]; then
 		cp -v ${OUTPUT} prev_${OUTPUT}
 		PREV_OUTPUT=prev_${OUTPUT}
+		gstlal_inspiral_reset_zerolag_counts ${PREV_OUTPUT}
 	else
 		PREV_OUTPUT=""
 	fi

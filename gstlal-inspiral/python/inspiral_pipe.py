@@ -139,6 +139,7 @@ def online_inspiral_layer(dag, jobs, options):
 			"job-tag": job_tags[-1],
 			"likelihood-snapshot-interval": options.likelihood_snapshot_interval,
 			"far-trials-factor": options.far_trials_factor,
+			"cap-singles": options.cap_singles,
 			"min-instruments": options.min_instruments,
 			"time-slide-file": options.time_slide_file,
 			"output-kafka-server": options.output_kafka_server
@@ -222,12 +223,26 @@ def event_upload_layer(dag, jobs, options, job_tags):
 		"gracedb-service-url": options.gracedb_service_url,
 		"far-threshold": options.event_aggregator_far_threshold,
 		"far-trials-factor": options.event_aggregator_far_trials_factor,
+		"upload-cadence-type": options.event_aggregator_upload_cadence_type,
+		"upload-cadence-factor": options.event_aggregator_upload_cadence_factor,
 		"num-jobs": len(job_tags),
 		"input-topic": "events",
 		"rootdir": "event_uploader",
 		"verbose": "",
 	}
 	return dagparts.DAGNode(jobs['eventUploader'], dag, [], opts = job_options)
+
+
+def event_plotter_layer(dag, jobs, options):
+	job_options = {
+		"kafka-server": options.output_kafka_server,
+		"gracedb-group": options.gracedb_group,
+		"gracedb-pipeline": options.gracedb_pipeline,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-service-url": options.gracedb_service_url,
+		"verbose": "",
+	}
+	return dagparts.DAGNode(jobs['eventPlotter'], dag, [], opts = job_options)
 
 
 def aggregator_layer(dag, jobs, options, job_tags):
@@ -302,6 +317,18 @@ def aggregator_layer(dag, jobs, options, job_tags):
 				aggNode = dagparts.DAGNode(jobs['aggLeader'], dag, [], opts = these_options)
 			else:
 				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], opts = these_options)
+
+	# Trigger counting
+	trigcount_options = {
+		"output-period": 300,
+		"num-jobs": len(job_tags),
+		"num-threads": 2,
+		"job-start": 0,
+		"kafka-server": options.output_kafka_server,
+		"gracedb-search": options.gracedb_search,
+		"gracedb-pipeline": options.gracedb_pipeline,
+	}
+	dagparts.DAGNode(jobs['trigcount'], dag, [], opts = trigcount_options)
 
 	# Trigger aggregation
 	trigagg_options = {

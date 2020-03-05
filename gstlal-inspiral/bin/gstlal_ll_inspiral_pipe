@@ -85,13 +85,18 @@ def set_up_jobs(options):
 	# A local universe job that will run in a loop marginalizing all of the likelihoods
 	jobs['marg'] = dagparts.DAGJob('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = local_condor_commands)
 
-	# an lvalert_listen job
-	jobs['lvalertListen'] = dagparts.DAGJob('gstlal_inspiral_lvalert_uberplotter', universe = "local", condor_commands = local_condor_commands)
+	if options.delay_uploads:
+		# event plotter that works in tandem with the event uploader
+		jobs['eventPlotter'] = dagparts.DAGJob("gstlal_ll_inspiral_event_plotter", condor_commands = non_inspiral_condor_commands)
+	else:
+		# an lvalert_listen job
+		jobs['lvalertListen'] = dagparts.DAGJob('gstlal_inspiral_lvalert_uberplotter', universe = "local", condor_commands = local_condor_commands)
 
 	# aggregator job
 	jobs['agg'] = dagparts.DAGJob("gstlal_ll_inspiral_aggregator", condor_commands = non_inspiral_condor_commands)
 	jobs['aggLeader'] = dagparts.DAGJob("gstlal_ll_inspiral_aggregator", tag_base = "gstlal_ll_inspiral_aggregator_leader", condor_commands = non_inspiral_condor_commands)
 	jobs['trigagg'] = dagparts.DAGJob("gstlal_ll_inspiral_trigger_aggregator", condor_commands = non_inspiral_condor_commands)
+	jobs['trigcount'] = dagparts.DAGJob("gstlal_ll_inspiral_trigger_counter", condor_commands = non_inspiral_condor_commands)
 
 	# DQ job
 	jobs['dq'] = dagparts.DAGJob("gstlal_ll_dq", condor_commands = non_inspiral_condor_commands)
@@ -171,9 +176,12 @@ def parse_command_line():
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")
 	parser.add_option("--time-slide-file", metavar = "filename", help = "Set the time slide table xml file")
 	parser.add_option("--far-trials-factor", metavar = "trials", type = "float", default = 1.0, help = "Add trials factor to FAR before uploading to gracedb")
+	parser.add_option("--cap-singles", action = "store_true", help = "Cap singles to 1 / livetime if computing FAR. No effect otherwise")
 	parser.add_option("--zookeeper-port", type = "int", metavar = "number", help = "Set the zookeeper port. default 2181", default = 2181)
 	parser.add_option("--output-kafka-server", metavar = "addr", help = "Set the kafka server hostname to send output data to - note, for now this must be the cluster facing ip address of the submit node. example = 10.14.0.112:9092")
 	parser.add_option("--delay-uploads", action = "store_true", help = "Choose whether to delay uploads to allow aggregation of events downstream from many gstlal_inspiral jobs (default is False).")
+	parser.add_option("--event-aggregator-upload-cadence-type", metavar = "string", default = "geometric", help = "Choose the method [geometric|linear] in which the cadence of subsequent uploads are done. Default = geometric.")
+	parser.add_option("--event-aggregator-upload-cadence-factor", type = "float", default = 4, help = "Cadence factor T for sending out subsequent events for the same event window. For geometric cadence, first event gets sent T seconds later, second event gets sent T^2 seconds later, etc. For linear cadence, subsequent events get sent T seconds later. Default = 4.0.")
 	parser.add_option("--event-aggregator-far-threshold", type = "float", default = 3.84e-07, help = "FAR threshold considered for an event to be public, not including a trials factor. Used in the event aggregator if using --delay-uploads. Default = 1 / month.")
 	parser.add_option("--event-aggregator-far-trials-factor", type = "int", default = 1, help = "Trials factor for number of CBC pipelines uploading events to GraceDB. Used in the event aggregator if using --delay-uploads. Default = 1.")
 	parser.add_option("--agg-data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
@@ -269,9 +277,11 @@ jobs = set_up_jobs(options)
 # Setup the Node classes
 #
 
-listenNode = dagparts.DAGNode(jobs['lvalertListen'], dag, [],
-	opts = {"gracedb-service-url": options.gracedb_service_url, "lvalert-server-url": options.lvalert_server_url},
-)
+if not options.delay_uploads:
+	# set up lvalert-based uberplotter if not use kafka for event uploads and plots
+	listenNode = dagparts.DAGNode(jobs['lvalertListen'], dag, [],
+		opts = {"gracedb-service-url": options.gracedb_service_url, "lvalert-server-url": options.lvalert_server_url},
+	)
 
 
 # dq with default options
@@ -303,6 +313,7 @@ aggNodes = inspiral_pipe.aggregator_layer(dag, jobs, options, job_tags)
 
 if options.delay_uploads:
 	eventNodes = inspiral_pipe.event_upload_layer(dag, jobs, options, job_tags)
+	plotNodes = inspiral_pipe.event_plotter_layer(dag, jobs, options)
 
 # inspiral state backup
 

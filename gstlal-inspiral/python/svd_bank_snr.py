@@ -17,6 +17,8 @@ from gstlal import lloidhandler
 from gstlal import lvalert_helper
 from gstlal import pipeio
 from gstlal import streamthinca
+from gstlal import simplehandler
+from gstlal import svd_bank
 from gstlal.lloidhandler import SegmentsTracker
 from gstlal.snglinspiraltable import GSTLALSnglInspiral as SnglInspiral
 
@@ -289,29 +291,9 @@ class SNR(object):
 		tseries.data.data = array
 		return tseries
 
-
-class SNRPipelineHandler(lloidhandler.Handler):
-	"""Simplified version of lloidhandler.Handler.
-
-	This is the SNR pipeline handler derived from lloidhandler. It adds additional
-	control for collecting SNR timeseries.
-
-	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, snr_document, horizon_distance_func, ranking_stat_output_url = None, verbose = False):
-		super(SNRPipelineHandler, self).__init__(
-			mainloop,
-			pipeline,
-			coincs_document,
-			rankingstat,
-			horizon_distance_func,
-			gracedbwrapper = inspiral.GracedBWrapper([]),
-			ranking_stat_output_url = ranking_stat_output_url,
-			kafka_server = None,
-			tag = "",
-			verbose = verbose
-		)
-		self.snr_document = snr_document
-		self.verbose = verbose
+class SNRHandlerMixin(object):
+	def __init__(self, *arg, **kwargs):
+		super(SNRHandlerMixin, self).__init__(*arg, **kwargs)
 
 	def appsink_new_snr_buffer(self, elem):
 		"""Callback function for SNR appsink."""
@@ -356,6 +338,54 @@ class SNRPipelineHandler(lloidhandler.Handler):
 			snrs.finish(COMPLEX)
 		self.snr_document.write_output_url(outdir, row_number=row_number)
 
+
+class SimpleSNRHandler(SNRHandlerMixin, simplehandler.Handler):
+	"""Simple SNR pipeline handler.
+
+	This is the SNR pipeline handler derived from simplehandler. It
+	only implements the controls for collecting SNR timeseries.
+
+	"""
+	def __init__(self, pipeline, mainloop, snr_document, verbose=False):
+		super(SimpleSNRHandler, self).__init__(mainloop, pipeline)
+		self.lock = threading.Lock()
+		self.snr_document = snr_document
+		self.verbose = verbose
+
+class Handler(SNRHandlerMixin, lloidhandler.Handler):
+	"""Simplified version of lloidhandler.Handler.
+
+	This is the SNR pipeline handler derived from lloidhandler. In
+	addition to the control for collecting SNR timeseries, it
+	implements controls for trigger generator.
+
+	"""
+	def __init__(self, snr_document, verbose=False):
+		self.lock = threading.Lock()
+		self.snr_document = snr_document
+		self.verbose = verbose
+
+	# Explictly delay the class initialization.
+	def init(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url=None, rankingstatpdf_url=None, ranking_stat_output_url=None, ranking_stat_input_url=None, likelihood_snapshot_interval=None, sngls_snr_threshold=None, FAR_trialsfactor=1.0, verbose=False):
+		super(Handler, self).__init__(
+			mainloop,
+			pipeline,
+			coincs_document,
+			rankingstat,
+			horizon_distance_func,
+			gracedbwrapper = gracedbwrapper,
+			zerolag_rankingstatpdf_url = zerolag_rankingstatpdf_url,
+			rankingstatpdf_url = rankingstatpdf_url,
+			ranking_stat_output_url = ranking_stat_output_url,
+			ranking_stat_input_url = ranking_stat_input_url,
+			likelihood_snapshot_interval = likelihood_snapshot_interval,
+			sngls_snr_threshold = sngls_snr_threshold,
+			FAR_trialsfactor = FAR_trialsfactor,
+			kafka_server = None,
+			cluster = True,
+			tag = "0000",
+			verbose = verbose
+		)
 
 #=============================================================================================
 #
@@ -466,13 +496,14 @@ class Bank(object):
 		self.bank_id = None
 		self.sample_rate = rate
 		self.template_bank_filename = None
+		self.processed_psd = None
 		self.horizon_factors = None
-		self.horizon_distance_func = None
+		self.horizon_distance_func = lambda psd, snr: [100, None]
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 
 		# Until the correct way to set the time_slice for multiple templates is known, generating more than one
-		# template is forbidden.
-		assert len(self.sngl_inspiral_table) == 1
+		# template is forbidden.  #FIXME: it looks like allowing this, the SNRs is unaffected
+		# assert len(self.sngl_inspiral_table) == 1
 
 		# FIXME: still correct if we have more than one templates?
 		template = min(self.sngl_inspiral_table, key = lambda row: row.mchirp)
@@ -490,6 +521,9 @@ class Bank(object):
 			verbose = verbose
 		)
 
+	def get_rates(self):
+		return set([self.sample_rate])
+
 	@classmethod
 	def from_url(cls, url, verbose = False):
 		xmldoc = ligolw_utils.load_url(url, contenthandler = ContentHandler, verbose = verbose)
@@ -501,17 +535,22 @@ class Bank(object):
 
 			bank.bank_id = ligolw_param.get_pyvalue(root, "bank_id")
 			bank.sample_rate = ligolw_param.get_pyvalue(root, "sample_rate")
-			bank.template_bank_filename = ligolw_param.get_pyvalue(root, "template_bank_filename")
-			bank.horizon_factors = None
-			bank.horizon_distance_func = lambda psd, snr: [100, None]
+			bank.processed_psd = None
 			bank.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(root)
-
+			bank.template_bank_filename = ligolw_param.get_pyvalue(root, "template_bank_filename")
 			bank.sigmasq = ligolw_array.get_array(root, "sigmasq").array
 			bank.templates = ligolw_array.get_array(root, "templates").array
 			bank.autocorrelation_bank = ligolw_array.get_array(root, "autocorrelation_bank").array
 			bank.autocorrelation_mask = ligolw_array.get_array(root, "autocorrelation_mask").array
+			bank.horizon_factors = dict((row.template_id, sigmasq**.5) for row, sigmasq in zip(bank.sngl_inspiral_table, bank.sigmasq))
 
 			banks.append(bank)
+
+		min_template_id, horizon_distance_func = svd_bank.horizon_distance_func(banks)
+		horizon_norm, = (bank.horizon_factors[row.template_id] for row in bank.sngl_inspiral_table for bank in banks if row.template_id == min_template_id)
+		for bank in banks:
+			bank.horizon_distance_func = horizon_distance_func
+			bank.horizon_factors = dict((tid, f / horizon_norm) for (tid, f) in bank.horizon_factors.items())
 
 		return banks
 
@@ -619,7 +658,7 @@ def scan_svd_banks_for_row(coinc_xmldoc, banks_dict):
 		row_number (int)
 
 	"""
-	eventid_trigger_dict = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+	eventid_trigger_dict = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 
 	assert len(set([row.template_id for row in eventid_trigger_dict.values()])) == 1, "Templates should have the same template_id."
 

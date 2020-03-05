@@ -651,6 +651,15 @@ class GracedBWrapper(object):
 			filename = "%s-%s-%d-%d.xml" % (instruments, description, end_time, 1)
 
 			#
+			# make sure the directory where we will write the files to disk exists
+			#
+
+			gracedb_uploads_gps_dir = os.path.join("gracedb_uploads", str(end_time)[:5])
+			if not os.path.exists(gracedb_uploads_gps_dir):
+				os.makedirs(gracedb_uploads_gps_dir)
+
+
+			#
 			# construct message and send to gracedb.
 			# we go through the intermediate step of
 			# first writing the document into a string
@@ -828,6 +837,8 @@ class GracedBWrapper(object):
 				snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
 				xmldoc.childNodes[-1].appendChild(snr_time_series_element)
 
+			# get background bin from SnglInspiral objects while they're still available
+			background_bin = int(sngl_inspiral_table[0].Gamma1)
 			# translate IDs from integers to ilwd:char for
 			# backwards compatibility
 			ilwdify.do_it_to(xmldoc)
@@ -861,6 +872,20 @@ class GracedBWrapper(object):
 					}
 				)
 				del psd_fobj
+				# Write ranking data to disk and send path to kafka
+				rankingstat_filename = os.path.join(gracedb_uploads_gps_dir, "%s-%s_%04d_RankingData-%d-%d.xml.gz" % (instruments, description, background_bin, end_time, 1))
+				with open(rankingstat_filename, "w") as fileobj:
+					ligolw_utils.write_fileobj(rankingstat_xmldoc_func(), fileobj, gz = True)
+
+				self.producer.send(
+					"ranking_stat",
+					value = {
+						"ranking_data_path": os.path.realpath(rankingstat_filename),
+						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
+						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,
+						"coinc": message.getvalue()
+					}
+				)
 
 			# upload events
 			if not self.delay_uploads:
@@ -889,11 +914,7 @@ class GracedBWrapper(object):
 
 			# save event to disk
 			message.close()
-			try:
-				os.mkdir("gracedb_uploads")
-			except OSError:
-				pass
-			with open(os.path.join("gracedb_uploads", filename), "w") as fileobj:
+			with open(os.path.join(gracedb_uploads_gps_dir, filename), "w") as fileobj:
 				ligolw_utils.write_fileobj(xmldoc, fileobj, gz = False)
 
 			xmldoc.unlink()
