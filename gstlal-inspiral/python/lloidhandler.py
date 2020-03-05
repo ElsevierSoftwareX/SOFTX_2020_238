@@ -647,7 +647,7 @@ class Handler(simplehandler.Handler):
 	dumps of segment information, trigger files and background
 	distribution statistics.
 	"""
-	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", cluster = False, cap_singles = False, FAR_trialsfactor = 1.0, activation_counts = None, verbose = False):
+	def __init__(self, mainloop, pipeline, coincs_document, rankingstat, horizon_distance_func, gracedbwrapper, zerolag_rankingstatpdf_url = None, rankingstatpdf_url = None, ranking_stat_output_url = None, ranking_stat_input_url = None, likelihood_snapshot_interval = None, sngls_snr_threshold = None, tag = "", kafka_server = "10.14.0.112:9092", cluster = False, cap_singles = False, FAR_trialsfactor = 1.0, activation_counts = None, template_id_time_map = None, verbose = False):
 		"""!
 		@param mainloop The main application's event loop
 		@param pipeline The gstreamer pipeline that is being
@@ -675,6 +675,7 @@ class Handler(simplehandler.Handler):
 		self.cap_singles = cap_singles
 		self.FAR_trialsfactor = FAR_trialsfactor
 		self.activation_counts = activation_counts
+		self.template_id_time_map = template_id_time_map
 
 		self.gracedbwrapper = gracedbwrapper
 		# FIXME:   detangle this
@@ -1131,7 +1132,7 @@ class Handler(simplehandler.Handler):
 				if not self.stream_thinca.push(instrument, [event for event in events if event.ifo == instrument], buf_timestamp):
 					continue
 
-				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, cluster = self.cluster, cap_singles = self.cap_singles, FAR_trialsfactor = self.FAR_trialsfactor)
+				flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, cluster = self.cluster, cap_singles = self.cap_singles, FAR_trialsfactor = self.FAR_trialsfactor,template_id_time_map = self.template_id_time_map)
 				self.coincs_document.commit()
 
 				# do GraceDB alerts and update eye candy
@@ -1355,7 +1356,7 @@ class Handler(simplehandler.Handler):
 		# whatever triggers remain in the queues, and processes
 		# them
 
-		flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, flush = True, cluster = self.cluster, cap_singles = self.cap_singles, FAR_trialsfactor = self.FAR_trialsfactor)
+		flushed_sngls = self.stream_thinca.pull(self.rankingstat, fapfar = self.fapfar, zerolag_rankingstatpdf = self.zerolag_rankingstatpdf, coinc_sieve = self.rankingstat.fast_path_cut_from_triggers, flush = True, cluster = self.cluster, cap_singles = self.cap_singles, FAR_trialsfactor = self.FAR_trialsfactor, template_id_time_map = self.template_id_time_map)
 		self.coincs_document.commit()
 
 		# do GraceDB alerts

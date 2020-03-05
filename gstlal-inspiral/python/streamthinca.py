@@ -235,6 +235,7 @@ class StreamThinca(object):
 	def set_xmldoc(self, xmldoc, process_id):
 		self.coinc_tables = thinca.InspiralCoincTables(xmldoc, thinca.InspiralCoincDef)
 		self.sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
+		self.process_params_table = lsctables.ProcessParamsTable.get_table(xmldoc)
 		self.last_coincs = last_coincs(xmldoc)
 		self.process_id = process_id
 		self.time_slide_graph = snglcoinc.TimeSlideGraph(
@@ -256,7 +257,7 @@ class StreamThinca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = False, FAR_trialsfactor = 1.0):
+	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = False, FAR_trialsfactor = 1.0, template_id_time_map = None):
 		# NOTE:  rankingstat is not used to compute the ranking
 		# statistic, it supplies the detector livetime segment
 		# lists to determine which triggers are eligible for
@@ -345,7 +346,11 @@ class StreamThinca(object):
 				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
 				self.sngl_inspiral_table.extend([sngl_trigger for sngl_trigger in events if sngl_trigger.event_id not in self.clustered_sngl_ids])
 				self.clustered_sngl_ids |= set(e.event_id for e in events)
-
+				if template_id_time_map is not None:
+					# The same template should have the same offset regardless of ifo, so just take the first one
+					offset = [template_id_time_map[int(sngl_trigger.Gamma0)] for sngl_trigger in events][0]
+					row = [row for row in self.process_params_table if row.param == u'--upload-time-before-merger'][0]
+					row.value=str(offset)
 
 		# add selected singles to the noise model
 

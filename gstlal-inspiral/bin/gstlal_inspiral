@@ -282,6 +282,7 @@ def parse_command_line():
 	group.add_option("--gracedb-label", action = "append", help = "Labels to apply to gracedb uploads. Can be applied multiple times.")
 	group.add_option("--gracedb-service-url", metavar = "url", default = gracedb_default_service_url, help = "Override default GracedB service url (optional, default is %s)." % gracedb_default_service_url)
 	group.add_option("--delay-uploads", action = "store_true", help = "Choose whether to delay uploads to allow aggregation of events downstream from many gstlal_inspiral jobs (default is False).")
+	group.add_option("--upload-time-before-merger", action = "store_true", help = "If stored in SVD banks, option to upload the time before merger at which each filter terminates in process params table")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Program Behaviour")
@@ -756,6 +757,9 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	else:
 		reconstruction_segment_list = None
 
+	if options.upload_time_before_merger is not None:
+		# Create template id / time before merger map
+		options.upload_time_before_merger = {row.template_id: abs(row.end.gpsSeconds) + 1e-9*abs(row.end.gpsNanoSeconds) for bank in banks.items()[0][-1] for row in bank.sngl_inspiral_table}
 
 	@bottle.route("/bank.txt")
 	def get_filter_length_and_chirpmass(banks = banks):
@@ -888,6 +892,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		cap_singles = options.cap_singles,
 		FAR_trialsfactor = options.far_trials_factor,
 		activation_counts = options.activation_counts,
+		template_id_time_map = options.upload_time_before_merger,
 		verbose = options.verbose
 	)
 	if options.verbose:
