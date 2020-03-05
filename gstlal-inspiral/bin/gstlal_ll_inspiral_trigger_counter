@@ -82,7 +82,7 @@ class ZeroLagCounts(object):
 		cnt = 0
 		for c in coincs:
 			# avoid trigs before LR assigned
-			if "likelihood" in c and c["likelihood"] > -12.0:
+			if "likelihood" in c and c["likelihood"] > -10.0:
 				# equiv to 10s clustering
 				key = round(c["end"], -1)
 				lr = c["likelihood"]
