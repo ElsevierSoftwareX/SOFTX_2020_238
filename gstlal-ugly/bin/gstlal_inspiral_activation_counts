@@ -20,13 +20,18 @@ def mchirp(m1, m2):
 	return (m1*m2)**.6 / (m1+m2)**.2
 
 # Cody's injection cutting scheme
-def mchirp_bounds(ml, mh):
+def mchirp_in_bounds(mc, ml, mh):
+	"""
+	function returns if a chirpmass is within a reasonable bound with
+	respect to the min and max chirp mass of this bank. If not the match won't be
+	computed at all
+	"""
 	if mh < 10:
-		return 0.65*m1, 1.35*mh
+		return mc >= 0.65*ml and mc < 1.35*mh
 	elif mh < 20:
-		return 0.5*m1, 1.5*mh
+		return mc >= 0.5*ml and mc < 1.5*mh
 	else:
-		return 0.5*m1, 2.0*mh
+		return mc >= 0.5*ml and mc < 2.0*mh
 
 
 parser = argparse.ArgumentParser()
@@ -42,6 +47,8 @@ args = parser.parse_args()
 
 outfile = open(args.output, "w")
 
+# Initialize a numeric metric object that will let us compute approximate
+# matches
 g_ij = metric_module.Metric(
 	args.psd_xml_file,
 	coord_func = metric_module.x_y_z_zn_func,
@@ -51,16 +58,19 @@ g_ij = metric_module.Metric(
 	approximant = "IMRPhenomD"
 )
 
+# Read all of the templates from the svd bin
 sngl_inspiral_table = []
 for n, bank in enumerate(svd_bank.read_banks(args.svd_file, contenthandler = LIGOLWContentHandler, verbose = True)):
 	sngl_inspiral_table.extend([row for row in bank.sngl_inspiral_table])
 
+# get the ranges of mchirp and chi effective from the templates
 min_mchirp = min(row.mchirp for row in sngl_inspiral_table)
 max_mchirp = max(row.mchirp for row in sngl_inspiral_table)
 chieff = [(row.mass1 * row.spin1z + row.mass2 * row.spin2z) / (row.mass1 + row.mass2) for row in sngl_inspiral_table]
 min_chi = min(chieff)
 max_chi = max(chieff)
 
+# define the coordinate transformation for the metric.
 def x_y_z_zn_from_row(row):
 	return [metric_module.x_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
 		metric_module.y_from_m1_m2_s1_s2(row.mass1, row.mass2, row.spin1z, row.spin2z),
@@ -71,7 +81,7 @@ def x_y_z_zn_from_row(row):
 print >> outfile, "mchirp (%f,%f) chieff (%f,%f)" % (min_mchirp, max_mchirp, min_chi, max_chi)
 print >> outfile, "name, m1 start, m1 stop, m2 start, m2 stop, activation counts"
 
-# compute template match functions:
+# compute template match functions. Each template has a metric computed
 print "computing metrics"
 match_funcs = []
 for tmp in (x_y_z_zn_from_row(row) for row in sngl_inspiral_table):
@@ -79,9 +89,12 @@ for tmp in (x_y_z_zn_from_row(row) for row in sngl_inspiral_table):
 		return  g_ij.pseudo_match(g, vec1, vec2)
 	match_funcs.append(match)
 
+# setup an array of SNRs to loop over covering a plausible signal range.
 snrs = numpy.linspace(6., 20., 15)
 snrnorm = sum(snrs**-4)
 
+# iterate over the lists of masses and spins that define the different target
+# regions, e.g., bns, nsbh, bbh etc.
 for M1, M2, S1, name in zip(args.m1, args.m2, args.chi_eff, args.name):
 
 	print M1, M2
@@ -89,11 +102,14 @@ for M1, M2, S1, name in zip(args.m1, args.m2, args.chi_eff, args.name):
 	m1n,m1s,m1e = [float(x) for x in M1.split(":")]
 	m2n,m2s,m2e = [float(x) for x in M2.split(":")]
 	chin,chis,chie = [float(x) for x in S1.split(":")]
+	num_injections = m1n * m2n * chin
 
-	# uniform population in m1 / m2 space
+	# Setup some "injections"
+	# uniform in log population as requested by Jolien for mass and uniform in spin
 	signals = []
 	for m1,m2,chi in itertools.product(numpy.logspace(numpy.log10(m1s), numpy.log10(m1e), m1n), numpy.logspace(numpy.log10(m2s), numpy.log10(m2e), m2n), numpy.linspace(chis, chie, chin)):
-		if mchirp(m1, m2) <= max_mchirp and mchirp(m1, m2) >= min_mchirp:
+
+		if mchirp_in_bounds(mchirp(m1, m2), min_mchirp, max_mchirp):
 			signals.append(
 				numpy.array(
 				[metric_module.x_from_m1_m2_s1_s2(m1, m2, chi, chi),
@@ -108,12 +124,12 @@ for M1, M2, S1, name in zip(args.m1, args.m2, args.chi_eff, args.name):
 	count = 0
 	print "computing counts for %d signals" % len(signals)
 
-	if len(signals) > 0:		
+	if len(signals) > 0:
 		for n, match_func in enumerate(match_funcs):
 			matches = numpy.apply_along_axis(match_func, 1, signals)
-			# Only consider matches greater than 0.70
+			# Only consider matches greater than 0.70, otherwise the match is considered to be zero.
 			matches = matches[matches > 0.70]
 			if len(matches) > 0:
 				for rho in snrs:
-					count += rho**-4 / snrnorm * (numpy.exp(-rho**2*(1.0 - matches)**2/2.)).sum() / len(matches)
+					count += rho**-4 / snrnorm * (numpy.exp(-rho**2*(1.0 - matches)**2/2.)).sum() / num_injections
 	print >> outfile, "%s, %f, %f, %f, %f, %e" % (name, m1s, m1e, m2s, m2e, count)
