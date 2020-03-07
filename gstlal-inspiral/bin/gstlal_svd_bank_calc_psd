@@ -20,21 +20,11 @@
 ### Usage
 ### -----
 ###
-### 1. Measure the PSD of frame data found in a file called frame.cache. Note: you can make frame cache with lalapps_path2cache, e.g.,::
-###
-###	$ gstlal_reference_psd --data-source frames --frame-cache frame.cache \\
-###	--gps-start-time=900000000 --gps-end-time=900005000 \\
-###	--channel-name=H1=FAKE-STRAIN --channel-name=L1=FAKE-STRAIN \\
-###	--write-psd psd.xml.gz --verbose
-###
-###    See :any:`gstlal_plot_psd` to plot the result
-###
-### 2. Measuring the PSD of low-latency data (e.g. on CIT cluster)::
-###
-###	$ gstlal_reference_psd --data-source framexmit --channel-name=L1=FAKE-STRAIN  \\
-###	--write-psd psd.xml.gz
-###
-### 3. Other things are certainly possible, please add them!
+###	$ gstlal_svd_bank_calc_psd --write-psd ./reproduce_svd_bank_psd.xml.gz \\
+###	--svd-bank-files H1-GSTLAL_SVD_BANK.xml.gz \\
+###	--svd-bank-files L1-GSTLAL_SVD_BANK.xml.gz \\
+###	--svd-bank-files V1-GSTLAL_SVD_BANK.xml.gz \\
+###	--verbose
 ###
 ### Related programs
 ### ----------------
