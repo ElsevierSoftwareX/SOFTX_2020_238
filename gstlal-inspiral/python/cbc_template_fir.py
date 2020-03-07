@@ -327,11 +327,48 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	avgwindow = int(smoothing_frequency / newdeltaF)
 	psddata = movingmedian(psddata, avgwindow)
 	psddata = movingaverage(psddata, avgwindow)
+	psd.data.data = psddata
+
+	#
+	# compute the psd horizon after conditioning and renormalize
+	#
+
+	horizon_after = horizon_distance(psd, 8.0)[0]
+
+	psddata = psd.data.data
+	psd.data.data =  psddata * (horizon_after / horizon_before)**2
+
+	#
+	# done
+	#
+
+	return psd
+
+def taperInf_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.)):
+	"""
+	A function to taper the psd to infinity for given min/max frequencies
+
+	:psd: A real8 frequency series containing the psd
+	:newdeltaF (Hz): The target delta F to interpolate to
+	:minfs (Hz): The frequency boundaries over which to taper the spectrum to infinity.  i.e., frequencies below the first item in the tuple will have an infinite spectrum, the second item in the tuple will not be changed.  A taper from 0 to infinity is applied in between.  The PSD is also tapered from 0.85 * Nyquist to Nyquist.
+	:smoothing_frequency (Hz): The target frequency resolution after smoothing.  Lines with bandwidths << smoothing_frequency are removed via a median calculation.  Remaining features will be blurred out to this resolution.
+
+	:returns: A tapered psd
+
+	"""
+
+	#
+	# store the psd horizon before tapering
+	#
+
+	horizon_distance = reference_psd.HorizonDistance(minfs[1], maxfs[0], psd.deltaF, 1.4, 1.4)
+	horizon_before = horizon_distance(psd, 8.0)[0]
 
 	#
 	# Taper to infinity to turn this psd into an effective band pass filter
 	#
 
+	psddata = psd.data.data
 	kmin = int(minfs[0] / newdeltaF)
 	kmax = int(minfs[1] / newdeltaF)
 	psddata[:kmin] = float('Inf')
@@ -389,17 +426,20 @@ class templates_workspace(object):
 		# SimInspiralChirpTimeBound() regardless of the component's spins.
 		template = min(self.template_table, key = lambda row: row.mchirp)
 		tchirp = lalsim.SimInspiralChirpTimeBound(self.f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI, 0., 0.)
-		working_f_low = lalsim.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / self.f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
+		self.working_f_low = lalsim.SimInspiralChirpStartFrequencyBound(1.1 * tchirp + 3. / self.f_low, template.mass1 * lal.MSUN_SI, template.mass2 * lal.MSUN_SI)
 
 		# Add duration of PSD to template length for PSD ringing, round up to power of 2 count of samples
 		self.working_length = templates.ceil_pow_2(self.length_max + round(1./psd.deltaF * self.sample_rate_max))
 		self.working_duration = float(self.working_length) / self.sample_rate_max
 
-		# Smooth the PSD and interpolate to required resolution
-		if not FIR_WHITENER and psd is not None:
-			self.psd = condition_psd(psd, 1.0 / self.working_duration, minfs = (working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
+		self.psd = condition_psd(psd, 1.0 / self.working_duration, minfs = (self.working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
+		if not FIR_WHITENER:
+			# Smooth the PSD and interpolate to required resolution
+			self.psd = taperInf_psd(self.psd, 1.0 / self.working_duration, minfs = (self.working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
 		else:
-			self.psd = reference_psd.interpolate_psd(psd, 1.0 / self.working_duration)
+			# Compute a frequency response of the time-domain whitening kernel and effectively taper the psd by zero-ing some elements for a FIR kernel
+			self.kernel_fseries = create_FIR_whitener_kernel(self.working_length, self.working_duration, self.sample_rate_max, self.psd)
+
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		self.fwdplan = lal.CreateForwardREAL8FFTPlan(self.working_length, 1)
 		self.tseries = lal.CreateCOMPLEX16TimeSeries(
@@ -418,9 +458,6 @@ class templates_workspace(object):
 			length = self.working_length // 2 + 1,
 			sampleUnits = lal.Unit("strain s")
 		)
-
-		if FIR_WHITENER:
-			self.kernel_fseries = create_FIR_whitener_kernel(self.working_length, self.working_duration, self.sample_rate_max, self.psd)
 
 		# Calculate the maximum ring down time or maximum shift time
 		if approximant in templates.gstlal_IMR_approximants:
@@ -447,7 +484,7 @@ class templates_workspace(object):
 
 		if FIR_WHITENER:
 			#
-			# Compute a product of freq series of the whitening kernel and the template (convolution in time domain) then add quadrature phase(Leo)
+			# Compute a product of freq series of the whitening kernel and the template (convolution in time domain) then add quadrature phase
 			#
 			assert (len(self.kernel_fseries.data.data) // 2 + 1) == len(fseries.data.data), "the size of whitening kernel freq series does not match with a given format of COMPLEX16FrequencySeries."
 			fseries.data.data *= self.kernel_fseries.data.data[len(self.kernel_fseries.data.data) // 2 - 1:]
