@@ -396,6 +396,30 @@ def taperInf_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.)):
 
 	return psd
 
+def reproduce_bank_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), smoothing_frequency = 4.):
+	"""
+	A function to reproduce the psd used for whiteing a template bank from the given raw psd
+
+	@param psd A real8 frequency series containing the psd
+	@param newdeltaF (Hz) The target delta F to interpolate to
+	@param minfs (Hz) The frequency boundaries over which to taper the spectrum to infinity.  i.e., frequencies below the first item in the tuple will have an infinite spectrum, the second item in the tuple will not be changed.  A taper from 0 to infinity is applied in between.  The PSD is also tapered from 0.85 * Nyquist to Nyquist.
+	@param smoothing_frequency (Hz) The target frequency resolution after smoothing.  Lines with bandwidths << smoothing_frequency are removed via a median calculation.  Remaining features will be blurred out to this resolution.
+
+	returns a psd used for whitening template banks
+
+	"""
+
+	psd = condition_psd(psd, newdeltaF, minfs = minfs, maxfs = maxfs, smoothing_frequency = smoothing_frequency)
+
+	#
+	# Tapering psd in either side up to infinity if a frequency-domain whitener is used, returns a psd without tapering otherwise.
+	# For a time-domain whitener, the tapering is effectively done as a part of deriving a frequency series of the FIR-whitner kernel
+	#
+	if not FIR_WHITENER:
+		psd = taperInf_psd(psd, newdeltaF, minfs = minfs, maxfs = maxfs)
+
+	return psd
+
 
 class templates_workspace(object):
 	def __init__(self, template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, fhigh = None):
@@ -647,7 +671,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			template_bank[j][(2*i+0),:] = template.real[end_index:begin_index:stride] * math.sqrt(stride)
 			template_bank[j][(2*i+1),:] = template.imag[end_index:begin_index:stride] * math.sqrt(stride)
 
-	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq, workspace.psd
+	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq, workspace
 
 
 def decompose_templates(template_bank, tolerance, identity = False):
