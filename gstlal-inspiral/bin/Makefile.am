@@ -76,4 +76,5 @@ dist_bin_SCRIPTS = \
 	gstlalcbcnode \
 	gstlalcbcsummary \
 	gstlal_svd_bank
-
+	gstlal_svd_bank \
+	gstlal_svd_bank_calc_psd
