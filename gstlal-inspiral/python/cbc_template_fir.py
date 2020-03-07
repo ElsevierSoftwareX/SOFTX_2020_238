@@ -55,7 +55,6 @@ import bisect
 import cmath
 import math
 import numpy
-import scipy
 import sys
 import os
 
@@ -150,6 +149,55 @@ def create_FIR_whitener_kernel(length, duration, sample_rate, psd):
 	lal.COMPLEX16TimeFreqFFT(kernel_fseries, kernel_tseries, fwdplan_kernel) #FIXME
 
 	return kernel_fseries
+
+def taperzero_fseries(fseries, minfs = (35.0, 40.0), maxfs = (1800., 2048.)):
+	"""
+	A function to taper the psd to infinity for given min/max frequencies
+
+	:psd: A real8 frequency series containing the psd
+	:newdeltaF (Hz): The target delta F to interpolate to
+	:minfs (Hz): The frequency boundaries over which to taper the spectrum to infinity.  i.e., frequencies below the first item in the tuple will have an infinite spectrum, the second item in the tuple will not be changed.  A taper from 0 to infinity is applied in between.  The PSD is also tapered from 0.85 * Nyquist to Nyquist.
+	:smoothing_frequency (Hz): The target frequency resolution after smoothing.  Lines with bandwidths << smoothing_frequency are removed via a median calculation.  Remaining features will be blurred out to this resolution.
+
+	:returns: A tapered psd
+
+	"""
+
+	#
+	# store the psd horizon before tapering
+	#
+
+	data = fseries.data.data
+	norm_before = numpy.dot(data.conj(), data).real
+
+	#
+	# taper to infinity to turn this psd into an effective band pass filter
+	#
+
+	deltaF = fseries.deltaF
+	kmin = int(minfs[0] / deltaF)
+	kmax = int(minfs[1] / deltaF)
+	data[(len(data)//2 + 1) - kmin + 1:(len(data)//2 + 1) + kmin] = 0.
+	data[(len(data)//2 + 1) + kmin:(len(data)//2 + 1) + kmax] *= numpy.sin(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+	data[(len(data)//2 + 1) - kmax:(len(data)//2 + 1) - kmin] *= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+
+	kmin = int(maxfs[0] / deltaF) - 1
+	kmax = int(maxfs[1] / deltaF) - 1
+	data[(len(data)//2 + 1) + kmax:] = data[:-(len(data)//2 + 1) - kmax] = 0.
+	data[(len(data)//2 + 1) + kmin:(len(data)//2 + 1) + kmax] *= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+	data[(len(data)//2 + 1) - kmax:(len(data)//2 + 1) - kmin] *= numpy.sin(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+
+	#
+	# renormalize after tapering
+	#
+
+	fseries.data.data = data * math.sqrt(norm_before / numpy.dot(data.conj(), data).real)
+
+	#
+	# done
+	#
+
+	return fseries
 
 
 def tukeywindow(data, samps = 200.):
@@ -462,7 +510,10 @@ class templates_workspace(object):
 			self.psd = taperInf_psd(self.psd, 1.0 / self.working_duration, minfs = (self.working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
 		else:
 			# Compute a frequency response of the time-domain whitening kernel and effectively taper the psd by zero-ing some elements for a FIR kernel
-			self.kernel_fseries = create_FIR_whitener_kernel(self.working_length, self.working_duration, self.sample_rate_max, self.psd)
+			self.kernel_fseries = taperzero_fseries(create_FIR_whitener_kernel(self.working_length, self.working_duration, self.sample_rate_max, self.psd),\
+													  minfs = (self.working_f_low, self.f_low),\
+													  maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0)\
+													 )
 
 		self.revplan = lal.CreateReverseCOMPLEX16FFTPlan(self.working_length, 1)
 		self.fwdplan = lal.CreateForwardREAL8FFTPlan(self.working_length, 1)
