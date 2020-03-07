@@ -159,7 +159,7 @@ class Bank(object):
 		self.bank_id = bank_id
 
 		# Generate downsampled templates
-		template_bank, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq, processed_psd = cbc_template_fir.generate_templates(
+		template_bank, self.autocorrelation_bank, self.autocorrelation_mask, self.sigmasq, bank_workspace = cbc_template_fir.generate_templates(
 			lsctables.SnglInspiralTable.get_table(bank_xmldoc),
 			read_approximant(bank_xmldoc),
 			psd,
@@ -174,7 +174,12 @@ class Bank(object):
 		self.sngl_inspiral_table = sngl_inspiral_table.copy()
 		self.sngl_inspiral_table.extend(sngl_inspiral_table)
 		# Include the processed psd
-		self.processed_psd = processed_psd
+		self.processed_psd = bank_workspace.psd
+		# Include some parameters passed from the bank workspace
+		self.newdeltaF = 1. / bank_workspace.working_duration
+		self.working_f_low = bank_workspace.working_f_low
+		self.f_low = bank_workspace.f_low
+		self.sample_rate_max = bank_workspace.sample_rate_max
 
 		# Assign template banks to fragments
 		self.bank_fragments = [BankFragment(rate,begin,end) for rate,begin,end in time_slices]
@@ -268,7 +273,7 @@ def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_
 	return bank
 
 
-def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = False):
+def write_bank(filename, banks, psd_input, cliplefts = None, cliprights = None, verbose = False):
 	"""Write SVD banks to a LIGO_LW xml file."""
 
 	# Create new document
@@ -301,6 +306,11 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = F
 		root.appendChild(ligolw_param.Param.from_pyvalue('snr_threshold', bank.snr_threshold))
 		root.appendChild(ligolw_param.Param.from_pyvalue('template_bank_filename', bank.template_bank_filename))
 		root.appendChild(ligolw_param.Param.from_pyvalue('bank_id', bank.bank_id))
+		root.appendChild(ligolw_param.Param.from_pyvalue('new_deltaf', bank.newdeltaF))
+		root.appendChild(ligolw_param.Param.from_pyvalue('working_f_low', bank.working_f_low))
+		root.appendChild(ligolw_param.Param.from_pyvalue('f_low', bank.f_low))
+		root.appendChild(ligolw_param.Param.from_pyvalue('sample_rate_max', bank.sample_rate_max))
+		root.appendChild(ligolw_param.Param.from_pyvalue('gstlal_fir_whiten', os.environ['GSTLAL_FIR_WHITEN']))
 
 		# apply clipping to autocorrelations and sigmasq
 		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
@@ -342,7 +352,8 @@ def write_bank(filename, banks, cliplefts = None, cliprights = None, verbose = F
 	# put a copy of the processed PSD file in
 	# FIXME in principle this could be different for each bank included in
 	# this file, but we only put one here
-	lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: bank.processed_psd}, lw)
+	psd = psd_input[bank.sngl_inspiral_table[0].ifo]
+	lal.series.make_psd_xmldoc({bank.sngl_inspiral_table[0].ifo: psd}, lw)
 
 	# Write to file
 	ligolw_utils.write_filename(xmldoc, filename, gz = filename.endswith('.gz'), verbose = verbose)
@@ -360,7 +371,7 @@ def read_banks(filename, contenthandler, verbose = False):
 	# this file, but we only put one in the file for now
 	# FIXME, right now there is only one instrument so we just pull out the
 	# only psd there is
-	processed_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
+	raw_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
 
@@ -378,6 +389,10 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
 		bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
 		bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
+		bank.newdeltaF = ligolw_param.get_pyvalue(root, 'new_deltaf')
+		bank.working_f_low = ligolw_param.get_pyvalue(root, 'working_f_low')
+		bank.f_low = ligolw_param.get_pyvalue(root, 'f_low')
+		bank.sample_rate_max = ligolw_param.get_pyvalue(root, 'sample_rate_max')
 
 		# Read root-level arrays
 		bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
@@ -387,8 +402,8 @@ def read_banks(filename, contenthandler, verbose = False):
 		# prepare the horizon distance factors
 		bank.horizon_factors = dict((row.template_id, sigmasq**.5) for row, sigmasq in zip(bank.sngl_inspiral_table, bank.sigmasq))
 
-		# attach a reference to the psd
-		bank.processed_psd = processed_psd
+		# reproduce the whitening psd and attach a reference to the psd
+		bank.processed_psd = cbc_template_fir.reproduce_bank_psd(raw_psd, bank.newdeltaF, minfs = (bank.working_f_low, bank.f_low), maxfs = (bank.sample_rate_max / 2.0 * 0.90, bank.sample_rate_max / 2.0))
 
 		# Read bank fragments
 		bank.bank_fragments = []
