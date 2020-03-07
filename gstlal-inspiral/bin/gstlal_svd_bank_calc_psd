@@ -1,0 +1,104 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2020 Leo Tsukada
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Reproduce the psd frequnecy arraies used for whitening a template bank from the given svd bank files and dump it to a xml file."""
+
+### Usage
+### -----
+###
+### 1. Measure the PSD of frame data found in a file called frame.cache. Note: you can make frame cache with lalapps_path2cache, e.g.,::
+###
+###	$ gstlal_reference_psd --data-source frames --frame-cache frame.cache \\
+###	--gps-start-time=900000000 --gps-end-time=900005000 \\
+###	--channel-name=H1=FAKE-STRAIN --channel-name=L1=FAKE-STRAIN \\
+###	--write-psd psd.xml.gz --verbose
+###
+###    See :any:`gstlal_plot_psd` to plot the result
+###
+### 2. Measuring the PSD of low-latency data (e.g. on CIT cluster)::
+###
+###	$ gstlal_reference_psd --data-source framexmit --channel-name=L1=FAKE-STRAIN  \\
+###	--write-psd psd.xml.gz
+###
+### 3. Other things are certainly possible, please add them!
+###
+### Related programs
+### ----------------
+###
+### - :any:`gstlal_svd_bank`
+###  
+
+#
+# parse command line
+#
+
+
+from optparse import OptionParser
+
+from ligo.lw import ligolw
+from ligo.lw import array as ligolw_array
+from ligo.lw import param as ligolw_param
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+
+from lal import series as lalseries
+
+from gstlal import svd_bank
+
+@ligolw_array.use_in
+@ligolw_param.use_in
+@lsctables.use_in
+class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+	pass
+
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	# add our own options
+	parser.add_option("--write-psd", metavar = "filename", help = "Write measured noise spectrum to this LIGO light-weight XML file (required).")
+	parser.add_option("--svd-bank-files", action="append", metavar = "filename", default=[], help = "Set svd bank files from which to make psd xml file. One can set this multiple times, e.g. --svd-bank-files H1-SVD-BANK...xml.gz --svd-bank-files L1-SVD-BANK...xml.gz --svd-bank-files V1-SVD-BANK...xml.gz.")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	# check our own options
+	if options.write_psd is None:
+		raise ValueError("Must specify --write-psd")
+
+	return options, filenames
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+options, filenames = parse_command_line()
+
+psds = {}
+
+
+for svd_bank_path in options.svd_bank_files:
+	bank = svd_bank.read_banks(svd_bank_path, contenthandler = LIGOLWContentHandler, verbose = options.verbose)[0]
+	psds.update({bank.sngl_inspiral_table[0].ifo: bank.processed_psd})
+
+# Write to file
+ligolw_utils.write_filename(lalseries.make_psd_xmldoc(psds), options.write_psd, gz = (options.write_psd or "stdout").endswith(".gz"), verbose = options.verbose)
