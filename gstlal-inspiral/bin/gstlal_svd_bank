@@ -154,6 +154,7 @@ svd_bank.write_bank(
 		contenthandler = svd_bank.DefaultContentHandler,
 		sample_rate = options.sample_rate
 	) for (template_bank, bank_id) in zip(options.template_bank, options.bank_id)],
+	psd,
 	options.clipleft,
 	options.clipright
 )
