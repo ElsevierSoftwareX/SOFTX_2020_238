@@ -54,6 +54,8 @@ ac_counts.normalize()
 
 for b, counts in sorted(ac_counts.counts.items()):
 	grp = h5.create_group(b)
+	grp.create_dataset("mchirp_max", data = ac_counts.mchirp[b][1])
+	grp.create_dataset("mchirp_min", data = ac_counts.mchirp[b][0])
 	for cat, count in counts.items():
 		grp.create_dataset(cat, data = numpy.array(count))
 h5.close()
