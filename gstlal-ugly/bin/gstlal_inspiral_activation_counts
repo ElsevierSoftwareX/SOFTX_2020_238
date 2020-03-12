@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import sys
 import itertools
+import time
 from gstlal import metric as metric_module
 from ligo.lw import ligolw
 from ligo.lw import utils as ligolw_utils
@@ -18,21 +19,6 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 
 def mchirp(m1, m2):
 	return (m1*m2)**.6 / (m1+m2)**.2
-
-# Cody's injection cutting scheme
-def mchirp_in_bounds(mc, ml, mh):
-	"""
-	function returns if a chirpmass is within a reasonable bound with
-	respect to the min and max chirp mass of this bank. If not the match won't be
-	computed at all
-	"""
-	if mh < 10:
-		return mc >= 0.65*ml and mc < 1.35*mh
-	elif mh < 20:
-		return mc >= 0.5*ml and mc < 1.5*mh
-	else:
-		return mc >= 0.5*ml and mc < 2.0*mh
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output", help = "provide the output file")
@@ -63,12 +49,15 @@ sngl_inspiral_table = []
 for n, bank in enumerate(svd_bank.read_banks(args.svd_file, contenthandler = LIGOLWContentHandler, verbose = True)):
 	sngl_inspiral_table.extend([row for row in bank.sngl_inspiral_table])
 
+print "number of templates", len(sngl_inspiral_table)
+
 # get the ranges of mchirp and chi effective from the templates
 min_mchirp = min(row.mchirp for row in sngl_inspiral_table)
 max_mchirp = max(row.mchirp for row in sngl_inspiral_table)
 chieff = [(row.mass1 * row.spin1z + row.mass2 * row.spin2z) / (row.mass1 + row.mass2) for row in sngl_inspiral_table]
 min_chi = min(chieff)
 max_chi = max(chieff)
+print "mchirp (%f,%f) chieff (%f,%f)" % (min_mchirp, max_mchirp, min_chi, max_chi)
 
 # define the coordinate transformation for the metric.
 def x_y_z_zn_from_row(row):
@@ -83,11 +72,19 @@ print >> outfile, "name, m1 start, m1 stop, m2 start, m2 stop, activation counts
 
 # compute template match functions. Each template has a metric computed
 print "computing metrics"
-match_funcs = []
+start = time.time()
+metric_tensors = []
+templates = []
+
 for tmp in (x_y_z_zn_from_row(row) for row in sngl_inspiral_table):
-	def match(vec2, vec1 = tmp, g = g_ij(tmp)[0]):
-		return  g_ij.pseudo_match(g, vec1, vec2)
-	match_funcs.append(match)
+	g = g_ij(tmp)[0]
+	templates.append(tmp)
+	metric_tensors.append(g)
+
+templates = numpy.array(templates)
+metric_tensors = numpy.array(metric_tensors)
+
+print "done computing metrics", time.time() - start
 
 # setup an array of SNRs to loop over covering a plausible signal range.
 snrs = numpy.linspace(6., 20., 15)
@@ -107,17 +104,17 @@ for M1, M2, S1, name in zip(args.m1, args.m2, args.chi_eff, args.name):
 	# Setup some "injections"
 	# uniform in log population as requested by Jolien for mass and uniform in spin
 	signals = []
+	print m1n, m1s, m1e, m2n,m2s,m2e, chin,chis,chie
 	for m1,m2,chi in itertools.product(numpy.logspace(numpy.log10(m1s), numpy.log10(m1e), m1n), numpy.logspace(numpy.log10(m2s), numpy.log10(m2e), m2n), numpy.linspace(chis, chie, chin)):
 
-		if mchirp_in_bounds(mchirp(m1, m2), min_mchirp, max_mchirp):
-			signals.append(
-				numpy.array(
-				[metric_module.x_from_m1_m2_s1_s2(m1, m2, chi, chi),
-				metric_module.y_from_m1_m2_s1_s2(m1, m2, chi, chi),
-				metric_module.z_from_m1_m2_s1_s2(m1, m2, chi, chi),
-				metric_module.zn_from_m1_m2_s1_s2(m1, m2, chi, chi)]
-				)
+		signals.append(
+			numpy.array(
+			[metric_module.x_from_m1_m2_s1_s2(m1, m2, chi, chi),
+			metric_module.y_from_m1_m2_s1_s2(m1, m2, chi, chi),
+			metric_module.z_from_m1_m2_s1_s2(m1, m2, chi, chi),
+			metric_module.zn_from_m1_m2_s1_s2(m1, m2, chi, chi)]
 			)
+		)
 
 	signals = numpy.array(signals)
 
@@ -125,11 +122,19 @@ for M1, M2, S1, name in zip(args.m1, args.m2, args.chi_eff, args.name):
 	print "computing counts for %d signals" % len(signals)
 
 	if len(signals) > 0:
-		for n, match_func in enumerate(match_funcs):
-			matches = numpy.apply_along_axis(match_func, 1, signals)
-			# Only consider matches greater than 0.70, otherwise the match is considered to be zero.
-			matches = matches[matches > 0.70]
+		for n, template in enumerate(templates):
+
+			delta = signals - template
+			X = numpy.dot(delta, metric_tensors[n])
+			Y = delta
+			d2 = numpy.sum((X * Y), axis = 1)
+			# flatten out the parabolic match function
+			matches = 1. - (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
+			matches[numpy.isnan(matches)] = 0.
+			matches = matches[matches > 0]
+			#print n, len(matches)
 			if len(matches) > 0:
 				for rho in snrs:
 					count += rho**-4 / snrnorm * (numpy.exp(-rho**2*(1.0 - matches)**2/2.)).sum() / num_injections
+	print count
 	print >> outfile, "%s, %f, %f, %f, %f, %e" % (name, m1s, m1e, m2s, m2e, count)
