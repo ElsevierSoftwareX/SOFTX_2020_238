@@ -378,93 +378,39 @@ def condition_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), 
 	psd.data.data = psddata
 
 	#
-	# compute the psd horizon after conditioning and renormalize
-	#
-
-	horizon_after = horizon_distance(psd, 8.0)[0]
-
-	psddata = psd.data.data
-	psd.data.data =  psddata * (horizon_after / horizon_before)**2
-
-	#
-	# done
-	#
-
-	return psd
-
-def taperInf_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.)):
-	"""
-	A function to taper the psd to infinity for given min/max frequencies
-
-	:psd: A real8 frequency series containing the psd
-	:newdeltaF (Hz): The target delta F to interpolate to
-	:minfs (Hz): The frequency boundaries over which to taper the spectrum to infinity.  i.e., frequencies below the first item in the tuple will have an infinite spectrum, the second item in the tuple will not be changed.  A taper from 0 to infinity is applied in between.  The PSD is also tapered from 0.85 * Nyquist to Nyquist.
-	:smoothing_frequency (Hz): The target frequency resolution after smoothing.  Lines with bandwidths << smoothing_frequency are removed via a median calculation.  Remaining features will be blurred out to this resolution.
-
-	:returns: A tapered psd
-
-	"""
-
-	#
-	# store the psd horizon before tapering
-	#
-
-	horizon_distance = reference_psd.HorizonDistance(minfs[1], maxfs[0], psd.deltaF, 1.4, 1.4)
-	horizon_before = horizon_distance(psd, 8.0)[0]
-
-	#
-	# Taper to infinity to turn this psd into an effective band pass filter
-	#
-
-	psddata = psd.data.data
-	kmin = int(minfs[0] / newdeltaF)
-	kmax = int(minfs[1] / newdeltaF)
-	psddata[:kmin] = float('Inf')
-	psddata[kmin:kmax] /= numpy.sin(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
-
-	kmin = int(maxfs[0] / newdeltaF)
-	kmax = int(maxfs[1] / newdeltaF)
-	psddata[kmax:] = float('Inf')
-	psddata[kmin:kmax] /= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
-
-	psd.data.data = psddata
-
-	#
-	# compute the psd horizon after conditioning and renormalize
-	#
-
-	horizon_after = horizon_distance(psd, 8.0)[0]
-
-	psddata = psd.data.data
-	psd.data.data =  psddata * (horizon_after / horizon_before)**2
-
-	#
-	# done
-	#
-
-	return psd
-
-def reproduce_bank_psd(psd, newdeltaF, minfs = (35.0, 40.0), maxfs = (1800., 2048.), smoothing_frequency = 4.):
-	"""
-	A function to reproduce the psd used for whiteing a template bank from the given raw psd
-
-	@param psd A real8 frequency series containing the psd
-	@param newdeltaF (Hz) The target delta F to interpolate to
-	@param minfs (Hz) The frequency boundaries over which to taper the spectrum to infinity.  i.e., frequencies below the first item in the tuple will have an infinite spectrum, the second item in the tuple will not be changed.  A taper from 0 to infinity is applied in between.  The PSD is also tapered from 0.85 * Nyquist to Nyquist.
-	@param smoothing_frequency (Hz) The target frequency resolution after smoothing.  Lines with bandwidths << smoothing_frequency are removed via a median calculation.  Remaining features will be blurred out to this resolution.
-
-	returns a psd used for whitening template banks
-
-	"""
-
-	psd = condition_psd(psd, newdeltaF, minfs = minfs, maxfs = maxfs, smoothing_frequency = smoothing_frequency)
-
-	#
 	# Tapering psd in either side up to infinity if a frequency-domain whitener is used, returns a psd without tapering otherwise.
 	# For a time-domain whitener, the tapering is effectively done as a part of deriving a frequency series of the FIR-whitner kernel
 	#
 	if not FIR_WHITENER:
-		psd = taperInf_psd(psd, newdeltaF, minfs = minfs, maxfs = maxfs)
+		#
+		# Taper to infinity to turn this psd into an effective band pass filter
+		#
+
+		psddata = psd.data.data
+		kmin = int(minfs[0] / newdeltaF)
+		kmax = int(minfs[1] / newdeltaF)
+		psddata[:kmin] = float('Inf')
+		psddata[kmin:kmax] /= numpy.sin(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+
+		kmin = int(maxfs[0] / newdeltaF)
+		kmax = int(maxfs[1] / newdeltaF)
+		psddata[kmax:] = float('Inf')
+		psddata[kmin:kmax] /= numpy.cos(numpy.arange(kmax-kmin) / (kmax-kmin-1.) * numpy.pi / 2.0)**4
+
+		psd.data.data = psddata
+
+	#
+	# compute the psd horizon after conditioning and renormalize
+	#
+
+	horizon_after = horizon_distance(psd, 8.0)[0]
+
+	psddata = psd.data.data
+	psd.data.data = psddata * (horizon_after / horizon_before)**2
+
+	#
+	# done
+	#
 
 	return psd
 
@@ -504,11 +450,11 @@ class templates_workspace(object):
 		self.working_length = templates.ceil_pow_2(self.length_max + round(1./psd.deltaF * self.sample_rate_max))
 		self.working_duration = float(self.working_length) / self.sample_rate_max
 
-		self.psd = condition_psd(psd, 1.0 / self.working_duration, minfs = (self.working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
-		if not FIR_WHITENER:
+		if psd is not None:
 			# Smooth the PSD and interpolate to required resolution
-			self.psd = taperInf_psd(self.psd, 1.0 / self.working_duration, minfs = (self.working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
-		else:
+			self.psd = condition_psd(psd, 1.0 / self.working_duration, minfs = (self.working_f_low, self.f_low), maxfs = (self.sample_rate_max / 2.0 * 0.90, self.sample_rate_max / 2.0))
+
+		if FIR_WHITENER:
 			# Compute a frequency response of the time-domain whitening kernel and effectively taper the psd by zero-ing some elements for a FIR kernel
 			self.kernel_fseries = taperzero_fseries(create_FIR_whitener_kernel(self.working_length, self.working_duration, self.sample_rate_max, self.psd),\
 													  minfs = (self.working_f_low, self.f_low),\
