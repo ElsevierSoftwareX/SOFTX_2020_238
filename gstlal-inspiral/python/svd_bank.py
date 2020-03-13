@@ -403,7 +403,7 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.horizon_factors = dict((row.template_id, sigmasq**.5) for row, sigmasq in zip(bank.sngl_inspiral_table, bank.sigmasq))
 
 		# reproduce the whitening psd and attach a reference to the psd
-		bank.processed_psd = cbc_template_fir.reproduce_bank_psd(raw_psd, bank.newdeltaF, minfs = (bank.working_f_low, bank.f_low), maxfs = (bank.sample_rate_max / 2.0 * 0.90, bank.sample_rate_max / 2.0))
+		bank.processed_psd = cbc_template_fir.condition_psd(raw_psd, bank.newdeltaF, minfs = (bank.working_f_low, bank.f_low), maxfs = (bank.sample_rate_max / 2.0 * 0.90, bank.sample_rate_max / 2.0))
 
 		# Read bank fragments
 		bank.bank_fragments = []
