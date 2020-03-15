@@ -344,13 +344,10 @@ class Metric(object):
 		w1 = self.waveform(center)
 		wp = {}
 		wm = {}
-		# FIXME assumes m1,m2,spins... as the coordinates
+		# FIXME assumes masses as first two and spins as the rest
 		deltas = numpy.zeros(len(center))
 		deltas[0:2] = abs(center[0:2]) * DELTA
 		deltas[2:] += DELTA
-		#deltas = numpy.ones(len(center), dtype=float) * DELTA
-		#deltas = abs(center)**.5 * DELTA + DELTA
-		#deltas = abs(center) * DELTA + DELTA
 		for i, x in enumerate(deltas):
 			for j, y in enumerate(deltas):
 				dx = numpy.zeros(len(deltas))
@@ -388,35 +385,51 @@ class Metric(object):
 		return g, det
 
 
-	def distance(self, metric_tensor, x, y):
+	def _distancesq(self, metric_tensor, x, y):
+		delta = x - y
+		X = numpy.dot(delta, metric_tensor)
+		Y = delta
+		d2 = numpy.sum((X * Y), axis = 1)
+		d2[d2<0.] = 0.
+		return d2
+
+	def distancesq(self, metric_tensor, x, y):
 		"""
-		Compute the distance between to points inside the cube using
+		Compute the distance squared between to points inside the cube using
 		the metric tensor, but assuming it is constant
 		"""
-
+		if len(y.shape) > 1:
+			return self._distancesq(metric_tensor, x, y)
 		def dot(x, y, metric):
 			return numpy.dot(numpy.dot(x.T, metric), y)
 
 		delta = x-y
-                return (dot(delta, delta, metric_tensor))**.5
+		# always return floating point epsilon distance
+		return max(1e-7, (dot(delta, delta, metric_tensor)))
 
 	def volume_element(self, metric_tensor):
 		return abs(numpy.linalg.det(metric_tensor))**.5
 
 	def metric_match(self, metric_tensor, c1, c2):
-		d2 = self.distance(metric_tensor, c1, c2)
+		d2 = self.distancesq(metric_tensor, c1, c2)
 		if d2 < 1 and d2 >= 0:
 			return 1 - d2
 		else:
 			return 0.
 
 	def pseudo_match(self, metric_tensor, c1, c2):
-                d2 = self.distance(metric_tensor, c1, c2)**2
-                if math.isnan(d2):
-                        return 0.
-                else:
-                        d2 = (numpy.arctan(d2**.5 * numpy.pi / 2) / numpy.pi * 2)**2
-                        return 1. - d2
+		d2 = self.distancesq(metric_tensor, c1, c2)
+		match = 1. / (1. + numpy.log(1. + d2))
+		try:
+			if match > 1.0:
+				return 1.0
+			if match < 0.0:
+				return 0.0
+			return match
+		except ValueError:# have an array
+			match[match > 1.0] = 1.0
+			match[match < 0.0] = 0.0
+			return match
 
 	def explicit_match(self, c1, c2):
 		def fftmatch(w1, w2):
