@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright (C) 2012--2016  Kipp Cannon, Chad Hanna, Drew Keppel, Cody Messick
+# Copyright (C) 2012--2016	Kipp Cannon, Chad Hanna, Drew Keppel, Cody Messick
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -9,7 +9,7 @@
 #
 # This program is distributed in the hope that it will be useful, but
 # WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	See the GNU General
 # Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along
@@ -149,31 +149,33 @@ for gid in gid_list:
 	fig = figure.Figure()
 	FigureCanvas(fig)
 
+	zero_pad = 2
 	for i, (eventid, complex8timeseries) in enumerate(timeseries_ligolw_dict.items()):
 		ifo = eventid_trigger_dict[eventid].ifo
-		complex_snr_timeseries = complex8timeseries.data.data
 		autocorr_length = complex8timeseries.data.length
-		time = numpy.linspace(float(complex8timeseries.epoch), float(complex8timeseries.epoch)+(autocorr_length-1)*complex8timeseries.deltaT, autocorr_length)
+		auto = banks[ifo][banknum].autocorrelation_bank[tmpltnum]
+		auto = numpy.concatenate([numpy.zeros(zero_pad), auto, numpy.zeros(zero_pad)])
+		complex_snr_timeseries = numpy.concatenate([numpy.zeros(zero_pad), complex8timeseries.data.data, numpy.zeros(zero_pad)])
+		time = numpy.linspace(float(complex8timeseries.epoch) - zero_pad * complex8timeseries.deltaT, float(complex8timeseries.epoch)+(autocorr_length+zero_pad-1)*complex8timeseries.deltaT, autocorr_length + zero_pad * 2)
 
 		peakoffset = numpy.argmin(abs(time - eventid_trigger_dict[eventid].end))
+		peakoffset_auto = numpy.argmax(auto.real)
 		phase = numpy.angle(complex_snr_timeseries[peakoffset])
 		snr = (complex_snr_timeseries * numpy.exp(-1.j * phase)).real
 		snrsigma = numpy.sqrt(2)
 		peaktime = time[peakoffset]
 		time -= peaktime
 		maxsnr = snr.max()
-		auto = banks[ifo][banknum].autocorrelation_bank[tmpltnum]
 
 		ax = fig.add_subplot(len(timeseries_ligolw_dict.items()),1,i+1)
 		ax.fill_between(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]-snrsigma, snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)]+snrsigma, color="0.75")
-		#FIXME : This could potentially create an asymmetric plot. Since the peakoffset may not be the "center" of snr timeseries but could be off by one index from the "center".
-		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], "k", label = r"$\mathrm{Measured}\,\rho(t)$")
-		ax.plot(time[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2], auto.real[peakoffset-(autocorr_length-1)/2:peakoffset+(autocorr_length+1)/2]*maxsnr, "b--", label = r"$\mathrm{Scaled\,Autocorrelation}$")
+		ax.plot(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], snr[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], "k", label = r"$\mathrm{Measured}\,\rho(t)$")
+		ax.plot(time[int(peakoffset-(autocorr_length-1)/2):int(peakoffset+(autocorr_length+1)/2+1)], auto.real[int(peakoffset_auto-(autocorr_length-1)/2):int(peakoffset_auto+(autocorr_length+1)/2+1)]*maxsnr, "b--", label = r"$\mathrm{Scaled\,Autocorrelation}$")
 		ax.set_ylabel(r"$\mathrm{%s}\,\rho(t)$" % ifo)
 		ax.set_xlabel(r"$\mathrm{Time\,from\,%f}$" % peaktime)
 		ax.legend(loc="best")
 		ax.grid()
-		
+
 	fig.tight_layout()
 	filename = "%s_snrtimeseries.png" % gid
 
