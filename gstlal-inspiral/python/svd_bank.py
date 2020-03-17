@@ -41,6 +41,7 @@
 
 
 import numpy
+import os
 import sys
 import warnings
 
@@ -371,7 +372,11 @@ def read_banks(filename, contenthandler, verbose = False):
 	# this file, but we only put one in the file for now
 	# FIXME, right now there is only one instrument so we just pull out the
 	# only psd there is
-	raw_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
+	try:
+		raw_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
+	except ValueError:
+		# the bank file does not contain psd ligolw element.
+		raw_psd = None
 
 	for root in (elem for elem in xmldoc.getElementsByTagName(ligolw.LIGO_LW.tagName) if elem.hasAttribute(u"Name") and elem.Name == "gstlal_svd_bank_Bank"):
 
@@ -389,10 +394,14 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.snr_threshold = ligolw_param.get_pyvalue(root, 'snr_threshold')
 		bank.template_bank_filename = ligolw_param.get_pyvalue(root, 'template_bank_filename')
 		bank.bank_id = ligolw_param.get_pyvalue(root, 'bank_id')
-		bank.newdeltaF = ligolw_param.get_pyvalue(root, 'new_deltaf')
-		bank.working_f_low = ligolw_param.get_pyvalue(root, 'working_f_low')
-		bank.f_low = ligolw_param.get_pyvalue(root, 'f_low')
-		bank.sample_rate_max = ligolw_param.get_pyvalue(root, 'sample_rate_max')
+
+		try:
+			bank.newdeltaF = ligolw_param.get_pyvalue(root, 'new_deltaf')
+			bank.working_f_low = ligolw_param.get_pyvalue(root, 'working_f_low')
+			bank.f_low = ligolw_param.get_pyvalue(root, 'f_low')
+			bank.sample_rate_max = ligolw_param.get_pyvalue(root, 'sample_rate_max')
+		except ValueError:
+			pass
 
 		# Read root-level arrays
 		bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
@@ -402,8 +411,9 @@ def read_banks(filename, contenthandler, verbose = False):
 		# prepare the horizon distance factors
 		bank.horizon_factors = dict((row.template_id, sigmasq**.5) for row, sigmasq in zip(bank.sngl_inspiral_table, bank.sigmasq))
 
-		# reproduce the whitening psd and attach a reference to the psd
-		bank.processed_psd = cbc_template_fir.condition_psd(raw_psd, bank.newdeltaF, minfs = (bank.working_f_low, bank.f_low), maxfs = (bank.sample_rate_max / 2.0 * 0.90, bank.sample_rate_max / 2.0))
+		if raw_psd is not None:
+			# reproduce the whitening psd and attach a reference to the psd
+			bank.processed_psd = cbc_template_fir.condition_psd(raw_psd, bank.newdeltaF, minfs = (bank.working_f_low, bank.f_low), maxfs = (bank.sample_rate_max / 2.0 * 0.90, bank.sample_rate_max / 2.0))
 
 		# Read bank fragments
 		bank.bank_fragments = []
