@@ -256,15 +256,28 @@ static GstFlowReturn trigger_generator(GSTLALStringTriggergen *element, GstBuffe
 			float snr = fabsf(*snrsample);
 			if(snr >= element->threshold) {
 				/*
+				 * If there was a discontinuity (e.g. gap) that made this sample and the last sample above threshold larger than
+				 * the clustering time window, pass the previous trigger and reset the SNR so as to start with a new trigger.
+				 */
+				if(element->bank[channel].snr > element->threshold && XLALGPSDiff(&t, &element->last_time[channel]) > element->cluster) {
+					triggers = g_renew(SnglBurst, triggers, ntriggers + 1);
+					triggers[ntriggers++] = element->bank[channel];
+					element->bank[channel].snr = 0.0;
+					element->bank[channel].chisq = 0.0;
+					element->bank[channel].chisq_dof = 0.0;
+				}
+
+				/*
 				 * If this is the first sample above threshold (i.e. snr of trigger is (re)set to 0), record the start time.
 				 */
 				if(element->bank[channel].snr < element->threshold)
 					element->bank[channel].start_time = t;
 				/*
 				 * Keep track of last time above threshold and the duration.
+				 * For duration add a sample of fuzz on both sides (like in lalapps_StringSearch).
 				 */
 				element->last_time[channel] = t;
-				element->bank[channel].duration = XLALGPSDiff(&element->last_time[channel], &element->bank[channel].start_time);
+				element->bank[channel].duration = XLALGPSDiff(&element->last_time[channel], &element->bank[channel].start_time) + (float) 2.0 / GST_AUDIO_INFO_RATE(&element->audio_info);
 				if(snr > element->bank[channel].snr) {
 					/*
 					 * Higher SNR than the "current winner". Update.
