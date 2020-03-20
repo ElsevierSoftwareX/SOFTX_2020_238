@@ -153,7 +153,8 @@ class EyeCandy(object):
 		for instrument in instruments:
 			name = "%s_strain_audiorate" % instrument
 			elem = pipeline.get_by_name(name)
-			self.strain[instrument] = elem
+			if elem is not None:
+				self.strain[instrument] = elem
 		self.time_since_last_state = None
 
 		#
