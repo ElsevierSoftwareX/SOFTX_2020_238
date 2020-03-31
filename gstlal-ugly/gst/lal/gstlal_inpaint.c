@@ -122,13 +122,17 @@ static void fft_psd(GSTLALInpaint *inpaint) {
 	XLALUnitInvert(&sample_inv_units, &sample_units);
 	LALUnit psd_units = gstlal_lalUnitSquaredPerHertz(lalDimensionlessUnit);
 	XLALUnitInvert(&psd_inv_units, &psd_units);
+	//fprintf(stderr, "psd length = %u\n", inpaint->psd->data->length);
 
 	COMPLEX16FrequencySeries *complex_psd = XLALCreateCOMPLEX16FrequencySeries("Complex PSD", &GPS_ZERO, 0.0,  1.0 / inpaint->fft_length_seconds, &psd_units, inpaint->psd->data->length);
 	REAL8TimeSeries *cov_series = XLALCreateREAL8TimeSeries("Covariance", &GPS_ZERO, 0.0, 1.0 / (double) inpaint->rate, &sample_units, inpaint->rate * (guint) inpaint->fft_length_seconds);
 
 	guint i;
-	for(i=0; i < inpaint->psd->data->length; i++)
-		complex_psd->data->data[i] = (COMPLEX16) 1. / inpaint->psd->data->data[i];
+	//fprintf(stderr, "printing psd\n");
+	for(i=0; i < inpaint->psd->data->length; i++) {
+		//fprintf(stderr, "%e\n", inpaint->psd->data->data[i]);
+		complex_psd->data->data[i] = (COMPLEX16) inpaint->psd->data->data[i];
+	}
 
 	REAL8FFTPlan *revplan = XLALCreateReverseREAL8FFTPlan(inpaint->rate * (guint) inpaint->fft_length_seconds, 1);
 	if(XLALREAL8FreqTimeFFT(cov_series, complex_psd, revplan)){
@@ -140,6 +144,7 @@ static void fft_psd(GSTLALInpaint *inpaint) {
 	// NOTE NOTE NOTE This will depend on the method used to construct the
 	// psd, the numbers used here assume the FIR whitener was not used
 	// FIXME Pass in zero pad length instead of hardcoding it
+	/*
 	REAL8Window *hann_window = XLALCreateHannREAL8Window((guint) inpaint->fft_length_seconds * inpaint->rate - ((guint) inpaint->fft_length_seconds * inpaint->rate) / 2 + 1);
 	double window_sum_of_squares = 0;
 	for(i = 0; i < hann_window->data->length; i++)
@@ -147,10 +152,26 @@ static void fft_psd(GSTLALInpaint *inpaint) {
 
 	for(i = 0; i < cov_series->data->length; i++)
 		cov_series->data->data[i] *= window_sum_of_squares;
+	*/
+
+	/*
+	// Multiply by tukey window
+	// FIXME Figure out why
+	// FIXME Dont hardcode transition length, which is based on the zero padding
+	REAL8Window *tukey_window = XLALCreateTukeyREAL8Window((guint) inpaint->fft_length_seconds * inpaint->rate, 0.5);
+	for(i = 0; i < cov_series->data->length; i++)
+		cov_series->data->data[i] *= tukey_window->data->data[i];
+	*/
+
+	/*
+	for(i = 0; i < cov_series->data->length; i++)
+		fprintf(stderr, "%e\n", cov_series->data->data[i]);
+	*/
 
 	inpaint->cov_series = cov_series;
 	XLALDestroyCOMPLEX16FrequencySeries(complex_psd);
-	XLALDestroyREAL8Window(hann_window);
+	//XLALDestroyREAL8Window(hann_window);
+	//XLALDestroyREAL8Window(tukey_window);
 }
 
 static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, const char *tagname, gchar **dest) {
@@ -290,6 +311,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	GstFlowReturn result = GST_FLOW_OK;
 	g_assert(inpaint->cov_series->data->length % 2 == 0);
 	g_assert(hole_end > hole_start);
+	fprintf(stderr, "cov_series length = %u\n", inpaint->cov_series->data->length);
 	gsl_matrix *cov_mat = gsl_matrix_alloc(inpaint->cov_series->data->length / 2, inpaint->cov_series->data->length / 2);
 	if(cov_mat == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
@@ -307,9 +329,9 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	guint k;
 	// The covariance series we got from the fft is the length of the fft
 	// in sample points (N) while the length of the psd is N/2+1. The
-	// covariance series is symmetric around N/2+1, though it has one
-	// additional point before it than after it (i.e. index 1 and index N
-	// are the same, index 2 and index N-1 are the same, etc). It is a
+	// covariance series is symmetric around N/2, though it has one
+	// additional point before it than after it (i.e. index 1 and index N-1
+	// are the same, index 2 and index N-2 are the same, etc). It is a
 	// circulant matrix since the noise is stationary.  The value of a
 	// given element in the covariance matrix only depends on the
 	// difference between the row and column indices, with no difference
@@ -319,7 +341,8 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	fprintf(stderr, "setting inverse covariance matrix\n");
 	for(i = 0; i < (gint) cov_mat->size1; i++) {
 		for(j = 0; j < (gint) cov_mat->size2; j++) {
-			k = (guint) fabs(i - j) + inpaint->cov_series->data->length / 2;
+			//k = (guint) fabs(i - j) + inpaint->cov_series->data->length / 2;
+			k = (guint) fabs(i - j);
 			gsl_matrix_set(cov_mat, (guint) i, (guint) j, inpaint->cov_series->data->data[k]);
 		}
 	}
@@ -475,6 +498,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf) {
 	GSTLALInpaint *inpaint = GSTLAL_INPAINT(trans);
 	GstFlowReturn result = GST_FLOW_OK;
+	//GstFlowReturn result = GST_FLOW_ERROR;
 	LIGOTimeGPS gate_start, gate_end, t0_GPS, t_idx;
 	gint idx;
 
@@ -512,8 +536,10 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	gst_audioadapter_copy_samples(inpaint->adapter, inpaint->transformed_data, outsamples, NULL, NULL);
 
 	//FIXME Dont hardcode everything for specific test case
-	XLALGPSSet(&gate_start, 1187008881, 378750000);
-	XLALGPSSet(&gate_end, 1187008881, 441250000);
+	//XLALGPSSet(&gate_start, 1187008881, 378750000);
+	//XLALGPSSet(&gate_end, 1187008881, 441250000);
+	XLALGPSSet(&gate_start, 1187008881, 0);
+	XLALGPSSet(&gate_end, 1187008882, 0);
 	XLALGPSSet(&t0_GPS, (INT4) (inpaint->t0 / 1000000000), 0);
 
 	//FIXME Dont hardcode everything for specific test case
