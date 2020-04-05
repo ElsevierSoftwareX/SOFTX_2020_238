@@ -98,6 +98,10 @@ for i in range(0, len(tf_files)):
 		response_file = tf_files.pop(i)
 		tf_files.append(response_file)
 
+if '1262900044' in tf_files[-1]:
+	response_file = tf_files.pop(len(tf_files) - 2)
+	tf_files.append(response_file)
+
 found_response = False
 response_count = 0
 
@@ -193,7 +197,7 @@ for tf_file in tf_files:
 		cal_version = 'Front\\mbox{-}end'
 		color = 'silver'
 	elif 'GDS' in tf_file:
-		if '1257612389' in tf_file:
+		if '1262900044' in tf_file:
 			cal_version = 'GDS'
 			color = 'royalblue'
 		else:

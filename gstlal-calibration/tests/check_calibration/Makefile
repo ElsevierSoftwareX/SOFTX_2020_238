@@ -4,22 +4,22 @@
 #################################
 
 # which interferometer (H or L)
-IFO = L
+IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1257672576 | bc)
+START = $(shell echo 1263002240 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1257672576 + 1536 | bc)
+END = $(shell echo 1263004800 | bc)
 
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 256
 PLOT_COOLDOWN_TIME = 256
 
-GDSCONFIGS = Filters/O3/GDSFilters/L1GDS_1265490264_test.ini
-#L1GDS_1263670254_test.ini
-#L1GDS_1265490264_test.ini
+GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1265142330_no_response_corr_test.ini
+#H1GDS_1262900044_no_response_corr_test.ini
+#H1GDS_1265142330_no_response_corr_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_1239472998.ini
@@ -36,7 +36,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: filters_tf_GDS
+all: GDS_BB_injection_plots
 
 ###############################################
 ### These commands should change less often ###
@@ -44,6 +44,15 @@ all: filters_tf_GDS
 
 PLOT_START = $(shell echo $(START) + $(PLOT_WARMUP_TIME) | bc)
 PLOT_END = $(shell echo $(END) - $(PLOT_COOLDOWN_TIME) | bc)
+
+O3_H1_BB_INJ_PATH = Measurements
+O3_H1_BB_INJ_DIR = FullIFOSensingTFs
+O3_H1_BB_PLOTS_PATH = Results
+O3_H1_BB_PLOTS_DIR = DCS_BB_plots
+O3_L1_BB_INJ_PATH = Measurements
+O3_L1_BB_INJ_DIR = PCAL
+O3_L1_BB_PLOTS_PATH = Measurements/PCAL
+O3_L1_BB_PLOTS_DIR = DCS_BB_plots
 
 $(IFO)1_raw_frames.cache:
 	gw_data_find -o $(IFO) -t $(IFO)1_R -s $(START) -e $(END) -l --url-type file > $@
@@ -148,6 +157,12 @@ pcal_GDS_transfer_functions: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_fram
 pcal_DCS_transfer_functions: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache $(IFO)1_hoft_DCS_realKappas_frames.cache $(IFO)1_hoft_DCS_realKappasSRC_frames.cache $(IFO)1_C00_frames.cache
 	python plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-PCALY_RX_PD_OUT_DQ --denominator-correction y_arm_pcal_corr --numerator-correction arm_length --frequency-max 400 --numerator-frame-cache-list $(IFO)1_hoft_DCS_realKappas_frames.cache,$(IFO)1_hoft_DCS_realKappasSRC_frames.cache,$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_TEST_frames.cache,$(IFO)1_C00_frames.cache --numerator-channel-list DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,GDS-CALIB_STRAIN --config-file $(DCSCONFIGS) --use-median --labels 'Real kappas,Real kappas + SRC,Complex kappas,Complex kappas + SRC,C00'
 
+GDS_BB_injection_plots: filters framesdir BB_inj_dir BB_plots_dir
+	python plot_BB_injections.py --ifo $(IFO) --obs-run $(OBSRUN) --check-directory BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH)/$($(OBSRUN)_$(IFO)1_BB_INJ_DIR) --plots-directory BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH)/$($(OBSRUN)_$(IFO)1_BB_PLOTS_DIR) --update-svn --cal-versions R,HOFT_C00
+
+DCS_BB_injection_plots: filters framesdir BB_inj_dir BB_plots_dir
+	python plot_BB_injections.py --ifo $(IFO) --obs-run $(OBSRUN) --check-directory BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH)/$($(OBSRUN)_$(IFO)1_BB_INJ_DIR) --plots-directory BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH)/$($(OBSRUN)_$(IFO)1_BB_PLOTS_DIR) --update-svn --cal-versions R,HOFT_C00,HOFT_C01
+
 lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 	python demod_ratio_timeseries.py --ifo $(IFO)1 --gps-end-time $(PLOT_END) --gps-start-time $(PLOT_START) --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-channel-name 'DCS-CALIB_STRAIN' --numerator-channel-name 'DCS-CALIB_STRAIN_CLEAN' --frequencies '15.6,16.4,17.1,17.6,410.3,1083.7;2001.3,2501.3' --magnitude-ranges '0.0,1.1;0.0,1.1' --phase-ranges '-180.0,180.0;-180.0,180.0' --plot-titles '$(IFO)1 Calibration Line Subtraction;$(IFO)1 Roaming Line Subtraction'
 
@@ -237,6 +252,24 @@ filters:
 		mkdir -p Filters/$(OBSRUN); \
 		cd Filters/$(OBSRUN); \
 		svn co https://svn.ligo.caltech.edu/svn/aligocalibration/trunk/Runs/$(OBSRUN)/GDSFilters; \
+	fi
+
+BB_inj_dir:
+	if [ -d BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH)/$($(OBSRUN)_$(IFO)1_BB_INJ_DIR) ]; then \
+		svn up BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH)/$($(OBSRUN)_$(IFO)1_BB_INJ_DIR); \
+	else \
+		mkdir -p BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH); \
+		cd BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH); \
+		svn co https://svn.ligo.caltech.edu/svn/aligocalibration/trunk/Runs/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH)/$($(OBSRUN)_$(IFO)1_BB_INJ_DIR); \
+	fi
+
+BB_plots_dir:
+	if [ -d BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH)/$($(OBSRUN)_$(IFO)1_BB_PLOTS_DIR) ]; then \
+		svn up BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH)/$($(OBSRUN)_$(IFO)1_BB_PLOTS_DIR); \
+	else \
+		mkdir -p BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH); \
+		cd BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH); \
+		svn co https://svn.ligo.caltech.edu/svn/aligocalibration/trunk/Runs/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH)/$($(OBSRUN)_$(IFO)1_BB_PLOTS_DIR); \
 	fi
 
 framesdir:

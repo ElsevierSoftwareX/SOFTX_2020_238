@@ -63,6 +63,8 @@ from gstlal import datasource
 from ligo import segments
 from gstlal import test_common
 
+from ticks_and_grid import ticks_and_grid
+
 parser = OptionParser()
 parser.add_option("--gps-start-time", metavar = "seconds", type = int, help = "GPS time at which to start processing data")
 parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS time at which to stop processing data")
@@ -74,11 +76,12 @@ parser.add_option("--denominator-correction", metavar = "name", type = str, defa
 parser.add_option("--numerator-frame-cache-list", metavar = "name", type = str, help = "Comma-separated list of frame cache files that contain numerators of transfer functions")
 parser.add_option("--numerator-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of channel-names of numerators")
 parser.add_option("--numerator-name", metavar = "name", type = str, default = '\\Delta L_{\\rm free}(f)', help = "Name of numerator in plot title, in latex math mode")
-parser.add_option("--numerator-correction", metavar = "name", type = str, default = None, help = "Name of filters-file parameter needed to apply a correction to the numerators")
+parser.add_option("--numerator-correction", metavar = "name", type = str, default = None, help = "Name of filters-file parameter needed to apply a correction to the numerators.  If there are multiple different corrections corresponding to different numerator channels, pass as a comma-separated list (must be equal in length as the numerator-frame-cache-list and the numerator-channel-list)")
 parser.add_option("--zeros", metavar = "list", type = str, default = None, help = "Comma-separated list of real and imaginary parts of zeros to filter the transfer function with.  Note that if you want to apply zeros to the denominator, you must apply poles to the transfer function.")
 parser.add_option("--poles", metavar = "list", type = str, default = None, help = "Comma-separated list of real and imaginary parts of poles to filter the transfer function with.  Note that if you want to apply poles to the denominator, you must apply zeros to the transfer function.")
 parser.add_option("--gain", type = float, default = 1.0, help = "Gain factor to apply to the transfer function")
-parser.add_option("--config-file", metavar = "name", default = None, help = "Configurations file used to produce GDS/DCS calibrated frames, needed if applying any correction to numerator or denominator")
+parser.add_option("--filters-file", metavar = "name", default = None, help = "Filters file used to produce GDS/DCS calibrated frames.  Either this or config-file is needed if applying any correction to numerator or denominator")
+parser.add_option("--config-file", metavar = "name", default = None, help = "Configurations file used to produce GDS/DCS calibrated frames.  Either this or filters-file is needed if applying any correction to numerator or denominator")
 parser.add_option("--sample-rate", metavar = "Hz", type = int, default = 16384, help = "Sample rate at which transfer function is computed")
 parser.add_option("--fft-time", metavar = "seconds", type = float, default = 16, help = "Length of FFTs used to compute transfer function")
 parser.add_option("--use-median", action = "store_true", help = "Use a median instead of an average to compute transfer function")
@@ -91,6 +94,8 @@ parser.add_option("--phase-min", metavar = "degrees", type = float, default = -6
 parser.add_option("--phase-max", metavar = "degrees", type = float, default = 6, help = "Maximum for phase plot, in degrees")
 parser.add_option("--labels", metavar = "list", type = str, default = None, help = "Comma-separated list of labels corresponding to each transfer function, to be added to plot legend and txt file names.")
 parser.add_option("--filename-suffix", type = str, default = "", help = "Suffix for filename to make it unique.")
+parser.add_option("--filename", type = str, default = None, help = "Name of plot filef, not including file extension.  Not required.")
+
 
 options, filenames = parser.parse_args()
 
@@ -132,19 +137,20 @@ def ConfigSectionMap(section):
 			dict[option] = None
 	return dict1
 
-if options.config_file is not None:
+filters_name = None
+if options.filters_file is not None:
+	filters_name = options.filters_file
+
+elif options.config_file is not None:
 	# Read the config file
 	Config = ConfigParser.ConfigParser()
 	Config.read(options.config_file)
 
 	InputConfigs = ConfigSectionMap("InputConfigurations")
 
-	#
-	# Load in the filters file that contains filter coefficients, etc.
-	#
-
-	# Search the directory tree for files with names matching the one we want.
 	filters_name = InputConfigs["filtersfilename"]
+
+if filters_name is not None:
 	if filters_name.count('/') > 0:
 		# Then the path to the filters file was given
 		filters = numpy.load(filters_name)
@@ -176,31 +182,48 @@ if options.config_file is not None:
 # Get the corrections for numerators and denominator, and resample if necessary
 num_corr = []
 denom_corr = []
-if options.numerator_correction is not None:
-	if numpy.size(filters[options.numerator_correction]) > 1:
-		corr = filters[options.numerator_correction]
-		# Check the frequency spacing of the correction
-		corr_df = corr[0][1] - corr[0][0]
-		cadence = options.df / corr_df
-		index = 0
-		# This is a linear resampler (it just connects the dots with straight lines)
-		while index < tf_length - 1:
-			before_idx = numpy.floor(cadence * index)
-			after_idx = numpy.ceil(cadence * index + 1e-10)
-			before = corr[1][before_idx] + 1j * corr[2][before_idx]
-			after = corr[1][after_idx] + 1j * corr[2][after_idx]
-			before_weight = after_idx - cadence * index
-			after_weight = cadence * index - before_idx
-			num_corr.append(before_weight * before + after_weight * after)
-			index += 1
-		# Check if we can add the last value
-		before_idx = numpy.floor(cadence * index)
-		if numpy.floor(cadence * index) == cadence * index:
-			num_corr.append(corr[1][before_idx] + 1j * corr[2][before_idx])
+numerator_correction = options.numerator_correction
+if numerator_correction == 'None':
+	numerator_correction = None
+denominator_correction = options.denominator_correction
+if denominator_correction == 'None':
+	denominator_correction = None
 
-if options.denominator_correction is not None:
-	if numpy.size(filters[options.denominator_correction]) > 1:
-		corr = filters[options.denominator_correction]
+if numerator_correction is not None:
+	numerator_correction = numerator_correction.split(',')
+	for i in range(len(numerator_correction)):
+		if numerator_correction[i] == 'None':
+			numerator_correction[i] = None
+	# Turn it into a list of identical strings if there is only one correction given
+	if len(numerator_correction) < len(numerator_frame_cache_list):
+		for i in range(len(numerator_frame_cache_list) - len(numerator_correction)):
+			numerator_correction.append(numerator_correction[-1])
+	for i in range(len(numerator_correction)):
+		num_corr.append([])
+		if numerator_correction[i] is not None and numpy.size(filters[numerator_correction[i]]) > 1:
+			corr = filters[numerator_correction[i]]
+			# Check the frequency spacing of the correction
+			corr_df = corr[0][1] - corr[0][0]
+			cadence = options.df / corr_df
+			index = 0
+			# This is a linear resampler (it just connects the dots with straight lines)
+			while index < tf_length - 1:
+				before_idx = numpy.floor(cadence * index)
+				after_idx = numpy.ceil(cadence * index + 1e-10)
+				before = corr[1][before_idx] + 1j * corr[2][before_idx]
+				after = corr[1][after_idx] + 1j * corr[2][after_idx]
+				before_weight = after_idx - cadence * index
+				after_weight = cadence * index - before_idx
+				num_corr[i].append(before_weight * before + after_weight * after)
+				index += 1
+			# Check if we can add the last value
+			before_idx = numpy.floor(cadence * index)
+			if numpy.floor(cadence * index) == cadence * index:
+				num_corr[i].append(corr[1][before_idx] + 1j * corr[2][before_idx])
+
+if denominator_correction is not None:
+	if numpy.size(filters[denominator_correction]) > 1:
+		corr = filters[denominator_correction]
 		# Check the frequency spacing of the correction
 		corr_df = corr[0][1] - corr[0][0]
 		cadence = options.df / corr_df
@@ -248,9 +271,9 @@ def plot_transfer_function(pipeline, name):
 	denominator = calibration_parts.hook_up(pipeline, denominator, options.denominator_channel_name, ifo, 1.0)
 	denominator = calibration_parts.caps_and_progress(pipeline, denominator, "audio/x-raw,format=F64LE", "denominator")
 	denominator = calibration_parts.mkresample(pipeline, denominator, 5, False, int(sample_rate))
-	if options.denominator_correction is not None:
-		if numpy.size(filters[options.denominator_correction]) == 1:
-			denominator = pipeparts.mkaudioamplify(pipeline, denominator, float(filters[options.denominator_correction]))
+	if denominator_correction is not None:
+		if numpy.size(filters[denominator_correction]) == 1:
+			denominator = pipeparts.mkaudioamplify(pipeline, denominator, float(filters[denominator_correction]))
 	denominator = pipeparts.mktee(pipeline, denominator)
 
 	# Get the data from the numerator frames
@@ -260,9 +283,10 @@ def plot_transfer_function(pipeline, name):
 		numerator = calibration_parts.hook_up(pipeline, numerator, numerator_channel_list[i], ifo, 1.0, element_name_suffix = "%d" % i)
 		numerator = calibration_parts.caps_and_progress(pipeline, numerator, "audio/x-raw,format=F64LE", labels[i])
 		numerator = calibration_parts.mkresample(pipeline, numerator, 5, False, int(sample_rate))
-		if options.numerator_correction is not None:
-			if numpy.size(filters[options.numerator_correction] == 1):
-				numerator = pipeparts.mkaudioamplify(pipeline, numerator, float(filters[options.numerator_correction]))
+		if numerator_correction is not None:
+			if numerator_correction[i] is not None:
+				if numpy.size(filters[numerator_correction[i]] == 1):
+					numerator = pipeparts.mkaudioamplify(pipeline, numerator, float(filters[numerator_correction[i]]))
 		# Interleave the channels to make one stream
 		channels = calibration_parts.mkinterleave(pipeline, [numerator, denominator])
 		# Send the data to lal_transferfunction to compute and write transfer functions
@@ -300,7 +324,29 @@ if options.poles is not None:
 	for i in range(0, len(real_poles) / 2):
 		poles.append(float(real_poles[2 * i]) + 1j * float(real_poles[2 * i + 1]))
 
-colors = ['blue', 'limegreen', 'maroon', 'orchid', 'red', 'b'] # Hopefully the user will not want to plot more than six datasets on one plot.
+# Decide a color scheme.
+colors = []
+
+# Start with defaults to use if we don't recognize what we are plotting.
+default_colors = ['red', 'gold', 'magenta', 'orange', 'aqua', 'darkgreen', 'blue']
+
+# Use specific colors for known version of calibration
+C02_labels = ['C02', 'c02']
+C01_labels = ['C01', 'c01', 'DCS', 'dcs', 'high-latency', 'High-Latency', 'High-latency', 'HIGH-LATENCY', 'high_latency', 'High_Latency', 'High_latency', 'HIGH_LATENCY', 'high latency', 'High Latency', 'High latency', 'HIGH LATENCY', 'offline', 'Offline', 'OFFLINE']
+C00_labels = ['C00', 'c00', 'GDS', 'gds', 'low-latency', 'Low-Latency', 'Low-latency', 'LOW-LATENCY', 'low_latency', 'Low_Latency', 'Low_latency', 'LOW_LATENCY', 'low latency', 'Low Latency', 'Low latency', 'LOW LATENCY', 'online', 'Online', 'ONLINE']
+CALCS_labels = ['CALCS', 'calcs', 'Calcs', 'CalCS', 'CAL-CS', 'Cal-CS', 'cal-cs', 'CAL_CS', 'Cal_CS', 'cal_cs', 'front', 'FRONT', 'Front']
+for i in range(len(labels)):
+	if any ([x for x in C02_labels if x in labels[i]]):
+		colors.append('springgreen')
+	elif any ([x for x in C01_labels if x in labels[i]]):
+		colors.append('maroon')
+	elif any ([x for x in C00_labels if x in labels[i]]):
+		colors.append('royalblue')
+	elif any([x for x in CALCS_labels if x in labels[i]]):
+		colors.append('silver')
+	else:
+		colors.append(default_colors[i % 7])
+
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
 	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")
@@ -319,8 +365,8 @@ for i in range(0, len(labels)):
 	for j in range(0, len(data)):
 		frequency.append(data[j][0])
 		tf_at_f = (data[j][1] + 1j * data[j][2]) * options.gain
-		if len(num_corr) > j:
-			tf_at_f *= num_corr[j]
+		if len(num_corr[i]) > j:
+			tf_at_f *= num_corr[i][j]
 		if len(denom_corr) > j:
 			tf_at_f /= denom_corr[j]
 		for z in zeros:
@@ -332,7 +378,10 @@ for i in range(0, len(labels)):
 
 	# Save txt file with the "corrected" data
 	os.system('rm %s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
-	numpy.savetxt('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration), numpy.transpose([frequency, magnitude, phase]), fmt = '%8e', delimiter = "   ", header = "Freq. (Hz)	Magnitude	Phase (deg)")
+	if options.filename is not None:
+		numpy.savetxt('%s.txt' % options.filename, numpy.transpose([frequency, magnitude, phase]), fmt = '%8e', delimiter = "   ", header = "Freq. (Hz)	Magnitude	Phase (deg)")
+	else:
+		numpy.savetxt('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration), numpy.transpose([frequency, magnitude, phase]), fmt = '%8e', delimiter = "   ", header = "Freq. (Hz)	Magnitude	Phase (deg)")
 
 	# Make plots
 	freq_scale = 'log' if options.frequency_min > 0.0 and options.frequency_max / options.frequency_min > 10 else 'linear'
@@ -343,31 +392,20 @@ for i in range(0, len(labels)):
 	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.75, label = r'${\rm %s}$' % labels[i].replace('_', '\_').replace(' ', '\ '))
 	leg = plt.legend(fancybox = True)
 	leg.get_frame().set_alpha(0.8)
-	plt.gca().set_xscale(freq_scale)
-	plt.gca().set_yscale(mag_scale)
 	if i == 0:
 		plt.title(r'${\rm %s} \ %s \ / \ %s$' % (ifo, options.numerator_name, options.denominator_name))
 		plt.ylabel(r'${\rm Magnitude}$')
-	plt.xlim(options.frequency_min, options.frequency_max)
-	plt.ylim(options.magnitude_min, options.magnitude_max)
-	plt.gca().set_yticks(numpy.arange(options.magnitude_min, options.magnitude_max + 0.001, (options.magnitude_max - options.magnitude_min) / 4.0))
-	plt.gca().set_yticks(numpy.arange(options.magnitude_min, options.magnitude_max + 0.001, (options.magnitude_max - options.magnitude_min) / 20.0), minor = True)
-	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
-	plt.gca().grid(which='minor', alpha=0.8)
-	plt.gca().grid(which='major', alpha=4.0)
+	ticks_and_grid(plt.gca(), xmin = options.frequency_min, xmax = options.frequency_max, ymin = options.magnitude_min, ymax = options.magnitude_max, xscale = freq_scale, yscale = mag_scale)
 	ax = plt.subplot(212)
-	ax.set_xscale(freq_scale)
 	plt.plot(frequency, phase, colors[i % 6], linewidth = 0.75)
 	if i == 0:
 		plt.ylabel(r'${\rm Phase \ [deg]}$')
 		plt.xlabel(r'${\rm Frequency \ [Hz]}$')
-	plt.xlim(options.frequency_min, options.frequency_max)
-	plt.ylim(options.phase_min, options.phase_max)
-	ax.set_yticks(numpy.arange(options.phase_min, options.phase_max + 0.01, (options.phase_max - options.phase_min) / 6.0))
-	ax.set_yticks(numpy.arange(options.phase_min, options.phase_max + 0.01, (options.phase_max - options.phase_min) / 24.0), minor = True)
-	plt.grid(True, which = "both", linestyle = ':', linewidth = 0.3, color = 'black')
-	ax.grid(which='minor', alpha=0.8)
-	ax.grid(which='major', alpha=4.0)
-plt.savefig('%s_%s_%s_over_%s_%d-%d.pdf' % (ifo, numerator_channel_list[-1], labels[-1].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
-plt.savefig('%s_%s_%s_over_%s_%d-%d.png' % (ifo, numerator_channel_list[-1], labels[-1].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
+	ticks_and_grid(plt.gca(), xmin = options.frequency_min, xmax = options.frequency_max, ymin = options.phase_min, ymax = options.phase_max, xscale = freq_scale, yscale = 'linear')
+if options.filename is not None:
+	plt.savefig('%s.pdf' % options.filename)
+	plt.savefig('%s.png' % options.filename)
+else:
+	plt.savefig('%s_%s_%s_over_%s_%d-%d.pdf' % (ifo, numerator_channel_list[-1], labels[-1].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
+	plt.savefig('%s_%s_%s_over_%s_%d-%d.png' % (ifo, numerator_channel_list[-1], labels[-1].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration))
 
