@@ -588,6 +588,33 @@ def linear_phase_filter(pipeline, head, shift_samples, num_samples = 256, gain =
 			filter_update.connect("notify::filter-endtime", update_property_simple, head, "filter_endtime", "kernel_endtime", 1)
 	return head
 
+def whiten(pipeline, head, num_samples = 512, nyq_magnitude = 1e15, scale = 'log', td = True):
+	# Number of filter samples should be even, since numpy's inverse real fft returns an even length array
+	num_samples += num_samples % 2
+	fd_num_samples = num_samples / 2 + 1
+	fd_filter = numpy.ones(fd_num_samples)
+	fd_filter[-1] = nyq_magnitude
+	if scale == 'log':
+		log_nyq_mag = numpy.log10(nyq_magnitude)
+		for i in range(1, fd_num_samples - 1):
+			fd_filter[i] = pow(10, log_nyq_mag * float(i) / (fd_num_samples - 1))
+	elif scale == 'linear':
+		for i in range(1, fd_num_samples - 1):
+			fd_filter[i] = nyq_magnitude * float(i) / (fd_num_samples - 1)
+	else:
+		raise ValueError("calibration_parts.whiten(): scale must be either 'log' or 'linear'.")
+		return head
+
+	# Take an inverse fft to get a time-domain filter
+	whiten_filter = numpy.fft.irfft(fd_filter)
+	# Add delay of half the filter length
+	whiten_filter = numpy.roll(whiten_filter, num_samples / 2)
+	# Window the filter
+	whiten_filter *= numpy.blackman(num_samples)
+
+	# Apply the filter
+	return mkcomplexfirbank(pipeline, head, latency = num_samples / 2, fir_matrix = [whiten_filter[::-1]], time_domain = td)
+
 def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
 	# Find the root mean square amplitude of a signal between two frequencies
 	# Downsample to save computational cost
