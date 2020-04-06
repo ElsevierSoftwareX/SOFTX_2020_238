@@ -22,6 +22,7 @@ import subprocess
 import time
 import numpy as np
 import xml.etree.ElementTree as ET
+from gwpy.timeseries import TimeSeries
 from optparse import OptionParser, Option
 
 parser = OptionParser()
@@ -47,6 +48,59 @@ options, filenames = parser.parse_args()
 
 if options.xml_filename is None and options.check_directory is None:
 	raise ValueError("Either --xml-filename or --check-directory must be set for this script to do anything.")
+
+
+# Names of TDCF channels to read
+CALCS_TDCFs = []
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_TST_REAL_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_TST_IMAG_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_PUM_REAL_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_PUM_IMAG_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_UIM_REAL_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_UIM_IMAG_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_C_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_F_C_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_F_S_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_Q_S_OUTPUT" % options.ifo)
+C00_TDCFs = []
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_TST_REAL" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_TST_IMAGINARY" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_PUM_REAL" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_PUM_IMAGINARY" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_UIM_REAL" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_UIM_IMAGINARY" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_PU_REAL" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_PU_IMAGINARY" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_KAPPA_C" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_F_CC" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_F_S" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_F_S_SQUARED" % options.ifo)
+C00_TDCFs.append("%s1:GDS-CALIB_SRC_Q_INVERSE" % options.ifo)
+C01_TDCFs = []
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_TST_REAL_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_TST_IMAGINARY_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_REAL_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_IMAGINARY_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_REAL_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_IMAGINARY_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_C_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_F_CC_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_F_S_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_F_S_SQUARED_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_SRC_Q_INVERSE_C01" % options.ifo)
+C02_TDCFs = []
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_TST_REAL_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_TST_IMAGINARY_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_REAL_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_IMAGINARY_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_REAL_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_IMAGINARY_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_C_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_F_CC_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_F_S_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_F_S_SQUARED_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_SRC_Q_INVERSE_C02" % options.ifo)
+
 
 cal_versions = options.cal_versions.split(',')
 # Make strings with comma-separated lists of corresponding h(t) channels and labels for plots
@@ -87,6 +141,7 @@ labels = labels[:-1]
 cal_scale_factors = cal_scale_factors[:-1]
 zeros = zeros[:-1]
 poles = poles[:-1]
+
 
 # Get a GPS start time from an xml file
 def get_gps_start_time(xml_filename):
@@ -217,6 +272,46 @@ def find_filters_file(ifo, gps_start_time, update_svn, obs_run):
 	return best_filter_files[idx]
 
 
+def write_info_file(path_to_file, gps_start_time, duration, labels, frame_cache_list, filters_file):
+	# Needed to record information about the broadband injection and plot
+	info_file = open('%s_info.txt' % path_to_file, 'w')
+
+	info_file.write('Versions of calibration (%d total): %s\n\n' % (len(labels.split(',')), labels.replace(',', ', ')))
+	info_file.write('Filters file (used for arm length and Pcal correction factor): %s\n' % filters_file)
+	info_file.write('GPS start time of plotted data: %d\n' % gps_start_time)
+	utc_start_time = os.popen('lalapps_tconvert %d' % gps_start_time).read()
+	info_file.write('UTC start time of plotted data: %s' % utc_start_time)
+	info_file.write('Duration of plotted data: %d seconds\n\n' % duration)
+
+	# Now include the TDCFs
+	for i in range(len(labels.split(','))):
+		channel_list = []
+
+		if labels.split(',')[i] == 'CALCS':
+			info_file.write('TDCFs for CALCS:\n')
+			channel_list = CALCS_TDCFs
+		elif labels.split(',')[i] == 'C00':
+			info_file.write('TDCFs for C00:\n')
+			channel_list = C00_TDCFs
+		elif labels.split(',')[i] == 'C01':
+			info_file.write('TDCFs for C01:\n')
+			channel_list = C01_TDCFs
+		elif labels.split(',')[i] == 'C02':
+			info_file.write('TDCFs for C02:\n')
+			channel_list = C02_TDCFs
+
+		for channel in channel_list:
+			try:
+				kappa = float(TimeSeries.read(frame_cache_list.split(',')[i], channel, start = gps_start_time, end = gps_start_time + duration).mean())
+				info_file.write('%s: %f\n' % (channel, kappa))
+			except:
+				pass
+
+		info_file.write('\n')
+
+	info_file.close()
+
+
 def make_plot(options, path_to_xml, path_to_plot, cal_versions, hoft_channel_list, labels, cal_scale_factors):
 	ifo = options.ifo
 	# Parse xml file to find GPS start time.
@@ -243,6 +338,10 @@ def make_plot(options, path_to_xml, path_to_plot, cal_versions, hoft_channel_lis
 	if not ('None' in pcal_frame_cache or 'None' in hoft_frame_cache_list):
 		# Then the data exists and we can make plots.
 		os.system('python plot_transfer_function.py --gps-start-time %d --gps-end-time %d --ifo %s1 --denominator-frame-cache %s --denominator-channel-name %s --denominator-correction y_arm_pcal_corr --numerator-correction %s --zeros \'%s\' --poles \'%s\' --frequency-min %f --frequency-max %f --magnitude-min %f --magnitude-max %f --phase-min %f --phase-max %f --numerator-frame-cache-list %s --numerator-channel-list %s --filters-file %s --use-median --labels %s --filename %s' % (gps_start_time, gps_end_time, ifo, pcal_frame_cache, pcal_channel_name, cal_scale_factors, zeros, poles, float(options.fmin), float(options.fmax), float(options.magnitude_min), float(options.magnitude_max), float(options.phase_min), float(options.phase_max), hoft_frame_cache_list, hoft_channel_list, filters_file, labels, path_to_plot))
+
+		# Include useful information along with the plots and data
+		write_info_file(path_to_plot, gps_start_time, gps_end_time - gps_start_time, labels, hoft_frame_cache_list, filters_file)
+
 		return True
 	else:
 		return False
@@ -272,7 +371,7 @@ if options.xml_filename is not None:
 		try_time = 0
 		while try_time < options.check_period / 2:
 			try:
-				os.system('svn add %s.*' % path_to_plot)
+				os.system('svn add %s*' % path_to_plot)
 				os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
 				break
 			except:
@@ -326,7 +425,7 @@ if options.check_directory is not None:
 
 				if success and options.update_svn:
 					try:
-						os.system('svn add %s.*' % path_to_plot)
+						os.system('svn add %s*' % path_to_plot)
 						os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
 					except:
 						pass
