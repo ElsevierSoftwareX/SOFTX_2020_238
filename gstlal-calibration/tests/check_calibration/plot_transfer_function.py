@@ -313,16 +313,29 @@ test_common.build_and_run(plot_transfer_function, "plot_transfer_function", segm
 # Get any zeros and poles that we want to use to filter the transfer functions
 zeros = []
 if options.zeros is not None:
-	real_zeros = options.zeros.split(',')
-	zeros = []
-	for i in range(0, len(real_zeros) / 2):
-		zeros.append(float(real_zeros[2 * i]) + 1j * float(real_zeros[2 * i + 1]))
+	real_zeros = options.zeros.split(';')
+	if len(real_zeros) < len(labels):
+		# Then copy the last element until they are the same length
+		for i in range(len(labels) - len(real_zeros)):
+			real_zeros.append(real_zeros[-1])
+	for i in range(len(real_zeros)):
+		real_zeros[i] = real_zeros[i].split(',')
+		zeros.append([])
+		for j in range(0, len(real_zeros[i]) / 2):
+			zeros[i].append(float(real_zeros[i][2 * j]) + 1j * float(real_zeros[i][2 * j + 1]))
 
 poles = []
 if options.poles is not None:
-	real_poles = options.poles.split(',')
-	for i in range(0, len(real_poles) / 2):
-		poles.append(float(real_poles[2 * i]) + 1j * float(real_poles[2 * i + 1]))
+	real_poles = options.poles.split(';')
+	if len(real_poles) < len(labels):
+		# Then copy the last element until they are the same length
+		for i in range(len(labels) - len(real_poles)):
+			real_poles.append(real_poles[-1])
+	for i in range(len(real_poles)):
+		real_poles[i] = real_poles[i].split(',')
+		poles.append([])
+		for j in range(0, len(real_poles[i]) / 2):
+			poles[i].append(float(real_poles[i][2 * j]) + 1j * float(real_poles[i][2 * j + 1]))
 
 # Decide a color scheme.
 colors = []
@@ -369,9 +382,9 @@ for i in range(0, len(labels)):
 			tf_at_f *= num_corr[i][j]
 		if len(denom_corr) > j:
 			tf_at_f /= denom_corr[j]
-		for z in zeros:
+		for z in zeros[i]:
 			tf_at_f = tf_at_f * (1.0 + 1j * frequency[j] / z)
-		for p in poles:
+		for p in poles[i]:
 			tf_at_f = tf_at_f / (1.0 + 1j * frequency[j] / p)
 		magnitude.append(abs(tf_at_f))
 		phase.append(numpy.angle(tf_at_f) * 180.0 / numpy.pi)

@@ -53,28 +53,40 @@ cal_versions = options.cal_versions.split(',')
 hoft_channel_list = ''
 labels = ''
 cal_scale_factors = ''
+zeros = ''
+poles = ''
 for version in cal_versions:
 	if version == 'R':
 		hoft_channel_list += 'CAL-DELTAL_EXTERNAL_DQ,'
 		labels += 'CALCS,'
 		cal_scale_factors += 'None,'
+		zeros += '30,0,30,0,30,0,30,0,30,0,30,0,-3.009075115760242e3,3.993177550236464e3,-3.009075115760242e3,-3.993177550236464e3,-5.839434764093102e2,6.674504477214695e3,-5.839434764093102e2,-6.674504477214695e3;'
+		poles += '0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,0.3,0,1.431097327857237e2,8.198751100282409e3,1.431097327857237e2,-8.198751100282409e3,8.574723070843939e2,1.636154629741894e4,8.574723070843939e2,-1.636154629741894e4;'
 	elif version == 'HOFT_C00':
 		hoft_channel_list += 'GDS-CALIB_STRAIN,'
 		labels += 'C00,'
 		cal_scale_factors += 'arm_length,'
+		zeros += ';'
+		poles += ';'
 	elif version == 'HOFT_C01':
 		hoft_channel_list += 'DCS-CALIB_STRAIN_C01,'
 		labels += 'C01,'
 		cal_scale_factors += 'arm_length,'
+		zeros += ';'
+		poles += ';'
 	elif version == 'HOFT_C02':
 		hoft_channel_list += 'DCS-CALIB_STRAIN_C02,'
 		labels += 'C02,'
 		cal_scale_factors += 'arm_length,'
+		zeros += ';'
+		poles += ';'
 	else:
 		raise ValueError("cal-versions must be a comma-separated list formatted as a string with no spaces.  The items in the list must be R, HOFT_C00, HOFT_C01, or HOFT_C02.")
 hoft_channel_list = hoft_channel_list[:-1]
 labels = labels[:-1]
 cal_scale_factors = cal_scale_factors[:-1]
+zeros = zeros[:-1]
+poles = poles[:-1]
 
 # Get a GPS start time from an xml file
 def get_gps_start_time(xml_filename):
@@ -225,12 +237,10 @@ def make_plot(options, path_to_xml, path_to_plot, cal_versions, hoft_channel_lis
 
 	if not ('None' in pcal_frame_cache or 'None' in hoft_frame_cache_list):
 		# Then the data exists and we can make plots.
-		os.system('python plot_transfer_function.py --gps-start-time %d --gps-end-time %d --ifo %s1 --denominator-frame-cache %s --denominator-channel-name %s --denominator-correction y_arm_pcal_corr --numerator-correction %s --frequency-min %f --frequency-max %f --magnitude-min %f --magnitude-max %f --phase-min %f --phase-max %f --numerator-frame-cache-list %s --numerator-channel-list %s --filters-file %s --use-median --labels %s --filename %s' % (gps_start_time, gps_end_time, ifo, pcal_frame_cache, pcal_channel_name, cal_scale_factors, float(options.fmin), float(options.fmax), float(options.magnitude_min), float(options.magnitude_max), float(options.phase_min), float(options.phase_max), hoft_frame_cache_list, hoft_channel_list, filters_file, labels, path_to_plot))
+		os.system('python plot_transfer_function.py --gps-start-time %d --gps-end-time %d --ifo %s1 --denominator-frame-cache %s --denominator-channel-name %s --denominator-correction y_arm_pcal_corr --numerator-correction %s --zeros \'%s\' --poles \'%s\' --frequency-min %f --frequency-max %f --magnitude-min %f --magnitude-max %f --phase-min %f --phase-max %f --numerator-frame-cache-list %s --numerator-channel-list %s --filters-file %s --use-median --labels %s --filename %s' % (gps_start_time, gps_end_time, ifo, pcal_frame_cache, pcal_channel_name, cal_scale_factors, zeros, poles, float(options.fmin), float(options.fmax), float(options.magnitude_min), float(options.magnitude_max), float(options.phase_min), float(options.phase_max), hoft_frame_cache_list, hoft_channel_list, filters_file, labels, path_to_plot))
 		return True
 	else:
 		return False
-
-
 
 
 if options.xml_filename is not None:
@@ -294,6 +304,6 @@ if options.check_directory is not None:
 				if success and options.update_svn:
 					os.system('svn add %s.*' % path_to_plot)
 					os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
-		sleep(options.check_period)
+		time.sleep(options.check_period)
 
 
