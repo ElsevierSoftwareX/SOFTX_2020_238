@@ -168,7 +168,10 @@ def get_frame_cache(ifo, frame_type, gps_start_time, gps_end_time):
 
 def find_filters_file(ifo, gps_start_time, update_svn, obs_run):
 	if update_svn:
-		os.system('svn up Filters/%s/GDSFilters' % obs_run)
+		try:
+			os.system('svn up Filters/%s/GDSFilters' % obs_run)
+		except:
+			pass
 
 	# Find the filters file most likely to be correct.
 	GDSFilters_files = os.popen('ls Filters/%s/GDSFilters -p | grep -v /' % obs_run).read().split('\n')
@@ -252,15 +255,30 @@ if options.xml_filename is not None:
 	# Update directories in the svn if requested.
 	if options.update_svn:
 		if options.check_directory is not None:
-			os.system('svn up %s' % check_directory)
+			try:
+				os.system('svn up %s' % check_directory)
+			except:
+				pass
 		if options.plots_directory is not None:
-			os.system('svn up %s' % plots_directory)
+			try:
+				os.system('svn up %s' % plots_directory)
+			except:
+				pass
 
 	success = make_plot(options, options.xml_filename, path_to_plot, cal_versions, hoft_channel_list, labels, cal_scale_factors)
 
 	if success and options.update_svn and options.plots_directory is not None:
-		os.system('svn add %s.*' % path_to_plot)
-		os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
+		# Keep trying to update the svn for half of the check_period
+		try_time = 0
+		while try_time < options.check_period / 2:
+			try:
+				os.system('svn add %s.*' % path_to_plot)
+				os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
+				break
+			except:
+				# Wait 5 minutes and try again
+				time.sleep(300)
+				try_time += 300
 
 
 if options.check_directory is not None:
@@ -273,8 +291,11 @@ if options.check_directory is not None:
 	while(True):
 		# Update directories in the svn if requested.
 		if options.update_svn:
-			os.system('svn up %s' % check_directory)
-			os.system('svn up %s' % plots_directory)
+			try:
+				os.system('svn up %s' % check_directory)
+				os.system('svn up %s' % plots_directory)
+			except:
+				pass
 
 		# Check if there is a file in the check_directory
 		# that has no counterpart in the plots directory.
@@ -304,8 +325,25 @@ if options.check_directory is not None:
 				success = make_plot(options, path_to_BBinj_file, path_to_plot, cal_versions, hoft_channel_list, labels, cal_scale_factors)
 
 				if success and options.update_svn:
-					os.system('svn add %s.*' % path_to_plot)
-					os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
+					try:
+						os.system('svn add %s.*' % path_to_plot)
+						os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
+					except:
+						pass
+
+		if '?       ' in os.popen('svn status %s' % plots_directory).read():
+			# Then there are unadded files that we should add.
+			try:
+				os.system('svn add %s/*' % plots_directory)
+			except:
+				pass
+		if 'A       ' in os.popen('svn status %s' % plots_directory).read():
+			# Then there are added files that we should commit.
+			try:
+				os.system('svn ci %s -m \"Plots of %s1 Pcal broadband injections\"' % (plots_directory, options.ifo))
+			except:
+				pass
+
 		time.sleep(options.check_period)
 
 
