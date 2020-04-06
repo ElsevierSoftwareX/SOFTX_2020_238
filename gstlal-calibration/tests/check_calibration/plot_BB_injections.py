@@ -156,6 +156,8 @@ def get_frame_cache(ifo, frame_type, gps_start_time, gps_end_time):
 	cache_file = open(cache_name, 'r')
 	lines = cache_file.readlines()
 	cache_file.close()
+	if not any(lines):
+		return 'None'
 	cache_start = int(lines[0].split(' ')[2])
 	cache_end = int(lines[-1].split(' ')[2]) + int(lines[-1].split(' ')[3])
 	if cache_start <= gps_start_time and cache_end >= gps_end_time:
