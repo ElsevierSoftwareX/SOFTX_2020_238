@@ -58,6 +58,8 @@ CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_PUM_REAL_OUTPUT" % options.ifo)
 CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_PUM_IMAG_OUTPUT" % options.ifo)
 CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_UIM_REAL_OUTPUT" % options.ifo)
 CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_UIM_IMAG_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_PU_REAL_OUTPUT" % options.ifo)
+CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_PU_IMAG_OUTPUT" % options.ifo)
 CALCS_TDCFs.append("%s1:CAL-CS_TDEP_KAPPA_C_OUTPUT" % options.ifo)
 CALCS_TDCFs.append("%s1:CAL-CS_TDEP_F_C_OUTPUT" % options.ifo)
 CALCS_TDCFs.append("%s1:CAL-CS_TDEP_F_S_OUTPUT" % options.ifo)
@@ -83,6 +85,8 @@ C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_REAL_C01" % options.ifo)
 C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_IMAGINARY_C01" % options.ifo)
 C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_REAL_C01" % options.ifo)
 C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_IMAGINARY_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_PU_REAL_C01" % options.ifo)
+C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_PU_IMAGINARY_C01" % options.ifo)
 C01_TDCFs.append("%s1:DCS-CALIB_KAPPA_C_C01" % options.ifo)
 C01_TDCFs.append("%s1:DCS-CALIB_F_CC_C01" % options.ifo)
 C01_TDCFs.append("%s1:DCS-CALIB_F_S_C01" % options.ifo)
@@ -95,6 +99,8 @@ C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_REAL_C02" % options.ifo)
 C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_PUM_IMAGINARY_C02" % options.ifo)
 C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_REAL_C02" % options.ifo)
 C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_UIM_IMAGINARY_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_PU_REAL_C02" % options.ifo)
+C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_PU_IMAGINARY_C02" % options.ifo)
 C02_TDCFs.append("%s1:DCS-CALIB_KAPPA_C_C02" % options.ifo)
 C02_TDCFs.append("%s1:DCS-CALIB_F_CC_C02" % options.ifo)
 C02_TDCFs.append("%s1:DCS-CALIB_F_S_C02" % options.ifo)
@@ -302,7 +308,7 @@ def write_info_file(path_to_file, gps_start_time, duration, labels, frame_cache_
 
 		for channel in channel_list:
 			try:
-				kappa = float(TimeSeries.read(frame_cache_list.split(',')[i], channel, start = gps_start_time, end = gps_start_time + duration).mean())
+				kappa = TimeSeries.read(frame_cache_list.split(',')[i], channel, start = gps_start_time, end = gps_start_time + duration).mean().value
 				info_file.write('%s: %f\n' % (channel, kappa))
 			except:
 				pass
