@@ -977,7 +977,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					g_assert(itacacpad->samples_available_for_padding == 0 || samples_left_in_window == itacacpad->n);
 					outsamps = nongapsamps > samples_left_in_window ? samples_left_in_window : nongapsamps;
 					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
-					samples_left_in_window -= outsamps;
+					samples_left_in_window -= (outsamps - itacacpad->samples_available_for_padding);
+					itacacpad->samples_available_for_padding = 0;
 
 				}
 			}
