@@ -976,6 +976,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 					// samples available for padding
 					g_assert(itacacpad->samples_available_for_padding == 0 || samples_left_in_window == itacacpad->n);
 					outsamps = nongapsamps > samples_left_in_window ? samples_left_in_window : nongapsamps;
+					// FIXME The assert on the next line probabily isn't necessary but Im adding it for now just in case. Remove at a later date if it never comes up
+					g_assert(outsamps > itacacpad->samples_available_for_padding);
 					gst_audioadapter_flush_samples(itacacpad->adapter, outsamps);
 					samples_left_in_window -= (outsamps - itacacpad->samples_available_for_padding);
 					itacacpad->samples_available_for_padding = 0;
