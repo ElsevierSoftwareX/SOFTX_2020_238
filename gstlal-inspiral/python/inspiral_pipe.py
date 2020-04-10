@@ -748,37 +748,27 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 		cluster_sql_file = options.cluster_sql_file if sim_tag is None else options.injection_sql_file
 		likelihood_job = jobs['calcLikelihood'] if sim_tag is None else jobs['calcLikelihoodInj']
 
-		# If we have only have 1 input file per bin, assume file is already clustered
-		# FIXME This means dags that run over a single segment O(1000)
-		# seconds will not have snr chisq clustering applied before the
-		# likelihood-ratio assignment, which also means those dags will
-		# not be able to be reranked. This is probably not a big deal,
-		# because a dag that small can quickly be rerun
-		if len(inputs) > 1:
-			# cluster sub banks
-			cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = parents,
-				opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"":inputs}
-				)
+		# cluster sub banks
+		cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = parents,
+			opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"":inputs}
+			)
 
-			# merge sub banks
-			merge_node = dagparts.DAGNode(jobs['ligolwAdd'], dag, parent_nodes = [cluster_node],
-				input_files = {"":inputs},
-				output_files = {"output":xml}
-				)
+		# merge sub banks
+		merge_node = dagparts.DAGNode(jobs['ligolwAdd'], dag, parent_nodes = [cluster_node],
+			input_files = {"":inputs},
+			output_files = {"output":xml}
+			)
 
-			# cluster and simplify sub banks
-			cluster_node = [dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [merge_node],
-				opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
-				input_files = {"":xml}
-				)]
-
-		else:
-			cluster_node = []
+		# cluster and simplify sub banks
+		cluster_node = dagparts.DAGNode(jobs['lalappsRunSqlite'], dag, parent_nodes = [merge_node],
+			opts = {"sql-file": snr_cluster_sql_file, "tmp-space":dagparts.condor_scratch_space()},
+			input_files = {"":xml}
+			)
 
 		# assign likelihoods
 		likelihood_node = dagparts.DAGNode(likelihood_job, dag,
-			parent_nodes = cluster_node,
+			parent_nodes = [cluster_node],
 			opts = {"tmp-space": dagparts.condor_scratch_space(), "force": ""},
 			input_files = {"likelihood-url":likelihood_url, "": xml}
 			)
