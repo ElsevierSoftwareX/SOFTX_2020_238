@@ -199,10 +199,10 @@ jobstopdict = {}
 jobholdstartdict = {}
 jobholdstopdict = {}
 for line in open(options.input_file):
+	if "[recovery mode]" in line:
+		continue
 	# 09/20/16 22:11:04 Event: ULOG_EXECUTE for HTCondor Node gstlal_inspiral_0001 (472899.0.0) {09/20/16 22:09:49}
 	if "ULOG_EXECUTE" in line:
-		if "[recovery mode]" in line:
-			continue
 		date, time, _, _, _, _, _, jobname, _, _, _ = line.split() 
 		jobstartdict[jobname] = datetime.strptime("%s %s" % (date, time), "%x %X")
 	# 09/20/16 22:12:45 Node gstlal_inspiral_0001 job proc (472945.0.0) completed successfully. 
@@ -231,7 +231,7 @@ correctKeys = set(jobstartdict.keys()) & set(jobstopdict.keys())
 holdKeys = set(jobstartdict.keys()) & set(jobstopdict.keys()) & set(jobholdstartdict.keys()) & set(jobholdstopdict.keys())
 
 if options.verbose:
-	print "Number of jobs help:", len(jobholdstartdict)
+	print "Number of jobs held:", len(jobholdstartdict)
 	print "Number of jobs released:", len(jobholdstopdict)
 	print "Number of these completed:", len(holdKeys)
 
@@ -288,7 +288,10 @@ for k, v in jobdurs.items():
 
 # print average and top N job durations for each jobs type
 for k,v in sorted(jobtypes.items()):
-	print "\n", k, len(v), np.mean([x[0] for x in v])
+	print "\n", "Job:", k
+	print "Number completed:", len(v)
+	print "Average time to complete:", round(np.mean([x[0] for x in v]),2), "s"
+	print "5 longest running jobs:"
 	for s in sorted(v, reverse=True)[:5]:
 		print "\t", s
 
