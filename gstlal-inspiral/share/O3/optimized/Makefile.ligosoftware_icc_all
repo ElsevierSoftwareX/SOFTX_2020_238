@@ -12,7 +12,7 @@ SHELL := /bin/bash # Use bash syntax
 # then use the touch (-t) option on the previous package.
 #
 # To rebuild lalsuite:
-# make gds -f Makefile.ligosoftware_icc_all -t
+# make swig -f Makefile.ligosoftware_icc_all -t
 # make lalsuite -f Makefile.ligosoftware_icc_all
 #
 # To rebuild gstlal:
@@ -71,7 +71,6 @@ LALSIMULATION=lalsimulation-1.9.1
 LALMETAIO=lalmetaio-1.5.1
 LALFRAME=lalframe-1.4.5
 LAL=lal-6.20.2
-GDS=gds-2.18.17
 LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.6.5
 LDASTOOLSAL=ldas-tools-al-2.6.2
 SWIG=swig-3.0.7
