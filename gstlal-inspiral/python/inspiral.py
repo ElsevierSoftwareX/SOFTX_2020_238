@@ -806,7 +806,24 @@ class GracedBWrapper(object):
 					length = snr_length
 				)
 				snr_time_series.data.data = snr_time_series_array
-				subthreshold_events.append((sngl_inspiral_table[-1], snr_time_series))
+				deltaT = snr_time_series.deltaT
+				sample_frq = 1//deltaT
+				down_frq = ceil_pow_2(2 * sngl_inspiral_table[0].f_final)
+				N = (len(snr_time_series_array)-1)//2
+				q = sample_frq//down_frq
+				assert (sample_frq % down_frq) == 0, 'down-sampling frequency must be a divisor of sample frequency'
+				snr_time_series_downsampled_array= snr_time_series_array[(N%q)::q]
+				snr_time_series_downsampled = lal.CreateCOMPLEX8TimeSeries(
+					name = "snr",
+					epoch = snr_time_series.epoch + (N%q)/sample_frq,
+					f0 = snr_time_series.f0,
+					deltaT = 1./down_frq,
+					sampleUnits = snr_time_series.sampleUnits,
+					length = len(snr_time_series_downsampled_array)
+					)
+				snr_time_series_downsampled.data.data = snr_time_series_downsampled_array
+				assert len(snr_time_series_downsampled.data.data) % 2 == 1, 'SNR time series must be odd'
+				subthreshold_events.append((sngl_inspiral_table[-1], snr_time_series_downsampled))
 
 			if subthreshold_events:
 				sngl_inspiral_table.sort(key = lambda row: row.ifo)
@@ -828,7 +845,25 @@ class GracedBWrapper(object):
 			for event in last_coincs.sngl_inspirals(coinc_event.coinc_event_id):
 				snr_time_series = getattr(event, "%s_snr_time_series" % event.ifo)
 				if snr_time_series is not None:
-					snr_time_series_element = lalseries.build_COMPLEX8TimeSeries(snr_time_series)
+					snr_time_series_array = snr_time_series.data.data
+					deltaT = snr_time_series.deltaT
+					sample_frq = 1//deltaT
+					down_frq = ceil_pow_2(2 * sngl_inspiral_table[0].f_final)
+					N = (len(snr_time_series_array)-1)//2
+					q = sample_frq//down_frq
+					assert (sample_frq % down_frq) == 0, 'down-sampling frequency must be a divisor of sample frequency'
+					snr_time_series_downsampled_array= snr_time_series_array[(N%q)::q]
+					snr_time_series_downsampled = lal.CreateCOMPLEX8TimeSeries(
+						name = "snr",
+						epoch = snr_time_series.epoch + (N%q)/sample_frq,
+						f0 = snr_time_series.f0,
+						deltaT = 1./down_frq,
+						sampleUnits = snr_time_series.sampleUnits,
+						length = len(snr_time_series_downsampled_array)
+					)
+					snr_time_series_downsampled.data.data = snr_time_series_downsampled_array
+					assert len(snr_time_series_downsampled.data.data) % 2 == 1, 'SNR time series must be odd'
+					snr_time_series_element = lalseries.build_COMPLEX8TimeSeries(snr_time_series_downsampled)
 					snr_time_series_element.appendChild(ligolw_param.Param.from_pyvalue(u"event_id", event.event_id))
 					xmldoc.childNodes[-1].appendChild(snr_time_series_element)
 
