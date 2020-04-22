@@ -32,10 +32,10 @@ TPS = TimePhaseSNR.from_hdf5(files[0], files[1:], **kwargs)
 time, phase, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
 # This actually doesn't matter it is just needed to map from eff distance to
 # snr, but the TimePhaseSNR code actually undoes this...
-h = {"H1":1., "L1":1., "V1":1., "K1":1.}
+h = {"G1":1., "K1":1.}
 
 # set the norm to 1
-combos = TPS.combos + (("H1",),("L1",),("V1",),("K1",))
+combos = TPS.combos + (("G1",),("K1",))
 norm = dict((frozenset(k), 1.) for k in combos)
 TPS.norm = norm
 
@@ -43,7 +43,7 @@ def extract_dict(DICT, keys):
 	return dict((k,v) for k,v in DICT.items() if k in keys)
 
 norm = dict((frozenset(k), 0.) for k in combos)
-for i in range(len(time["H1"])):
+for i in range(len(time["G1"])):
 	t = dict((k, v[i]) for k, v in time.items())
 	p = dict((k, v[i]) for k, v in phase.items())
 	s = dict((k, h[k] / v[i]) for k, v in deff.items())
@@ -53,7 +53,7 @@ for i in range(len(time["H1"])):
 		p2 = extract_dict(p, ifos)
 		s2 = extract_dict(s, ifos)
 		h2 = extract_dict(h, ifos)
-		norm[frozenset(ifos)] += TPS(t2,p2,s2,h2) * (sum(x**2 for x in s2.values())**.5)**4 / len(time["H1"]) * 1. / (16. * numpy.pi**2)
+		norm[frozenset(ifos)] += TPS(t2,p2,s2,h2) * (sum(x**2 for x in s2.values())**.5)**4 / len(time["G1"]) * 1. / (16. * numpy.pi**2)
 
 TPS.norm = norm
 
