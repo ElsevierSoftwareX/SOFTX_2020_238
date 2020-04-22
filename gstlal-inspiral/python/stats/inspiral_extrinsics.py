@@ -1183,8 +1183,8 @@ class TimePhaseSNR(object):
 	"""
 	# NOTE to save a couple hundred megs of ram we do not
 	# include kagra for now...
-	responses = {"H1": lal.CachedDetectors[lal.LHO_4K_DETECTOR].response, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].response, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].response, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
-	locations = {"H1":lal.CachedDetectors[lal.LHO_4K_DETECTOR].location, "L1":lal.CachedDetectors[lal.LLO_4K_DETECTOR].location, "V1":lal.CachedDetectors[lal.VIRGO_DETECTOR].location, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
+	responses = {"G1": lal.CachedDetectors[lal.GEO_600_DETECTOR].response, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].response}
+	locations = {"G1": lal.CachedDetectors[lal.GEO_600_DETECTOR].location, "K1":lal.CachedDetectors[lal.KAGRA_DETECTOR].location}
 	numchunks = 20
 
 	def __init__(self, transtt = None, transtp = None, transpt = None, transpp = None, transdd = None, norm = None, tree_data = None, margsky = None, verbose = False, margstart = 0, margstop = None, SNR=None, psd_fname=None):
@@ -1330,8 +1330,8 @@ class TimePhaseSNR(object):
 
 		f.create_dataset("psd", data=self.psd_fname)
 		h5_snr = f.create_group("SNR")
-		for ifo in self.snr:
-			h5_snr.create_dataset(ifo, data=self.snr[ifo].value)
+		for ifo, snr in self.snr.items():
+			h5_snr.create_dataset(ifo, data=snr)
 
 		f.close()
 
@@ -1360,6 +1360,8 @@ class TimePhaseSNR(object):
 			tree_data = None
 			margsky = None
 
+		kwargs["psd_fname"] = f["psd"].value
+		kwargs["SNR"] = {ifo : f["SNR"][ifo].value for ifo in f["SNR"]}
 		f.close()
 
 		# FIXME add sanity checking on this - also make it a += ? In
@@ -1993,6 +1995,7 @@ class InspiralExtrinsics(object):
 	p_of_ifos[("H1", "K1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "H1K1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("K1", "L1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1L1_p_of_instruments_given_H_d.h5"))
 	p_of_ifos[("K1", "V1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "K1V1_p_of_instruments_given_H_d.h5"))
+	p_of_ifos[("G1", "K1",)] = p_of_instruments_given_horizons.from_hdf5(os.path.join(gstlal_config_paths["pkgdatadir"], "G1K1_p_of_instruments_given_H_d.h5"))
 
 	time_phase_snr = None
 
