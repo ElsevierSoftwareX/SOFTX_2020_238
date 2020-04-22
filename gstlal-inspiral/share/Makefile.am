@@ -6,6 +6,7 @@ endif
 
 dist_pkgdata_DATA = \
 	de_calc_likelihood.sql \
+	G1K1_p_of_instruments_given_H_d.h5 \
 	H1K1_p_of_instruments_given_H_d.h5 \
 	H1K1L1_p_of_instruments_given_H_d.h5 \
 	H1K1V1_p_of_instruments_given_H_d.h5 \
