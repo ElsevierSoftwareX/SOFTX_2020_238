@@ -29,6 +29,7 @@ parser.add_argument('--H-snr', type = float, help = 'H characteristic SNR')
 parser.add_argument('--L-snr', type = float, help = 'L characteristic SNR')
 parser.add_argument('--V-snr', type = float, help = 'V characteristic SNR')
 parser.add_argument('--K-snr', type = float, help = 'K characteristic SNR')
+parser.add_argument('--G-snr', type = float, help = 'GEO characteristic SNR')
 parser.add_argument('--m1', type = float, default = 1.4, help = 'primary component mass')
 parser.add_argument('--m2', type = float, default = 1.4, help = 'secondary component mass')
 parser.add_argument('--s1', type = float, default = 0., help = 'primary (z) spin')
@@ -42,14 +43,17 @@ if args.flow >= args.fhigh:
 	raise ValueError("flow cannot be greater than fhigh")
 
 refpsd = args.psd_xml
-rho = {"L1": args.L_snr, "H1": args.H_snr, "V1": args.V_snr, "K1": args.K_snr}
+rho ={ifo : ifo_snr for (ifo, ifo_snr) in zip(["L1", "H1", "V1", "K1", "G1"], [args.L_snr, args.H_snr, args.V_snr, args.K_snr, args.G_snr]) if ifo_snr is not None}
 
-instruments = ("H1", "L1", "V1", "K1")
+instruments = sorted(rho.keys())
 snr = series.read_psd_xmldoc(ligolw_utils.load_filename(refpsd, verbose = True, contenthandler = series.PSDContentHandler))
 psddict = {}
 for ifo in rho:
-	f = numpy.arange(len(snr[ifo].data.data)) * snr[ifo].deltaF
-	psddict[ifo] = scipy.interpolate.interp1d(f, snr[ifo].data.data)
+	try:
+		f = numpy.arange(len(snr[ifo].data.data)) * snr[ifo].deltaF
+		psddict[ifo] = scipy.interpolate.interp1d(f, snr[ifo].data.data)
+	except KeyError:
+		continue
 
 def moment(fmin, fmax, n, m1, m2, s1, s2, ifo, psddict = psddict, delta_f = 0.25):
 	farr = numpy.linspace(0, fmax, fmax / delta_f + delta_f)
