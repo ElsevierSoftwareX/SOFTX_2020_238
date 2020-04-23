@@ -72,6 +72,7 @@ def parse_command_line():
 	parser.add_option("--gracedb-group", metavar = "name", default = "Test", help = "Gracedb group to which to upload events (default is Test).")
 	parser.add_option("--gracedb-pipeline", metavar = "name", default = "gstlal", help = "Name of pipeline to provide in GracedB uploads (default is gstlal).")
 	parser.add_option("--gracedb-search", metavar = "name", default = "LowMass", help = "Name of search to provide in GracedB uploads (default is LowMass).")
+	group.add_option("--gracedb-label", action = "append", help = "Labels to apply to gracedb uploads. Can be applied multiple times.")
 	parser.add_option("--gracedb-service-url", metavar = "url", default = DEFAULT_GRACEDB_URL, help = "Override default GracedB service url (optional, default is {}).".format(DEFAULT_GRACEDB_URL))
 
 	options, args = parser.parse_args()
@@ -116,6 +117,7 @@ class EventUploader(events.EventProcessor):
 		self.gracedb_group = options.gracedb_group
 		self.gracedb_pipeline = options.gracedb_pipeline
 		self.gracedb_search = options.gracedb_search
+		self.gracedb_label = options.gracedb_label
 
 		### upload cadence settings
 		self.upload_cadence_type = options.upload_cadence_type
@@ -341,7 +343,8 @@ class EventUploader(events.EventProcessor):
 					self.gracedb_pipeline,
 					'coinc.xml',
 					filecontents = event['favored']['coinc'],
-					search = self.gracedb_search
+					search = self.gracedb_search,
+					label = self.gracedb_label
 				)
 			except HTTPError as resp:
 				logging.warning(resp)
