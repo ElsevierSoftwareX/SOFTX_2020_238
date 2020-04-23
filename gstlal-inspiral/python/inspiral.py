@@ -88,6 +88,7 @@ from gstlal import bottle
 from gstlal import cbc_template_iir
 from gstlal import ilwdify
 from gstlal import svd_bank
+from gstlal import templates
 
 
 #
@@ -808,7 +809,7 @@ class GracedBWrapper(object):
 				snr_time_series.data.data = snr_time_series_array
 				deltaT = snr_time_series.deltaT
 				sample_frq = 1//deltaT
-				down_frq = ceil_pow_2(2 * sngl_inspiral_table[0].f_final)
+				down_frq = templates.ceil_pow_2(2 * sngl_inspiral_table[0].f_final)
 				N = (len(snr_time_series_array)-1)//2
 				q = sample_frq//down_frq
 				assert (sample_frq % down_frq) == 0, 'down-sampling frequency must be a divisor of sample frequency'
@@ -848,7 +849,7 @@ class GracedBWrapper(object):
 					snr_time_series_array = snr_time_series.data.data
 					deltaT = snr_time_series.deltaT
 					sample_frq = 1//deltaT
-					down_frq = ceil_pow_2(2 * sngl_inspiral_table[0].f_final)
+					down_frq = templates.ceil_pow_2(2 * sngl_inspiral_table[0].f_final)
 					N = (len(snr_time_series_array)-1)//2
 					q = sample_frq//down_frq
 					assert (sample_frq % down_frq) == 0, 'down-sampling frequency must be a divisor of sample frequency'
