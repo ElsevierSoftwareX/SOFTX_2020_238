@@ -88,23 +88,23 @@ def log_path():
 	try:
 		return os.environ['TMPDIR']
 	except KeyError:
-		print "\n\n!!!! $TMPDIR NOT SET !!!!\n\n\tPLEASE email your admin to tell them to set $TMPDIR to be the place where a users temporary files should be\n"
+		print("\n\n!!!! $TMPDIR NOT SET !!!!\n\n\tPLEASE email your admin to tell them to set $TMPDIR to be the place where a users temporary files should be\n")
 		#FIXME add more hosts as you need them
 		if 'cit' in host or 'caltech.edu' in host:
 			tmp = '/usr1/' + os.environ['USER']
-			print "falling back to ", tmp
+			print(f"falling back to {tmp}")
 			return tmp
 		if 'phys.uwm.edu' in host:
 			tmp = '/localscratch/' + os.environ['USER']
-			print "falling back to ", tmp
+			print(f"falling back to {tmp}")
 			return tmp
 		if 'aei.uni-hannover.de' in host:
 			tmp = '/local/user/' + os.environ['USER']
-			print "falling back to ", tmp
+			print(f"falling back to {tmp}")
 			return tmp
 		if 'phy.syr.edu' in host:
 			tmp = '/usr1/' + os.environ['USER']
-			print "falling back to ", tmp
+			print(f"falling back to {tmp}")
 			return tmp
 
 		raise KeyError("$TMPDIR is not set and I don't recognize this environment")
@@ -303,7 +303,7 @@ def pipeline_dot_py_append_opts_hack(opt, vals):
 
 def breakupseg(seg, maxextent, overlap):
 	if maxextent <= 0:
-		raise ValueError, "maxextent must be positive, not %s" % repr(maxextent)
+		raise ValueError("maxextent must be positive, not %s" % repr(maxextent))
 
 	# Simple case of only one segment
 	if abs(seg) < maxextent:

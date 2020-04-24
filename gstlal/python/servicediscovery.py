@@ -337,12 +337,12 @@ if __name__ == "__main__":
 
 		class MyListener(Listener):
 			def print_msg(self, action, sname, stype, sdomain, host, port, properties):
-				print >>sys.stderr, "Service \"%s\" %s" % (sname, action)
-				print >>sys.stderr, "\tType is \"%s\"" % stype
-				print >>sys.stderr, "\tDomain is \"%s\"" % sdomain
-				print >>sys.stderr, "\tHost is \"%s\"" % host
-				print >>sys.stderr, "\tPort is %s" % port
-				print >>sys.stderr, "\tProperties are %s\n" % properties
+				print("Service \"%s\" %s" % (sname, action), file=sys.stderr)
+				print("\tType is \"%s\"" % stype, file=sys.stderr)
+				print("\tDomain is \"%s\"" % sdomain, file=sys.stderr)
+				print("\tHost is \"%s\"" % host, file=sys.stderr)
+				print("\tPort is %s" % port, file=sys.stderr)
+				print("\tProperties are %s\n" % properties, file=sys.stderr)
 			def add_service(self, sname, stype, sdomain, host, port, properties):
 				self.print_msg("added", sname, stype, sdomain, host, port, properties)
 			def remove_service(self, sname, stype, sdomain):
@@ -355,5 +355,5 @@ if __name__ == "__main__":
 				print >>sys.stderr, "failure", args
 		mainloop = GLib.MainLoop()
 		browser = ServiceBrowser(MyListener())
-		print "Browsing for services.  Press CTRL-C to quit.\n"
+		print("Browsing for services.  Press CTRL-C to quit.\n")
 		mainloop.run()

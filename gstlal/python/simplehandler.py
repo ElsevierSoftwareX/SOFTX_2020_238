@@ -118,10 +118,10 @@ class Handler(object):
 			self.quit(bus)
 		elif message.type == Gst.MessageType.INFO:
 			gerr, dbgmsg = message.parse_info()
-			print >>sys.stderr, "info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			print("info (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg), file=sys.stderr)
 		elif message.type == Gst.MessageType.WARNING:
 			gerr, dbgmsg = message.parse_warning()
-			print >>sys.stderr, "warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			print("warning (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg), file=sys.stderr)
 		elif message.type == Gst.MessageType.ERROR:
 			gerr, dbgmsg = message.parse_error()
 			# FIXME:  this deadlocks.  shouldn't we be doing this?
@@ -151,13 +151,13 @@ class OneTimeSignalHandler(object):
 	def __call__(self, signum, frame):
 		self.count += 1
 		if self.count == 1:
-			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+			print("*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum, file=sys.stderr)
 			try:
 				self.do_on_call(signum, frame)
 				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
-			except Exception, e:
-				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+			except Exception as e:
+				print("graceful shutdown failed: %s\naborting." % str(e), file=sys.stderr)
 				os._exit(1)
 		else:
-				print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+				print("*** received SIG %d %d times... ***" % (signum, self.count), file=sys.stderr)
