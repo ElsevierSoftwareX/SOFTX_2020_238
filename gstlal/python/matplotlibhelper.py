@@ -72,8 +72,9 @@ def figure():
 	return figure
 
 
-def render(fig, buf, (width, height), fmt):
+def render(fig, buf, dims, fmt):
 	"""Render a Matplotlib figure to a GStreamer buffer."""
+	width, height = dims
 	fig.set_size_inches(
 		width / float(fig.get_dpi()),
 		height / float(fig.get_dpi())

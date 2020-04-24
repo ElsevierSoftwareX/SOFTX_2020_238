@@ -244,11 +244,12 @@ class ServiceBrowser(object):
 		bus.signal_subscribe(None, None, "AllForNow", browser_path, None, Gio.DBusSignalFlags.NONE, self.allfornow_handler, None)
 		bus.signal_subscribe(None, None, "Failure", browser_path, None, Gio.DBusSignalFlags.NONE, self.failure_handler, None)
 
-	def itemnew_handler(self, bus, sender_name, object_path, interface_name, signal_name, (interface, protocol, sname, stype, sdomain, flags), data):
+	def itemnew_handler(self, bus, sender_name, object_path, interface_name, signal_name, service_config, data):
 		"""
 		Internal ItemNew signal handler.  Forwards the essential
 		information to the Listener's .add_service() method.
 		"""
+		interface, protocol, sname, stype, sdomain, flags = service_config
 		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
 			# local service (on this machine)
 			return
@@ -264,11 +265,12 @@ class ServiceBrowser(object):
 		)
 		self.listener.add_service(sname, stype, sdomain, host, port, dict(s.split("=", 1) for s in avahi.txt_array_to_string_array(txt)))
 
-	def itemremove_handler(self, bus, sender_name, object_path, interface_name, signal_name, (interface, protocol, sname, stype, sdomain, flags), data):
+	def itemremove_handler(self, bus, sender_name, object_path, interface_name, signal_name, service_config, data):
 		"""
 		Internal ItemRemove signal handler.  Forwards the essential
 		information to the Listener's .remove_service() method.
 		"""
+		interface, protocol, sname, stype, sdomain, flags = service_config
 		if self.ignore_local and (flags & avahi.LOOKUP_RESULT_LOCAL):
 			# local service (on this machine)
 			return

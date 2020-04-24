@@ -128,7 +128,8 @@ class src_deferred_link(object):
 		pad_added_data.append(pad_added_handler_id)
 
 	@staticmethod
-	def pad_added(element, pad, (srcpadname, sinkpad, no_more_pads_handler_id, pad_added_handler_id)):
+	def pad_added(element, pad, src_sink_ids):
+		srcpadname, sinkpad, no_more_pads_handler_id, pad_added_handler_id = src_sink_ids
 		if pad.get_name() == srcpadname:
 			element.handler_disconnect(no_more_pads_handler_id)
 			element.handler_disconnect(pad_added_handler_id)
@@ -236,7 +237,8 @@ class framecpp_channeldemux_check_segments(object):
 		return probe_id
 
 	@staticmethod
-	def probe(pad, probeinfo, (seglist, jitter, probe_id)):
+	def probe(pad, probeinfo, seg_jitter_id):
+		seglist, jitter, probe_id = seg_jitter_id
 		if probeinfo.type & Gst.PadProbeType.BUFFER:
 			obj = probeinfo.get_buffer()
 			if not obj.mini_object.flags & Gst.BufferFlags.GAP:
@@ -267,12 +269,14 @@ class framecpp_channeldemux_check_segments(object):
 #
 
 
-def framecpp_filesink_ldas_path_handler(elem, pspec, (outpath, dir_digits)):
+def framecpp_filesink_ldas_path_handler(elem, pspec, path_digits):
 	"""
 	Example:
 
 	>>> filesinkelem.connect("notify::timestamp", framecpp_filesink_ldas_path_handler, (".", 5))
 	"""
+	outpath, dir_digits = path_digits
+
 	# get timestamp and truncate to integer seconds
 	timestamp = elem.get_property("timestamp") // Gst.SECOND
 
