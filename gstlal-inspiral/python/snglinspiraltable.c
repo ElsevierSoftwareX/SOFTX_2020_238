@@ -851,7 +851,7 @@ static PyTypeObject gstlal_GSTLALSnglInspiral_Type = {
 	PyObject_HEAD_INIT(NULL)
 	.tp_basicsize = sizeof(gstlal_GSTLALSnglInspiral),
 	.tp_doc = "GstLAL's GSTLALSnglInspiral type",
-	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_CHECKTYPES,
+	.tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
 	.tp_members = members,
 	.tp_methods = methods,
 	.tp_getset = getset,
