@@ -30,7 +30,7 @@ Requires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
 Requires: python%{python3_pkgversion}-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Requires: python%{python3_pkgversion}-ligo-lw >= @MIN_LIGO_LW_VERSION@
 Requires: python%{python3_pkgversion}-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
-Requires: python2-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
+Requires: python%{python3_pkgversion}-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
 
 # --- python package requirements --- #
 Requires: numpy >= @MIN_NUMPY_VERSION@

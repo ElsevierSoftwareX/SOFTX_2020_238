@@ -15,33 +15,26 @@ Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-bad-free
+Requires: python%{python3_pkgversion}-%{gstreamername}
+Requires: orc >= @MIN_ORC_VERSION@
+Requires: gsl
+
+# --- python package requirements --- #
+Requires: python%{python3_pkgversion} >= @MIN_PYTHON_VERSION@
 Requires: h5py
 Requires: numpy >= @MIN_NUMPY_VERSION@
 Requires: scipy
 
-Requires: python >= @MIN_PYTHON_VERSION@
-Requires: glue >= @MIN_GLUE_VERSION@
-Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
-Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
-Requires: python2-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
-# --- python package requirements --- #
-Requires: python%{python3_pkgversion} >= @MIN_PYTHON_VERSION@
-Requires: python%{python3_pkgversion}-glue >= @MIN_GLUE_VERSION@
-Requires: python%{python3_pkgversion}-ligo-lw >= @MIN_LIGO_LW_VERSION@
-Requires: python%{python3_pkgversion}-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
-Requires: python%{python3_pkgversion}-%{gstreamername}
-
-## FIXME: build python3x-ligo-scald
-Requires: python2-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
-
 # --- LSCSoft package requirements --- #
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
-Requires: gsl
 Requires: ldas-tools-framecpp >= @MIN_FRAMECPP_VERSION@
 Requires: gds-lowlatency >= @MIN_GDS_VERSION@
 Requires: nds2-client >= @MIN_NDS_VERSION@
-Requires: orc >= @MIN_ORC_VERSION@
+Requires: python%{python3_pkgversion}-glue >= @MIN_GLUE_VERSION@
+Requires: python%{python3_pkgversion}-ligo-lw >= @MIN_LIGO_LW_VERSION@
+Requires: python%{python3_pkgversion}-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
+Requires: python%{python3_pkgversion}-ligo-scald >= @MIN_LIGO_SCALD_VERSION@
 
 # -- build requirements --- #
 BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
