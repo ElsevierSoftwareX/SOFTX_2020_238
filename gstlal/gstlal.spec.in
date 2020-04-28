@@ -6,6 +6,8 @@ Release: 1%{?dist}
 Summary: GSTLAL
 License: GPL
 Group: LSC Software/Data Analysis
+
+# --- package requirements --- #
 Requires: avahi
 Requires: avahi-glib
 Requires: avahi-ui-tools
@@ -13,30 +15,38 @@ Requires: fftw >= 3
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 Requires: gsl
+Requires: zlib
+Requires: orc >= @MIN_ORC_VERSION@
 Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-bad-free
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
+
 # FIXME:  add this when it becomes available, and figure out what its name
 # is on .rpm based systems
 #Requires: %{gstreamername}-python3-plugin-loader
 # FIXME:  add this when it becomes available
 #Requires: %{gstreamername}-rtsp-server >= @MIN_GSTREAMER_VERSION@
+
+# --- LSCSoft package requirements --- #
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lalburst >= @MIN_LALBURST_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Requires: lalsimulation >= @MIN_LALSIMULATION_VERSION@
+
+# --- python package requirements --- #
+Requires: python%{python3_pkgversion} >= @MIN_PYTHON_VERSION@
+Requires: python%{python3_pkgversion}-%{gstreamername}
+Requires: python%{python3_pkgversion}-gobject >= @MIN_PYGOBJECT_VERSION@
+Requires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
+Requires: python%{python3_pkgversion}-ligo-lw >= @MIN_LIGO_LW_VERSION@
+Requires: python%{python3_pkgversion}-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
 Requires: numpy > @MIN_NUMPY_VERSION@
-Requires: orc >= @MIN_ORC_VERSION@
-Requires: python >= @MIN_PYTHON_VERSION@
-Requires: python-%{gstreamername}
-Requires: python-gobject >= @MIN_PYGOBJECT_VERSION@
-Requires: python2-lal >= @MIN_LAL_VERSION@
-Requires: python-ligo-lw >= @MIN_LIGO_LW_VERSION@
-Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
 Requires: scipy
-Requires: zlib
+
+
+# --- build requirements --- #
 BuildRequires: doxygen >= @MIN_DOXYGEN_VERSION@
 BuildRequires: fftw-devel >= 3
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
@@ -55,10 +65,10 @@ BuildRequires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
 BuildRequires: numpy >= @MIN_NUMPY_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
-BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
+BuildRequires: python3-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
 BuildRequires: pygobject3-devel >= @MIN_PYGOBJECT_VERSION@
-BuildRequires: python2-lal >= @MIN_LAL_VERSION@
+BuildRequires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
 BuildRequires: zlib-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://wiki.ligo.org/DASWG/GstLAL
@@ -88,7 +98,7 @@ Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 Requires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
 Requires: lalburst-devel >= @MIN_LALBURST_VERSION@
 Requires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
-Requires: python-devel >= @MIN_PYTHON_VERSION@
+Requires: python3-devel >= @MIN_PYTHON_VERSION@
 %description devel
 This package contains the files needed for building gstlal-based plugins
 and programs.

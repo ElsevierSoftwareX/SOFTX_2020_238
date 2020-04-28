@@ -338,9 +338,9 @@ def breakupsegs(seglist, maxextent, overlap):
 def breakupseglists(seglists, maxextent, overlap):
 	for instrument, seglist in seglists.iteritems():
 		newseglist = segments.segmentlist()
-	        for bigseg in seglist:
+		for bigseg in seglist:
 			newseglist.extend(breakupseg(bigseg, maxextent, overlap))
-	        seglists[instrument] = newseglist
+		seglists[instrument] = newseglist
 
 
 #

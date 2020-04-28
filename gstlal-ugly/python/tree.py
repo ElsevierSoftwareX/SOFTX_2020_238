@@ -240,7 +240,7 @@ class Node(object):
 		for vertex in self.cube.vertices:
 			if vertex not in self.boundary:
 				self.on_boundary = True
-				print "\n\non boundary!!\n\n"
+				print("\n\non boundary!!\n\n")
 
 	def split(self, split_num_templates, mismatch, bifurcation = 0, verbose = True, metric_tol = 0.1, max_coord_vol = float(10)):
 		if self.cube.constraint_func(self.cube.vertices + [self.cube.center]):

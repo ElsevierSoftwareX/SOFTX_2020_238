@@ -278,7 +278,7 @@ class Metric(object):
 			del hplus
 			del hcross
 		except RuntimeError:
-			print p
+			print(p)
 			#raise
 			return None
 		return fseries
