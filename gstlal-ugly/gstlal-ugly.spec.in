@@ -74,7 +74,15 @@ gstlal-based applications.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ fftw-devel >= 3 %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ gsl-devel nds2-client-headers >= @MIN_NDS_VERSION@
+Requires: gstlal-devel >= @MIN_GSTLAL_VERSION@ 
+Requires: python3-devel >= @MIN_PYTHON_VERSION@ 
+Requires: fftw-devel >= 3 
+Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ 
+Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ 
+Requires: lal-devel >= @MIN_LAL_VERSION@ 
+Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ 
+Requires: gsl-devel 
+Requires: nds2-client-headers >= @MIN_NDS_VERSION@
 %description devel
 This package contains the files needed for building gstlal-ugly based
 plugins and programs.

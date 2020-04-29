@@ -320,7 +320,8 @@ class Metric(object):
 		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / self.delta_t**2
 		return -0.5 * d2mbydx2
 
-	def __set_offdiagonal_metric_tensor_component(self, (i,j), wp, wm, deltas, g, w1):
+	def __set_offdiagonal_metric_tensor_component(self, inds, wp, wm, deltas, g, w1):
+		i, j = inds
 		# evaluate symmetrically
 		if j <= i:
 			return None

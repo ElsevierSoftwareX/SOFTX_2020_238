@@ -292,7 +292,7 @@ class Node(object):
 			else:
 				self.template_count[0] = self.template_count[0] + 1
 				if verbose and not (self.template_count[0] % 100):
-					print "%d tmps : level %03d @ %s : num tmps per side %s: deltas %s : vol frac. %.2f : splits %s : det %.2f : size %s" % (self.template_count[0], bifurcation, self.cube.center, tmps_per_side, self.cube.deltas, numtmps, self.on_boundary, self.cube.det**.5, size)
+					print("%d tmps : level %03d @ %s : num tmps per side %s: deltas %s : vol frac. %.2f : splits %s : det %.2f : size %s".format(self.template_count[0], bifurcation, self.cube.center, tmps_per_side, self.cube.deltas, numtmps, self.on_boundary, self.cube.det**.5, size))
 
 	# FIXME can this be made a generator?
 	#def leafnodes(self, out = set()):

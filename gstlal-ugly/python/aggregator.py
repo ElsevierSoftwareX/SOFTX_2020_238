@@ -312,7 +312,7 @@ def reduce_data_from_lower_level_by_job_type_and_route(level, base_dir, job, typ
 	shutil.move(tmpfname, fname)
 
 
-def reduce_across_jobs((jobs, this_level_dir, typ, route, func, level, start, end)):
+def reduce_across_jobs(jobs, this_level_dir, typ, route, func, level, start, end):
 	# Process this level
 	agg_data = numpy.array([])
 	agg_time = numpy.array([])
@@ -334,7 +334,7 @@ def reduce_across_jobs((jobs, this_level_dir, typ, route, func, level, start, en
 	shutil.move(tmpfname, fname)
 
 
-def get_data_from_job_and_reduce((job, job_tag, routes, datatypes, prevdataspan, base_dir, jobs, timedata, datadata)):
+def get_data_from_job_and_reduce(job, job_tag, routes, datatypes, prevdataspan, base_dir, jobs, timedata, datadata):
 	# get the url
 	with open(os.path.join(job_tag, "%s_registry.txt" % job)) as f:
 		url = f.readline().strip()
