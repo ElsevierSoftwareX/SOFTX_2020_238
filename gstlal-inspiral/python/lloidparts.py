@@ -227,7 +227,7 @@ def mkcontrolsnksrc(pipeline, rate, verbose = False, suffix = None, control_peak
 # @enddot
 #
 #
-def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src), gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None, reconstruction_segment_list = None):
+def mkLLOIDbranch(pipeline, src, bank, bank_fragment, control_input_tpl, gate_attack_length, gate_hold_length, block_duration, nxydump_segment = None, fir_stride = None, control_peak_time = None, reconstruction_segment_list = None):
 	"""!
 	Make a single slice of one branch of the lloid graph, e.g. one instrument and one
 	template bank fragment. For details see: http://arxiv.org/abs/1107.2665
@@ -249,6 +249,8 @@ def mkLLOIDbranch(pipeline, src, bank, bank_fragment, (control_snk, control_src)
 	@param reconstruction_segment_list A segment list object that describes when the control signal should be on.  This can be useful in e.g., only reconstructing physical SNRS around the time of injections, which can save an enormous amount of CPU time.
 	"""
 	logname = "%s_%.2f.%.2f" % (bank.logname, bank_fragment.start, bank_fragment.end)
+
+	control_snk, control_src = control_input_tpl
 
 	#
 	# FIR filter bank.  low frequency branches use time-domain

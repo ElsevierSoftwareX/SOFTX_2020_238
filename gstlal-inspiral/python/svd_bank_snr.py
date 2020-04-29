@@ -67,7 +67,7 @@ class SignalNoiseRatioDocument(object):
 	This xml document contains the SNRs timeseries and their corresponding templates
 	autocorrelation. Some meta data are recorded in the xml document for
 	"""
-        def __init__(self, bank_snrs_dict, verbose=False):
+	def __init__(self, bank_snrs_dict, verbose=False):
 		self.verbose = verbose
 		self.bank_snrs_dict = bank_snrs_dict
 

@@ -582,7 +582,8 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 			min_chirp_mass, max_chirp_mass = float(min_chirp_mass), float(max_chirp_mass)
 			inspiral_nodes[(ifos, sim_tag_from_inj_file(injections))] = {}
 			ignore[injections] = []
-			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda (k,v): int(k)):
+			# FIXME: confirm that this sort works as intended:
+			for bgbin_index, bounds in sorted(template_mchirp_dict.items(), key = lambda k : int(k[0])):
 				if max_chirp_mass <= bounds[0]:
 					ignore[injections].append(int(bgbin_index))
 					# NOTE putting a break here assumes that the min chirp mass
@@ -884,7 +885,8 @@ def inj_psd_layer(segsdict, options):
 	for ce in map(CacheEntry, open(options.psd_cache)):
 		psd_cache_files.setdefault(frozenset(lsctables.instrumentsproperty.get(ce.observatory)), []).append((ce.segment, ce.path))
 	for ifos in segsdict:
-		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda (s, p): s)
+		# FIXME: confirm that this sort works
+		reference_psd_files = sorted(psd_cache_files[ifos], key = lambda s : s[0])
 		ref_psd_file_num = 0
 		for seg in segsdict[ifos]:
 			while int(reference_psd_files[ref_psd_file_num][0][0]) < int(seg[0]):

@@ -74,7 +74,7 @@ __all__ = [
 ]
 
 
-__doc__ = """
+__doc__ = r"""
 
 The goal of this module is to implement the probability of getting a given set
 of extrinsic parameters for a set of detectors parameterized by n-tuples of
@@ -252,7 +252,7 @@ Documentation of classes and functions
 
 # FIXME: This code is no longer used.
 def P_instruments_given_signal(horizon_distances, n_samples = 500000, min_instruments = 2, min_distance = 0.):
-	"""
+	r"""
 	Example:
 
 	>>> P_instruments_given_signal({"H1": 120., "L1": 120.})

@@ -66,7 +66,7 @@ def get_thinca_zero_lag_segments(connection, program_name = "thinca"):
 	durations_before = abs(seglists)
 	seglists.coalesce()
 	if abs(seglists) != durations_before:
-		raise ValueError, "detected overlapping thinca rings"
+		raise ValueError("detected overlapping thinca rings")
 
 	# done
 

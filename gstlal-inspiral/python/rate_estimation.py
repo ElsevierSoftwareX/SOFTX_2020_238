@@ -522,7 +522,8 @@ def calculate_alphabetsoup_rate_posteriors(rankingstatpdf, ln_likelihood_ratios,
 	#
 
 	ln_f_over_b.sort()
-	def log_posterior((Rf1, Rf2, Rb), x1 = math.exp(ln_f_over_b[-1]), x2 = math.exp(ln_f_over_b[-2]), std_log_posterior = LogPosterior(ln_f_over_b[:-2])):
+	def log_posterior(Rf1f2b, x1 = math.exp(ln_f_over_b[-1]), x2 = math.exp(ln_f_over_b[-2]), std_log_posterior = LogPosterior(ln_f_over_b[:-2])):
+		Rf1, Rf2, Rb = Rf1f2b
 		if Rf1 < 0. or Rf2 < 0. or Rb < 0.:
 			return NegInf
 		return math.log(Rf1 / Rb * x1 + 1.) + math.log(Rf2 / Rb * x2 + 1.) + 2. * math.log(Rb) + std_log_posterior((Rf1 + Rf2, Rb))

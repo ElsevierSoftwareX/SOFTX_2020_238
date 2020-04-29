@@ -114,12 +114,12 @@ class SourcePopulationModel(object):
 			with h5py.File(filename, 'r') as model:
 				coefficients = model['coefficients'].value
 				snr_bp = model['SNR'].value
-                                try:
-                                        model_ids = model['template_id'].value
-                                except KeyError:
+				try:
+					model_ids = model['template_id'].value
+				except KeyError:
                                         # FIXME: assume sequential order if model['event_id'] doesn't exist
                                         #model_ids = numpy.arange(numpy.shape(model['coefficients'].value)[-1])
-                                        model_ids = model['event_id'].value
+					model_ids = model['event_id'].value
 			# PPoly can construct an array of polynomials by just
 			# feeding it the coefficients array all in one go, but then
 			# it insists on evaluating all of them at once.  we don't
@@ -128,14 +128,14 @@ class SourcePopulationModel(object):
 			# just one.  since we have to do this anyway, we use a
 			# dictionary to also solve the problem of mapping
 			# template_id to a specific polynomial
-                        template_indices = {}
-                        for template_id in template_ids:
+			template_indices = {}
+			for template_id in template_ids:
                                 # maps template ID to the right coefficient array, since template IDs
                                 # in the bank may not be in sequential order
-                                try:
-                                        template_indices[template_id] = numpy.where(model_ids==template_id)[0][0]
-                                except IndexError:
-                                        raise IndexError("template ID %d is not in this model" % template_id)
+				try:
+					template_indices[template_id] = numpy.where(model_ids==template_id)[0][0]
+				except IndexError:
+					raise IndexError("template ID %d is not in this model".format(template_id))
 			self.polys = dict((template_id, PPoly(coefficients[:,:,[template_indices[template_id]]], snr_bp)) for template_id in template_ids)
 			self.max_snr = snr_bp.max()
 		else:
@@ -148,7 +148,7 @@ class SourcePopulationModel(object):
 		try:
 			lnP_vs_snr = self.polys[template_id]
 		except KeyError:
-			raise KeyError("template ID %d is not in this model" % template_id)
+			raise KeyError("template ID %d is not in this model".format(template_id))
 		# PPoly's .__call__() returns an array, so we need the
 		# final [0] to flatten it
 		return lnP_vs_snr(min(snr, self.max_snr))[0]

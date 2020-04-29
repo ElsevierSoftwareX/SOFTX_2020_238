@@ -167,7 +167,7 @@ def make_weights_from_histograms(mass1,
         a_hat_mg = activation_counts['MassGap']
         a_hat_nsbh = activation_counts['NSBH']
         a_hat_bbh = activation_counts['BBH']
-	num_bins = activation_counts['num_bins']
+        num_bins = activation_counts['num_bins']
 
     return a_hat_bns, a_hat_bbh, a_hat_nsbh, a_hat_mg, num_bins
 

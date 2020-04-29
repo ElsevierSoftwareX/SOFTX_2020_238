@@ -217,7 +217,8 @@ def plot_rates(rankingstat):
 	labels = []
 	sizes = []
 	colours = []
-	for instruments, count in sorted(rankingstat.denominator.candidate_count_model().items(), key = lambda (instruments, count): sorted(instruments)):
+        # FIXME: make sure this sort works
+	for instruments, count in sorted(rankingstat.denominator.candidate_count_model().items(), key = lambda instruments : sorted(instruments[0])):
 		labels.append("%s\n(%d)" % (", ".join(sorted(instruments)), count))
 		sizes.append(count)
 		colours.append(plotutil.colour_from_instruments(instruments))
@@ -330,7 +331,9 @@ def plot_snr_joint_pdf(snrpdf, instruments, horizon_distances, min_instruments, 
 	return fig
 
 
-def plot_likelihood_ratio_pdf(rankingstatpdf, (xlo, xhi), title, which = "noise"):
+def plot_likelihood_ratio_pdf(rankingstatpdf, xlohi, title, which = "noise"):
+
+	xlo, xhi = xlohi
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 
 	if rankingstatpdf.zero_lag_lr_lnpdf.array.any():
@@ -371,7 +374,9 @@ def plot_likelihood_ratio_pdf(rankingstatpdf, (xlo, xhi), title, which = "noise"
 	return fig
 
 
-def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios = None, is_open_box = False, ln_likelihood_ratio_markers = None):
+def plot_likelihood_ratio_ccdf(fapfar, xlohi, observed_ln_likelihood_ratios = None, is_open_box = False, ln_likelihood_ratio_markers = None):
+
+	xlo, xhi = xlohi
 	assert xlo < xhi
 
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
@@ -404,7 +409,8 @@ def plot_likelihood_ratio_ccdf(fapfar, (xlo, xhi), observed_ln_likelihood_ratios
 	return fig
 
 
-def plot_horizon_distance_vs_time(rankingstat, (tlo, thi), masses = (1.4, 1.4), tref = None):
+def plot_horizon_distance_vs_time(rankingstat, tlohi, masses = (1.4, 1.4), tref = None):
+	tlo, thi = tlohi
 	fig, axes = init_plot((8., 8. / plotutil.golden_ratio))
 	axes.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(1800.))
 	axes.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(5.))

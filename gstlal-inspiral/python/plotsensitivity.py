@@ -71,7 +71,10 @@ def parse_sensitivity_docs(database, cumulative_segments_file, simdb_query_end_t
 
 	return found_inj, missed_inj, seglistdicts, seg_bins
 
-def plot_range(found_inj, missed_inj, seg_bins, (tlo, thi), (dlo, dhi), horizon_history, colors = {'H1': numpy.array((1.0, 0.0, 0.0)), 'L1':  numpy.array((0.0, 0.8, 0.0)), 'V1':  numpy.array((1.0, 0.0, 1.0))}, fig = None, axes = None):
+def plot_range(found_inj, missed_inj, seg_bins, tlohi, dlohi, horizon_history, colors = {'H1': numpy.array((1.0, 0.0, 0.0)), 'L1':  numpy.array((0.0, 0.8, 0.0)), 'V1':  numpy.array((1.0, 0.0, 1.0))}, fig = None, axes = None):
+
+	tlo, thi = tlohi
+	dlo, dhi = dlohi
 	if fig is None:
 		fig = plt.figure()
 	if axes is None:
@@ -107,7 +110,8 @@ def plot_range(found_inj, missed_inj, seg_bins, (tlo, thi), (dlo, dhi), horizon_
 	axes.grid(color=(0.1,0.4,0.5), linewidth=2)
 	return fig, axes
 
-def plot_missedfound(found_inj, missed_inj, (tlo, thi), fig = None, axes = None):
+def plot_missedfound(found_inj, missed_inj, tlohi, fig = None, axes = None):
+	tlo, thi = tlohi
 	if fig is None:
 		fig = plt.figure()
 	if axes is None:
@@ -123,12 +127,14 @@ def plot_missedfound(found_inj, missed_inj, (tlo, thi), fig = None, axes = None)
 	axes.xaxis.set_ticks(xticks)
 	return fig, axes
 
-def plot_missedfound_range_segments(found_inj, missed_inj, seglistdicts, seg_bins, (tlo, thi), (dlo, dhi), horizon_history, colors = {'H1': numpy.array((1.0, 0.0, 0.0)), 'L1':  numpy.array((0.0, 0.8, 0.0)), 'V1':  numpy.array((1.0, 0.0, 1.0)), 'H1L1': numpy.array((.5, .5, .5))}, fig = None):
+def plot_missedfound_range_segments(found_inj, missed_inj, seglistdicts, seg_bins, tlohi, dlohi, horizon_history, colors = {'H1': numpy.array((1.0, 0.0, 0.0)), 'L1':  numpy.array((0.0, 0.8, 0.0)), 'V1':  numpy.array((1.0, 0.0, 1.0)), 'H1L1': numpy.array((.5, .5, .5))}, fig = None):
 	# FIXME In order to save the figure with the legends included off to
 	# the right, users need to do something along these lines:
 	# fig.savefig(path, additional_artists=[lgd1, lgd2], bbox_inches=matplotlib.transforms.Bbox([[0.,0.],[fig_width+1.5,fig_height]]))
 	# There has to be a better a way, and I think tight_layout() may do it
 	# automatically
+	tlo, thi = tlohi
+	dlo, dhi = dlohi
 
 	if fig is None:
 		fig = plt.figure()

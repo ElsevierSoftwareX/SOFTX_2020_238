@@ -418,7 +418,7 @@ class SegmentsTracker(object):
 		# gate element that should provide those segments, and
 		# connect handlers to collect the segments
 		if verbose:
-			print >>sys.stderr, "connecting segment handlers to gates ..."
+			print(sys.stderr, "connecting segment handlers to gates ...", file=sys.stderr)
 		for segtype, seglistdict in self.seglistdicts.items():
 			for instrument in seglistdict:
 				try:
@@ -439,10 +439,10 @@ class SegmentsTracker(object):
 				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
 				elem.set_property("emit-signals", True)
 		if verbose:
-			print >>sys.stderr, "... done connecting segment handlers to gates"
+			print("... done connecting segment handlers to gates", file=sys.stderr)
 
 
-	def __gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
+	def __gatehandler(self, elem, timestamp, seg_state_input):
 		"""!
 		A handler that intercepts gate state transitions.
 
@@ -462,8 +462,11 @@ class SegmentsTracker(object):
 		# convert integer nanoseconds to LIGOTimeGPS
 		timestamp = LIGOTimeGPS(0, timestamp)
 
+		# unpack argument tuple:
+		segtype, instrument, new_state = seg_state_input
+
 		if self.verbose:
-			print >>sys.stderr, "%s: %s '%s' state transition: %s @ %s" % ((elem.get_name() if elem is not None else "<internal>"), instrument, segtype, new_state, str(timestamp))
+			print("%s: %s '%s' state transition: %s @ %s".format((elem.get_name() if elem is not None else "<internal>"), instrument, segtype, new_state, str(timestamp)), file= sys.stderr)
 
 		if new_state == "off":
 			# record end of segment
@@ -477,7 +480,8 @@ class SegmentsTracker(object):
 			assert False, "impossible new_state '%s'" % new_state
 
 
-	def gatehandler(self, elem, timestamp, (segtype, instrument, new_state)):
+	def gatehandler(self, elem, timestamp, seg_state_input):
+		segtype, instrument, new_state = seg_state_input
 		with self.lock:
 			self.__gatehandler(elem, timestamp, (segtype, instrument, new_state))
 
@@ -1172,7 +1176,7 @@ class Handler(simplehandler.Handler):
 			self._record_horizon_distance(instrument, timestamp, horizon_distance)
 
 
-	def horizgatehandler(self, elem, timestamp, (instrument, new_state)):
+	def horizgatehandler(self, elem, timestamp, instrument_tpl):
 		"""!
 		A handler that intercepts h(t) gate state transitions to 0
 		horizon distances.
@@ -1216,6 +1220,7 @@ class Handler(simplehandler.Handler):
 		# intervals.
 
 		timestamp = float(LIGOTimeGPS(0, timestamp))
+		instrument, new_state = instrument_tpl
 
 		if self.verbose:
 			print >>sys.stderr, "%s: %s horizon distance state transition: %s @ %s" % (elem.get_name(), instrument, ("on" if new_state else "off"), str(timestamp))

@@ -111,5 +111,5 @@ def plot_segments_history(seglistdicts, segments_to_plot = ['trigger buffers', '
 	try:
 		fig.tight_layout(pad = .8)
 		return fig, axes
-        except AttributeError:
+	except AttributeError:
                 return fig, axes

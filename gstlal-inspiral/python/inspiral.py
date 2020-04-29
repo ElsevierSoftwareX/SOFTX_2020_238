@@ -896,7 +896,7 @@ class GracedBWrapper(object):
 					try:
 						resp = self.gracedb_client.createEvent(self.group, self.pipeline, filename, filecontents = message.getvalue(), search = self.search, label = self.label)
 					except gracedb.rest.HTTPError as resp:
-						print resp
+						print(resp)
 					else:
 						resp_json = resp.json()
 						if resp.status == httplib.CREATED:

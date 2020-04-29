@@ -24,7 +24,7 @@ Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalinspiral >= @MIN_LALINSPIRAL_VERSION@
 Requires: lalapps
 Requires: ligo-gracedb >= 1.11
-Requires: python >= @MIN_PYTHON_VERSION@
+Requires: python3 >= @MIN_PYTHON_VERSION@
 Requires: python%{python3_pkgversion}-%{gstreamername}
 Requires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
 Requires: python%{python3_pkgversion}-lalinspiral >= @MIN_LALINSPIRAL_VERSION@
@@ -71,7 +71,14 @@ analysis.
 %package devel
 Summary: Files and documentation needed for compiling gstlal-inspiral based plugins and programs.
 Group: LSC Software/Data Analysis
-Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ gsl-devel
+Requires: gstlal-devel >= @MIN_GSTLAL_VERSION@ 
+Requires: python3-devel >= @MIN_PYTHON_VERSION@ 
+Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ 
+Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ 
+Requires: lal-devel >= @MIN_LAL_VERSION@ 
+Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ 
+Requires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@ 
+Requires: gsl-devel
 %description devel
 This package contains the files needed for building gstlal-inspiral based
 plugins and programs.

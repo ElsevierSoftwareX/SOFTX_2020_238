@@ -88,7 +88,7 @@ try:
 	else:
 		FIR_WHITENER = False
 except KeyError:
-	print sys.stderr, "You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter"
+	print("You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter", file=sys.stderr)
 	raise
 
 #
@@ -609,7 +609,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 	# Check parity of autocorrelation length
 	if autocorrelation_length is not None:
 		if not (autocorrelation_length % 2):
-			raise ValueError, "autocorrelation_length must be odd (got %d)" % autocorrelation_length
+			raise ValueError("autocorrelation_length must be odd (got %d)".format(autocorrelation_length))
 		autocorrelation_bank = numpy.zeros((len(template_table), autocorrelation_length), dtype = "cdouble")
 		autocorrelation_mask = compute_autocorrelation_mask( autocorrelation_bank )
 	else:

@@ -313,7 +313,7 @@ class NearestLeafTree(object):
 	def __repr__(self):
 		return "NearestLeafTree([%s])" % ", ".join("(%g, %g)" % item for item in self.tree)
 
-	def functional_integral(self, (lo, hi), w = lambda f: f):
+	def functional_integral(self, lohi, w = lambda f: f):
 		"""
 		Given the function f(x) = self[x], compute
 
@@ -334,6 +334,8 @@ class NearestLeafTree(object):
 		>>> x.functional_integral((100., 150.), lambda f: f**3)
 		200.0
 		"""
+		lo, hi = lohi
+
 		if not self.tree:
 			raise ValueError("empty tree")
 		if lo < hi:
@@ -371,7 +373,7 @@ class NearestLeafTree(object):
 		result = sum((b_key - a_key) * w(a_val) for (a_key, a_val), (b_key, b_val) in zip(samples[:-1], samples[1:]))
 		return -result if swapped else result
 
-	def weighted_mean(self, (lo, hi), weight = lambda y: 1.):
+	def weighted_mean(self, lohi, weight = lambda y: 1.):
 		"""
 		Given the function f(x) = self[x], compute
 
@@ -398,6 +400,7 @@ class NearestLeafTree(object):
 		>>> x.weighted_mean((100., 150.), lambda x: x**3)
 		2.0
 		"""
+		lo, hi = lohi
 		if not self.tree:
 			raise ValueError("empty tree")
 		if lo > hi:
@@ -502,7 +505,7 @@ class HorizonHistories(dict):
 		"""
 		return dict((key, value.functional_integral(*args, **kwargs)) for key, value in self.items())
 
-	def functional_integral(self, (lo, hi), w = lambda f: max(f.values())):
+	def functional_integral(self, lohi, w = lambda f: max(f.values())):
 		"""
 		Given the function f(x) = self.getdict(x), compute
 
@@ -526,6 +529,7 @@ class HorizonHistories(dict):
 		>>> x["H1"].functional_integral((100., 150.), w = lambda f: f**3)
 		200.0
 		"""
+		lo, hi = lohi
 		if not self or not all(self.values()):
 			raise ValueError("empty tree or no trees")
 		if lo < hi:
