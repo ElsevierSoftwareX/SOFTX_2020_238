@@ -7,8 +7,9 @@ Summary: GSTLAL Burst
 License: GPL
 Group: LSC Software/Data Analysis
 
+# --- package requirements --- #
 Requires: fftw >= 3
-Requires: glue >= @MIN_GLUE_VERSION@
+Requires: python%{python3_pkgversion}-glue >= @MIN_GLUE_VERSION@
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 Requires: gstlal >= @MIN_GSTLAL_VERSION@
 Requires: gstlal-ugly >= @MIN_GSTLAL_UGLY_VERSION@
@@ -16,16 +17,22 @@ Requires: %{gstreamername} >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-good >= @MIN_GSTREAMER_VERSION@
 Requires: gsl
-Requires: h5py
+Requires: orc >= @MIN_ORC_VERSION@
+
+# --- LSCSoft package requirements --- #
 Requires: lal >= @MIN_LAL_VERSION@
 Requires: lalmetaio >= @MIN_LALMETAIO_VERSION@
 Requires: lalburst >= @MIN_LALBURST_VERSION@
-Requires: numpy
-Requires: orc >= @MIN_ORC_VERSION@
-Requires: python >= @MIN_PYTHON_VERSION@
-Requires: python-%{gstreamername}
-Requires: python2-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
+
+# --- python package requirements --- #
+Requires: python3 >= @MIN_PYTHON_VERSION@
+Requires: python%{python3_pkgversion}-%{gstreamername}
+Requires: python%{python3_pkgversion}-ligo-segments >= @MIN_LIGO_SEGMENTS_VERSION@
+Requires: h5py
 Requires: scipy
+Requires: numpy
+
+# -- build requirements --- #
 BuildRequires: fftw-devel >= 3
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 BuildRequires: graphviz
@@ -38,8 +45,8 @@ BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
 BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
-BuildRequires: python-devel >= @MIN_PYTHON_VERSION@
-BuildRequires: python2-lal >= @MIN_LAL_VERSION@
+BuildRequires: python3-devel >= @MIN_PYTHON_VERSION@
+BuildRequires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
 Conflicts: gstlal-ugly < 0.6.0
 Source: @PACKAGE_NAME@-%{version}.tar.gz
 URL: https://www.lsc-group.phys.uwm.edu/daswg/projects/gstlal.html
@@ -54,7 +61,7 @@ Group: LSC Software/Data Analysis
 Requires: %{name} = %{version} 
 Requires: gstlal-devel >= @MIN_GSTLAL_VERSION@
 Requires: gstlal-ugly-devel >= @MIN_GSTLAL_UGLY_VERSION@
-Requires: python-devel >= @MIN_PYTHON_VERSION@ 
+Requires: python3-devel >= @MIN_PYTHON_VERSION@ 
 Requires: fftw-devel >= 3 
 Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ 

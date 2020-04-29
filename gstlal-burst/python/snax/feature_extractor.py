@@ -166,7 +166,7 @@ class MultiChannelHandler(simplehandler.Handler):
 					waveform = self.waveform_type
 				)
 			else:
-				raise KeyError, 'not a valid feature mode option'
+				raise KeyError('not a valid feature mode option')
 
 		elif self.save_format == 'kafka':
 			check_kafka()

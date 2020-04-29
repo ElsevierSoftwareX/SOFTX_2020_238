@@ -233,7 +233,8 @@ def group_indices(indices):
 	"""
 	Given a list of indices, groups up indices into contiguous groups.
 	"""
-	for k, group in itertools.groupby(enumerate(indices), lambda (i,x):i-x):
+	#FIXME: confirm this lambda works
+	for k, group in itertools.groupby(enumerate(indices), lambda i :i[0]-i[1]):
 		yield map(operator.itemgetter(1), group)
 
 
