@@ -156,7 +156,10 @@ norm = numpy.sum(prob.values())
 chirpmasses = numpy.array([mchirps[tid] for tid in ids])
 coefficients = numpy.zeros((1, 1, len(ids)+1), dtype=float)
 for idx, tid in enumerate(ids):
-	coefficients[0,0,idx] = numpy.log(prob[tid]) - numpy.log(norm)
+        if options.model == "uniform-template":
+                coefficients[0,0,idx] = numpy.log(prob[tid])
+        else:
+                coefficients[0,0,idx] = numpy.log(prob[tid]) - numpy.log(norm)
 
 #import matplotlib
 #matplotlib.use('agg')
