@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Example gst-python applicaiton for trying out new ideas
 """

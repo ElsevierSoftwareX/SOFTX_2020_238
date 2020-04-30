@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 __author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
 __description__ = "a module for storing event processing utilities"

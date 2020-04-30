@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # This example print out the different upsampling responses of test sine waves. 
 

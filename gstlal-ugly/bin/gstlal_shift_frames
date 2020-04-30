@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # This is just a simplified version of gstlal_inj_frames, written by
 # Laleh and Chris. The only real difference is that here we:
 # (1) Do NOT do any injections (and uploads to SimDb);

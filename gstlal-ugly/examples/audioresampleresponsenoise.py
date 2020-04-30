@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from gstlal.pipeutil import *
 import gstlal.pipeio as pipeio

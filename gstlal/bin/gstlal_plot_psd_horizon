@@ -33,7 +33,7 @@ from gstlal import plotutil
 from gstlal import reference_psd
 
 if len(sys.argv) < 3:
-	print "USAGE gstlal_plot_psd output_name psd_file1 psd_file2 ..."
+	print("USAGE gstlal_plot_psd output_name psd_file1 psd_file2 ...")
 	sys.exit()
 
 outname = sys.argv[1]

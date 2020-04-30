@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 import itertools
 import numpy, math
 from ligo.lw import ligolw

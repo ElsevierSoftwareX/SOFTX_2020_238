@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from glue.ligolw import lsctables
 from glue.ligolw import utils

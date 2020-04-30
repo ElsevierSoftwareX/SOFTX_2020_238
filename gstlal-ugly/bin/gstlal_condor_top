@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2017 Duncan Meacher, Alexander Pace
 #
@@ -35,24 +35,24 @@ class color:
    END       = '\033[0m'
 
 def parse_command_line():
-	parser = OptionParser(description = __doc__)
-	parser.add_option("-u", "--username", help = "User name.")
-	parser.add_option("-s", "--sampler", default = "top", help = "Choose sampling program to use (top or ps), default = top")
-	parser.add_option("-c", "--cpu-limit", metavar = "value", type = "float", default = 1.0, help = "cpu% to recheck jobs below")
+        parser = OptionParser(description = __doc__)
+        parser.add_option("-u", "--username", help = "User name.")
+        parser.add_option("-s", "--sampler", default = "top", help = "Choose sampling program to use (top or ps), default = top")
+        parser.add_option("-c", "--cpu-limit", metavar = "value", type = "float", default = 1.0, help = "cpu% to recheck jobs below")
 
-	options, filenames = parser.parse_args()
+        options, filenames = parser.parse_args()
 
-	if options.username is None:
-		options.username = pwd.getpwuid(os.getuid()).pw_name
+        if options.username is None:
+                options.username = pwd.getpwuid(os.getuid()).pw_name
 
-	if options.sampler is None:
-		options.sampler = 'top'
-	
-	if options.sampler not in ['top','ps']:
-		print "Invalid sampler. Please specify either top or ps."
-		exit()
+        if options.sampler is None:
+                options.sampler = 'top'
+        
+        if options.sampler not in ['top','ps']:
+                print("Invalid sampler. Please specify either top or ps.")
+                exit()
 
-	return options, filenames
+        return options, filenames
 
 options, filenames = parse_command_line()
 
@@ -76,98 +76,97 @@ queue = {}
 # If an item in the output from condor_q contains our prefix and the hex
 # regular expression, then add it to the results list. 
 for pre in prefixes:
-	results.extend([line for line in cq_out if re.search(pre+'[0-9A-F]',line) is not None])
+        results.extend([line for line in cq_out if re.search(pre+'[0-9A-F]',line) is not None])
 for line in results:
-	split_list = line.split()
-	job_name, condor_id, job_status = split_list[1][2:], split_list[0], split_list[5]
-	queue[condor_id] = [job_name, condor_id, job_status, None, None, None]
+        split_list = line.split()
+        job_name, condor_id, job_status = split_list[1][2:], split_list[0], split_list[5]
+        queue[condor_id] = [job_name, condor_id, job_status, None, None, None]
 
 # Check to see is any matches
 if not results:
-	print color.YELLOW + "No matches found in condor_q" + color.END
-	exit()
+        print(color.YELLOW + "No matches found in condor_q" + color.END)
+        exit()
 else:
-	print color.BOLD + "".join("job_name".ljust(col_width))+ \
-	      "".join("condor_id".ljust(18))+"pid\tcpu%\tmem%" + color.END
+        print(color.BOLD + "".join("job_name".ljust(col_width))+ \
+              "".join("condor_id".ljust(18))+"pid\tcpu%\tmem%" + color.END)
 
+def process_result(input_tuple, options = options):
+        job_name, condor_id, job_status = input_tuple
+        if job_status == "R":
+                # Put together the command string for condor_ssh_to job. Note that the 
+                # quotes and slashes are key for the correct command to get evaluated by
+                # the interpreter:
 
-def process_result((job_name, condor_id, job_status), options = options):
+                if options.sampler == 'top':
+                        sample_command = """ "top b -n 1 -p \\${_CONDOR_JOB_PIDS}" """
 
-	if job_status == "R":
-		# Put together the command string for condor_ssh_to job. Note that the 
-		# quotes and slashes are key for the correct command to get evaluated by
-		# the interpreter:
+                if options.sampler == 'ps':
+                        sample_command = ' "ps u -p \\${_CONDOR_JOB_PIDS}"'
 
-		if options.sampler == 'top':
-			sample_command = """ "top b -n 1 -p \\${_CONDOR_JOB_PIDS}" """
+                condor_ssh_command = 'condor_ssh_to_job ' + \
+                                     condor_id + \
+                                     sample_command
 
-		if options.sampler == 'ps':
-			sample_command = ' "ps u -p \\${_CONDOR_JOB_PIDS}"'
+                cstj_err = None
+                try:
+                        cstj_output = subprocess.check_output(condor_ssh_command, shell = True)
+                except subprocess.CalledProcessError as e:
+                        print(e)
+                        return (job_name, condor_id, "U", "--",  "--", "--")
 
-		condor_ssh_command = 'condor_ssh_to_job ' + \
-				     condor_id + \
-				     sample_command
+                # Collect output. The syntax should be apparent from looking at which 
+                # line is being collected and which column is being pulled after the
+                # split().
 
-		cstj_err = None
-		try:
-			cstj_output = subprocess.check_output(condor_ssh_command, shell = True)
-		except subprocess.CalledProcessError as e:
-			print e
-			return (job_name, condor_id, "U", "--",  "--", "--")
+                if options.sampler == 'top':
+                        try:
+                                cstj_output = cstj_output.splitlines()[-1].split()
+                        except IndexError:
+                                return (job_name, condor_id, "U", "--", "--", "--")
+                        pid = cstj_output[0]
+                        cpu = cstj_output[8]
+                        mem = cstj_output[9]
+                if options.sampler == 'ps':
+                        cstj_output = cstj_output.splitlines()[1].split()
+                        pid = cstj_output[1]
+                        cpu = cstj_output[2]
+                        mem = cstj_output[3]
 
-		# Collect output. The syntax should be apparent from looking at which 
-		# line is being collected and which column is being pulled after the
-		# split().
+                return (job_name, condor_id, job_status, pid, cpu, mem)
 
-		if options.sampler == 'top':
-			try:
-				cstj_output = cstj_output.splitlines()[-1].split()
-			except IndexError:
-				return (job_name, condor_id, "U", "--", "--", "--")
-			pid = cstj_output[0]
-			cpu = cstj_output[8]
-			mem = cstj_output[9]
-		if options.sampler == 'ps':
-			cstj_output = cstj_output.splitlines()[1].split()
-			pid = cstj_output[1]
-			cpu = cstj_output[2]
-			mem = cstj_output[3]
-
-		return (job_name, condor_id, job_status, pid, cpu, mem)
-
-	elif job_status == "H":
-		return (job_name, condor_id, "H", "--", "--", "--")
-	elif job_status == "I":
-		return (job_name, condor_id, "I", "--", "--", "--")
-	else:
-		return (job_name, condor_id, job_status, "--", "--", "--")
-		#raise ValueError(job_status)
+        elif job_status == "H":
+                return (job_name, condor_id, "H", "--", "--", "--")
+        elif job_status == "I":
+                return (job_name, condor_id, "I", "--", "--", "--")
+        else:
+                return (job_name, condor_id, job_status, "--", "--", "--")
+                #raise ValueError(job_status)
 
 if __name__ == '__main__':
 
-	# Loop over all jobs
-	pool = multiprocessing.Pool(100)
-	recheck = {}
-	for r in sorted(pool.map(process_result, [(v[0], v[1], v[2]) for v in queue.values()]), key = lambda x: x[3] if x else 0):
-		job_name, condor_id, job_status, pid, cpu, mem = r
-		queue[condor_id] = [job_name, condor_id, job_status, pid, cpu, mem]
-		try:
-			if float(cpu) < options.cpu_limit:
-				recheck[condor_id] = [job_name, condor_id, job_status, pid, cpu, mem]
-		except ValueError:
-			pass
+        # Loop over all jobs
+        pool = multiprocessing.Pool(100)
+        recheck = {}
+        for r in sorted(pool.map(process_result, [(v[0], v[1], v[2]) for v in queue.values()]), key = lambda x: x[3] if x else 0):
+                job_name, condor_id, job_status, pid, cpu, mem = r
+                queue[condor_id] = [job_name, condor_id, job_status, pid, cpu, mem]
+                try:
+                        if float(cpu) < options.cpu_limit:
+                                recheck[condor_id] = [job_name, condor_id, job_status, pid, cpu, mem]
+                except ValueError:
+                        pass
 
-	# check one more time for jobs with cpu less than the limit
-	for r in sorted(map(process_result, [(v[0], v[1], v[2]) for v in recheck.values()]), key = lambda x: float(x[3]) if x and x[3] != "--" else 0):
-		job_name, condor_id, job_status, pid, cpu, mem = r
-		queue[condor_id] = [job_name, condor_id, job_status, pid, cpu, mem]
+        # check one more time for jobs with cpu less than the limit
+        for r in sorted(map(process_result, [(v[0], v[1], v[2]) for v in recheck.values()]), key = lambda x: float(x[3]) if x and x[3] != "--" else 0):
+                job_name, condor_id, job_status, pid, cpu, mem = r
+                queue[condor_id] = [job_name, condor_id, job_status, pid, cpu, mem]
 
-	for r in sorted(queue.values(), key = lambda x: x[4] if x else 0, reverse=True):
-		job_name, condor_id, job_status, pid, cpu, mem = r
-		try:
-			if float(cpu) < options.cpu_limit:
-				print color.RED + "%s%s\t%s\t%s\t%s" % (job_name.ljust(col_width), condor_id.ljust(18), job_status, cpu, mem) + color.END
-			else:
-				print color.GREEN + "%s%s\t%s\t%s\t%s" % (job_name.ljust(col_width), condor_id.ljust(18), job_status, cpu, mem) + color.END
-		except ValueError:
-			print "%s%s\t%s\t%s\t%s" % (job_name.ljust(col_width), condor_id.ljust(18), job_status, cpu, mem)
+        for r in sorted(queue.values(), key = lambda x: x[4] if x else 0, reverse=True):
+                job_name, condor_id, job_status, pid, cpu, mem = r
+                try:
+                        if float(cpu) < options.cpu_limit:
+                                print(color.RED + "%s%s\t%s\t%s\t%s" % (job_name.ljust(col_width), condor_id.ljust(18), job_status, cpu, mem) + color.END)
+                        else:
+                                print(color.GREEN + "%s%s\t%s\t%s\t%s" % (job_name.ljust(col_width), condor_id.ljust(18), job_status, cpu, mem) + color.END)
+                except ValueError:
+                        print("%s%s\t%s\t%s\t%s" % (job_name.ljust(col_width), condor_id.ljust(18), job_status, cpu, mem))

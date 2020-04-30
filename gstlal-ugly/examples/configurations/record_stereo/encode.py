@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 
 Encode whitened, bandpassed h(t) from H1 and L1 as a stereo .wav file.
