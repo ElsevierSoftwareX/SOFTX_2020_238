@@ -65,10 +65,10 @@ def parse_command_line():
 	required_options = ["gps_start_time", "gps_end_time", "time_slide_instruments"]
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+		raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options)))
 
 	if len(filenames) != 1:
-		raise ValueError, "must provide exactly 1 output filename"
+		raise ValueError("must provide exactly 1 output filename")
 
 	options.start_time = LIGOTimeGPS(options.gps_start_time)
 	options.end_time = LIGOTimeGPS(options.gps_end_time)
@@ -92,7 +92,7 @@ def uniform_log(a, b):
 
 def power_law(a, b, n):
 	if n == -1:
-		raise ValueError, "requires n != -1"
+		raise ValueError("requires n != -1")
 	exponent = 1.0 / (n + 1.0)
 	return random.uniform(a**(1.0 / exponent), b**(1.0 / exponent))**exponent
 

@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#!/usr/bin/env python3
 # Copyright (C) 2015  Surabhi Sachdev, Tjonnie Li
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -54,7 +54,7 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 
 	if len(filenames)!=1:
-		raise ValueError, "Provide one injection file"
+		raise ValueError("Provide one injection file")
 
 	return options, filenames
 

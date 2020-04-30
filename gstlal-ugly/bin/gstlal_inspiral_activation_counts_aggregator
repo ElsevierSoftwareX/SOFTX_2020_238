@@ -24,8 +24,8 @@ class AcCounts(object):
 						self.counts[binnum][name] += float(count)
 					except:
 						self.counts[binnum][name] = float(count)
-		except ValueError, IOError:
-			print "%s could not be processed" % fname
+		except ValueError as IOError:
+			print("%s could not be processed" % fname)
 			raise
 
 	def __str__(self):

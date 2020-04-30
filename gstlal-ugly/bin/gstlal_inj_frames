@@ -190,7 +190,7 @@ sim_inspiral_table.sort(key = lambda row: -row.get_end())
 
 for i in range(0, len(sim_inspiral_table)-11):
     if sim_inspiral_table[i].get_end() < sim_inspiral_table[i+10].get_end() + lsctables.LIGOTimeGPS(60.0):
-        print "There are more than 10 injections per minute."
+        print("There are more than 10 injections per minute.")
         sys.exit(-1)
 
 #######################################################
@@ -208,7 +208,7 @@ class GraceDBThread ( threading.Thread ):
         threading.Thread.__init__ ( self )
     def run ( self ):
        # This follows the code at the end of ligo.lw.utils.process
-        print 'Notifying GraceDB now'
+        print('Notifying GraceDB now')
        # Create an empty XML document to send to GraceDB
         xmldoc = ligolw.Document()
         xmldoc.appendChild(ligolw.LIGO_LW())
@@ -224,15 +224,15 @@ class GraceDBThread ( threading.Thread ):
         fake_file = StringIO.StringIO()
         xmldoc.write(fake_file)
        # fake_file.write("Hello world.")
-        print "fake_file: [", fake_file.getvalue(), "]"
-        print "Talking to GraceDB"
+        print("fake_file: [", fake_file.getvalue(), "]")
+        print("Talking to GraceDB")
         gracedb = GraceDb(options.gracedb_server)
         try:
             r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search, instrument = options.instrument, source_channel = options.channel, destination_channel = options.channel_inj)
             #r = gracedb.createEvent(options.group, "HardwareInjection", "gstinjector_inj_tables.xml", filecontents=fake_file.getvalue(), search = options.search)
             rdict = r.json()
             graceid = rdict['graceid']
-            print "Success: GraceID = %s" % graceid
+            print("Success: GraceID = %s" % graceid)
             inst, channel = options.channel.split(":")
             inst_inj, channel_inj = options.channel_inj.split(":")
             try:
@@ -251,11 +251,11 @@ def watch_data(pad, obj, sim_inspiral_table):
         buffer = obj.get_buffer()
         timestamp = lal.LIGOTimeGPS(0, int(buffer.pts))
         duration = lal.LIGOTimeGPS(0, int(buffer.duration))
-        print "current buffer = [%s, %s)" % (timestamp, timestamp + duration)
+        print("current buffer = [%s, %s)" % (timestamp, timestamp + duration))
         while sim_inspiral_table and sim_inspiral_table[-1].get_end() < timestamp + duration:
             sim = sim_inspiral_table.pop()
             if options.upload_to_gracedb is not None:
-                print "upload sim to gracedb" 
+                print("upload sim to gracedb")
                 GraceDBThread(sim).start()
     elif obj.type & Gst.PadProbeType.EVENT_BOTH != 0:
         event = obj.get_event()
@@ -268,7 +268,7 @@ def watch_data(pad, obj, sim_inspiral_table):
             position = segment.position
             # update, rate, format, start, stop, position = obj.parse_new_segment()
             start = lal.LIGOTimeGPS(0, start)
-            print "data starts at %s" % start
+            print("data starts at %s" % start)
             while sim_inspiral_table and sim_inspiral_table[-1].get_end() < start:
                 sim_inspiral_table.pop()
     return True
@@ -292,10 +292,10 @@ if options.write_pipeline is not None and "GST_DEBUG_DUMP_DOT_DIR" in os.environ
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError( "pipeline failed to enter PLAYING state" )
 else:
-        print "set to playing successfully"
+        print("set to playing successfully")
 
 handler = simplehandler.Handler(mainloop, pipeline)
-print 'running mainloop...'
+print('running mainloop...')
 
 try:
     mainloop.run()

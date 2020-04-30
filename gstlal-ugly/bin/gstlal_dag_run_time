@@ -231,9 +231,9 @@ correctKeys = set(jobstartdict.keys()) & set(jobstopdict.keys())
 holdKeys = set(jobstartdict.keys()) & set(jobstopdict.keys()) & set(jobholdstartdict.keys()) & set(jobholdstopdict.keys())
 
 if options.verbose:
-	print "Number of jobs held:", len(jobholdstartdict)
-	print "Number of jobs released:", len(jobholdstopdict)
-	print "Number of these completed:", len(holdKeys)
+	print("Number of jobs held:", len(jobholdstartdict))
+	print("Number of jobs released:", len(jobholdstopdict))
+	print("Number of these completed:", len(holdKeys))
 
 # Calculate each job duration
 duration = {}
@@ -254,10 +254,10 @@ for k,v in holdduration.items():
 
 # print any jobs that takes longer than 24 hours
 if options.verbose:
-	print "Jobs with runtimes > 86400s"
+	print("Jobs with runtimes > 86400s")
 	for k,v in sorted(duration.items()):
 		if v > 86400:
-			print k, v
+			print(k, v)
 	# FIXME Add regular expresion search to match id numbers to split up by job type
 	#print "gstlal_inspiral jobs with runtimes > 86400s"
 	#for k,v in sorted(duration.items()):
@@ -288,12 +288,12 @@ for k, v in jobdurs.items():
 
 # print average and top N job durations for each jobs type
 for k,v in sorted(jobtypes.items()):
-	print "\n", "Job:", k
-	print "Number completed:", len(v)
-	print "Average time to complete:", round(np.mean([x[0] for x in v]),2), "s"
-	print "5 longest running jobs:"
+	print("\n", "Job:", k)
+	print("Number completed:", len(v))
+	print("Average time to complete:", round(np.mean([x[0] for x in v]),2), "s")
+	print("5 longest running jobs:")
 	for s in sorted(v, reverse=True)[:5]:
-		print "\t", s
+		print("\t", s)
 
 if 'gstlal_inspiral' in jobtypes and 'gstlal_inspiral_inj' in jobtypes:
 	gstlal_inspiral_dur = [line[0] for line in jobtypes['gstlal_inspiral']]
