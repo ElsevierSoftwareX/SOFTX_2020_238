@@ -10,7 +10,8 @@ Group: LSC Software/Data Analysis
 # --- package requirements --- #
 Requires: avahi
 Requires: avahi-glib
-Requires: avahi-ui-tools
+# avahi-ui-tools depreciated in 0.7-19, remove if not necessary
+#Requires: avahi-ui-tools
 Requires: fftw >= 3
 Requires: glue >= @MIN_GLUE_VERSION@
 Requires: gobject-introspection >= @MIN_GOBJECT_INTROSPECTION_VERSION@
