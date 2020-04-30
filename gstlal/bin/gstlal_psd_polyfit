@@ -51,7 +51,7 @@ options, filenames = parser.parse_args()
 psds = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(filenames[0], verbose = True, contenthandler = lal.series.PSDContentHandler))
 
 # FIXME Don't assume all psds have same resolution
-psd = psds.values()[0]
+psd = list(psds.values())[0]
 minsample = int(options.low_fit_freq / psd.deltaF)
 maxsample = int(options.high_fit_freq / psd.deltaF)
 
