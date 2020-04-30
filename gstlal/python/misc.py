@@ -63,7 +63,7 @@ def cdf_weighted_chisq_Pinv(A, noncent, dof, var, P, lim, accuracy):
 	while func(hi) < 0:
 		lo = hi
 		hi *= 2
-		print >>sys.stderr, lo, hi
+		print(lo, hi, file=sys.stderr)
 	return optimize.brentq(func, lo, hi, xtol = accuracy * 4)
 
 #

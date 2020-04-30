@@ -91,7 +91,7 @@ options, filenames = parse_command_line()
 
 if options.segments_file.lower().endswith(".sqlite"):
 	if options.verbose:
-		print >>sys.stderr, "reading %s ..." % options.segments_file
+		print("reading %s ..." % options.segments_file, file=sys.stderr)
 	seglists = ligolw_segments.segmenttable_get_by_name(dbtables.get_xml(sqlite3.connect(options.segments_file)), options.segments_name).coalesce()
 else:
 	seglists = ligolw_segments.segmenttable_get_by_name(ligolw_utils.load_filename(options.segments_file, contenthandler = ligolw_segments.LIGOLWContentHandler, verbose = options.verbose), options.segments_name).coalesce()
@@ -99,7 +99,7 @@ else:
 
 for filename in filenames:
 	if options.verbose:
-		print >>sys.stderr, "loading %s ..." % (filename or "stdin")
+		print("loading %s ..." % (filename or "stdin"), file=sys.stderr)
 	for line in open(filename) if filename else sys.stdin:
 		seglists -= CacheEntry(line).segmentlistdict
 
@@ -110,7 +110,7 @@ for filename in filenames:
 
 
 if any(seglists.values()):
-	print >>sys.stderr, "gaps found in cache.  total missing time: %s" % str(abs(seglists))
+	print("gaps found in cache.  total missing time: %s" % str(abs(seglists)), file=sys.stderr)
 	sys.exit(1)
 if options.verbose:
-	print >>sys.stderr, "cache is complete"
+	print("cache is complete", file=sys.stderr)

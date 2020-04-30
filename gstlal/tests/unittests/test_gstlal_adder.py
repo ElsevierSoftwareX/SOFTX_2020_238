@@ -91,9 +91,9 @@ class TestGstLALAdder(unittest.TestCase):
     def setUp(self):
 
         if(self.quiet==False):
-            print
-            print "setUp with bps={0} np-preci={1}".format(self.bits_per_sample, 
-                                                           self.numpy_float_width)
+            print()
+            print("setUp with bps={0} np-preci={1}".format(self.bits_per_sample, 
+                                                           self.numpy_float_width))
 
         self.pipeline = Gst.Pipeline(name="test_gstlal_adder")
         self.mainloop = GObject.MainLoop()
@@ -177,11 +177,11 @@ class TestGstLALAdder(unittest.TestCase):
         self.accu_buf_dut_out += samples
         
         if(self.quiet==False):
-            print "DUT send buffer no.: {0} of size: {1} bytes ; {2} samples ; accu-samples {3}".format( 
+            print("DUT send buffer no.: {0} of size: {1} bytes ; {2} samples ; accu-samples {3}".format( 
                 self.idx_buf_dut_out, 
                 buffer.data.__sizeof__(), 
                 samples,
-                self.accu_buf_dut_out)
+                self.accu_buf_dut_out))
         
         gst_app_buf= np.ndarray( shape= samples,
                                  buffer= buffer.data, 
@@ -313,8 +313,8 @@ class TestGstLALAdder(unittest.TestCase):
         absmax= np.amax(np.absolute(np_diff))
 
         if(self.quiet==False):
-            print 
-            print "maximum of absolute differences from numpy reference add= {0}".format(absmax)
+            print() 
+            print("maximum of absolute differences from numpy reference add= {0}".format(absmax))
             self.failIf(absmax >= 1.8e-8, "OOOPS!")
 
         #display all
@@ -342,8 +342,8 @@ class TestGstLALAdder(unittest.TestCase):
         absmax= np.amax(np.absolute(np_diff))
 
         if(self.quiet==False):
-            print 
-            print "maximum of absolute differences from numpy reference add= {0}".format(absmax)
+            print() 
+            print("maximum of absolute differences from numpy reference add= {0}".format(absmax))
             self.failIf(absmax >= 1.0e-20, "OOOPS!")
 
         #display all

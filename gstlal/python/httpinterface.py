@@ -64,18 +64,18 @@ class HTTPDServer(object):
 		self.httpd_thread.daemon = True
 		self.httpd_thread.start()
 		if self.verbose:
-			print >>sys.stderr, "waiting for http server to start ..."
+			print("waiting for http server to start ...", file=sys.stderr)
 		while self.httpd.port == 0:
 			time.sleep(0.25)
 		self.host = self.httpd.host
 		self.port = self.httpd.port
 		if self.verbose:
-			print >>sys.stderr, "started http server on http://%s:%d" % (self.httpd.host, self.httpd.port)
+			print("started http server on http://%s:%d" % (self.httpd.host, self.httpd.port), file=sys.stderr)
 		return self
 
 	def __exit__(self, exc_type, exc_value, traceback):
 		if self.verbose:
-			print >>sys.stderr, "stopping http server on http://%s:%d ..." % (self.httpd.host, self.httpd.port),
+			print("stopping http server on http://%s:%d ..." % (self.httpd.host, self.httpd.port), file=sys.stderr)
 		try:
 			self.httpd.shutdown()
 		except Exception as e:
@@ -83,12 +83,12 @@ class HTTPDServer(object):
 		else:
 			result = "done"
 		if self.verbose:
-			print >>sys.stderr, result
-			print >>sys.stderr, "killing http server thread ...",
+			print(result, file=sys.stderr)
+			print("killing http server thread ...", file=sys.stderr)
 		# wait 10 seconds, then give up
 		self.httpd_thread.join(10.0)
 		if self.verbose:
-			print >>sys.stderr, "timeout" if self.httpd_thread.is_alive() else "done"
+			print("timeout" if self.httpd_thread.is_alive() else "done", file=sys.stderr)
 
 
 class HTTPServers(list):
@@ -124,7 +124,7 @@ class HTTPServers(list):
 		for (ignored, ignored, ignored, ignored, (host, port)) in socket.getaddrinfo(None, port, socket.AF_INET, socket.SOCK_STREAM, 0, socket.AI_NUMERICHOST | socket.AI_PASSIVE):
 			httpd = HTTPDServer(host, port, bottle_app, verbose = verbose).__enter__()
 			if verbose:
-				print >>sys.stderr, "advertising http server \"%s\" on http://%s:%d ..." % (service_name, httpd.host, httpd.port),
+				print("advertising http server \"%s\" on http://%s:%d ..." % (service_name, httpd.host, httpd.port), file=sys.stderr)
 			if self.service_discovery:
 				service = self.service_publisher.add_service(
 					sname = service_name,
@@ -136,7 +136,7 @@ class HTTPServers(list):
 			else:
 				service = None
 			if verbose:
-				print >>sys.stderr, "done (%s)" % (".".join((service.sname, service.sdomain)) if service else "")
+				print("done (%s)" % (".".join((service.sname, service.sdomain)) if service else ""), file=sys.stderr)
 			self.append((httpd, service))
 		if not self:
 			raise ValueError("unable to start servers%s" % (" on port %d" % port if port != 0 else ""))
@@ -145,19 +145,19 @@ class HTTPServers(list):
 
 	def __del__(self):
 		if self.verbose:
-			print >>sys.stderr, "de-advertising http server(s) ...",
+			print("de-advertising http server(s) ...", file=sys.stderr)
 		try:
 			if self.service_discovery:
 				self.service_publisher.__exit__(None, None, None)
 		except Exception as e:
 			if self.verbose:
-				print >>sys.stderr, "failed: %s" % str(e)
+				print("failed: %s" % str(e), file=sys.stderr)
 		else:
 			if self.verbose:
-				print >>sys.stderr, "done"
+				print("done", file=sys.stderr)
 		while self:
 			try:
 				self.pop()[0].__exit__(None, None, None)
 			except Exception as e:
 				if self.verbose:
-					print >>sys.stderr, "failed: %s" % str(e)
+					print("failed: %s" % str(e), file=sys.stderr)

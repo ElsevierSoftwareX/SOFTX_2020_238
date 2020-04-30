@@ -12,4 +12,4 @@ group_path = server.EntryGroupNew("()")
 group = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, group_path, avahi.DBUS_INTERFACE_ENTRY_GROUP, None)
 
 group_introspection = Gio.DBusProxy.new_sync(bus, Gio.DBusProxyFlags.NONE, None, avahi.DBUS_NAME, group_path, "org.freedesktop.DBus.Introspectable", None)
-print group_introspection.Introspect()
+print(group_introspection.Introspect())

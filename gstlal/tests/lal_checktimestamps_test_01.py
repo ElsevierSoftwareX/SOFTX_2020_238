@@ -76,7 +76,7 @@ class SigHandler(object):
 		signal.signal(signal.SIGINT, self)
 
 	def __call__(self, signum, frame):
-		print "shifting by %d ns" % self.shift
+		print("shifting by %d ns" % self.shift)
 		self.pipeline.get_by_name("shift").set_property("shift", self.shift)
 		self.shift += 1
 

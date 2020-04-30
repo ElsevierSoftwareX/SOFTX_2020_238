@@ -322,10 +322,11 @@ if not os.path.isdir(options.output_path):
 	try:
 		os.makedirs(options.output_path)
 	except:
-		print >> sys.stderr, "Unable to make directory ", options.output_path
+		print("Unable to make directory ", options.output_path, file=sys.stderr)
 		pass
 else:
-	print "Target output directory already exists."
+	print("Target output directory already exists.")
+
 
 ## 10) create frames
 head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.output_channel_name): head}, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file)

@@ -52,7 +52,7 @@ def segmentsrc_test_01(pipeline, name, seg):
 
 	f = open("%s_in.dump" % name, "w")
 	for t in numpy.arange(float(seg[0]), float(seg[1]), 0.25):
-		print >>f, "%g\t%d" % (t, 128 if  t in segs else 0)
+		print("%g\t%d" % (t, 128 if  t in segs else 0), file=f)
 
 	return pipeline
 

@@ -62,7 +62,7 @@ try:
 	else:
 		FIR_WHITENER = False
 except KeyError as e:
-	print >> sys.stderr, "You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter"
+	print("You must set the environment variable GSTLAL_FIR_WHITEN to either 0 or 1.  1 enables causal whitening. 0 is the traditional acausal whitening filter", file=sys.stderr)
 	raise
 
 

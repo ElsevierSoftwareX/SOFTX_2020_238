@@ -349,10 +349,10 @@ if __name__ == "__main__":
 				self.print_msg("removed", sname, stype, sdomain, None, None, None)
 
 			def all_for_now(self):
-				print >>sys.stderr, "All for now\n"
+				print("All for now\n", file=sys.stderr)
 
 			def failure(self, *args):
-				print >>sys.stderr, "failure", args
+				print("failure", args, file=sys.stderr)
 		mainloop = GLib.MainLoop()
 		browser = ServiceBrowser(MyListener())
 		print("Browsing for services.  Press CTRL-C to quit.\n")

@@ -490,7 +490,7 @@ class DAG(object):
 		Example:
 
 		>>> def progress(f, n, done):
-		...	print "reading %s: %d lines\\r" % (f.name, n),
+		...	print("reading %s: %d lines\\r" % (f.name, n)),
 		...	if done:
 		...		print
 		...
@@ -752,9 +752,9 @@ class DAG(object):
 		>>> try:
 		...	dag.check_edges()
 		... except ValueError as e:
-		...	print "edges are broken: %s" % str(e)
+		...	print("edges are broken: %s" % str(e))
 		... else:
-		...	print "all edges are OK"
+		...	print("all edges are OK")
 		...
 		"""
 		nodes = set(self.nodes.values())

@@ -422,7 +422,7 @@ def group_T050017_filename_from_T050017_files(cache_entries, extension, path = N
 		# Files from different bins, thus segments must be same
 		return T050017_filename(observatories, '_'.join([min_bin, max_bin] + description_base), seg, extension, path = path)
 	else:
-		print >>sys.stderr, "ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path)
+		print("ERROR: first and last file of cache file do not match known pattern, cannot name group file under T050017 convention. \nFile 1: %s\nFile 2: %s" % (cache_entries[0].path, cache_entries[-1].path), file=sys.stderr)
 		raise ValueError
 
 

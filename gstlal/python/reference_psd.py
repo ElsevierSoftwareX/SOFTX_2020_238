@@ -146,8 +146,8 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	#
 
 	if verbose:
-		print >>sys.stderr, "measuring PSD in segment %s" % str(gw_data_source_info.seg)
-		print >>sys.stderr, "building pipeline ..."
+		print("measuring PSD in segment %s" % str(gw_data_source_info.seg), file=sys.stderr)
+		print("building pipeline ...", file=sys.stderr)
 	mainloop = GObject.MainLoop()
 	pipeline = Gst.Pipeline(name="psd")
 	handler = PSDHandler(mainloop, pipeline)
@@ -177,17 +177,17 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	#
 
 	if verbose:
-		print >>sys.stderr, "putting pipeline into READY state ..."
+		print("putting pipeline into READY state ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter READY state")
 	if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# FIXME what about nds online?
 		datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
 	if verbose:
-		print >>sys.stderr, "putting pipeline into PLAYING state ..."
+		print("putting pipeline into PLAYING state ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	if verbose:
-		print >>sys.stderr, "running pipeline ..."
+		print("running pipeline ...", file=sys.stderr)
 	mainloop.run()
 
 	#
@@ -195,7 +195,7 @@ def measure_psd(gw_data_source_info, instrument, rate, psd_fft_length = 8, verbo
 	#
 
 	if verbose:
-		print >>sys.stderr, "PSD measurement complete"
+		print("PSD measurement complete", file=sys.stderr)
 	return handler.psd
 
 
@@ -841,7 +841,7 @@ def polyfit(psd, minsample, maxsample, order, verbose = False):
 	data = interp(logf)
 	p = numpy.poly1d(numpy.polyfit(logf, data, order))
 	if verbose:
-		print >> sys.stderr, "\nFit polynomial is: \n\nlog(PSD) = \n", p, "\n\nwhere x = f / f_min\n"
+		print("\nFit polynomial is: \n\nlog(PSD) = \n", p, "\n\nwhere x = f / f_min\n", file=sys.stderr)
 	data = numpy.exp(p(numpy.log(f)))
 	olddata = psd.data.data
 	olddata[minsample:maxsample] = data
