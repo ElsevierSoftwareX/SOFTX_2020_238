@@ -219,9 +219,10 @@ class lal_checktimestamps(GstBase.BaseTransform):
 		expected_offset = self.offset0 + int(round((buf.pts - self.t0) * float(self.units_per_second) / Gst.SECOND))
 		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * Gst.SECOND / float(self.units_per_second)))
 		if buf.offset != expected_offset:
-			print("%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), buf.offset, printable_timestamp(buf.pts), expected_offset, buf.offset - expected_offset), file=sys.stderr)
+			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), buf.offset, printable_timestamp(buf.pts), expected_offset, buf.offset - expected_offset)
 		elif abs(buf.pts - expected_timestamp) > self.timestamp_fuzz:
-			print("%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), printable_timestamp(buf.pts), buf.offset, printable_timestamp(expected_timestamp), buf.pts - expected_timestamp), file=sys.stderr)
+			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), printable_timestamp(buf.pts), buf.offset, printable_timestamp(expected_timestamp), buf.pts - expected_timestamp)
+
 
 	def do_transform_ip(self, buf):
 		if self.t0 is None or gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT):
