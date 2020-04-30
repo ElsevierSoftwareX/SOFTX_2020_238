@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2010--2013  Kipp Cannon, Chad Hanna, Leo Singer
 #
@@ -267,7 +267,7 @@ class HorizonDistance(object):
 		0
 		>>> # compute horizon distance
 		>>> D, (f, model) = horizon_distance(psd)
-		>>> print "%.4g Mpc" % D
+		>>> print("%.4g Mpc" % D)
 		434.7 Mpc
 		>>> # compute distance and spectrum for SNR = 25
 		>>> D, (f, model) = horizon_distance(psd, 25.)

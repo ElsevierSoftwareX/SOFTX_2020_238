@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2018  Kipp Cannon
 #
@@ -85,6 +85,6 @@ for filename in filenames:
 		filename = "%s%s.txt" % (options.prefix, instrument)
 		with open(filename, "w") as f:
 			if options.verbose:
-				print >>sys.stderr, "writing \"%s\" ..." % filename
+                                print("writing \"%s\" ..." % filename, file=sys.stderr)
 			for i, x in enumerate(psd.data.data):
-				print >>f, "%.16g %.16g" % (psd.f0 + i * psd.deltaF, x**.5)
+                                print("%.16g %.16g" % (psd.f0 + i * psd.deltaF, x**.5), file=f)
