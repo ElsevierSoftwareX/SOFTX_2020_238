@@ -17,6 +17,8 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_create_dt_dphi_snr_ratio_pdfs \
 	gstlal_inspiral_create_dt_dphi_snr_ratio_pdfs_dag \
 	gstlal_inspiral_create_p_of_ifos_given_horizon \
+	gstlal_inspiral_create_p_of_ifos_given_horizon_dag \
+	gstlal_inspiral_add_p_of_ifos_given_horizon \
 	gstlal_inspiral_create_prior_diststats \
 	gstlal_inspiral_destagger_injections \
 	gstlal_inspiral_dlrs_diag \

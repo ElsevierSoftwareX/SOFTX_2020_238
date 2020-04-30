@@ -23,8 +23,11 @@ from gstlal.stats import inspiral_extrinsics, inspiral_lr
 parser = argparse.ArgumentParser(description='Generate PDFs of extrinsic parameters')
 parser.add_argument('--snr-thresh', type=float, default = inspiral_lr.LnLRDensity.snr_min, help = 'set the snr minimum to define found')
 parser.add_argument('--output-file', default = 'extparams.h5', help = 'set the output hdf5 file. Default extparams.h5')
-parser.add_argument('--instrument', action = "append", help='add instrument. Can be given multiple times', required = True)
+parser.add_argument('--instruments', type=str, help='add instruments. Separate tham with comma, does not have to be alphabetical.', required = True)
+parser.add_argument('--start', type=int, default = 0, help = 'The first bin index to count')
+parser.add_argument('--stop', type=int, default = None, help = 'The last bin index to count')
 args = parser.parse_args()
 
-PofI = inspiral_extrinsics.p_of_instruments_given_horizons(instruments = args.instrument, snr_thresh = args.snr_thresh)
+instruments = sorted(args.instruments.split(","))
+PofI = inspiral_extrinsics.p_of_instruments_given_horizons(instruments = instruments, snr_thresh = args.snr_thresh, bin_start = args.start, bin_stop = args.stop)
 PofI.to_hdf5(args.output_file)

@@ -18,20 +18,24 @@
 
 import sys
 import numpy
+import h5py
 from gstlal.stats.inspiral_extrinsics import TimePhaseSNR
 
 # Read in and combine all of the input files
-files = sys.argv[1:]
-TPS = TimePhaseSNR.from_hdf5(files[0], files[1:])
+h5_covmat = h5py.File(sys.argv[1])
+kwargs = {"SNR":h5_covmat["SNR"], "psd_fname":h5_covmat["psd"]}
+h5_covmat.close()
+files = sys.argv[2:]
+TPS = TimePhaseSNR.from_hdf5(files[0], files[1:], **kwargs)
 
 # compute the normalization
 time, phase, deff = TimePhaseSNR.tile(NSIDE = 8, NANGLE = 17)
 # This actually doesn't matter it is just needed to map from eff distance to
 # snr, but the TimePhaseSNR code actually undoes this...
-h = {"H1":1., "L1":1., "V1":1.}
+h = {"H1":1., "L1":1., "V1":1., "K1":1.}
 
 # set the norm to 1
-combos = TPS.combos + (("H1",),("L1",),("V1",))
+combos = TPS.combos + (("H1",),("L1",),("V1",),("K1",))
 norm = dict((frozenset(k), 1.) for k in combos)
 TPS.norm = norm
 

@@ -1,0 +1,56 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2019 Leo Tsukdda
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import os
+from gstlal import dagparts
+from gstlal.stats import inspiral_extrinsics, inspiral_lr
+import argparse
+
+parser = argparse.ArgumentParser(description = 'generate a dt dphi covariance matrix and tree data to replace share/inspiral_dtdphi_pdf.h5')
+parser.add_argument('--snr-thresh', type=float, default = inspiral_lr.LnLRDensity.snr_min, help = 'set the snr minimum to define found')
+# parser.add_argument('--output-file', default = 'p_of_instruments_given_H_d.h5', help = 'set the output hdf5 file. Default extparams.h5')
+parser.add_argument('--instruments', type=str, help='add instruments. Separate tham with comma, does not have to be alphabetical.', required = True)
+args = parser.parse_args()
+
+instruments = "".join(sorted(args.instruments.split(",")))
+
+try:
+	os.mkdir("logs")
+except:
+	pass
+dag = dagparts.DAG("p_of_I_%s" % instruments)
+
+margJob = dagparts.DAGJob("gstlal_inspiral_create_p_of_ifos_given_horizon", condor_commands = {"request_memory":"4GB", "want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
+addJob = dagparts.DAGJob("gstlal_inspiral_add_p_of_ifos_given_horizon", condor_commands = {"request_memory":"4GB", "want_graceful_removal":"True", "kill_sig":"15", "accounting_group":"ligo.prod.o3.cbc.uber.gstlaloffline"})
+
+
+num = 41
+margnodes = []
+for start in range(0, 41**(len(instruments) / 2 - 1), num):
+	stop = start + num
+	margnodes.append(dagparts.DAGNode(margJob, dag, parent_nodes = [], opts = {"start":str(start), "stop":str(stop), "instruments": args.instruments}, output_files = {"output-file":"%s/%s_p_of_instruments_given_H_d_%d_%d.h5" % (margJob.output_path, "".join(instruments), start, stop)}))
+
+addJob_input = []
+addJob_input.extend([n.output_files["output-file"] for n in margnodes])
+addnode = dagparts.DAGNode(addJob, dag, parent_nodes = margnodes, opts = {"": args.instruments}, input_files = {"": addJob_input})
+
+dag.write_sub_files()
+dag.write_dag()
+dag.write_script()
+dag.write_cache()
+
