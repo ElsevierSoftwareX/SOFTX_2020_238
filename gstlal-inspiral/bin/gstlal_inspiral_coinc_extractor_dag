@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
 gstlal_inspiral_coinc_extractor_dag --injection-database=path/to/injection/database --zerolag-database=path/to/zerolag/database --tmp-space=path/to/tmp/space --far-threshold=1e-6 --max-number-inspiral-jobs=max_number_inspiral_jobs
 '''

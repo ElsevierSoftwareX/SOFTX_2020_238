@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2009-2014  Kipp Cannon, Chad Hanna, Drew Keppel
 #
@@ -142,9 +142,9 @@ import math
 from optparse import OptionGroup, OptionParser
 import os
 import resource
-import signal
+gnal
 import socket
-import StringIO
+from io import StringIO
 import sys
 import tempfile
 import time
@@ -326,7 +326,7 @@ def parse_command_line():
 		try:
 			svd_banks = map(inspiral.parse_svdbank_string, options.svd_bank)
 		except ValueError as e:
-			print "Unable to parse --svd-bank"
+			print("Unable to parse --svd-bank")
 			raise
 	elif options.svd_bank_cache:
 		svd_banks = []
@@ -498,7 +498,7 @@ def parse_command_line():
 	if options.local_frame_caching:
 		f, fname = tempfile.mkstemp(".cache")
 		if options.verbose:
-			print >> sys.stderr, "caching frame data locally to ", fname
+			print("caching frame data locally to ", fname, file=sys.stderr)
 		f = open(fname, "w")
 		# FIXME:  should try to down-sample if possible.  there are
 		# MDCs data sets floating around whose streams do not start
@@ -519,7 +519,7 @@ def parse_command_line():
 		for cacheentry in detectors.local_cache_list:
 			# Guarantee a lal cache complient file with only integer starts and durations.
 			cacheentry.segment = segments.segment( int(cacheentry.segment[0]), int(math.ceil(cacheentry.segment[1])) )
-			print >>f, str(cacheentry)
+			print(str(cacheentry), file=f)
 		detectors.frame_cache = fname
 
 		# the injections are now present in the data so we don't want to do them twice
@@ -546,17 +546,17 @@ class OneTimeSignalHandler(object):
 	def __call__(self, signum, frame):
 		self.count += 1
 		if self.count == 1:
-			print >>sys.stderr, "*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum
+			print("*** SIG %d attempting graceful shutdown (this might take several minutes) ... ***" % signum, file=sys.stderr)
 			try:
 				#FIXME how do I choose a timestamp?
 				self.pipeline.get_bus().post(lloidhandler.message_new_checkpoint(self.pipeline, timestamp = inspiral.now().ns()))
 				if not self.pipeline.send_event(Gst.Event.new_eos()):
 					raise Exception("pipeline.send_event(EOS) returned failure")
 			except Exception as e:
-				print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
+				print("graceful shutdown failed: %s\naborting." % str(e), file=sys.stderr)
 				os._exit(1)
 		else:
-			print >>sys.stderr, "*** received SIG %d %d times... ***" % (signum, self.count)
+			print("*** received SIG %d %d times... ***" % (signum, self.count), file=sys.stderr)
 
 
 #
@@ -658,7 +658,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		except IOError:
 			# File does not exist or is corrupted, need to
 			# reprocess
-			print >>sys.stderr, "Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_url))
+			print("Checkpoint: {0} of {1} files completed and continuing with {2}".format(output_file_number, len(options.output), os.path.basename(output_url)), file=sys.stderr)
 			pass
 
 
@@ -769,7 +769,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 
 	if options.verbose:
-		print >>sys.stderr, "assembling pipeline ...",
+		print("assembling pipeline ...", file=sys.stderr)
 
 	pipeline = Gst.Pipeline(name="gstlal_inspiral")
 	mainloop = GObject.MainLoop()
@@ -793,7 +793,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 
 	if options.verbose:
-		print >>sys.stderr, "done"
+		print("done", file=sys.stderr)
 
 
 	#
@@ -806,7 +806,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		try:
 			xmldoc = ligolw_utils.load_url(options.ranking_stat_input, verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler)
 		except IOError:
-			print >>sys.stderr, "warning:  '%s' not found or cannot be loaded;  will fall back to newly-initialized ranking statistic" % options.ranking_stat_input
+			print("warning:  '%s' not found or cannot be loaded;  will fall back to newly-initialized ranking statistic" % options.ranking_stat_input, file=sys.stderr)
 		else:
 			rankingstat, _ = far.parse_likelihood_control_doc(xmldoc)
 			if rankingstat is None:
@@ -825,10 +825,10 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 			if options.compress_ranking_stat:
 				if options.verbose:
-					print >> sys.stderr, "compressing ranking stat..."
+					print("compressing ranking stat...", file=sys.stderr)
 				rankingstat.numerator.horizon_history.compress(threshold = options.compress_ranking_stat_threshold)
 				if options.verbose:
-					print >> sys.stderr, "...done."
+					print("...done.", file=sys.stderr)
 
 			xmldoc.unlink()
 			del xmldoc
@@ -843,7 +843,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 
 	if options.verbose:
-		print >>sys.stderr, "initializing pipeline handler ..."
+		print("initializing pipeline handler ...", file=sys.stderr)
 	handler = lloidhandler.Handler(
 		mainloop = mainloop,
 		pipeline = pipeline,
@@ -892,15 +892,15 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		verbose = options.verbose
 	)
 	if options.verbose:
-		print >>sys.stderr, "... pipeline handler initialized"
+		print("... pipeline handler initialized", file=sys.stderr)
 
 	if options.verbose:
-		print >>sys.stderr, "attaching appsinks to pipeline ...",
+		print("attaching appsinks to pipeline ...", file=sys.stderr)
 	appsync = pipeparts.AppSync(appsink_new_buffer = handler.appsink_new_buffer)
 	appsinks = set(appsync.add_sink(pipeline, src, caps = Gst.Caps.from_string("application/x-lal-snglinspiral"), name = "bank_%s_sink" % bank_id) for bank_id, src in triggersrc.items())
 
 	if options.verbose:
-		print >>sys.stderr, "attached %d, done" % len(appsinks)
+		print("attached %d, done" % len(appsinks), file=sys.stderr)
 
 
 	#
@@ -933,12 +933,12 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 
 	if options.verbose:
-		print >>sys.stderr, "setting pipeline state to ready ..."
+		print("setting pipeline state to ready ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.READY) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline did not enter ready state")
 	datasource.pipeline_seek_for_gps(pipeline, *detectors.seg)
 	if options.verbose:
-		print >>sys.stderr, "setting pipeline state to playing ..."
+		print("setting pipeline state to playing ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline did not enter playing state")
 
@@ -946,7 +946,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
 	if options.verbose:
-		print >>sys.stderr, "running pipeline ..."
+		print("running pipeline ...", file=sys.stderr)
 	mainloop.run()
 
 
@@ -966,7 +966,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	for ifo in banks:
 		for bank in banks[ifo]:
 			if options.verbose:
-				print >> sys.stderr, "removing file: ", bank.template_bank_filename
+				print("removing file: ", bank.template_bank_filename, file=sys.stderr)
 			os.remove(bank.template_bank_filename)
 
 
@@ -1002,7 +1002,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 
 if options.local_frame_caching:
 	if options.verbose:
-		print >>sys.stderr, "deleting temporary cache file ", detectors.frame_cache
+		print("deleting temporary cache file ", detectors.frame_cache, file=sys.stderr)
 	os.remove(detectors.frame_cache)
 	del detectors.local_cache_list
 

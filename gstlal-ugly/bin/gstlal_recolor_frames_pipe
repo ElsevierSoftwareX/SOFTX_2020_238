@@ -280,7 +280,7 @@ def parse_command_line():
 	for option in ("segment_file","min_segment_length", "frame_cache", "frame_type"):
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
-	if fail: raise ValueError, fail
+	if fail: raise(ValueError, fail)
 
 	framecache = {}
 	for c in options.frame_cache.split(','):

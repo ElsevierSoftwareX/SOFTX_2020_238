@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2011--2013 Kipp Cannon, Chad Hanna, Drew Keppel
 #
@@ -115,7 +115,7 @@ if rankingstatpdf is None:
 
 
 if options.verbose:
-	print >>sys.stderr, "beginning count of above-threshold events"
+	print("beginning count of above-threshold events", file=sys.stderr)
 
 rankingstatpdf.zero_lag_lr_lnpdf.array[:] = 0.
 
@@ -126,7 +126,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d: %s" % (n, len(options.non_injection_db), filename)
+		print("%d/%d: %s" % (n, len(options.non_injection_db), filename), file=sys.stderr)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
@@ -170,7 +170,7 @@ fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 
 
 if options.verbose:
-	print >>sys.stderr, "assigning FAPs and FARs"
+	print("assigning FAPs and FARs", file=sys.stderr)
 
 for n, filename in enumerate(options.non_injection_db + options.injection_db, start = 1):
 	#
@@ -178,10 +178,10 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d: %s" % (n, len(options.non_injection_db + options.injection_db), filename)
+		print("%d/%d: %s" % (n, len(options.non_injection_db + options.injection_db), filename), file=sys.stderr)
 	if not options.force and sqlite3.connect(filename).cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_compute_far_from_snr_chisq_histograms",)).fetchone()[0]:
 		if options.verbose:
-			print >>sys.stderr, "already processed, skipping"
+			print("already processed, skipping", file=sys.stderr)
 		continue
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
@@ -211,7 +211,7 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
 
 if options.verbose:
-	print >>sys.stderr, "FAP and FAR assignment complete"
+	print("FAP and FAR assignment complete", file=sys.stderr)
 
 
 #
@@ -234,4 +234,4 @@ outname = "post_%s" % options.background_bins_file
 ligolw_utils.write_filename(xmldoc, outname, gz = outname.endswith(".gz"), verbose = options.verbose)
 
 if options.verbose:
-	print >>sys.stderr, "done"
+	print("done", file=sys.stderr)

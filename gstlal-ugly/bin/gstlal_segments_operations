@@ -70,9 +70,9 @@ for segfile in filenames:
 
 if options.verbose:
 	for segfile in filenames:
-		print "\n%s" % segfile
+		print("\n%s" % segfile)
 		for segname, segslist in segsdicts[segfile].items():
-			print "%s live time: %s, two or more detectors on: %f" % (segname, abs(segslist), abs(segmentsUtils.vote(segslist.values(), 2)))
+			print("%s live time: %s, two or more detectors on: %f" % (segname, abs(segslist), abs(segmentsUtils.vote(segslist.values(), 2))))
 
 segslist = []
 for segname in options.segment_name:
@@ -86,9 +86,9 @@ for segname in options.segment_name:
 			segslist[-1] -= segsdicts[segfile][segname]
 
 if options.verbose:
-	print "\nresults"
+	print("\nresults")
 	for i, segs in enumerate(segslist):
-		print "%s live time: %s, two or more detectors on: %f" % (options.output_segment_name[i], abs(segs), abs(segmentsUtils.vote(segs.values(), 2)))
+		print("%s live time: %s, two or more detectors on: %f" % (options.output_segment_name[i], abs(segs), abs(segmentsUtils.vote(segs.values(), 2))))
 
 if options.output_file:
 	xmldoc = ligolw.Document()

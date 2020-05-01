@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from ligo.lw import dbtables
 from ligo.lw import lsctables

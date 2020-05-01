@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2012 Stephen Privitera
 # Copyright (C) 2011-2014 Chad Hanna
@@ -44,7 +44,7 @@ from lal import series
 ###
 ### 1. split up bank file for H1; sort by mchirp; add final frequency and specify a maximum frequency::
 ###
-###	gstlal_bank_splitter --overlap 10 --instrument H1 --n 100 --sort-by mchirp --add-f-final --max-f-final 2048 H1-TMPLTBANK-871147516-2048.xml
+###     gstlal_bank_splitter --overlap 10 --instrument H1 --n 100 --sort-by mchirp --add-f-final --max-f-final 2048 H1-TMPLTBANK-871147516-2048.xml
 ###
 ### 2. Please add more!
 ###
@@ -53,8 +53,8 @@ from lal import series
 ###
 ### Compared original bank with the split banks.  Verified that they are the same, e.g., add sub bank files into test.xml.gz and run (except that lalapps_tmpltbank adds redundant templates)::
 ###
-###	ligolw_print -t sngl_inspiral -c mass1 -c mass2 ../H1-TMPLTBANK-871147516-2048.xml | sort -u | wc
-###	ligolw_print -t sngl_inspiral -c mass1 -c mass2 test.xml.gz | sort -u | wc
+###     ligolw_print -t sngl_inspiral -c mass1 -c mass2 ../H1-TMPLTBANK-871147516-2048.xml | sort -u | wc
+###     ligolw_print -t sngl_inspiral -c mass1 -c mass2 test.xml.gz | sort -u | wc
 ###
 ### +-------------------------------------------------+------------------------------------------+------------+
 ### | Names                                           | Hash                                     |            |
@@ -66,90 +66,90 @@ from lal import series
 ###
 
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
-	pass
+        pass
 lsctables.use_in(LIGOLWContentHandler)
 
 
 def group_templates(templates, n, overlap = 0):
-	"""
-	break up the template table into sub tables of length n with overlap
-	overlap.  n must be less than the number of templates and overlap must be less
-	than n
-	"""
-	if n >= len(templates):
-		yield templates
-	else:
-		n = len(templates) / round(len(templates) / float(n))
-		assert n >= 1
-		for i in itertools.count():
-			start = int(round(i * n)) - overlap // 2
-			end = int(round((i + 1) * n)) + overlap // 2
-			yield templates[max(start, 0):end]
-			if end >= len(templates):
-				break
+        """
+        break up the template table into sub tables of length n with overlap
+        overlap.  n must be less than the number of templates and overlap must be less
+        than n
+        """
+        if n >= len(templates):
+                yield templates
+        else:
+                n = len(templates) / round(len(templates) / float(n))
+                assert n >= 1
+                for i in itertools.count():
+                        start = int(round(i * n)) - overlap // 2
+                        end = int(round((i + 1) * n)) + overlap // 2
+                        yield templates[max(start, 0):end]
+                        if end >= len(templates):
+                                break
 
 def parse_command_line():
-	parser = OptionParser()
-	parser.add_option("--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
-	parser.add_option("--output-full-bank-file", metavar = "path", help = "Set the path to output the bank.")
-	parser.add_option("--output-cache", metavar = "file", help = "Set the file name for the output cache.")
-	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
-	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
-	parser.add_option("--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
-	parser.add_option("--min-f-final", metavar = "float", type="float", help = "Min f_final to populate table with; if f_final under min, use min.")
-	parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over max, use max.")
-	parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
-	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required if sort-by is bandwidth")
-	parser.add_option("--approximant", type = "string", action = "append", help = "Must specify an approximant given as mchirp_min:mchirp_max:string")
-	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff. Required")
-	parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
-	parser.add_option("--write-svd-caches", action = "store_true", help = "output a cache file of cache files, each of which correspond to the banks meant to be in a single SVD bank (disabled by default)")
-	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per SVD bank. can be given as a list like 1,2,3,4 then it will split up the bank into N groups with M banks each. (required if --write-svd-caches invoked)") # FIXME The second half of this help message is incomprehensible
-	options, filenames = parser.parse_args()
+        parser = OptionParser()
+        parser.add_option("--output-path", metavar = "path", default = ".", help = "Set the path to the directory where output files will be written.  Default is \".\".")
+        parser.add_option("--output-full-bank-file", metavar = "path", help = "Set the path to output the bank.")
+        parser.add_option("--output-cache", metavar = "file", help = "Set the file name for the output cache.")
+        parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
+        parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
+        parser.add_option("--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
+        parser.add_option("--min-f-final", metavar = "float", type="float", help = "Min f_final to populate table with; if f_final under min, use min.")
+        parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over max, use max.")
+        parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
+        parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
+        parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required if sort-by is bandwidth")
+        parser.add_option("--approximant", type = "string", action = "append", help = "Must specify an approximant given as mchirp_min:mchirp_max:string")
+        parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff. Required")
+        parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
+        parser.add_option("--write-svd-caches", action = "store_true", help = "output a cache file of cache files, each of which correspond to the banks meant to be in a single SVD bank (disabled by default)")
+        parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per SVD bank. can be given as a list like 1,2,3,4 then it will split up the bank into N groups with M banks each. (required if --write-svd-caches invoked)") # FIXME The second half of this help message is incomprehensible
+        options, filenames = parser.parse_args()
 
-	required_options = ("n", "instrument", "sort_by", "output_cache", "approximant", "f_low")
-	missing_options = [option for option in required_options if getattr(options, option) is None]
-	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
+        required_options = ("n", "instrument", "sort_by", "output_cache", "approximant", "f_low")
+        missing_options = [option for option in required_options if getattr(options, option) is None]
+        if missing_options:
+                raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options))
 
-	if options.write_svd_caches and not options.num_banks:
-		raise ValueError, "missing --num-banks, required if invoking --write-svd-caches"
+        if options.write_svd_caches and not options.num_banks:
+                raise ValueError("missing --num-banks, required if invoking --write-svd-caches")
 
-	if options.overlap % 2:
-		raise ValueError("overlap must be even")
+        if options.overlap % 2:
+                raise ValueError("overlap must be even")
 
-	if len(filenames) !=1:
-		raise ValueError("Must give exactly one file name")
+        if len(filenames) !=1:
+                raise ValueError("Must give exactly one file name")
 
-	if options.sort_by == "bandwidth" and not options.psd_xml:
-		raise ValueError("must specify psd-xml if sort-by is bandwidth")
+        if options.sort_by == "bandwidth" and not options.psd_xml:
+                raise ValueError("must specify psd-xml if sort-by is bandwidth")
 
-	approximants = []
-	for appx in options.approximant:
-		mn, mx, appxstring = appx.split(":")
-		approximants.append((float(mn), float(mx), appxstring))
-	options.approximant = approximants
+        approximants = []
+        for appx in options.approximant:
+                mn, mx, appxstring = appx.split(":")
+                approximants.append((float(mn), float(mx), appxstring))
+        options.approximant = approximants
 
-	if options.num_banks:
-		options.num_banks = [int(v) for v in options.num_banks.split(",")]
+        if options.num_banks:
+                options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
-	# FIXME don't hard code L1
-	if options.psd_xml:
-		psd = series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler))["L1"]
-		f = numpy.arange(len(psd.data.data)) * psd.deltaF
-		psd = scipy.interpolate.interp1d(f, psd.data.data)
-	else:
-		psd = None
-	return options, filenames[0], psd
+        # FIXME don't hard code L1
+        if options.psd_xml:
+                psd = series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler))["L1"]
+                f = numpy.arange(len(psd.data.data)) * psd.deltaF
+                psd = scipy.interpolate.interp1d(f, psd.data.data)
+        else:
+                psd = None
+        return options, filenames[0], psd
 
 options, filename, psd = parse_command_line()
 
 def assign_approximant(mchirp, approximants = options.approximant):
-	for lo, hi, appx in approximants:
-		if lo <= mchirp < hi:
-			return appx
-	raise ValueError("Valid approximant not given for this chirp mass")
+        for lo, hi, appx in approximants:
+                if lo <= mchirp < hi:
+                        return appx
+        raise ValueError("Valid approximant not given for this chirp mass")
 
 
 outputrows = []
@@ -158,107 +158,108 @@ xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, content
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 # Add a fake bandwidth column
 if options.sort_by == "bandwidth":
-	for count, row in enumerate(sngl_inspiral_table):
-		# FIXME don't hard code
-		row.bandwidth = templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
-		print count, len(sngl_inspiral_table), row.bandwidth
+        for count, row in enumerate(sngl_inspiral_table):
+                # FIXME don't hard code
+                row.bandwidth = templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
+                print(count, len(sngl_inspiral_table), row.bandwidth)
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
 if options.output_full_bank_file is not None:
-	ligolw_utils.write_filename(xmldoc, options.output_full_bank_file, gz = options.output_full_bank_file.endswith('gz'), verbose = options.verbose)
+        ligolw_utils.write_filename(xmldoc, options.output_full_bank_file, gz = options.output_full_bank_file.endswith('gz'), verbose = options.verbose)
 
 # Bin by Chi
 sngl_inspiral_table.sort(key = lambda row: spawaveform.computechi(row.mass1, row.mass2, row.spin1z, row.spin2z))
 for chirows in group_templates(sngl_inspiral_table, len(sngl_inspiral_table) / options.group_by_chi, overlap = 0):
 
-	def sort_func(row, column = options.sort_by):
-		return getattr(row, column)
+        def sort_func(row, column = options.sort_by):
+                return getattr(row, column)
 
-	chirows.sort(key=sort_func, reverse = True if options.sort_by == "template_duration" else False)
+        chirows.sort(key=sort_func, reverse = True if options.sort_by == "template_duration" else False)
 
-	for numrow, rows in enumerate(group_templates(chirows, options.n, options.overlap)):
-		assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
-		# Pad the first group with an extra overlap / 2 templates
-		if numrow == 0:
-			rows = rows[:options.overlap/2] + rows
-		outputrows.append((rows[0], rows))
-	# Pad the last group with an extra overlap / 2 templates
-	outputrows[-1] = (rows[0], rows + rows[-options.overlap/2:])
+        for numrow, rows in enumerate(group_templates(chirows, options.n, options.overlap)):
+                assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
+                # Pad the first group with an extra overlap / 2 templates
+                if numrow == 0:
+                        rows = rows[:options.overlap/2] + rows
+                outputrows.append((rows[0], rows))
+        # Pad the last group with an extra overlap / 2 templates
+        outputrows[-1] = (rows[0], rows + rows[-options.overlap/2:])
 
 # A sort of the groups of templates so that the sub banks are ordered.
-def sort_func((row, rows), column = options.sort_by):
-	return getattr(row, column)
+def sort_func(input_tuple, column = options.sort_by):
+        row, rows = input_tuple
+        return getattr(row, column)
 
 outputrows.sort(key=sort_func, reverse = True if options.sort_by == "template_duration" else False)
 svd_caches = []
 
 with open(options.output_cache, "w") as output_cache_file:
 
-	for bank_count, (_, rows) in enumerate(outputrows):
-		# just choose the first row to get mchirp
-		# FIXME this could certainly be better
-		approximant = assign_approximant(rows[0].mchirp)
+        for bank_count, (_, rows) in enumerate(outputrows):
+                # just choose the first row to get mchirp
+                # FIXME this could certainly be better
+                approximant = assign_approximant(rows[0].mchirp)
 
-		# Make an output document
-		xmldoc = ligolw.Document()
-		lw = xmldoc.appendChild(ligolw.LIGO_LW())
-		sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable)
-		lw.appendChild(sngl_inspiral_table)
-		# Override the approximant
-		options.approximant = approximant
-		# store the process params
-		process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
+                # Make an output document
+                xmldoc = ligolw.Document()
+                lw = xmldoc.appendChild(ligolw.LIGO_LW())
+                sngl_inspiral_table = lsctables.New(lsctables.SnglInspiralTable)
+                lw.appendChild(sngl_inspiral_table)
+                # Override the approximant
+                options.approximant = approximant
+                # store the process params
+                process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
 
-		for row in rows:
-			# Chirptime uses SI
-			m1_SI, m2_SI = lal.MSUN_SI * row.mass1, lal.MSUN_SI * row.mass2
-			# Find the total spin magnitudes
-			spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
+                for row in rows:
+                        # Chirptime uses SI
+                        m1_SI, m2_SI = lal.MSUN_SI * row.mass1, lal.MSUN_SI * row.mass2
+                        # Find the total spin magnitudes
+                        spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
 
-			if approximant in templates.gstlal_IMR_approximants:
-				# make sure to go a factor of 2 above the ringdown frequency for safety
-				row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
-			else:
-				# otherwise choose a suitable high frequency
-				# NOTE not SI
-				row.f_final = spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')
+                        if approximant in templates.gstlal_IMR_approximants:
+                                # make sure to go a factor of 2 above the ringdown frequency for safety
+                                row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
+                        else:
+                                # otherwise choose a suitable high frequency
+                                # NOTE not SI
+                                row.f_final = spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')
 
-			# Override the high frequency with the max if appropriate
-			if options.max_f_final and (row.f_final > options.max_f_final):
-				row.f_final = options.max_f_final
-			# Override the high frequency with the min if appropriate
-			if options.min_f_final and (row.f_final < options.min_f_final):
-				row.f_final = options.min_f_final
-			row.process_id = process.process_id
+                        # Override the high frequency with the max if appropriate
+                        if options.max_f_final and (row.f_final > options.max_f_final):
+                                row.f_final = options.max_f_final
+                        # Override the high frequency with the min if appropriate
+                        if options.min_f_final and (row.f_final < options.min_f_final):
+                                row.f_final = options.min_f_final
+                        row.process_id = process.process_id
 
 
-			# Record the conservative template duration
-			row.template_duration = chirptime.imr_time(options.f_low, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
+                        # Record the conservative template duration
+                        row.template_duration = chirptime.imr_time(options.f_low, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
 
-			# Make sure ifo and total mass is stored
-			row.ifo = options.instrument
-			row.mtotal = row.mass1 + row.mass2
+                        # Make sure ifo and total mass is stored
+                        row.ifo = options.instrument
+                        row.mtotal = row.mass1 + row.mass2
 
-		sngl_inspiral_table[:] = rows
-		output = dagparts.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
-		if not options.write_svd_caches:
-			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
-		else:
-			svd_caches.append((bank_count, "%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output))))
-		ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
+                sngl_inspiral_table[:] = rows
+                output = dagparts.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
+                if not options.write_svd_caches:
+                        output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
+                else:
+                        svd_caches.append((bank_count, "%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output))))
+                ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
-	if options.write_svd_caches:
-		cache_path = os.path.join(options.output_path, "cache")
-		try:
-			os.mkdir(cache_path)
-		except OSError:
-			# cache directory already exists
-			pass
+        if options.write_svd_caches:
+                cache_path = os.path.join(options.output_path, "cache")
+                try:
+                        os.mkdir(cache_path)
+                except OSError:
+                        # cache directory already exists
+                        pass
 
-		for svd_cache_group in inspiral_pipe.group(svd_caches, options.num_banks):
-			output = dagparts.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), (0, 0), ".cache", path = cache_path)
-			with open(output, 'w') as svd_cache:
-				for bank_count, split_bank_cache_entry in svd_cache_group:
-					svd_cache.write(split_bank_cache_entry)
+                for svd_cache_group in inspiral_pipe.group(svd_caches, options.num_banks):
+                        output = dagparts.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), (0, 0), ".cache", path = cache_path)
+                        with open(output, 'w') as svd_cache:
+                                for bank_count, split_bank_cache_entry in svd_cache_group:
+                                        svd_cache.write(split_bank_cache_entry)
 
-			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
+                        output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))

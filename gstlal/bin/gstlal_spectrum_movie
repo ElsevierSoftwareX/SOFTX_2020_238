@@ -54,27 +54,27 @@ from ligo import segments
 
 
 def parse_command_line():
-	parser = OptionParser(
-		description = "%prog generates an animated view of the PSD measured from h(t).  The video can be shown on the screen or saved to a OGG Theora movie file.  Example:\n\n%prog \\\n\t--frame-cache \"/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache\" \\\n\t--instrument \"H1\" \\\n\t--channel-name \"LSC-STRAIN\" \\\n\t--gps-start-time 874100000.0 \\\n\t--gps-end-time 874120000.0 \\\n\t--psd-fft-length 8.0 \\\n\t--psd-zero-pad-length 0.0 \\\n\t--average-length 64.0 \\\n\t--median-samples 3 \\\n\t--frame-rate 10/1 \\\n\t--output spectrum_movie.ogm \\\n\t--verbose"
-	)
-	# generic "source" options
-	datasource.append_options(parser)
-	parser.add_option("--sample-rate", metavar = "Hz", type = "float", default = 8192.0, help = "Downsample the data to this sample rate.  Default = 8192 Hz.")
-	parser.add_option("--psd-fft-length", metavar = "seconds", type = "float", default = 8.0, help = "Set the length of the FFT windows used to measure the PSD (optional).")
-	parser.add_option("--psd-zero-pad-length", metavar = "seconds", type = "float", default = 0.0, help = "Set the length of zero-padding in the FFT windows used to measure the PSD (optional).")
-	parser.add_option("--average-length", metavar = "seconds", type = "float", default = 64.0, help = "Set the time scale for the running mean (optional).  Default = 64.0.")
-	parser.add_option("--median-samples", metavar = "samples", type = "int", default = 5, help = "Set the number of samples in the median history (optional).  Default = 5.")
-	parser.add_option("--f-min", metavar = "Hz", type = "float", default = 10.0, help = "Set the lower bound of the spectrum plot's horizontal axis.  Default = 10.0.")
-	parser.add_option("--f-max", metavar = "Hz", type = "float", default = 4000.0, help = "Set the upper bound of the spectrum plot's horizontal axis.  Default = 4000.0.")
-	parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (optional).  The default is to display the video on screen.")
-	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+        parser = OptionParser(
+                description = "%prog generates an animated view of the PSD measured from h(t).  The video can be shown on the screen or saved to a OGG Theora movie file.  Example:\n\n%prog \\\n\t--frame-cache \"/home/kipp/scratch_local/874100000-20000/cache/874100000-20000.cache\" \\\n\t--instrument \"H1\" \\\n\t--channel-name \"LSC-STRAIN\" \\\n\t--gps-start-time 874100000.0 \\\n\t--gps-end-time 874120000.0 \\\n\t--psd-fft-length 8.0 \\\n\t--psd-zero-pad-length 0.0 \\\n\t--average-length 64.0 \\\n\t--median-samples 3 \\\n\t--frame-rate 10/1 \\\n\t--output spectrum_movie.ogm \\\n\t--verbose"
+        )
+        # generic "source" options
+        datasource.append_options(parser)
+        parser.add_option("--sample-rate", metavar = "Hz", type = "float", default = 8192.0, help = "Downsample the data to this sample rate.  Default = 8192 Hz.")
+        parser.add_option("--psd-fft-length", metavar = "seconds", type = "float", default = 8.0, help = "Set the length of the FFT windows used to measure the PSD (optional).")
+        parser.add_option("--psd-zero-pad-length", metavar = "seconds", type = "float", default = 0.0, help = "Set the length of zero-padding in the FFT windows used to measure the PSD (optional).")
+        parser.add_option("--average-length", metavar = "seconds", type = "float", default = 64.0, help = "Set the time scale for the running mean (optional).  Default = 64.0.")
+        parser.add_option("--median-samples", metavar = "samples", type = "int", default = 5, help = "Set the number of samples in the median history (optional).  Default = 5.")
+        parser.add_option("--f-min", metavar = "Hz", type = "float", default = 10.0, help = "Set the lower bound of the spectrum plot's horizontal axis.  Default = 10.0.")
+        parser.add_option("--f-max", metavar = "Hz", type = "float", default = 4000.0, help = "Set the upper bound of the spectrum plot's horizontal axis.  Default = 4000.0.")
+        parser.add_option("--output", metavar = "filename", help = "Set the name of the movie file to write (optional).  The default is to display the video on screen.")
+        parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
-	options, filenames = parser.parse_args()
+        options, filenames = parser.parse_args()
 
-	if options.f_max <= options.f_min:
-		raise ValueError, "--f-max must be >= --f-min"
+        if options.f_max <= options.f_min:
+                raise ValueError("--f-max must be >= --f-min")
 
-	return options, filenames
+        return options, filenames
 
 
 #
@@ -102,7 +102,7 @@ options, filenames = parse_command_line()
 
 gw_data_source_info = datasource.GWDataSourceInfo(options)
 if len(gw_data_source_info.channel_dict) != 1:
-	raise ValueError("can only specify one channel, one instrument")
+        raise ValueError("can only specify one channel, one instrument")
 instrument, = gw_data_source_info.channel_dict.keys()
 
 
@@ -111,16 +111,17 @@ instrument, = gw_data_source_info.channel_dict.keys()
 #
 
 
-def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_length, average_length, median_samples, (f_min, f_max), verbose = False):
-	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % sample_rate)
-	head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = psd_zero_pad_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
-	pipeparts.mkfakesink(pipeline, head)
-	head = pipeparts.mkqueue(pipeline, head.get_static_pad("mean-psd"), max_size_buffers = 4)
+def build_pipeline(pipeline, head, sample_rate, psd_fft_length, psd_zero_pad_length, average_length, median_samples, input_tuple, verbose = False):
+        f_min, f_max = input_tuple
+        head = pipeparts.mkresample(pipeline, head, quality = 9)
+        head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % sample_rate)
+        head = pipeparts.mkwhiten(pipeline, head, fft_length = psd_fft_length, zero_pad = psd_zero_pad_length, average_samples = int(round(average_length / (psd_fft_length / 2) - 1)), median_samples = median_samples)
+        pipeparts.mkfakesink(pipeline, head)
+        head = pipeparts.mkqueue(pipeline, head.get_static_pad("mean-psd"), max_size_buffers = 4)
 
-	head = pipeparts.mkspectrumplot(pipeline, head, f_min = f_min, f_max = f_max)
-	head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
-	return head
+        head = pipeparts.mkspectrumplot(pipeline, head, f_min = f_min, f_max = f_max)
+        head = pipeparts.mkcapsfilter(pipeline, head, "video/x-raw-rgb, width=768, height=320")
+        return head
 
 
 #
@@ -135,20 +136,20 @@ handler = simplehandler.Handler(mainloop, pipeline)
 
 head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
 head = build_pipeline(
-	pipeline,
-	head,
-	options.sample_rate,
-	options.psd_fft_length,
-	options.psd_zero_pad_length,
-	options.average_length,
-	options.median_samples,
-	(options.f_min, options.f_max),
-	verbose = options.verbose
+        pipeline,
+        head,
+        options.sample_rate,
+        options.psd_fft_length,
+        options.psd_zero_pad_length,
+        options.average_length,
+        options.median_samples,
+        (options.f_min, options.f_max),
+        verbose = options.verbose
 )
 if options.output is not None:
-	pipeparts.mkogmvideosink(pipeline, head, options.output, verbose = options.verbose)
+        pipeparts.mkogmvideosink(pipeline, head, options.output, verbose = options.verbose)
 else:
-	pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
+        pipeparts.mkvideosink(pipeline, pipeparts.mkcolorspace(pipeline, head))
 
 
 #
@@ -157,7 +158,7 @@ else:
 
 
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-	raise RuntimeError("pipeline failed to enter PLAYING state")
+        raise RuntimeError("pipeline failed to enter PLAYING state")
 mainloop.run()
 
 

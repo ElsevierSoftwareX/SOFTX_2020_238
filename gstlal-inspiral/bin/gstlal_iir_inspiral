@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2011  Shaun Hooper, Chad Hanna
 # Copyright (C) 2013-2014 Qi Chu
@@ -218,7 +218,7 @@ def parse_command_line():
 		missing_options += ["--iir-bank"]
 	missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+		raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
 
 	# parse the datasource specific information and do option checking
@@ -238,10 +238,10 @@ def parse_command_line():
 		required_files += [options.veto_segments_file]
 	missing_files = [filename for filename in required_files if not os.path.exists(filename)]
 	if missing_files:
-		raise ValueError, "files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files))
+		raise ValueError("files %s do not exist" % ", ".join("'%s'" % filename for filename in sorted(missing_files)))
 
 	if options.chisq_type not in ["autochisq", "timeslicechisq"]:
-		raise ValueError, "--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type)
+		raise ValueError("--chisq-type must be one of (autochisq|timeslicechisq), given %s" % (options.chisq_type))
 
 	# do this before converting option types
 	process_params = options.__dict__.copy() 
@@ -255,7 +255,7 @@ def parse_command_line():
 
 		missing_options += ["--%s" % option.replace("_", "-") for option in required_options if getattr(options, option) is None]
 		if missing_options:
-			raise ValueError, "missing required option(s) %s" % ", ".join(sorted(missing_options))
+			raise ValueError("missing required option(s) %s" % ", ".join(sorted(missing_options)))
 
 		# make an "infinite" extent segment
 		detectors.seg = segments.segment(LIGOTimeGPS(0), LIGOTimeGPS(2000000000))
@@ -481,7 +481,7 @@ if options.data_source not in ("lvshm", "framexmit"):
 	if options.verbose:
 		print >>sys.stderr, "setting pipeline state to paused ..."
 	if pipeline.set_state(gst.STATE_PAUSED) != gst.STATE_CHANGE_SUCCESS:
-		raise RuntimeError, "pipeline did not enter paused state"
+		raise RuntimeError("pipeline did not enter paused state")
 	httpservers = None
 else:
 	#
@@ -511,7 +511,7 @@ else:
 					self.pipeline.get_bus().post(inspiral.message_new_checkpoint(self.pipeline, timestamp=now().ns()))
 					if not self.pipeline.send_event(gst.event_new_eos()):
 						raise Exception("pipeline.send_event(EOS) returned failure")
-				except Exception, e:
+				except Exception as e:
 					print >>sys.stderr, "graceful shutdown failed: %s\naborting." % str(e)
 					os._exit(1)
 			else:
@@ -526,13 +526,13 @@ else:
 if options.verbose:
 	print >>sys.stderr, "setting pipeline state to playing ..."
 if pipeline.set_state(gst.STATE_PLAYING) != gst.STATE_CHANGE_SUCCESS:
-	raise RuntimeError, "pipeline did not enter playing state"
+	raise RuntimeError("pipeline did not enter playing state")
 
 if options.write_pipeline is not None:
 	pipeparts.write_dump_dot(pipeline, "%s.%s" % (options.write_pipeline, "PLAYING"), verbose = options.verbose)
 
 if options.verbose:
-	print >>sys.stderr, "running pipeline ..."
+	print("running pipeline ...", file=sys.stderr)
 mainloop.run()
 
 

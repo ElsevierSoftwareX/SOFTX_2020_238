@@ -31,7 +31,7 @@ class ContentHandler(ligolw.LIGOLWContentHandler):
 lsctables.use_in(ContentHandler)
 
 
-print>>sys.stdout,"Reading in the template bank..."
+print("Reading in the template bank...", file=sys.stdout)
 tmpdoc = utils.load_filename(sys.argv[1], contenthandler=ContentHandler)
 sngl_inspiral = table.get_table(tmpdoc, lsctables.SnglInspiralTable.tableName)
 

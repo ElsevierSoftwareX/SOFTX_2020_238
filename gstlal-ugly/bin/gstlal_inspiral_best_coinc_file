@@ -29,5 +29,4 @@ for fname in sys.argv[2:]:
 		bestsnr = snr
 		best = fname
 
-print best
-		
+print(best)

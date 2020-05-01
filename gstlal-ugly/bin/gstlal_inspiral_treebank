@@ -199,7 +199,7 @@ if False:#args.mcm2:
 		coord_limits_2[0][0] = max(coord_limits_2[0][0], args.min_mc)
 	if args.max_mc:
 		coord_limits_2[0][1] = min(coord_limits_2[0][1], args.max_mc)
-	print coord_limits_2
+	print(coord_limits_2)
 	bank = Node(HyperCube(numpy.array(coord_limits_2), mismatch, constraint_func = lambda x: tree.mass_sym_constraint_mc(x, args.max_q, args.max_mtotal, coord_limits[0], coord_limits[1], coord_limits_2[0]), metric = g_ij))
 else:
 	coord_limits_2 = coord_limits
@@ -207,10 +207,10 @@ else:
 
 
 if args.verbose:
-	print "The bank size according to the center metric: ", bank.cube.size
-	print "The bank boundaries are: "
+	print("The bank size according to the center metric: ", bank.cube.size)
+	print("The bank boundaries are: ")
 	for row in bank.cube.boundaries:
-		print "\t", row
+		print("\t", row)
 
 mismatch = 1.0 - args.min_match
 bank.split(tree.packing_density(len(coord_limits)), mismatch = mismatch, verbose = args.verbose)
@@ -232,7 +232,7 @@ expected = 0
 bad_metrics = 0
 
 if args.verbose:
-	print >> sys.stderr, "Writing output document"
+	print("Writing output document", file=sys.stderr)
 
 for n, c in enumerate(nodes):
 
@@ -263,6 +263,6 @@ numpy.save("patches.npy", numpy.array(patches))
 utils.write_filename(xmldoc, args.output_name,  gz=args.output_name.endswith("gz"))
 
 if args.verbose:
-	print >>sys.stderr, "Number of leaf nodes: ", n+1
-	print >>sys.stderr, "Number of templates (tiles): ", len(tbl)
-	print >>sys.stderr, "Expected number ", expected
+	print("Number of leaf nodes: ", n+1, file=sys.stderr)
+	print("Number of templates (tiles): ", len(tbl), file=sys.stderr)
+	print("Expected number ", expected, file=sys.stderr)

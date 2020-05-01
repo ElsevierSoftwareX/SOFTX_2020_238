@@ -22,9 +22,9 @@ import sys
 
 # Print out progress of reading in dag
 def progress(f, n, done):
-	print "%s: %d lines\r" % (f.name, n),
+	print("%s: %d lines\r" % (f.name, n))
 	if done:
-		print
+		print()
 
 # Parse command line options
 parser = OptionParser(description = __doc__)
@@ -36,17 +36,17 @@ parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 options, filenames = parser.parse_args()
 
 if options.dag is None:
-	print >>sys.stderr, "No dag file specified."
+	print("No dag file specified.", file=sys.stderr)
 	exit()
 
 # Reading in dag file
-print >>sys.stderr, "... dag file"
+print("... dag file", file=sys.stderr)
 dag = dagfile.DAG.parse(open(options.dag), progress = progress)
-print >>sys.stderr, "dag file read"
+print("dag file read", file=sys.stderr)
 
 # Reading in resuce file
 if options.rescue:
-	print >>sys.stderr, "... resuce file"
+	print("... resuce file", file=sys.stderr)
 	dag.load_rescue(open(options.rescue), progress = progress)
 
 # Remove job reties
@@ -62,7 +62,7 @@ if options.reduce_name:
 	dag.reindex()
 
 # Write out dag and rescure files
-print >>sys.stderr, "writing ..."
+print("writing ...", file=sys.stderr)
 if options.rescue:
 	dag.write(open(options.dag, "w"), rescue = open(options.rescue, "w"), progress = progress)
 else:

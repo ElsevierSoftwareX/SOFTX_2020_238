@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2011  Chad Hanna
 #
@@ -55,7 +55,7 @@ cgitb.enable()
 import os
 os.environ["MPLCONFIGDIR"] = "/tmp"
 import time
-import urlparse
+import urllib.parse as urlparse
 from gstlal import llweb
 
 form = cgi.parse()
@@ -74,7 +74,7 @@ print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
 print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
 print >>sys.stdout, 'Content-type: text/html\r\n'
 
-print """
+print("""
 <html>
 <head>
 <meta http-equiv="Pragma" content="no-cache">
@@ -82,11 +82,11 @@ print """
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
 <meta http-equiv="refresh" content="300">
 <title>GstLAL CBC</title>
-"""
+""")
 
-print llweb.css
+print(llweb.css)
 
-print """
+print("""
 <div class=topbox> 
         <table>
         <tr><th rowspan=2><img width=100px src="http://www.lsc-group.phys.uwm.edu/cgit/gstlal/plain/gstlal/doc/gstlal.png"></th><th>Nodes</th><th>IFOs</th><th>GPS</th><th>Date</th><th>Status</th></tr>
@@ -94,34 +94,34 @@ print """
         </table>
 <hr>
 </div>
-""" % (",".join([min(web.registry.keys()), max(web.registry.keys())]), "".join(sorted(web.ifos)), int(llweb.now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()), web.status()[1])
+""" % (",".join([min(web.registry.keys()), max(web.registry.keys())]), "".join(sorted(web.ifos)), int(llweb.now()), time.strftime("%a, %d %b %Y %H:%M:%S %Z", time.localtime()), web.status()[1]))
 
 
 cnt = 0
 
 if os.path.isfile("%s/sensitivity_base64.txt" % web.directory):
-	print """
+        print("""
 	<div class="tabs">
 		<div class=tab>
 			<input type="radio" id="tab-%d" name="tab-group-1" checked>
 			<label for="tab-%d">%s</label>
 			<div class="content"><img src="data:image/png;base64,%s"></img></div>
 		</div>
-	""" % (cnt, cnt, 'Analysis Sensitivity', open("%s/sensitivity_base64.txt" % web.directory).readline())
-	cnt+=1
+	""" % (cnt, cnt, 'Analysis Sensitivity', open("%s/sensitivity_base64.txt" % web.directory).readline()))
+        cnt+=1
 
-	print """
+        print("""
 	<div class=tab>
 		<input type="radio" id="tab-%d" name="tab-group-1">
-	""" % cnt
+	""" % cnt)
 else:
-	print """
+        print("""
 	<div class="tabs">
 		<div class=tab>
 			<input type="radio" id="tab-%d" name="tab-group-1" checked>
-	""" % cnt
+	""" % cnt)
 
-print """
+print("""
 		<label for="tab-%d">Summary</label>
 		<div class="content">
 			<table>
@@ -130,30 +130,30 @@ print """
 			</table>
 		</div>
 	</div>
-""" % (cnt, web.latency(), web.time_since_last(), web.average_up_time())
+""" % (cnt, web.latency(), web.time_since_last(), web.average_up_time()))
 
 cnt+=1
 
 for dt in ("latency_history","snr_history","bank","ram_history"):
-	print """
+        print("""
 	<div class=tab>
 	<input type="radio" id="tab-%d" name="tab-group-1">
 	<label for="tab-%d">%s</label>
 	<div class="content">%s</div>
 	</div>
-	""" % (cnt, cnt, dt.replace("_", " "), web.plot(dt))
-	cnt +=1
+	""" % (cnt, cnt, dt.replace("_", " "), web.plot(dt)))
+        cnt +=1
 
 for ifo in web.ifos:
 	for dt in ("%s/state_vector_on_off_gap" % ifo,):
-		print """
+                print("""
 	<div class=tab>
 		<input type="radio" id="tab-%d" name="tab-group-1">
 		<label for="tab-%d">%s</label>
 		<div class="content">%s</div>
 	</div>
-		""" % (cnt, cnt, dt.replace("_", " "), web.plot(dt, ifo = ifo))
-		cnt+=1
+		""" % (cnt, cnt, dt.replace("_", " "), web.plot(dt, ifo = ifo)))
+                cnt+=1
 
 # This plot takes too long to load for a summary page.
 #print """
@@ -165,23 +165,22 @@ for ifo in web.ifos:
 #	""" % (cnt, cnt, "likelihood CCDF", web.plot("marginalized_likelihood"))
 #cnt+=1
 
-print """
+print("""
 </div>
 <div class=topbox>
 	Node links:
-"""
+""")
 
 for id in sorted(web.registry):
 	url = os.path.join(web.directory, "%s/likelihood.xml" % (id,))
-	print """
+	print("""
 	<a target="_blank" href="gstlalcbcnode?dir=%s&id=%s,%s&url=%s&ifos=%s">%s</a>
-	"""  % (web.directory, id, id, url, ",".join(sorted(web.ifos)), id.strip())
+	"""  % (web.directory, id, id, url, ",".join(sorted(web.ifos)), id.strip()))
 
 
-print
-"""
+print("""
 </div>
 
 </html>
 </body>
-"""
+""")

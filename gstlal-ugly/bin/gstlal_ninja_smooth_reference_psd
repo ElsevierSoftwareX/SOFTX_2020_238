@@ -164,7 +164,7 @@ required_options = ["input_psd", "output_psd","instrument"]
 
 missing_options = [option for option in required_options if getattr(options, option) is None]
 if missing_options:
-	raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options))
+	raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options)))
 
 #
 # =============================================================================

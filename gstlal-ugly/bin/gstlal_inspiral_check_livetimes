@@ -44,22 +44,23 @@ _, rankingstatpdf = far.parse_likelihood_control_doc(ligolw_utils.load_filename(
 fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 
 livetime = fapfar.livetime
-print "%s: livetime used in making IFAR plots\n" % (livetime,)
+print("%s: livetime used in making IFAR plots\n" % (livetime,))
 
 connection = sqlite3.connect(database[0])
 xmldoc = dbtables.get_xml(connection)
 
 for name, in set(connection.cursor().execute("SELECT name from segment_definer")):
 	segs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str(name)).coalesce()
-	print "%s: livetime %s" % (name, abs(segs))
-	print "%s: two or more detectors on: %s\n" % (name, abs(segmentsUtils.vote(segs.values(), 2)))
+	print("%s: livetime %s" % (name, abs(segs)))
+	print("%s: two or more detectors on: %s\n" % (name, abs(segmentsUtils.vote(segs.values(), 2))))
 
 datasegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("datasegments")).coalesce()
 vetosegs = ligolw_segments.LigolwSegments(xmldoc).get_by_name(str("vetoes")).coalesce()
 
 coinclivetime=abs(segmentsUtils.vote((datasegs-vetosegs).values(),2))
 
-print "analyzable time (datasegments-vetosegments): %s" % (coinclivetime,)
+print("analyzable time (datasegments-vetosegments): %s" % (coinclivetime,))
 
 for end_time, end_time_ns, combined_far, false_alarm_rate in connection.cursor().execute("SELECT end_time, end_time_ns, combined_far, false_alarm_rate from coinc_inspiral JOIN coinc_event on coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) ORDER BY false_alarm_rate ASC LIMIT 5"):
-	print "gps=%s: gstlalFAP=%s, gstlalFAR(Hz)=%.7E, gstlalFAR(/yr)=%.7E, coincltFAR(Hz)=%.7E, coincltFAR(/yr)=%.7E" % (end_time + end_time_ns * 1e-9, false_alarm_rate, float(combined_far), float(combined_far) * 86400 * 365.25, float(combined_far) * float(livetime) / float(coinclivetime), float(combined_far) * float(livetime) / float(coinclivetime) * 86400. * 365.25,)
+	print("gps=%s: gstlalFAP=%s, gstlalFAR(Hz)=%.7E, gstlalFAR(/yr)=%.7E, coincltFAR(Hz)=%.7E, coincltFAR(/yr)=%.7E" % (end_time + end_time_ns * 1e-9, false_alarm_rate, float(combined_far), float(combined_far) * 86400 * 365.25, float(combined_far) * float(livetime) / float(coinclivetime), float(combined_far) * float(livetime) / float(coinclivetime) * 86400. * 365.25,))
+

@@ -23,7 +23,7 @@ import os
 import logging
 from optparse import OptionParser
 import shutil
-import StringIO
+from io import StringIO
 import sys
 
 import h5py

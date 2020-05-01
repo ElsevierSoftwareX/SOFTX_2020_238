@@ -58,9 +58,9 @@ matplotlib.use('Agg')
 import numpy
 import matplotlib.pyplot as plt
 import time
-import StringIO
+from io import StringIO
 import base64
-import urlparse
+import urllib.parse as urlparse
 
 import lal
 from ligo.lw import ligolw
