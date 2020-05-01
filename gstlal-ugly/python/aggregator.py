@@ -28,7 +28,8 @@ import time
 from gi.repository import GLib
 import logging
 import subprocess
-import urllib2
+import urllib.error
+import urllib.request
 import shutil
 import collections
 from multiprocessing import Pool
@@ -67,11 +68,11 @@ def get_url(url,d):
 	"""
 	f = "%s%s.txt" % (url, d)
 	try:
-		jobdata = urllib2.urlopen(f).read().split("\n")
-	except urllib2.HTTPError as e:
+		jobdata = urllib.request.urlopen(f).read().split("\n")
+	except urllib.error.HTTPError as e:
 		logging.error("%s : %s" % (f, str(e)))
 		return
-	except urllib2.URLError as e:
+	except urllib.error.URLError as e:
 		logging.error("%s : %s" % (f, str(e)))
 		return
 	data = []
