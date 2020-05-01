@@ -152,14 +152,14 @@ static PyObject *pylal_inline_string_get(PyObject *obj, void *data)
 		/* something's wrong, obj probably isn't a valid address */
 	}
 
-	return PyString_FromString(s);
+	return PyUnicode_FromString(s);
 }
 
 
 static int pylal_inline_string_set(PyObject *obj, PyObject *val, void *data)
 {
 	const struct pylal_inline_string_description *desc = data;
-	char *v = PyString_AsString(val);
+	char *v = PyUnicode_AsUTF8(val);
 	char *s = (void *) obj + desc->offset;
 
 	if(!v)
@@ -194,12 +194,12 @@ static int end_set(PyObject *obj, PyObject *val, void *null)
 	attr = PyObject_GetAttrString(converted, "gpsSeconds");
 	if(!attr)
 		goto error;
-	end_time = PyInt_AsLong(attr);
+	end_time = PyLong_AsLong(attr);
 	Py_DECREF(attr);
 	attr = PyObject_GetAttrString(converted, "gpsNanoSeconds");
 	if(!attr)
 		goto error;
-	end_time_ns = PyInt_AsLong(attr);
+	end_time_ns = PyLong_AsLong(attr);
 	Py_DECREF(attr);
 	Py_DECREF(converted);
 
@@ -216,13 +216,13 @@ error:
 
 static PyObject *template_id_get(PyObject *obj, void *null)
 {
-	return PyInt_FromLong(((gstlal_GSTLALSnglInspiral *) obj)->row.Gamma[0]);
+	return PyLong_FromLong(((gstlal_GSTLALSnglInspiral *) obj)->row.Gamma[0]);
 }
 
 
 static int template_id_set(PyObject *obj, PyObject *val, void *null)
 {
-	int template_id = PyInt_AsLong(val);
+	int template_id = PyLong_AsLong(val);
 
 	if(template_id == -1 && PyErr_Occurred())
 		return -1;
@@ -281,22 +281,22 @@ static PyObject *H1_snr_component_get(PyObject *obj, void *data)
 		return NULL;
 	}
 	if(!strcmp(name, "_H1_snr_name")) {
-		return PyString_FromString(H1_snr->name);
+		return PyUnicode_FromString(H1_snr->name);
 	} else if(!strcmp(name, "_H1_snr_epoch_gpsSeconds")) {
-		return PyInt_FromLong(H1_snr->epoch.gpsSeconds);
+		return PyLong_FromLong(H1_snr->epoch.gpsSeconds);
 	} else if(!strcmp(name, "_H1_snr_epoch_gpsNanoSeconds")) {
-		return PyInt_FromLong(H1_snr->epoch.gpsNanoSeconds);
+		return PyLong_FromLong(H1_snr->epoch.gpsNanoSeconds);
 	} else if(!strcmp(name, "_H1_snr_f0")) {
 		return PyFloat_FromDouble(H1_snr->f0);
 	} else if(!strcmp(name, "_H1_snr_deltaT")) {
 		return PyFloat_FromDouble(H1_snr->deltaT);
 	} else if(!strcmp(name, "_H1_snr_sampleUnits")) {
 		char *s = XLALUnitToString(&H1_snr->sampleUnits);
-		PyObject *result = PyString_FromString(s);
+		PyObject *result = PyUnicode_FromString(s);
 		XLALFree(s);
 		return result;
 	} else if(!strcmp(name, "_H1_snr_data_length")) {
-		return PyInt_FromLong(H1_snr->data->length);
+		return PyLong_FromLong(H1_snr->data->length);
 	} else if(!strcmp(name, "_H1_snr_data")) {
 		npy_intp dims[] = {H1_snr->data->length};
 		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, H1_snr->data->data);
@@ -320,22 +320,22 @@ static PyObject *K1_snr_component_get(PyObject *obj, void *data)
 		return NULL;
 	}
 	if(!strcmp(name, "_K1_snr_name")) {
-		return PyString_FromString(K1_snr->name);
+		return PyUnicode_FromString(K1_snr->name);
 	} else if(!strcmp(name, "_K1_snr_epoch_gpsSeconds")) {
-		return PyInt_FromLong(K1_snr->epoch.gpsSeconds);
+		return PyLong_FromLong(K1_snr->epoch.gpsSeconds);
 	} else if(!strcmp(name, "_K1_snr_epoch_gpsNanoSeconds")) {
-		return PyInt_FromLong(K1_snr->epoch.gpsNanoSeconds);
+		return PyLong_FromLong(K1_snr->epoch.gpsNanoSeconds);
 	} else if(!strcmp(name, "_K1_snr_f0")) {
 		return PyFloat_FromDouble(K1_snr->f0);
 	} else if(!strcmp(name, "_K1_snr_deltaT")) {
 		return PyFloat_FromDouble(K1_snr->deltaT);
 	} else if(!strcmp(name, "_K1_snr_sampleUnits")) {
 		char *s = XLALUnitToString(&K1_snr->sampleUnits);
-		PyObject *result = PyString_FromString(s);
+		PyObject *result = PyUnicode_FromString(s);
 		XLALFree(s);
 		return result;
 	} else if(!strcmp(name, "_K1_snr_data_length")) {
-		return PyInt_FromLong(K1_snr->data->length);
+		return PyLong_FromLong(K1_snr->data->length);
 	} else if(!strcmp(name, "_K1_snr_data")) {
 		npy_intp dims[] = {K1_snr->data->length};
 		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, K1_snr->data->data);
@@ -358,22 +358,22 @@ static PyObject *L1_snr_component_get(PyObject *obj, void *data)
 		return NULL;
 	}
 	if(!strcmp(name, "_L1_snr_name")) {
-		return PyString_FromString(L1_snr->name);
+		return PyUnicode_FromString(L1_snr->name);
 	} else if(!strcmp(name, "_L1_snr_epoch_gpsSeconds")) {
-		return PyInt_FromLong(L1_snr->epoch.gpsSeconds);
+		return PyLong_FromLong(L1_snr->epoch.gpsSeconds);
 	} else if(!strcmp(name, "_L1_snr_epoch_gpsNanoSeconds")) {
-		return PyInt_FromLong(L1_snr->epoch.gpsNanoSeconds);
+		return PyLong_FromLong(L1_snr->epoch.gpsNanoSeconds);
 	} else if(!strcmp(name, "_L1_snr_f0")) {
 		return PyFloat_FromDouble(L1_snr->f0);
 	} else if(!strcmp(name, "_L1_snr_deltaT")) {
 		return PyFloat_FromDouble(L1_snr->deltaT);
 	} else if(!strcmp(name, "_L1_snr_sampleUnits")) {
 		char *s = XLALUnitToString(&L1_snr->sampleUnits);
-		PyObject *result = PyString_FromString(s);
+		PyObject *result = PyUnicode_FromString(s);
 		XLALFree(s);
 		return result;
 	} else if(!strcmp(name, "_L1_snr_data_length")) {
-		return PyInt_FromLong(L1_snr->data->length);
+		return PyLong_FromLong(L1_snr->data->length);
 	} else if(!strcmp(name, "_L1_snr_data")) {
 		npy_intp dims[] = {L1_snr->data->length};
 		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, L1_snr->data->data);
@@ -397,22 +397,22 @@ static PyObject *V1_snr_component_get(PyObject *obj, void *data)
 		return NULL;
 	}
 	if(!strcmp(name, "_V1_snr_name")) {
-		return PyString_FromString(V1_snr->name);
+		return PyUnicode_FromString(V1_snr->name);
 	} else if(!strcmp(name, "_V1_snr_epoch_gpsSeconds")) {
-		return PyInt_FromLong(V1_snr->epoch.gpsSeconds);
+		return PyLong_FromLong(V1_snr->epoch.gpsSeconds);
 	} else if(!strcmp(name, "_V1_snr_epoch_gpsNanoSeconds")) {
-		return PyInt_FromLong(V1_snr->epoch.gpsNanoSeconds);
+		return PyLong_FromLong(V1_snr->epoch.gpsNanoSeconds);
 	} else if(!strcmp(name, "_V1_snr_f0")) {
 		return PyFloat_FromDouble(V1_snr->f0);
 	} else if(!strcmp(name, "_V1_snr_deltaT")) {
 		return PyFloat_FromDouble(V1_snr->deltaT);
 	} else if(!strcmp(name, "_V1_snr_sampleUnits")) {
 		char *s = XLALUnitToString(&V1_snr->sampleUnits);
-		PyObject *result = PyString_FromString(s);
+		PyObject *result = PyUnicode_FromString(s);
 		XLALFree(s);
 		return result;
 	} else if(!strcmp(name, "_V1_snr_data_length")) {
-		return PyInt_FromLong(V1_snr->data->length);
+		return PyLong_FromLong(V1_snr->data->length);
 	} else if(!strcmp(name, "_V1_snr_data")) {
 		npy_intp dims[] = {V1_snr->data->length};
 		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, V1_snr->data->data);
@@ -794,14 +794,14 @@ static PyObject *richcompare(PyObject *self, PyObject *other, int op_id)
 		Py_DECREF(converted);
 		return NULL;
 	}
-	t_other.gpsSeconds = PyInt_AsLong(attr);
+	t_other.gpsSeconds = PyLong_AsLong(attr);
 	Py_DECREF(attr);
 	attr = PyObject_GetAttrString(converted, "gpsNanoSeconds");
 	if(!attr) {
 		Py_DECREF(converted);
 		return NULL;
 	}
-	t_other.gpsNanoSeconds = PyInt_AsLong(attr);
+	t_other.gpsNanoSeconds = PyLong_AsLong(attr);
 	Py_DECREF(attr);
 	Py_DECREF(converted);
 
@@ -870,10 +870,17 @@ static PyTypeObject gstlal_GSTLALSnglInspiral_Type = {
  * ============================================================================
  */
 
+static struct PyModuleDef SnglInspiralTableModule = {
+	PyModuleDef_HEAD_INIT,
+	MODULE_NAME,
+	"Low-level wrapper for GSTLALSnglInspiral type.",
+	-1,
+	NULL
+};
 
-PyMODINIT_FUNC init_snglinspiraltable(void)
+PyMODINIT_FUNC PyInit__snglinspiraltable(void)
 {
-	PyObject *module = Py_InitModule3(MODULE_NAME, NULL, "Low-level wrapper for GSTLALSnglInspiral type.");
+	PyObject *module = PyModule_Create(&SnglInspiralTableModule);
 
 	import_array();
 
@@ -897,4 +904,6 @@ PyMODINIT_FUNC init_snglinspiraltable(void)
 		return;
 	Py_INCREF(&gstlal_GSTLALSnglInspiral_Type);
 	PyModule_AddObject(module, "GSTLALSnglInspiral", (PyObject *) &gstlal_GSTLALSnglInspiral_Type);
+
+	return module;
 }
