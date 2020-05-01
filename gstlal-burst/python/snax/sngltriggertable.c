@@ -88,14 +88,14 @@ static PyObject *pylal_inline_string_get(PyObject *obj, void *data)
 		/* something's wrong, obj probably isn't a valid address */
 	}
 
-	return PyString_FromString(s);
+	return PyUnicode_FromString(s);
 }
 
 
 static int pylal_inline_string_set(PyObject *obj, PyObject *val, void *data)
 {
 	const struct pylal_inline_string_description *desc = data;
-	char *v = PyString_AsString(val);
+	char *v = PyUnicode_AsUTF8(val);
 	char *s = (void *) obj + desc->offset;
 
 	if(!v)
@@ -123,22 +123,22 @@ static PyObject *snr_component_get(PyObject *obj, void *data)
 		return NULL;
 	}
 	if(!strcmp(name, "_snr_name")) {
-		return PyString_FromString(snr->name);
+		return PyUnicode_FromString(snr->name);
 	} else if(!strcmp(name, "_snr_epoch_gpsSeconds")) {
-		return PyInt_FromLong(snr->epoch.gpsSeconds);
+		return PyLong_FromLong(snr->epoch.gpsSeconds);
 	} else if(!strcmp(name, "_snr_epoch_gpsNanoSeconds")) {
-		return PyInt_FromLong(snr->epoch.gpsNanoSeconds);
+		return PyLong_FromLong(snr->epoch.gpsNanoSeconds);
 	} else if(!strcmp(name, "_snr_f0")) {
 		return PyFloat_FromDouble(snr->f0);
 	} else if(!strcmp(name, "_snr_deltaT")) {
 		return PyFloat_FromDouble(snr->deltaT);
 	} else if(!strcmp(name, "_snr_sampleUnits")) {
 		char *s = XLALUnitToString(&snr->sampleUnits);
-		PyObject *result = PyString_FromString(s);
+		PyObject *result = PyUnicode_FromString(s);
 		XLALFree(s);
 		return result;
 	} else if(!strcmp(name, "_snr_data_length")) {
-		return PyInt_FromLong(snr->data->length);
+		return PyLong_FromLong(snr->data->length);
 	} else if(!strcmp(name, "_snr_data")) {
 		npy_intp dims[] = {snr->data->length};
 		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, snr->data->data);
@@ -331,10 +331,17 @@ static PyTypeObject gstlal_GSTLALSnglTrigger_Type = {
  */
 
 
-// Modified
-PyMODINIT_FUNC init_sngltriggertable(void)
+static struct PyModuleDef SnglTriggerTableModule = {
+	PyModuleDef_HEAD_INIT,
+	MODULE_NAME,
+	"Low-level wrapper for GSTLALSnglTrigger type.",
+	-1,
+	NULL
+};
+
+PyMODINIT_FUNC PyInit__sngltriggertable(void)
 {
-	PyObject *module = Py_InitModule3(MODULE_NAME, NULL, "Low-level wrapper for GSTLALSnglTrigger type.");
+	PyObject *module = PyModule_Create(&SnglTriggerTableModule);
 
 	import_array();
 
@@ -343,4 +350,6 @@ PyMODINIT_FUNC init_sngltriggertable(void)
 		return;
 	Py_INCREF(&gstlal_GSTLALSnglTrigger_Type);
 	PyModule_AddObject(module, "GSTLALSnglTrigger", (PyObject *) &gstlal_GSTLALSnglTrigger_Type);
+
+	return module;
 }

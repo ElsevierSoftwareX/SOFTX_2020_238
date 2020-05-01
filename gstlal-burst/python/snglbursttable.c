@@ -94,14 +94,14 @@ static PyObject *pylal_inline_string_get(PyObject *obj, void *data)
 		/* something's wrong, obj probably isn't a valid address */
 	}
 
-	return PyString_FromString(s);
+	return PyUnicode_FromString(s);
 }
 
 
 static int pylal_inline_string_set(PyObject *obj, PyObject *val, void *data)
 {
 	const struct pylal_inline_string_description *desc = data;
-	char *v = PyString_AsString(val);
+	char *v = PyUnicode_AsUTF8(val);
 	char *s = (void *) obj + desc->offset;
 
 	if(!v)
@@ -226,14 +226,14 @@ static PyObject *richcompare(PyObject *self, PyObject *other, int op_id)
 		Py_DECREF(converted);
 		return NULL;
 	}
-	t_other.gpsSeconds = PyInt_AsLong(attr);
+	t_other.gpsSeconds = PyLong_AsLong(attr);
 	Py_DECREF(attr);
 	attr = PyObject_GetAttrString(converted, "gpsNanoSeconds");
 	if(!attr) {
 		Py_DECREF(converted);
 		return NULL;
 	}
-	t_other.gpsNanoSeconds = PyInt_AsLong(attr);
+	t_other.gpsNanoSeconds = PyLong_AsLong(attr);
 	Py_DECREF(attr);
 	Py_DECREF(converted);
 
@@ -302,10 +302,17 @@ static PyTypeObject gstlal_GSTLALSnglBurst_Type = {
  * ============================================================================
  */
 
+static struct PyModuleDef SnglBurstTableModule = {
+	PyModuleDef_HEAD_INIT,
+	MODULE_NAME,
+	"Low-level wrapper for GSTLALSnglBurst type.",
+	-1,
+	NULL
+};
 
-PyMODINIT_FUNC init_snglbursttable(void)
+PyMODINIT_FUNC PyInit__snglbursttable(void)
 {
-	PyObject *module = Py_InitModule3(MODULE_NAME, NULL, "Low-level wrapper for GSTLALSnglBurst type.");
+	PyObject *module = PyModule_Create(&SnglBurstTableModule);
 
 	/* LIGOTimeGPS */
 
@@ -327,4 +334,6 @@ PyMODINIT_FUNC init_snglbursttable(void)
 		return;
 	Py_INCREF(&gstlal_GSTLALSnglBurst_Type);
 	PyModule_AddObject(module, "GSTLALSnglBurst", (PyObject *) &gstlal_GSTLALSnglBurst_Type);
+
+	return module;
 }
