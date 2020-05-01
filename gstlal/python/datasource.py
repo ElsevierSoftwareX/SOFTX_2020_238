@@ -73,7 +73,7 @@ def channel_dict_from_channel_list(channel_list):
 	Examples:
 
 		>>> channel_dict_from_channel_list(["H1=LSC-STRAIN", "H2=SOMETHING-ELSE"])
-		{'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}
+		{'H1': 'LSC-STRAIN', 'H2': 'SOMETHING-ELSE'}
 	"""
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
@@ -88,7 +88,7 @@ def channel_dict_from_channel_list_with_node_range(channel_list):
 	Examples:
 
 		>>> channel_dict_from_channel_list_with_node_range(["0000:0002:H1=LSC_STRAIN_1,L1=LSC_STRAIN_2", "0002:0004:H1=LSC_STRAIN_3,L1=LSC_STRAIN_4", "0004:0006:H1=LSC_STRAIN_5,L1=LSC_STRAIN_6"])
-		{'0004': {'H1': 'LSC_STRAIN_5', 'L1': 'LSC_STRAIN_6'}, '0005': {'H1': 'LSC_STRAIN_5', 'L1': 'LSC_STRAIN_6'}, '0000': {'H1': 'LSC_STRAIN_1', 'L1': 'LSC_STRAIN_2'}, '0001': {'H1': 'LSC_STRAIN_1', 'L1': 'LSC_STRAIN_2'}, '0002': {'H1': 'LSC_STRAIN_3', 'L1': 'LSC_STRAIN_4'}, '0003': {'H1': 'LSC_STRAIN_3', 'L1': 'LSC_STRAIN_4'}}
+		{'0000': {'H1': 'LSC_STRAIN_1', 'L1': 'LSC_STRAIN_2'}, '0001': {'H1': 'LSC_STRAIN_1', 'L1': 'LSC_STRAIN_2'}, '0002': {'H1': 'LSC_STRAIN_3', 'L1': 'LSC_STRAIN_4'}, '0003': {'H1': 'LSC_STRAIN_3', 'L1': 'LSC_STRAIN_4'}, '0004': {'H1': 'LSC_STRAIN_5', 'L1': 'LSC_STRAIN_6'}, '0005': {'H1': 'LSC_STRAIN_5', 'L1': 'LSC_STRAIN_6'}}
 	"""
 	outdict = {}
 	for instrument_channel_full in channel_list:
@@ -220,7 +220,7 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 		>>> on_bit_list = ["V1=7", "H1=7", "L1=7"]
 		>>> off_bit_list  = ["V1=256", "H1=352", "L1=352"]
 		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list)
-		{'H2': [7, 352], 'V1': [7, 256], 'H1': [7, 352], 'L1': [7, 352]}
+		{'H1': [7, 352], 'H2': [7, 352], 'L1': [7, 352], 'V1': [7, 256]}
 
 		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list,{})
 		{'V1': [7, 256], 'H1': [7, 352], 'L1': [7, 352]}
@@ -258,7 +258,7 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 
 		>>> state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
 		>>> state_vector_on_off_list_from_bits_dict(state_vector_on_off_dict)
-		('H2=7 --state-vector-on-bits=V1=103 --state-vector-on-bits=H1=7 --state-vector-on-bits=L1=7 ', 'H2=352 --state-vector-off-bits=V1=256 --state-vector-off-bits=H1=352 --state-vector-off-bits=L1=352 ')
+		('H1=7 --state-vector-on-bits=H2=7 --state-vector-on-bits=L1=7 --state-vector-on-bits=V1=103 ', 'H1=352 --state-vector-off-bits=H2=352 --state-vector-off-bits=L1=352 --state-vector-off-bits=V1=256 ')
 	"""
 
 	onstr = ""
@@ -302,7 +302,7 @@ def framexmit_dict_from_framexmit_list(framexmit_list):
 	Examples:
 
 		>>> framexmit_dict_from_framexmit_list(["H1=224.3.2.1:7096", "L1=224.3.2.2:7097", "V1=224.3.2.3:7098"])
-		{'V1': ('224.3.2.3', 7098), 'H1': ('224.3.2.1', 7096), 'L1': ('224.3.2.2', 7097)}
+		{'H1': ('224.3.2.1', 7096), 'L1': ('224.3.2.2', 7097), 'V1': ('224.3.2.3', 7098)}
 	"""
 	out = []
 	for instrument_addr in framexmit_list:

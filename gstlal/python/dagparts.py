@@ -261,11 +261,11 @@ def condor_command_dict_from_opts(opts, defaultdict = None):
 	A function to turn a list of options into a dictionary of condor commands, e.g.,
 
 	>>> condor_command_dict_from_opts(["+Online_CBC_SVD=True", "TARGET.Online_CBC_SVD =?= True"])
-	{'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
+	{'+Online_CBC_SVD': 'True', 'TARGET.Online_CBC_SVD ': '?= True'}
 	>>> condor_command_dict_from_opts(["+Online_CBC_SVD=True", "TARGET.Online_CBC_SVD =?= True"], {"somecommand":"somevalue"})
-	{'somecommand': 'somevalue', 'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
+	{'somecommand': 'somevalue', '+Online_CBC_SVD': 'True', 'TARGET.Online_CBC_SVD ': '?= True'}
 	>>> condor_command_dict_from_opts(["+Online_CBC_SVD=True", "TARGET.Online_CBC_SVD =?= True"], {"+Online_CBC_SVD":"False"})
-	{'TARGET.Online_CBC_SVD ': '?= True', '+Online_CBC_SVD': 'True'}
+	{'+Online_CBC_SVD': 'True', 'TARGET.Online_CBC_SVD ': '?= True'}
 	"""
 
 	if defaultdict is None:
