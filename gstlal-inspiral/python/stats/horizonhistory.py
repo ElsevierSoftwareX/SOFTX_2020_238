@@ -115,7 +115,7 @@ class NearestLeafTree(object):
 	<Array Type="real_8" Name="H1:nearestleaftree:array">
 		<Dim>2</Dim>
 		<Dim>2</Dim>
-		<Stream Delimiter=" " Type="Local">
+		<Stream Type="Local" Delimiter=" ">
 			100 102
 			120 110
 		</Stream>
