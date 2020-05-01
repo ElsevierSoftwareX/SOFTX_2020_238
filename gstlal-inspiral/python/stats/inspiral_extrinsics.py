@@ -1696,8 +1696,8 @@ class p_of_instruments_given_horizons(object):
 			# histogram to just be the value in the last(first)
 			# bin, so we track those center values here in order to
 			# decide if something should be clipped.
-			self.first_center = self.histograms.values()[0].centres()[0][0]
-			self.last_center = self.histograms.values()[0].centres()[0][-1]
+			self.first_center = list(self.histograms.values())[0].centres()[0][0]
+			self.last_center = list(self.histograms.values())[0].centres()[0][-1]
 		# Otherwise we need to initialize these ourselves, which can be pretty slow.
 		else:
 			# We reuse the function in TimePhaseSNR to get
@@ -1907,7 +1907,7 @@ class p_of_instruments_given_horizons(object):
 		snr_thresh = grp.attrs["snr_thresh"]
 		hmin = grp.attrs["hmin"]
 		hmax = grp.attrs["hmax"]
-		nbins = grp.attrs["nbins"]
+		nbins = int(grp.attrs["nbins"])
 		instruments = tuple(sorted(grp.attrs["instruments"].decode("utf-8").split(",")))
 		histograms = {}
 		bins = []
