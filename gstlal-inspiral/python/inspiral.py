@@ -58,10 +58,10 @@ import sqlite3
 import io
 import sys
 import time
-import httplib
+import http.client
 import tempfile
 import os
-import urlparse
+from urllib.parse import urlparse
 
 from glue import iterutils
 from ligo.lw import ligolw
@@ -465,7 +465,7 @@ class CoincsDocument(object):
 
 class FakeGracedbResp(object):
 	def __init__(self):
-		self.status = httplib.CREATED
+		self.status = http.client.CREATED
 	def json(self):
 		return {"graceid": -1}
 
@@ -473,7 +473,7 @@ class FakeGracedbResp(object):
 class FakeGracedbClient(object):
 	def __init__(self, service_url):
 		# Assumes that service url is a directory to write files to
-		self.path = urlparse.urlparse(service_url).path
+		self.path = urlparse(service_url).path
 	def createEvent(self, group, pipeline, filename, filecontents, search):
 		with open(os.path.join(self.path, filename), "w") as f:
 			f.write(filecontents)
@@ -592,7 +592,7 @@ class GracedBWrapper(object):
 				except gracedb.rest.HTTPError as resp:
 					pass
 				else:
-					if resp.status == httplib.CREATED:
+					if resp.status == http.client.CREATED:
 						break
 				print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d"  % (filename, gracedb_id, attempt, self.retries)
 				time.sleep(random.lognormal(math.log(self.retry_delay), .5))
@@ -899,7 +899,7 @@ class GracedBWrapper(object):
 						print(resp)
 					else:
 						resp_json = resp.json()
-						if resp.status == httplib.CREATED:
+						if resp.status == http.client.CREATED:
 							if self.verbose:
 								print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
 							gracedb_ids.append(resp_json["graceid"])
