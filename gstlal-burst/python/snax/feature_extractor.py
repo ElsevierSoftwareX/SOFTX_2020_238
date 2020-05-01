@@ -30,7 +30,6 @@ from collections import deque
 import json
 import optparse
 import os
-import StringIO
 import threading
 import shutil
 

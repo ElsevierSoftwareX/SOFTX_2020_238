@@ -371,7 +371,7 @@ class TimeseriesFeatureQueue(object):
 		>>> row['timestamp']
 		123450
 		>>> row['features']['channel1']
-		[{'snr': 3.0, 'time': 123450.3}]
+		[{'time': 123450.3, 'snr': 3.0}]
 
 	"""
 	def __init__(self, channels, columns, **kwargs):

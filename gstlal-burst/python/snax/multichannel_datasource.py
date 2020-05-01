@@ -28,7 +28,7 @@ import sys
 import time
 import itertools
 import optparse
-from ConfigParser import SafeConfigParser
+from configparser import ConfigParser
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -78,7 +78,7 @@ def channel_dict_from_channel_list(channel_list):
 	Examples:
 
 		>>> channel_dict_from_channel_list(["H1:AUX-CHANNEL-NAME_1:2048", "H1:AUX-CHANNEL-NAME-2:512"])
-		{'H1:AUX-CHANNEL-NAME_1': {'qhigh': None, 'ifo': 'H1', 'flow': None, 'fsamp': 2048.0, 'fhigh': None, 'frametype': None}, 'H1:AUX-CHANNEL-NAME-2': {'qhigh': None, 'ifo': 'H1', 'flow': None, 'fsamp': 512.0, 'fhigh': None, 'frametype': None}}
+		{'H1:AUX-CHANNEL-NAME_1': {'fsamp': 2048.0, 'ifo': 'H1', 'flow': None, 'fhigh': None, 'qhigh': None, 'frametype': None}, 'H1:AUX-CHANNEL-NAME-2': {'fsamp': 512.0, 'ifo': 'H1', 'flow': None, 'fhigh': None, 'qhigh': None, 'frametype': None}}
 	"""
 
 	channel_dict = {}
@@ -130,7 +130,7 @@ def channel_dict_from_channel_ini(options):
 	known_fidelity = set(("clean", "flat", "glitchy", "unknown"))
 	
 	# read in channel list
-	config = SafeConfigParser()
+	config = ConfigParser()
 	config.read(options.channel_list)
 	
 	# filter out channels by frame type	
