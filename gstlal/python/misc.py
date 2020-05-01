@@ -39,7 +39,7 @@ import sys
 #
 
 
-from _misc import *
+from ._misc import *
 
 
 #
