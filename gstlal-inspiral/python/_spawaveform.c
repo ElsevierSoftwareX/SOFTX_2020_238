@@ -576,17 +576,26 @@ static struct PyMethodDef methods[] = {
 	{NULL, NULL, 0, NULL}
 	};
 
+/* The struct definition for this module */
+static struct PyModuleDef SPAWaveformModule = {
+	PyModuleDef_HEAD_INIT,
+	MODULE_NAME,
+	SPADocstring,
+	-1,
+	methods
+};
+
 /* The init function for this module */
-void init_spawaveform(void)
-	{
-	(void) Py_InitModule3(MODULE_NAME, methods, SPADocstring);
+PyMODINIT_FUNC PyInit__spawaveform(void)
+{
 	import_array();
 	/* FIXME someday handle errors
 	 * SVMError = PyErr_NewException("_spawaveform.SPAWaveformError", NULL, NULL);
 	 * Py_INCREF(SPAWaveformError);
 	 * PyModule_AddObject(m, "SPAWaveformError", SPAWaveformError);
-         */
-	}
+	 */
+	return PyModule_Create(&SPAWaveformModule);
+}
 
 /*****************************************************************************/
 /* The remainder of this code defines the static functions that the python   */

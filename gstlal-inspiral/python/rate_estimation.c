@@ -325,10 +325,17 @@ static PyTypeObject LogPosterior_Type = {
  * ============================================================================
  */
 
+static struct PyModuleDef RateEstimationModule = {
+	PyModuleDef_HEAD_INIT,
+	MODULE_NAME,
+	"",
+	-1,
+	NULL
+};
 
-void init_rate_estimation(void)
+PyMODINIT_FUNC PyInit__rate_estimation(void)
 {
-	PyObject *module = Py_InitModule3(MODULE_NAME, NULL, "");
+	PyObject *module = PyModule_Create(&RateEstimationModule);
 
 	import_array();
 
@@ -336,4 +343,6 @@ void init_rate_estimation(void)
 		return;
 	Py_INCREF((PyObject *) &LogPosterior_Type);
 	PyModule_AddObject(module, "LogPosterior", (PyObject *) &LogPosterior_Type);
+
+	return module;
 }
