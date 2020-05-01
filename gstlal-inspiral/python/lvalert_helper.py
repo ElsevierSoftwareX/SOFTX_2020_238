@@ -33,10 +33,9 @@
 #
 
 
-import httplib
+import http.client
 import logging
 import os.path
-import StringIO
 import time
 import io
 
@@ -58,9 +57,9 @@ def get_filename(gracedb_client, graceid, filename, retries = 3, retry_delay = 1
 	for i in range(retries):
 		logging.info("retrieving \"%s\" for %s" % (filename, graceid))
 		response = gracedb_client.files(graceid, filename)
-		if response.status == httplib.OK:
+		if response.status == http.client.OK:
 			return response
-		if response.status == httplib.NOT_FOUND and ignore_404:
+		if response.status == http.client.NOT_FOUND and ignore_404:
 			logging.warning("retrieving \"%s\" for %s: (%d) %s.  skipping ..." % (filename, graceid, response.status, response.reason))
 			return None
 		logging.warning("retrieving \"%s\" for %s: (%d) %s.  pausing ..." % (filename, graceid, response.status, response.reason))
@@ -73,26 +72,26 @@ def get_coinc_xmldoc(gracedb_client, graceid, filename = "coinc.xml"):
 
 
 def upload_fig(fig, gracedb_client, graceid, filename, log_message, tagname = "psd"):
-	plotfile = StringIO.StringIO()
+	plotfile = io.StringIO()
 	fig.savefig(plotfile, format = os.path.splitext(filename)[-1][1:])
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
 	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = plotfile.getvalue(), tagname = tagname)
-	if response.status != httplib.CREATED:
+	if response.status != http.client.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
 
 
 def upload_file(gracedb_client, graceid, filename, log_message = "A file", tagname = None):
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
 	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = io.FileIO(filename).readall(), tagname = tagname)
-	if response.status != httplib.CREATED:
+	if response.status != http.client.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))
 
 
 def upload_xmldoc(gracedb_client, graceid, filename, xmldoc, log_message = "A file", tagname = None):
 	logging.info("uploading \"%s\" for %s" % (filename, graceid))
-	output = StringIO.StringIO()
+	output = io.StringIO()
 	ligolw_utils.write_fileobj(xmldoc, output, gz = filename.endswith(".gz"))
 	response = gracedb_client.writeLog(graceid, log_message, filename = filename, filecontents = output.getvalue(), tagname = tagname)
 	output.close()
-	if response.status != httplib.CREATED:
+	if response.status != http.client.CREATED:
 		raise Exception("upload of \"%s\" for %s failed: %s" % (filename, graceid, response["error"]))

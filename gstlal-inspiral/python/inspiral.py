@@ -55,7 +55,7 @@ import math
 import numpy
 from scipy import random
 import sqlite3
-import StringIO
+import io
 import sys
 import time
 import httplib
@@ -603,7 +603,7 @@ class GracedBWrapper(object):
 		# check for no-op
 		if not gracedb_ids:
 			return
-		fobj = StringIO.StringIO()
+		fobj = io.StringIO()
 		ligolw_utils.write_fileobj(xmldoc, fobj, gz = filename.endswith(".gz"))
 		self.__upload_aux_data(message, filename, tag, fobj.getvalue(), gracedb_ids)
 		del fobj
@@ -674,7 +674,7 @@ class GracedBWrapper(object):
 			#
 
 			print >>sys.stderr, "sending %s to gracedb ..." % filename
-			message = StringIO.StringIO()
+			message = io.StringIO()
 			xmldoc = last_coincs[coinc_event.coinc_event_id]
 			# give the alert all the standard inspiral
 			# columns (attributes should all be
@@ -860,7 +860,7 @@ class GracedBWrapper(object):
 
 			# send event data to kafka
 			if self.producer:
-				psd_fobj = StringIO.StringIO()
+				psd_fobj = io.StringIO()
 				ligolw_utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), psd_fobj, gz = False)
 				self.producer.send(
 					"events",

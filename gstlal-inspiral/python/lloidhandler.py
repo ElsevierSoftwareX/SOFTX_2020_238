@@ -61,7 +61,7 @@ import numpy
 import os
 import resource
 from scipy.interpolate import interp1d
-import StringIO
+import io
 import sys
 import threading
 import time
@@ -580,7 +580,7 @@ class SegmentsTracker(object):
 		provide a bottle route to get segment information via a url
 		"""
 		with self.lock:
-			output = StringIO.StringIO()
+			output = io.StringIO()
 			ligolw_utils.write_fileobj(self.gen_segments_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
@@ -626,7 +626,7 @@ class SegmentsTracker(object):
 		information via a url
 		"""
 		with self.lock:
-			output = StringIO.StringIO()
+			output = io.StringIO()
 			ligolw_utils.write_fileobj(self.gen_recent_segment_history_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
@@ -1278,7 +1278,7 @@ class Handler(simplehandler.Handler):
 
 	def web_get_psd_xml(self):
 		with self.lock:
-			output = StringIO.StringIO()
+			output = io.StringIO()
 			ligolw_utils.write_fileobj(self.__get_psd_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
@@ -1331,7 +1331,7 @@ class Handler(simplehandler.Handler):
 
 	def web_get_rankingstat(self):
 		with self.lock:
-			output = StringIO.StringIO()
+			output = io.StringIO()
 			ligolw_utils.write_fileobj(self.__get_rankingstat_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
@@ -1349,7 +1349,7 @@ class Handler(simplehandler.Handler):
 
 	def web_get_zerolag_rankingstatpdf(self):
 		with self.lock:
-			output = StringIO.StringIO()
+			output = io.StringIO()
 			ligolw_utils.write_fileobj(self.__get_zerolag_rankingstatpdf_xmldoc(), output)
 			outstr = output.getvalue()
 			output.close()
