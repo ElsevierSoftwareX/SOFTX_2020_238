@@ -387,8 +387,8 @@ class ratebinlist(segments.segmentlist):
 			self[:] = (ratebin(seg, seg.count * 2) for seg in self)
 			return self
 		def andgen(self, other):
-			self_next = iter(self).next
-			other_next = iter(other).next
+			self_next = iter(self).__next__
+			other_next = iter(other).__next__
 			self_seg = self_next()
 			other_seg = other_next()
 			try:

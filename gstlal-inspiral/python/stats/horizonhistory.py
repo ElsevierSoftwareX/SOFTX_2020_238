@@ -133,7 +133,7 @@ class NearestLeafTree(object):
 		>>> x = NearestLeafTree(y.items())
 		"""
 		# make a copy to ensure we have a stable object
-		self.tree = map(tuple, items)
+		self.tree = list(map(tuple, items))
 		if any(len(item) != 2 for item in self.tree):
 			raise ValueError("items must be sequence of two-element sequences")
 		self.tree.sort()
