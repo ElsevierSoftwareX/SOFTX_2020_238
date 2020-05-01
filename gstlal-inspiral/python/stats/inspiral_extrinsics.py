@@ -1908,7 +1908,7 @@ class p_of_instruments_given_horizons(object):
 		hmin = grp.attrs["hmin"]
 		hmax = grp.attrs["hmax"]
 		nbins = grp.attrs["nbins"]
-		instruments = tuple(sorted(grp.attrs["instruments"].split(",")))
+		instruments = tuple(sorted(grp.attrs["instruments"].decode("utf-8").split(",")))
 		histograms = {}
 		bins = []
 		combos = TimePhaseSNR.instrument_combos(instruments, min_instruments = 1)
