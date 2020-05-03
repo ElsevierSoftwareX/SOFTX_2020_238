@@ -226,7 +226,7 @@ options, filenames = parse_command_line()
 gw_data_source = datasource.GWDataSourceInfo(options)
 
 ## Assume instrument is the first and only key of the python.datasource.GWDataSourceInfo.channel_dict
-instrument = gw_data_source.channel_dict.keys()[0]
+instrument = list(gw_data_source.channel_dict.keys())[0]
 
 # disable progress reports if not verbose
 if not options.verbose:

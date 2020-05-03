@@ -152,8 +152,8 @@ for row in sngl_inspiral_table:
 		raise ValueError("Invalid mass model")
 
 
-ids = sorted(prob.keys())
-norm = numpy.sum(prob.values())
+ids = sorted(list(prob.keys()))
+norm = numpy.sum(list(prob.values()))
 chirpmasses = numpy.array([mchirps[tid] for tid in ids])
 coefficients = numpy.zeros((1, 1, len(ids)+1), dtype=float)
 for idx, tid in enumerate(ids):
