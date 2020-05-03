@@ -136,6 +136,7 @@ except ImportError:
 	# fpconst is not part of the standard library and might not be
 	# available
 	PosInf = float("+inf")
+from functools import reduce
 import gzip
 import itertools
 import math
@@ -324,13 +325,13 @@ def parse_command_line():
 		if options.svd_bank_cache:
 			raise ValueError("cannot supply both --svd-bank and --svd-bank-cache")
 		try:
-			svd_banks = map(inspiral.parse_svdbank_string, options.svd_bank)
+			svd_banks = list(map(inspiral.parse_svdbank_string, options.svd_bank))
 		except ValueError as e:
 			print("Unable to parse --svd-bank")
 			raise
 	elif options.svd_bank_cache:
 		svd_banks = []
-		svd_bank_cache = map(CacheEntry, open(options.svd_bank_cache))
+		svd_bank_cache = list(map(CacheEntry, open(options.svd_bank_cache)))
 		if not svd_bank_cache:
 			raise ValueError("--svd-bank-cache is empty")
 		svd_bank_cache.sort(key = lambda cache_entry: cache_entry.description)
@@ -720,9 +721,9 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	banks = inspiral.parse_bank_files(svd_bank_url_dict, verbose = options.verbose)
 	# assume all instruments have the same templates, just extract them
 	# from one of the instruments at random
-	sngl_inspiral_table = banks.values()[0][0].sngl_inspiral_table.copy()
+	sngl_inspiral_table = list(banks.values())[0][0].sngl_inspiral_table.copy()
 	horizon_factors = {}
-	for bank in banks.values()[0]:
+	for bank in list(banks.values())[0]:
 		sngl_inspiral_table.extend(bank.sngl_inspiral_table)
 		horizon_factors.update(bank.horizon_factors)
 	@bottle.route("/template_bank.xml.gz")
@@ -861,7 +862,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			verbose = options.verbose
 		),
 		rankingstat = rankingstat,
-		horizon_distance_func = banks.values()[0][0].horizon_distance_func,# they should all be the same
+		horizon_distance_func = list(banks.values())[0][0].horizon_distance_func,# they should all be the same
 		gracedbwrapper = inspiral.GracedBWrapper(
 			instruments = rankingstat.instruments,
 			far_threshold = options.gracedb_far_threshold,
