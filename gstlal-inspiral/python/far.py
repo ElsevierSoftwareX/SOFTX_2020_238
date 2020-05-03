@@ -1,4 +1,4 @@
-g# Copyright (C) 2011--2014  Kipp Cannon, Chad Hanna, Drew Keppel
+# Copyright (C) 2011--2014  Kipp Cannon, Chad Hanna, Drew Keppel
 # Copyright (C) 2013  Jacob Peoples
 #
 # This program is free software; you can redistribute it and/or modify it

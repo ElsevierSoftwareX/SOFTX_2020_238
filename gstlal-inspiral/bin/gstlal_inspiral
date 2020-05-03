@@ -142,7 +142,7 @@ import math
 from optparse import OptionGroup, OptionParser
 import os
 import resource
-gnal
+import signal
 import socket
 from io import StringIO
 import sys
