@@ -537,7 +537,7 @@ static struct PyMethodDef methods[] = {
 	 "This function calculates the mass weighted spin parameter chi\n\n"
 	 "computechi(m1, m2, spin1, spin2)\n\n"
 	},
-	{"svd", (PyCFunction) PySVD, METH_KEYWORDS,
+	{"svd", (PyCFunction) PySVD, METH_VARARGS | METH_KEYWORDS,
 	 "This function calculates the singular value decomposition of a matrix\n"
 	 "via the GSL implementation of the Golub-Reinsch algorithm.  The default\n"
 	 "GSL function used is\n"
