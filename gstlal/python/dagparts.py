@@ -367,7 +367,7 @@ def T050017_filename(instruments, description, seg, extension, path = None):
 	"""!
 	A function to generate a T050017 filename.
 	"""
-	if not isinstance(instruments, basestring):
+	if not isinstance(instruments, str):
 		instruments = "".join(sorted(instruments))
 	start, end = seg
 	start = int(math.floor(start))

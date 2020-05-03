@@ -341,7 +341,7 @@ def write_bank(filename, banks, psd_input, cliplefts = None, cliprights = None, 
 			frag.chifacs = frag.chifacs[clipleft*2:clipright*2]
 
 			# Add scalar params
-			el.appendChild(ligolw_param.Param.from_pyvalue('rate', frag.rate))
+			el.appendChild(ligolw_param.Param.from_pyvalue('rate', int(frag.rate)))
 			el.appendChild(ligolw_param.Param.from_pyvalue('start', frag.start))
 			el.appendChild(ligolw_param.Param.from_pyvalue('end', frag.end))
 

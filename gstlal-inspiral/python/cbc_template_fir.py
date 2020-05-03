@@ -329,9 +329,9 @@ def movingmedian(interval, window_size):
 				A = A + [newdata]
 				bisect.insort(As, newdata)
 			if len(As) % 2:
-				tmp[i] = As[len(As)/2]
+				tmp[i] = As[len(As)//2]
 			else:
-				tmp[i] = (As[len(As)/2-1] + As[len(As)/2]) / 2.
+				tmp[i] = (As[len(As)//2-1] + As[len(As)//2]) / 2.
 			prev = A.pop(0)
 			del As[bisect.bisect_left(As, prev)]
 	return tmp

@@ -2006,7 +2006,7 @@ class InspiralExtrinsics(object):
 		self.min_instruments = min_instruments
 		# remove combinations less than min instruments and renormalize
 		for pofI in self.p_of_ifos.values():
-			total = numpy.zeros(pofI.histograms.values()[0].array.shape)
+			total = numpy.zeros(list(pofI.histograms.values())[0].array.shape)
 			for combo in list(pofI.histograms.keys()):
 				if len(combo) < self.min_instruments:
 					del pofI.histograms[combo]

@@ -900,7 +900,7 @@ class LnNoiseDensity(LnLRDensity):
 		# pick a canonical PDF to definine the binning (we assume
 		# they're all the same and only compute this array once to
 		# save time
-		lnpdf = self.densities.values()[0]
+		lnpdf = list(self.densities.values())[0]
 		arr = numpy.zeros_like(lnpdf.array)
 
 		snrindices, rcossindices = lnpdf.bins[self.snr_min:1e10, 1e-6:1e2]
