@@ -564,7 +564,7 @@ class PSDFirKernel(object):
 		kernel_fseries.data.data = numpy.sqrt(data) + 0.j
 		lal.COMPLEX16FreqTimeFFT(kernel_tseries, kernel_fseries, self.revplan)
 		kernel = kernel_tseries.data.data.real
-		kernel = numpy.roll(kernel, (len(data) - 1) / 2) / sample_rate * 2
+		kernel = numpy.roll(kernel, (len(data) - 1) // 2) / sample_rate * 2
 
 		#
 		# apply a Tukey window whose flat bit is 50% of the kernel.

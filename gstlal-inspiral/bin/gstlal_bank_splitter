@@ -180,10 +180,10 @@ for chirows in group_templates(sngl_inspiral_table, len(sngl_inspiral_table) / o
 		assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
 		# Pad the first group with an extra overlap / 2 templates
 		if numrow == 0:
-			rows = rows[:options.overlap/2] + rows
+			rows = rows[:options.overlap//2] + rows
 		outputrows.append((rows[0], rows))
 	# Pad the last group with an extra overlap / 2 templates
-	outputrows[-1] = (rows[0], rows + rows[-options.overlap/2:])
+	outputrows[-1] = (rows[0], rows + rows[-options.overlap//2:])
 
 # A sort of the groups of templates so that the sub banks are ordered.
 def sort_func(input_tuple, column = options.sort_by):
