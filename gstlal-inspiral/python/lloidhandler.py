@@ -431,10 +431,10 @@ class SegmentsTracker(object):
 				if elem is None:
 					# ignore missing gate elements
 					if verbose:
-						print >>sys.stderr, "\tcould not find %s for %s '%s'" % (name, instrument, segtype)
+						print("\tcould not find %s for %s '%s'" % (name, instrument, segtype), file=sys.stderr)
 					continue
 				if verbose:
-					print >>sys.stderr, "\tfound %s for %s '%s'" % (name, instrument, segtype)
+					print("\tfound %s for %s '%s'" % (name, instrument, segtype), file=sys.stderr)
 				elem.connect("start", self.gatehandler, (segtype, instrument, "on"))
 				elem.connect("stop", self.gatehandler, (segtype, instrument, "off"))
 				elem.set_property("emit-signals", True)
@@ -761,11 +761,11 @@ class Handler(simplehandler.Handler):
 			if self.rankingstat.is_healthy(self.verbose):
 				self.stream_thinca.ln_lr_from_triggers = far.OnlineFrankensteinRankingStat(self.rankingstat, self.rankingstat).finish().ln_lr_from_triggers
 				if self.verbose:
-					print >>sys.stderr, "ranking statistic assignment ENABLED"
+					print("ranking statistic assignment ENABLED", file=sys.stderr)
 			else:
 				self.stream_thinca.ln_lr_from_triggers = None
 				if self.verbose:
-					print >>sys.stderr, "ranking statistic assignment DISABLED"
+					print("ranking statistic assignment DISABLED", file=sys.stderr)
 		elif False:
 			# FIXME:  move sum-of-SNR^2 cut into this object's
 			# .__call__() and then use as coinc sieve function
@@ -778,11 +778,11 @@ class Handler(simplehandler.Handler):
 				delta_t = rankingstat.delta_t
 			).finish().ln_lr_from_triggers
 			if self.verbose:
-				print >>sys.stderr, "ranking statistic assignment ENABLED"
+				print("ranking statistic assignment ENABLED", file=sys.stderr)
 		else:
 			self.stream_thinca.ln_lr_from_triggers = None
 			if self.verbose:
-				print >>sys.stderr, "ranking statistic assignment DISABLED"
+				print("ranking statistic assignment DISABLED", file=sys.stderr)
 
 		#
 		# zero_lag_ranking_stats is a RankingStatPDF object that is
@@ -841,7 +841,7 @@ class Handler(simplehandler.Handler):
 		#
 
 		if verbose:
-			print >>sys.stderr, "connecting horizon distance handlers to gates ..."
+			print("connecting horizon distance handlers to gates ...", file=sys.stderr)
 		self.absent_instruments = set()
 		for instrument in rankingstat.instruments:
 			name = "%s_ht_gate" % instrument
@@ -861,12 +861,12 @@ class Handler(simplehandler.Handler):
 				continue
 				raise ValueError("cannot find \"%s\" element for %s" % (name, instrument))
 			if verbose:
-				print >>sys.stderr, "\tfound %s for %s" % (name, instrument)
+				print("\tfound %s for %s" % (name, instrument), file=sys.stderr)
 			elem.connect("start", self.horizgatehandler, (instrument, True))
 			elem.connect("stop", self.horizgatehandler, (instrument, False))
 			elem.set_property("emit-signals", True)
 		if verbose:
-			print >>sys.stderr, "... done connecting horizon distance handlers to gates"
+			print("... done connecting horizon distance handlers to gates", file=sys.stderr)
 
 
 	def do_on_message(self, bus, message):
@@ -958,11 +958,11 @@ class Handler(simplehandler.Handler):
 			if self.rankingstatpdf.is_healthy(self.verbose):
 				self.fapfar = far.FAPFAR(self.rankingstatpdf.new_with_extinction())
 				if self.verbose:
-					print >>sys.stderr, "false-alarm probability and rate assignment ENABLED"
+					print("false-alarm probability and rate assignment ENABLED", file=sys.stderr)
 			else:
 				self.fapfar = None
 				if self.verbose:
-					print >>sys.stderr, "false-alarm probability and rate assignment DISABLED"
+					print("false-alarm probability and rate assignment DISABLED", file=sys.stderr)
 		else:
 			self.rankingstatpdf = None
 			self.fapfar = None
@@ -1079,11 +1079,11 @@ class Handler(simplehandler.Handler):
 				if self.rankingstat.is_healthy(self.verbose):
 					self.stream_thinca.ln_lr_from_triggers = far.OnlineFrankensteinRankingStat(self.rankingstat, self.rankingstat).finish().ln_lr_from_triggers
 					if self.verbose:
-						print >>sys.stderr, "ranking statistic assignment ENABLED"
+						print("ranking statistic assignment ENABLED", file=sys.stderr)
 				else:
 					self.stream_thinca.ln_lr_from_triggers = None
 					if self.verbose:
-						print >>sys.stderr, "ranking statistic assignment DISABLED"
+						print("ranking statistic assignment DISABLED", file=sys.stderr)
 
 				# optionally get updated ranking statistic
 				# PDF data and enable FAP/FAR assignment
@@ -1114,7 +1114,7 @@ class Handler(simplehandler.Handler):
 					# correct thing to do is probably to add metadata to
 					# the buffer containing information about which
 					# instruments were on
-					self.rankingstat.denominator.triggerrates[instrument].add_ratebin(map(float, buf_seg[instrument]), len([event for event in events if event.snr >= snr_min and event.ifo == instrument]))
+					self.rankingstat.denominator.triggerrates[instrument].add_ratebin(list(map(float, buf_seg[instrument])), len([event for event in events if event.snr >= snr_min and event.ifo == instrument]))
 
 			# FIXME At the moment, empty triggers are added to
 			# inform the "how many instruments were on test", the
@@ -1223,7 +1223,7 @@ class Handler(simplehandler.Handler):
 		instrument, new_state = instrument_tpl
 
 		if self.verbose:
-			print >>sys.stderr, "%s: %s horizon distance state transition: %s @ %s" % (elem.get_name(), instrument, ("on" if new_state else "off"), str(timestamp))
+			print("%s: %s horizon distance state transition: %s @ %s" % (elem.get_name(), instrument, ("on" if new_state else "off"), str(timestamp)), file=sys.stderr)
 
 		with self.lock:
 			# retrieve the horizon history for this instrument
@@ -1258,7 +1258,7 @@ class Handler(simplehandler.Handler):
 		try:
 			self.snapshot_output_url("%s_LLOID" % self.tag, "xml.gz", verbose = self.verbose)
 		except TypeError as te:
-			print >>sys.stderr, "Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te
+			print("Warning: couldn't build output file on checkpoint, probably there aren't any triggers: %s" % te, file=sys.stderr)
 		# FIXME:  the timestamp is used to close off open segments
 		# and so should *not* be the timestamp of the current
 		# buffer, necessarily, but rather a GPS time guaranteed to
