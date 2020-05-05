@@ -10,6 +10,7 @@ Group: LSC Software/Data Analysis
 # --- package requirements --- #
 Requires: avahi
 Requires: avahi-glib
+Requires: python3-avahi
 # avahi-ui-tools depreciated in 0.7-19, remove if not necessary
 #Requires: avahi-ui-tools
 Requires: fftw >= 3
