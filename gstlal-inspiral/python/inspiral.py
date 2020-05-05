@@ -490,7 +490,7 @@ class GracedBWrapper(object):
 
 	DEFAULT_SERVICE_URL = gracedb.rest.DEFAULT_SERVICE_URL
 
-	def __init__(self, instruments, far_threshold = None, min_instruments = None, group = "Test", search = "LowMass", label = None, pipeline = "gstlal", service_url = None, kafka_server = None, delay_uploads = False, upload_auxiliary_data = True, verbose = False):
+	def __init__(self, instruments, far_threshold = None, min_instruments = None, group = "Test", search = "LowMass", label = None, pipeline = "gstlal", service_url = None, kafka_server = None, delay_uploads = False, upload_auxiliary_data = True, delta_t = 0.005, verbose = False):
 		self.instruments = frozenset(instruments)
 		self.min_instruments = min_instruments
 		self.group = group
@@ -504,6 +504,8 @@ class GracedBWrapper(object):
 		# cause the client to be created, which requires
 		# .service_url to have already been set
 		self.far_threshold = far_threshold
+		# store the coincidence threshold to use it later when forming coincidence
+		self.delta_t = delta_t
 
 		bottle.route("/gracedb_far_threshold.txt", method = "GET")(self.web_get_gracedb_far_threshold)
 		bottle.route("/gracedb_far_threshold.txt", method = "POST")(self.web_set_gracedb_far_threshold)
@@ -710,7 +712,7 @@ class GracedBWrapper(object):
 				snr_length = trigger_time_list[0][2].data.length
 				autocorrelation_length = (snr_length - 1) / 2
 				for (trigger_ifo, trigger_time, snr_time_series) in trigger_time_list:
-					coincidence_window = LIGOTimeGPS(light_travel_time(ifo, trigger_ifo))
+					coincidence_window = LIGOTimeGPS(light_travel_time(ifo, trigger_ifo)) + self.delta_t
 					coinc_segment &= ligolw_segments.segments.segment(trigger_time - coincidence_window, trigger_time + coincidence_window)
 					if snr_time_series.epoch == t0:
 						snr_time_series_array = snr_time_series.data.data

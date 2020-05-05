@@ -858,6 +858,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			injection_filename = options.injections,
 			tmp_path = options.tmp_space,
 			replace_file = True,
+			delta_t = options.coincidence_threshold,
 			verbose = options.verbose
 		),
 		rankingstat = rankingstat,
