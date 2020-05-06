@@ -119,9 +119,9 @@ for combo in combos:
 	norm[combo] = 1.0
 f.close()
 
-print "transtt =", transtt
-print "transtp =", transtp
-print "transpt =", transpt
-print "transpp =", transpp
-print "transdd =", transdd
-print "norm = ", norm
+print("transtt =", transtt)
+print("transtp =", transtp)
+print("transpt =", transpt)
+print("transpp =", transpp)
+print("transdd =", transdd)
+print("norm = ", norm)

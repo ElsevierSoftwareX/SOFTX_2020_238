@@ -26,7 +26,7 @@ import json
 import sys
 import tempfile
 import urllib
-import urlparse
+import urllib.parse as urlparse
 import logging
 import time
 from optparse import OptionParser
@@ -124,7 +124,7 @@ patt = re.compile('.*imgId=(?P<id>[0-9]*).*')
 for l in open(outfile):
 	m = patt.match(l)
 	if m:
-		print l
+		print(l)
 		imgid = m.group("id")
 		url = "https://ldvw.ligo.caltech.edu/ldvw/view?act=getImg&imgId=%s" % imgid
 		outfile = "ldvw_%s.png" % imgid

@@ -33,7 +33,7 @@ import logging
 from optparse import OptionParser
 import os.path
 import sys
-import urlparse
+import urllib.parse as urlparse
 import json
 
 

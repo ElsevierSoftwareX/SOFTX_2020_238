@@ -29,7 +29,7 @@
 
 
 import json
-import urlparse
+import urllib.parse as urlparse
 import logging
 from optparse import OptionParser
 import os

@@ -135,7 +135,7 @@ for m1 in numpy.logspace(numpy.log10(m1start), numpy.log10(m1stop), m1num):
 			s1s.append(s1)
 			s2s.append(s2)
 			durs.append(dur)
-			print m1, m2, s1, s2, numtmps
+			print(m1, m2, s1, s2, numtmps)
 
 # prepare a new XML document for writing template bank
 xmldoc = ligolw.Document()
@@ -149,7 +149,7 @@ process = ligolw_process.register_to_xmldoc(xmldoc, sys.argv[0], {})
 ligolw_process.set_process_end_time(process)
 
 if options.verbose:
-	print >> sys.stderr, "Writing output document"
+	print("Writing output document", file=sys.stderr)
 
 for n, (m1, m2, s1, s2, dur) in enumerate(zip(m1s, m2s, s1s, s2s, durs)):
 	row = SnglInspiralTable()

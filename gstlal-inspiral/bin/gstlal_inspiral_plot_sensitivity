@@ -136,7 +136,7 @@ class upper_limit(object):
         self.total_injections = {}
         for f in self.opts.injection_database:
             if opts.verbose:
-                print "Reading results of injection analysis from %s ..."%f
+                print("Reading results of injection analysis from %s ..."%f)
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
             connection = sqlite3.connect(working_filename)
             for inst in self.instrument_combos:
@@ -164,9 +164,9 @@ class upper_limit(object):
             self.found_injections_snrs[instr] = self.filter_injections(self.found_injections_snrs[instr])
 
             if self.opts.verbose:
-                print >>sys.stdout,"\nInstruments: %s" % instr
-                print >>sys.stdout,"Number of found injections: %d" % len(self.found_injections_fars[instr])
-                print >>sys.stdout,"Number of total injections: %d" % len(self.total_injections[instr])
+                print("\nInstruments: %s" % instr, file=sys.stdout)
+                print("Number of found injections: %d" % len(self.found_injections_fars[instr]), file=sys.stdout)
+                print("Number of total injections: %d" % len(self.total_injections[instr]), file=sys.stdout)
 
 
     def get_searched_instruments(self,connection):
@@ -224,7 +224,7 @@ class upper_limit(object):
         Compute multi-ifo (coincident) segment list from single ifo segments.
         '''
         if self.opts.verbose:
-            print >>sys.stdout,"\nForming coincident segments from single IFO segments..."
+            print("\nForming coincident segments from single IFO segments...", file=sys.stdout)
 
         for inst in self.instrument_combos[:]:
             # intersect single ifo segments
@@ -234,7 +234,7 @@ class upper_limit(object):
             else:
                 self.zero_lag_segments[inst] = self.segments.intersection(inst) - self.segments.union(set(self.segments.keys()) - inst)
             if self.opts.verbose:
-                print >>sys.stdout,"\t%s were on for %d seconds (after vetoes)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst]))
+                print("\t%s were on for %d seconds (after vetoes)" % (','.join(sorted(list(inst))),abs(self.zero_lag_segments[inst])), file=sys.stdout)
 
         return self.zero_lag_segments
 
@@ -411,7 +411,7 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
         opts.bin_types.append("Duration")
 
     if opts.max_mass_ratio and (opts.max_mass_ratio < 1):
-        raise ValueError, "The maximum mass ratio must be >=1!"
+        raise ValueError("The maximum mass ratio must be >=1!")
 
     return opts, filenames
 
@@ -442,7 +442,7 @@ def write_cache(cache_list, fileout):
 opts, database = parse_command_line()
 
 # read in data from input database, store in upper limit object
-if opts.verbose: print "\n\nSetting up the search volume calculations...\n"
+if opts.verbose: print("\n\nSetting up the search volume calculations...\n")
 UL = upper_limit(opts)
 
 # get the range of xaxis values to use
@@ -459,11 +459,11 @@ for bin_type in opts.bin_types:
     for instr in UL.instrument_combos:
 
         if opts.verbose:
-            print "\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type)
+            print("\n\nComputing sensitive volume for %s observation time binning by %s...\n" % ("".join(sorted(list(instr))),bin_type))
         # check for empty injection sets. these tend to crash
         # set_bins, so we just catch it here
         if not UL.total_injections[instr]:
-            print >> sys.stderr, "No injections performed in %s time. Skipping..." % "".join(sorted(list(instr)))
+            print("No injections performed in %s time. Skipping..." % "".join(sorted(list(instr))), file=sys.stderr)
             continue
 
         # get bins
@@ -475,12 +475,12 @@ for bin_type in opts.bin_types:
             nbins *= len(bin)
 
         if len(UL.total_injections[instr]) / nbins <= 1:
-            print >> sys.stderr, "Insufficient injections (%d) performed in %s time to compute sensitivity. Perform more injections or request fewer bins." % (len(UL.total_injections[instr]), "".join(sorted(list(instr))))
-            print >> sys.stderr, "Skipping ..."
+            print("Insufficient injections (%d) performed in %s time to compute sensitivity. Perform more injections or request fewer bins." % (len(UL.total_injections[instr]), "".join(sorted(list(instr)))), file=sys.stderr)
+            print("Skipping ...", file=sys.stderr)
             continue
 
         if opts.verbose:
-            print "\tInjections performed: %d\n" % (len(UL.total_injections[instr]))
+            print("\tInjections performed: %d\n" % (len(UL.total_injections[instr])))
 
 
         #

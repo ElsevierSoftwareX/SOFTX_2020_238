@@ -202,7 +202,7 @@ def parse_command_line():
 	for option in required_options:
 		if getattr(options, option) is None:
 			fail += "must provide option %s\n" % (option)
-	if fail: raise ValueError, fail
+	if fail: raise ValueError(fail)
 
 	#FIXME a hack to find the sql paths
 	share_path = os.path.split(dagparts.which('gstlal_inspiral'))[0].replace('bin', 'share/gstlal')

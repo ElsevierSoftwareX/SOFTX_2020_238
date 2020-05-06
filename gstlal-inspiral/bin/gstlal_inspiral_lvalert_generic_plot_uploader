@@ -33,7 +33,7 @@ import logging
 from optparse import OptionParser
 import os.path
 import sys
-import urlparse
+import urllib.parse as urlparse
 import json
 import glob
 import shutil
@@ -126,7 +126,7 @@ if not graceids:
 	lvalert_data = json.loads(sys.stdin.read())
 	logging.info("%(alert_type)s-type alert for event %(uid)s" % lvalert_data)
 	logging.info("lvalert data: %s" % repr(lvalert_data))
-	 if "filename" in lvalert_data["data"]:
+	if "filename" in lvalert_data["data"]:
 		filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
 		if filename not in (u"psd.xml.gz",):
 			logging.info("filename is not 'psd.xml.gz'.  skipping")
@@ -145,7 +145,7 @@ for graceid in graceids:
 		for filename in glob.glob(pat):
 			tmpfilename = "plot%d.png" % number
 			shutil.copyfile(filename, tmpfilename)
-			print tmpfilename
+			print(tmpfilename)
 			lvalert_helper.upload_file(gracedb_client, graceid, filename = tmpfilename, log_message = "Additional analysis plot", tagname = "background")
 			if tmpfilename != filename:
 				os.remove(tmpfilename)

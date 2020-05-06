@@ -168,7 +168,7 @@ def parse_command_line():
 
 		for ifo in options.event_snr_dict.keys():
 			if ifo not in options.event_chisq_dict.keys():
-				print ifo
+				print(ifo)
 				raise ValueError("Each ifo provided to --event-snr or --event-chisq must be provided to both options")
 
 	return options, filenames
@@ -194,7 +194,7 @@ def load_distributions(filenames, verbose = False):
 	rankingstatpdf = None
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+			print("%d/%d:" % (n, len(filenames)), file=sys.stderr)
 		this_rankingstat, this_rankingstatpdf = far.parse_likelihood_control_doc(far.ligolw_utils.load_filename(filename, verbose = verbose, contenthandler = far.RankingStat.LIGOLWContentHandler))
 		if this_rankingstat is not None:
 			template_ids = this_rankingstat.template_ids
@@ -237,7 +237,7 @@ def load_search_results(filenames, tmp_path = None, verbose = False):
 
 	for n, filename in enumerate(filenames, 1):
 		if verbose:
-			print >>sys.stderr, "%d/%d: %s" % (n, len(filenames), filename)
+			print("%d/%d: %s" % (n, len(filenames), filename), file=sys.stderr)
 		working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, verbose = verbose)
 		connection = sqlite3.connect(working_filename)
 
@@ -357,14 +357,14 @@ for bin_index, rankingstat in enumerate(sorted(rankingstats.values(), key = lamb
 				continue
 			plotname = dagparts.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_%s_SNRCHI2" % (options.user_tag, bin_index, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)
 			if options.verbose:
-				print >>sys.stderr, "writing %s" % plotname
+				print("writing %s" % plotname, file=sys.stderr)
 			fig.savefig(plotname)
 
 	# candidate rates
 	fig = plotfar.plot_rates(rankingstat)
 	plotname = dagparts.T050017_filename("H1L1V1", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_RATES" % (options.user_tag, bin_index), seg, options.output_format, path = options.output_dir)
 	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
+		print("writing %s" % plotname, file=sys.stderr)
 	fig.savefig(plotname)
 
 
@@ -373,7 +373,7 @@ if options.plot_snr_snr_pdfs:
 	# assume PDFs are identical for all template bank bins, and pick
 	# one set to plot
 	rankingstat = rankingstats.values()[0]
-	for (instruments, horizon_distances) in sorted(rankingstat.numerator.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda (a, horizon_distances): sorted(horizon_distances)):
+	for (instruments, horizon_distances) in sorted(rankingstat.numerator.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda x: sorted(x[1])):
 		# they're stored as a frozen set of quantized key/value
 		# pairs, need to unquantize them and get a dictionary back
 		horizon_distances = rankingstat.numerator.SNRPDF.quantized_horizon_distances(horizon_distances)
@@ -381,7 +381,7 @@ if options.plot_snr_snr_pdfs:
 		if fig is not None:
 			plotname = dagparts.T050017_filename(instruments, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_SNR_PDF_%s" % (options.user_tag, "_".join(["%s_%s" % (k, horizon_distances[k]) for k in sorted(horizon_distances)]) ), seg, options.output_format, path = options.output_dir)
 			if options.verbose:
-				print >>sys.stderr, "writing %s" % plotname
+				print("writing %s" % plotname, file=sys.stderr)
 			fig.savefig(plotname)
 
 
@@ -391,7 +391,7 @@ if rankingstatpdf is not None:
 		fig = plotfar.plot_likelihood_ratio_pdf(rankingstatpdf, (options.min_log_lambda, options.max_log_lambda), Title, which = which)
 		plotname = dagparts.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%s_LIKELIHOOD_RATIO_PDF" % (options.user_tag, NAME), seg, options.output_format, path = options.output_dir)
 		if options.verbose:
-			print >>sys.stderr, "writing %s" % plotname
+			print("writing %s" % plotname, file=sys.stderr)
 		fig.savefig(plotname)
 
 if rankingstatpdf is not None and rankingstatpdf.zero_lag_lr_lnpdf.array.any():
@@ -405,11 +405,11 @@ if rankingstatpdf is not None and rankingstatpdf.zero_lag_lr_lnpdf.array.any():
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = zerolag_ln_lr, is_open_box = True)
 	plotname = dagparts.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_openbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
+		print("writing %s" % plotname, file=sys.stderr)
 	fig.savefig(plotname)
 
 	fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (options.min_log_lambda, xhi), observed_ln_likelihood_ratios = timeslide_ln_lr, is_open_box = False)
 	plotname = dagparts.T050017_filename("COMBINED", "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_NOISE_LIKELIHOOD_RATIO_CCDF_closedbox" % options.user_tag, seg, options.output_format, path = options.output_dir)
 	if options.verbose:
-		print >>sys.stderr, "writing %s" % plotname
+		print("writing %s" % plotname, file=sys.stderr)
 	fig.savefig(plotname)

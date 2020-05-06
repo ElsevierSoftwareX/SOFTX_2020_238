@@ -35,10 +35,10 @@ from matplotlib import pyplot
 
 from ligo.lw import lsctables
 
-print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
-print >>sys.stdout, 'Content-type: text/html\r\n'
+print('Expires: Mon, 26 Jul 1997 05:00:00 GMT', file=sys.stdout)
+print('Content-type: text/html\r\n', file=sys.stdout)
 
-print """
+print("""
 <html>
 <head>
 <meta http-equiv="Pragma" content="no-cache">
@@ -46,12 +46,12 @@ print """
 <meta http-equiv="CACHE-CONTROL" content="NO-CACHE">
 </head>
 <body bgcolor=#E0E0E0>
-"""
+""")
 
 # title
-print """
+print("""
 <font size=10>SVD BANK</font><br>
-"""
+""")
 
 
 for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentHandler):
@@ -65,7 +65,7 @@ for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentH
 
 		pyplot.figure(figsize=(18,6))
 		pyplot.subplot(211)
-		print "<div>"
+		print("<div>")
 		maxrate = 0
 		mint = 0
 		for frag in bank.bank_fragments:
@@ -89,7 +89,7 @@ for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentH
 		pyplot.plot(numpy.real(bank.autocorrelation_bank[n,:]))
 		pyplot.plot(numpy.imag(bank.autocorrelation_bank[n,:]))
 		pyplot.savefig(sys.stdout, format="svg")
-		print "</div>"
+		print( "</div>")
 
 
-print "</body></html>"
+print("</body></html>")

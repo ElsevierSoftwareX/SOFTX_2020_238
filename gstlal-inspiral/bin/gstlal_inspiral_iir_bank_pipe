@@ -171,7 +171,7 @@ iirNode = {}
 
 
 for f in [lal.CacheEntry(line).path for line in open(input_cache)]:
-	print f
+	print(f)
 	iirNode[f] = gstlal_iir_bank_node(iirJob, dag, f, ifo, options.flow, ref_psd, options.sampleRate, options.padding, options.downsample, options.epsilon)
 
 dag.write_sub_files()

@@ -29,7 +29,7 @@
 
 
 import json
-import urlparse
+import urllib.parse as urlparse
 import logging
 from optparse import OptionParser
 import os
@@ -62,15 +62,15 @@ from gstlal import plotpsd
 
 import matplotlib
 matplotlib.rcParams.update({
-	"font.size": 10.0,
-	"axes.titlesize": 10.0,
-	"axes.labelsize": 10.0,
-	"xtick.labelsize": 8.0,
-	"ytick.labelsize": 8.0,
-	"legend.fontsize": 8.0,
-	"figure.dpi": 100,
-	"savefig.dpi": 100,
-	"text.usetex": True
+        "font.size": 10.0,
+        "axes.titlesize": 10.0,
+        "axes.labelsize": 10.0,
+        "xtick.labelsize": 8.0,
+        "ytick.labelsize": 8.0,
+        "legend.fontsize": 8.0,
+        "figure.dpi": 100,
+        "savefig.dpi": 100,
+        "text.usetex": True
 })
 
 
@@ -84,39 +84,39 @@ matplotlib.rcParams.update({
 
 
 def parse_command_line():
-	parser = OptionParser(
-		usage = "%prog [options] [graceID ...]",
-		description = "%prog generates a suite of plots displaying the data used to assess the significance of a candidate event in gracedb.  This program can be run manually with one more more gracedb IDs provided on the command line.  If no gracedb IDs are given on the command line, the tool assumes it is being run as an lvalert_listen client, and retrieves the candidate ID to process from a json blob ingested from stdin."
-	)
-	parser.add_option("--gracedb-service-url", metavar = "URL", default="%s" % DEFAULT_GRACEDB_URL, help = "GraceDb service url to upload to (default: %s)" % DEFAULT_GRACEDB_URL)
-	parser.add_option("--lvalert-server-url", metavar = "LVURL", default=DEFAULT_LVALERT_URL, help = "LVAlert Sever to listen to (default: %s)" % DEFAULT_LVALERT_URL)
-	parser.add_option("--search", metavar = "gdbsearch", default="allsky", help = "Search specification of GraceDB uploads (default: %s)" % "allsky")
-	parser.add_option("--max-snr", metavar = "SNR", type = "float", default = 200., help = "Set the upper bound of the SNR ranges in plots (default = 200).")
-	parser.add_option("--format", default = "png", help = "Set file format by selecting the extention (default = \"png\").")
-	parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = don't).")
-	parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
-	parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
-	parser.add_option("--testenv", action = "store_true", help = "Listen to test nodes")
-	parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
+        parser = OptionParser(
+                usage = "%prog [options] [graceID ...]",
+                description = "%prog generates a suite of plots displaying the data used to assess the significance of a candidate event in gracedb.  This program can be run manually with one more more gracedb IDs provided on the command line.  If no gracedb IDs are given on the command line, the tool assumes it is being run as an lvalert_listen client, and retrieves the candidate ID to process from a json blob ingested from stdin."
+        )
+        parser.add_option("--gracedb-service-url", metavar = "URL", default="%s" % DEFAULT_GRACEDB_URL, help = "GraceDb service url to upload to (default: %s)" % DEFAULT_GRACEDB_URL)
+        parser.add_option("--lvalert-server-url", metavar = "LVURL", default=DEFAULT_LVALERT_URL, help = "LVAlert Sever to listen to (default: %s)" % DEFAULT_LVALERT_URL)
+        parser.add_option("--search", metavar = "gdbsearch", default="allsky", help = "Search specification of GraceDB uploads (default: %s)" % "allsky")
+        parser.add_option("--max-snr", metavar = "SNR", type = "float", default = 200., help = "Set the upper bound of the SNR ranges in plots (default = 200).")
+        parser.add_option("--format", default = "png", help = "Set file format by selecting the extention (default = \"png\").")
+        parser.add_option("--output-path", metavar = "PATH", help = "Write local copies of the plots to this directory (default = don't).")
+        parser.add_option("--no-upload", action = "store_true", help = "Disable upload of plots to gracedb, e.g., for testing new plots.")
+        parser.add_option("--skip-404", action = "store_true", help = "Skip events that give 404 (file not found) errors (default is to abort).")
+        parser.add_option("--testenv", action = "store_true", help = "Listen to test nodes")
+        parser.add_option("--verbose", action = "store_true", help = "Be verbose.")
 
-	options, gid_list = parser.parse_args()
+        options, gid_list = parser.parse_args()
 
-	if not gid_list:
-		# FIXME:  lvalert_listen doesn't allow command-line
-		# options, enable logging for online analysis
-		options.verbose = True
+        if not gid_list:
+                # FIXME:  lvalert_listen doesn't allow command-line
+                # options, enable logging for online analysis
+                options.verbose = True
 
-	# can only call basicConfig once (otherwise need to switch to more
-	# complex logging configuration)
-	if options.verbose:
-		logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
-	else:
-		logging.basicConfig(format = "%(asctime)s:%(message)s")
+        # can only call basicConfig once (otherwise need to switch to more
+        # complex logging configuration)
+        if options.verbose:
+                logging.basicConfig(format = "%(asctime)s:%(message)s", level = logging.INFO)
+        else:
+                logging.basicConfig(format = "%(asctime)s:%(message)s")
 
-	if options.no_upload and options.output_path is None:
-		raise ValueError("--no-upload without setting --ouput-path disables all output")
+        if options.no_upload and options.output_path is None:
+                raise ValueError("--no-upload without setting --ouput-path disables all output")
 
-	return options, gid_list
+        return options, gid_list
 
 
 #
@@ -129,34 +129,34 @@ def parse_command_line():
 
 
 def get_files(gracedb_client, graceid, ranking_data_filename = "ranking_data.xml.gz"):
-	coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
+        coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(gracedb_client, graceid)
 
-	response = lvalert_helper.get_filename(gracedb_client, graceid, filename = ranking_data_filename)
-	ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.RankingStat.LIGOLWContentHandler)[0]
+        response = lvalert_helper.get_filename(gracedb_client, graceid, filename = ranking_data_filename)
+        ranking_data_xmldoc = ligolw_utils.load_fileobj(response, contenthandler = far.RankingStat.LIGOLWContentHandler)[0]
 
-	rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ranking_data_xmldoc)
-	if rankingstat is None:
-		raise ValueError("failed to extract CoincParams object from '%s'" % ranking_data_filename)
-	# RankingStat objects are never written to disk .finish()ed
-	rankingstat.finish()
+        rankingstat, rankingstatpdf = far.parse_likelihood_control_doc(ranking_data_xmldoc)
+        if rankingstat is None:
+                raise ValueError("failed to extract CoincParams object from '%s'" % ranking_data_filename)
+        # RankingStat objects are never written to disk .finish()ed
+        rankingstat.finish()
 
        # RankingStatPDF objects are never written to disk extincted
-	fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
+        fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
 
-	return coinc_xmldoc, rankingstat, rankingstatpdf, fapfar
+        return coinc_xmldoc, rankingstat, rankingstatpdf, fapfar
 
 
 
 def get_psds(gracedb_client, graceid, filename = "psd.xml.gz", ignore_404 = False):
         response = lvalert_helper.get_filename(gracedb_client, graceid, filename = filename, ignore_404 = ignore_404)
         if response is None:
-		logging.info("No response retrieving psd.xml.gz")
+                logging.info("No response retrieving psd.xml.gz")
         return series.read_psd_xmldoc(ligolw_utils.load_fileobj(response, contenthandler = series.PSDContentHandler)[0])
 
 
 def plot_snrchisq(instrument, rankingstat, plot_type, max_snr, snrchisq = None):
-	snr, chisq = snrchisq if snrchisq is not None else (None, None)
-	return plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
+        snr, chisq = snrchisq if snrchisq is not None else (None, None)
+        return plotfar.plot_snr_chi_pdf(rankingstat, instrument, plot_type, max_snr, event_snr = snr, event_chisq = chisq)
 
 
 #
@@ -169,58 +169,58 @@ def plot_snrchisq(instrument, rankingstat, plot_type, max_snr, snrchisq = None):
 
 
 def main(client=None):
-	#
-	# Read in options from the command line:
-	#
+        #
+        # Read in options from the command line:
+        #
 
-	options, gid_list = parse_command_line()
-	logging.info ("read command line options")
+        options, gid_list = parse_command_line()
+        logging.info ("read command line options")
 
-	#
-	# Initiate the LVALert Client, and subscribe to relevant nodes
-	# I'm hardcoding this to cbc_gstlal_allsky for now.
-	#
+        #
+        # Initiate the LVALert Client, and subscribe to relevant nodes
+        # I'm hardcoding this to cbc_gstlal_allsky for now.
+        #
 
-	client = LVAlertClient(server=options.lvalert_server_url)
+        client = LVAlertClient(server=options.lvalert_server_url)
 
-	#
-	# Connect to gracedb:
-	#
+        #
+        # Connect to gracedb:
+        #
 
-	gracedb_client = GraceDb(options.gracedb_service_url)
+        gracedb_client = GraceDb(options.gracedb_service_url)
 
-	if options.testenv:
-		lvnodes = ['test_gstlal_' + options.search]
-	else:
-		lvnodes = ['cbc_gstlal_' + options.search]
-	#
-	# start LVAlert listener loop:
-	#
-	try:
-		logging.info("connecting to %s" % options.lvalert_server_url)
-		if client.connect():
-			logging.info("connected to %s" % options.lvalert_server_url)
-		else:
-			logging.info("could not connect to %s, exiting" % options.lvalert_server_url)
-			exit()
+        if options.testenv:
+                lvnodes = ['test_gstlal_' + options.search]
+        else:
+                lvnodes = ['cbc_gstlal_' + options.search]
+        #
+        # start LVAlert listener loop:
+        #
+        try:
+                logging.info("connecting to %s" % options.lvalert_server_url)
+                if client.connect():
+                        logging.info("connected to %s" % options.lvalert_server_url)
+                else:
+                        logging.info("could not connect to %s, exiting" % options.lvalert_server_url)
+                        exit()
 
-		plotter = uber_plotter(gracedb_client, options)
-		client.process(block=False)
+                plotter = uber_plotter(gracedb_client, options)
+                client.process(block=False)
 
-		# Subscribe to lvnodes:
-	        for n in lvnodes:
-            		try:
-                		client.subscribe(n)
-				logging.info("subscribed to node %s" % n)
-            		except:
-                		logging.info("Could not subscribe to node %s" % n)
-		logging.info("Listening for lvalerts.")
-		client.listen(plotter.process_alert)
-		while True: time.sleep(5)
+                # Subscribe to lvnodes:
+                for n in lvnodes:
+                        try:
+                                client.subscribe(n)
+                                logging.info("subscribed to node %s" % n)
+                        except:
+                                logging.info("Could not subscribe to node %s" % n)
+                logging.info("Listening for lvalerts.")
+                client.listen(plotter.process_alert)
+                while True: time.sleep(5)
 
-	except (KeyboardInterrupt, SystemExit):
-		logging.info("exit signal received, disconnecting from lvalert")
-		client.abort()
+        except (KeyboardInterrupt, SystemExit):
+                logging.info("exit signal received, disconnecting from lvalert")
+                client.abort()
 
 #
 # the uber plotter class that responds to alerts:
@@ -228,156 +228,156 @@ def main(client=None):
 
 
 class uber_plotter(object):
-	# initiate:
-	def __init__(self, gracedb_client, options):
-		self.opts = options
-		self.gracedb = gracedb_client
-		logging.info("uber_plotter class initiated")
+        # initiate:
+        def __init__(self, gracedb_client, options):
+                self.opts = options
+                self.gracedb = gracedb_client
+                logging.info("uber_plotter class initiated")
 
-	# respond to an alert:
-	def process_alert(self, node=None, payload=None):
-		lvalert_data =  json.loads(payload)
-		logging.info("Recieved LVAlert from node %s" % node)
-		logging.info("Alert Contents: %s" % lvalert_data)
+        # respond to an alert:
+        def process_alert(self, node=None, payload=None):
+                lvalert_data =  json.loads(payload)
+                logging.info("Recieved LVAlert from node %s" % node)
+                logging.info("Alert Contents: %s" % lvalert_data)
 
-		gid = None
+                gid = None
 
-		# check for the right filenames:
-        	if "filename" in lvalert_data["data"]:
-                	filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
-               		gid = str(lvalert_data["uid"])
-                	if filename in (u"ranking_data.xml.gz",):
-                        	logging.info("ranking_data.xml.gz available for %s" % gid)
-        			logging.info("generating ranking plots for %s" % gid)
-				try:
-        				self.generate_ranking_plots(gid)
-				except Exception, err:
-					logging.info(traceback.print_exc())
-                	elif filename in (u"psd.xml.gz",):
-                        	logging.info("psd.xml.gz available for %s" % gid)
-        			logging.info("generating psd plots for %s" % gid)
-				try:
-        				self.generate_psd_plots(gid)
-				except Exception, err:
-					logging.info(traceback.print_exc())
-        		else:
-                        	logging.info("filename is not 'ranking_data.xml.gz' or 'psd.xml.gz'.  skipping")
-        	else:
-                	logging.info("json key filename not in lvalert data, skipping")
-
-
-	#						#
-	#---- Generate plots from ranking stat file ----#
-	#						#
-
-	def generate_ranking_plots(self, gid=None):
-		#
-		# download candidate's data
-		#
-		coinc_xmldoc, rankingstat, rankingstatpdf, fapfar = get_files(gracedb_client=self.gracedb, graceid=gid)
-		coinc_event_table = lsctables.CoincTable.get_table(coinc_xmldoc)
-		coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
-		try:
-			coinc_event, = coinc_event_table
-			coinc_inspiral, = coinc_inspiral_table
-		except ValueError:
-			raise ValueError("document does not contain exactly one candidate")
-		if [(row.search, row.search_coinc_type) for row in lsctables.CoincDefTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_event.coinc_def_id] != [(InspiralCoincDef.search, InspiralCoincDef.search_coinc_type)]:
-			raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
-		offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
-		sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
+                # check for the right filenames:
+                if "filename" in lvalert_data["data"]:
+                        filename = os.path.split(urlparse.urlparse(lvalert_data["data"]["filename"]).path)[-1]
+                        gid = str(lvalert_data["uid"])
+                        if filename in (u"ranking_data.xml.gz",):
+                                logging.info("ranking_data.xml.gz available for %s" % gid)
+                                logging.info("generating ranking plots for %s" % gid)
+                                try:
+                                        self.generate_ranking_plots(gid)
+                                except Exception as err:
+                                        logging.info(traceback.print_exc())
+                        elif filename in (u"psd.xml.gz",):
+                                logging.info("psd.xml.gz available for %s" % gid)
+                                logging.info("generating psd plots for %s" % gid)
+                                try:
+                                        self.generate_psd_plots(gid)
+                                except Exception as err:
+                                        logging.info(traceback.print_exc())
+                        else:
+                                logging.info("filename is not 'ranking_data.xml.gz' or 'psd.xml.gz'.  skipping")
+                else:
+                        logging.info("json key filename not in lvalert data, skipping")
 
 
+        #                                               #
+        #---- Generate plots from ranking stat file ----#
+        #                                               #
 
-		for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
-			for instrument in rankingstat.instruments:
-				if instrument in sngl_inspirals:
-					# place marker on plot
-					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
-				else:
-					# no sngl for this instrument
-					fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr)
-				filename = "%s_%s_%s_snrchi.png" % (gid, instrument, plot_type)
-				if not self.opts.no_upload:
-					lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
-				if self.opts.output_path is not None:
-					filename = os.path.join(self.opts.output_path, filename)
-					logging.info("writing %s ..." % filename)
-					fig.savefig(filename)
-
-
-		fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
-		filename = "%s_likehoodratio_ccdf.png" % gid
-		if not self.opts.no_upload:
-			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
-		if self.opts.output_path is not None:
-			filename = os.path.join(self.opts.output_path, filename)
-			logging.info("writing %s ..." % filename)
-			fig.savefig(filename)
+        def generate_ranking_plots(self, gid=None):
+                #
+                # download candidate's data
+                #
+                coinc_xmldoc, rankingstat, rankingstatpdf, fapfar = get_files(gracedb_client=self.gracedb, graceid=gid)
+                coinc_event_table = lsctables.CoincTable.get_table(coinc_xmldoc)
+                coinc_inspiral_table = lsctables.CoincInspiralTable.get_table(coinc_xmldoc)
+                try:
+                        coinc_event, = coinc_event_table
+                        coinc_inspiral, = coinc_inspiral_table
+                except ValueError:
+                        raise ValueError("document does not contain exactly one candidate")
+                if [(row.search, row.search_coinc_type) for row in lsctables.CoincDefTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_event.coinc_def_id] != [(InspiralCoincDef.search, InspiralCoincDef.search_coinc_type)]:
+                        raise ValueError("candidate is not an inspiral<-->inspiral coincidence")
+                offsetvector = lsctables.TimeSlideTable.get_table(coinc_xmldoc).as_dict()[coinc_event.time_slide_id]
+                sngl_inspirals = dict((row.ifo, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 
 
-		fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
-		filename = "%s_horizon_distances.png" % gid
-		if not self.opts.no_upload:
-			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
-		if self.opts.output_path is not None:
-			filename = os.path.join(self.opts.output_path, filename)
-			logging.info("writing %s ..." % filename)
-			fig.savefig(filename)
+
+                for plot_type in ["background_pdf", "injection_pdf", "zero_lag_pdf", "LR"]:
+                        for instrument in rankingstat.instruments:
+                                if instrument in sngl_inspirals:
+                                        # place marker on plot
+                                        fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr, (sngl_inspirals[instrument].snr, sngl_inspirals[instrument].chisq))
+                                else:
+                                        # no sngl for this instrument
+                                        fig = plot_snrchisq(instrument, rankingstat, plot_type, self.opts.max_snr)
+                                filename = "%s_%s_%s_snrchi.png" % (gid, instrument, plot_type)
+                                if not self.opts.no_upload:
+                                        lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "%s SNR, chisq PDF" % instrument, tagname = "background")
+                                if self.opts.output_path is not None:
+                                        filename = os.path.join(self.opts.output_path, filename)
+                                        logging.info("writing %s ..." % filename)
+                                        fig.savefig(filename)
 
 
-		fig = plotfar.plot_rates(rankingstat)
-		filename = "%s_rates.png" % gid
-		if not self.opts.no_upload:
-			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Instrument combo rates", tagname = "background")
-		if self.opts.output_path is not None:
-			filename = os.path.join(self.opts.output_path, filename)
-			logging.info("writing %s ..." % filename)
-			fig.savefig(filename)
+                fig = plotfar.plot_likelihood_ratio_ccdf(fapfar, (0., max(40., coinc_event.likelihood - coinc_event.likelihood % 5. + 5.)), ln_likelihood_ratio_markers = (coinc_event.likelihood,))
+                filename = "%s_likehoodratio_ccdf.png" % gid
+                if not self.opts.no_upload:
+                        lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Likelihood Ratio CCDF", tagname = "background")
+                if self.opts.output_path is not None:
+                        filename = os.path.join(self.opts.output_path, filename)
+                        logging.info("writing %s ..." % filename)
+                        fig.savefig(filename)
 
 
-	#						#
-	#--------  Generate plots from psd file --------#
-	#						#
+                fig = plotfar.plot_horizon_distance_vs_time(rankingstat, (coinc_inspiral.end - 14400., coinc_inspiral.end), tref = coinc_inspiral.end)
+                filename = "%s_horizon_distances.png" % gid
+                if not self.opts.no_upload:
+                        lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Horizon Distances", tagname = "psd")
+                if self.opts.output_path is not None:
+                        filename = os.path.join(self.opts.output_path, filename)
+                        logging.info("writing %s ..." % filename)
+                        fig.savefig(filename)
 
-	def generate_psd_plots(self, gid=None):
-		psds = get_psds(gracedb_client=self.gracedb,
-				graceid=gid, ignore_404 = self.opts.skip_404)
-		if psds is None:
-			logging.info("Could not get_psds, exiting loop")
-			return
 
-		coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(self.gracedb, gid)
+                fig = plotfar.plot_rates(rankingstat)
+                filename = "%s_rates.png" % gid
+                if not self.opts.no_upload:
+                        lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "Instrument combo rates", tagname = "background")
+                if self.opts.output_path is not None:
+                        filename = os.path.join(self.opts.output_path, filename)
+                        logging.info("writing %s ..." % filename)
+                        fig.savefig(filename)
 
-		#
-		# PSD plot
-		#
 
-		fig = plotpsd.plot_psds(psds, coinc_xmldoc, plot_width = 800)
-		fig.tight_layout()
+        #                                               #
+        #--------  Generate plots from psd file --------#
+        #                                               #
 
-		filename = "%s_psd.%s" % (gid, self.opts.format)
-		if self.opts.no_upload:
-			logging.info("writing %s ..." % filename)
-			fig.savefig(filename)
-		else:
-			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "strain spectral density plot", tagname = "psd")
+        def generate_psd_plots(self, gid=None):
+                psds = get_psds(gracedb_client=self.gracedb,
+                                graceid=gid, ignore_404 = self.opts.skip_404)
+                if psds is None:
+                        logging.info("Could not get_psds, exiting loop")
+                        return
 
-		#
-		# Cumulative SNRs plot
-		#
+                coinc_xmldoc = lvalert_helper.get_coinc_xmldoc(self.gracedb, gid)
 
-		fig = plotpsd.plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 800)
-		fig.tight_layout()
+                #
+                # PSD plot
+                #
 
-		filename = "%s_cumulative_snrs.%s" % (gid, self.opts.format)
-		if self.opts.no_upload:
-			logging.info("writing %s ..." % filename)
-			fig.savefig(filename)
-		else:
-			lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
+                fig = plotpsd.plot_psds(psds, coinc_xmldoc, plot_width = 800)
+                fig.tight_layout()
 
-		logging.info("finished processing psd plot for %s" % gid)
+                filename = "%s_psd.%s" % (gid, self.opts.format)
+                if self.opts.no_upload:
+                        logging.info("writing %s ..." % filename)
+                        fig.savefig(filename)
+                else:
+                        lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "strain spectral density plot", tagname = "psd")
+
+                #
+                # Cumulative SNRs plot
+                #
+
+                fig = plotpsd.plot_cumulative_snrs(psds, coinc_xmldoc, plot_width = 800)
+                fig.tight_layout()
+
+                filename = "%s_cumulative_snrs.%s" % (gid, self.opts.format)
+                if self.opts.no_upload:
+                        logging.info("writing %s ..." % filename)
+                        fig.savefig(filename)
+                else:
+                        lvalert_helper.upload_fig(fig, self.gracedb, gid, filename = filename, log_message = "cumulative SNRs plot", tagname = "psd")
+
+                logging.info("finished processing psd plot for %s" % gid)
 
 
 

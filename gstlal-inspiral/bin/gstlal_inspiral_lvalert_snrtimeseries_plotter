@@ -36,7 +36,7 @@ matplotlib.rcParams.update({
 from optparse import OptionParser
 from os import path
 import sys
-import urlparse
+import urllib.parse as urlparse
 
 from glue.ligolw import ligolw
 from glue.ligolw import lsctables

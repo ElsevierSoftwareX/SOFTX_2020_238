@@ -36,7 +36,7 @@ for detector in ("H1", "L1"):
 			tpdf[i] += prob
 			phipdf[j] += prob
 			jointpdf[i,j] = prob
-	print "evaluated %d probabilities in %f seconds" % (num**2, time.time()-s)
+	print("evaluated %d probabilities in %f seconds" % (num**2, time.time()-s))
 	f = pyplot.figure(figsize=(10,10))
 	pyplot.subplot(222)
 	pyplot.plot(dts, tpdf)#, drawstyle="steps-mid")

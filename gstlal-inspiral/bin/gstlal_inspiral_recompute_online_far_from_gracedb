@@ -99,7 +99,7 @@ def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with
 	#
 
 	for [gid, coinc_xmldoc] in list_of_gid_xmldoc_pairs:
-		print "likelihood ratio of %s before: %.6f\nFAR of %s before: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, lsctables.CoincInspiralTable.get_table(coinc_xmldoc)[0].combined_far)
+		print("likelihood ratio of %s before: %.6f\nFAR of %s before: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, lsctables.CoincInspiralTable.get_table(coinc_xmldoc)[0].combined_far))
 		coinc_def_id = lsctables.CoincDefTable.get_table(coinc_xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 		sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(coinc_xmldoc))
 		coinc_event_map_index = dict((row.coinc_event_id, []) for row in lsctables.CoincTable.get_table(coinc_xmldoc) if row.coinc_def_id == coinc_def_id)
@@ -115,7 +115,7 @@ def reassign_likelihoods(likelihood_file, list_of_gid_xmldoc_pairs, fapfar, with
 			ln_likelihood_ratio_func = rankingstat.ln_lr_from_triggers,
 			verbose = verbose)
 
-		print "likelihood ratio of %s after: %.6f\nFAR of %s after: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, fapfar.far_from_rank(lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood))
+		print("likelihood ratio of %s after: %.6f\nFAR of %s after: %g" % (gid, lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood, gid, fapfar.far_from_rank(lsctables.CoincTable.get_table(coinc_xmldoc)[0].likelihood)))
 
 #
 # =============================================================================

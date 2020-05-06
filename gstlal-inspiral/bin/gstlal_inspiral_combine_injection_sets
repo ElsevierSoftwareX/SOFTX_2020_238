@@ -71,7 +71,7 @@ def create_split_injection(processmap, process_params_dict, endtimesim_tuples, m
 	siminspiraltimemap = {}
 	end_times = numpy.array([])
 
-	for end_time, sim in sorted(endtimesim_tuples, key = lambda (k,v): k):
+	for end_time, sim in sorted(endtimesim_tuples, key = lambda x: x[0]):
 		siminspiraltable.append(sim)
 		end_times = numpy.append(end_times, end_time)
 		process_ids.setdefault(sim.process_id, []).append(sim.simulation_id)
@@ -82,7 +82,7 @@ def create_split_injection(processmap, process_params_dict, endtimesim_tuples, m
 			processparamstable.append(param)
 
 	dt = end_times[1:] - end_times[:-1]
-	print '%s: avg injection rate = %f, min mchirp = %f, max mchirp = %f, min dt = %f' % (name, 1./dt.mean(), min_mchirp, max_mchirp, dt.min())
+	print("%s: avg injection rate = %f, min mchirp = %f, max mchirp = %f, min dt = %f" % (name, 1./dt.mean(), min_mchirp, max_mchirp, dt.min()))
 	ligolw_utils.write_filename(xmldoc, name)
 
 def parse_command_line():
@@ -151,7 +151,7 @@ else:
 			avg_inj_rate = 1/numpy.mean(avg_dts)
 
 			if avg_inj_rate < target_inj_rate_interval[0]:
-				print avg_inj_rate, num_output
+				print(avg_inj_rate, num_output)
 				# the average injection rate cannot increase with more splittings, thus we can't hit this injection rate interval
 				raise ValueError("target injection rate not attainable, either increase the tolerance or decrease the target rate")
 

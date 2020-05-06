@@ -22,7 +22,7 @@ import os
 import re
 import time
 import logging
-import urlparse
+import urllib.parse as urlparse
 import json
 from optparse import OptionParser
 import numpy
@@ -106,7 +106,7 @@ gps = coinc_inspiral.get_end()
 # If the event is not older than five hours, wait till it is.
 sleep = 3600 * 5 -  abs(now() - gps)
 if sleep > 0:
-	print >> sys.stderr, "sleeping for %d seconds" % sleep
+	print("sleeping for %d seconds" % sleep, file=sys.stderr)
 	time.sleep(sleep)
 
 
@@ -129,7 +129,7 @@ try:
 	wd = "followups/%d" % gps
 	os.mkdir(wd)
 except OSError:
-	print "The directory for this event already exists, continuing anyway."
+	print("The directory for this event already exists, continuing anyway.")
 
 
 # FIXME hardcodes gps digits to 5 to match current

@@ -75,4 +75,5 @@ for i, bank in enumerate(banks):
 	print "--->\tMFLOPS per complex template: ", MFLOPs / (MT / 2.)
 	
 averageMFLOPS = totalMFLOPS / totalMT
-print "--\nAverage MFLOPS per template:", averageMFLOPS
+print("--\nAverage MFLOPS per template:", averageMFLOPS)
+
