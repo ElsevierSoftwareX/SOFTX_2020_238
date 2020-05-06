@@ -95,10 +95,10 @@ OK = True
 urls = set("%sgracedb_far_threshold.txt" % url.strip() for filename in filenames for url in open(filename))
 
 for url in sorted(urls):
-	print "%s:" % url
+	print("%s:" % url)
 	for line in urllib.urlopen(url, data = post_data):
 		OK &= "error" not in line
-		print "\t%s" % line.strip()
+		print("\t%s" % line.strip())
 
 if not OK:
 	sys.exit(1)

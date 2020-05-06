@@ -20,7 +20,7 @@ import base64
 import matplotlib
 matplotlib.use('agg')
 from optparse import OptionParser
-import StringIO
+from io import StringIO
 
 from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
