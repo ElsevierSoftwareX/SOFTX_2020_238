@@ -361,7 +361,7 @@ def P_instruments_given_signal(horizon_distances, n_samples = 500000, min_instru
 		# the SNR threshold in that combination.  sequence of
 		# instrument combinations is left as a generator expression
 		# for lazy evaluation
-		instruments = (frozenset(ordered_names[:n]) for n in xrange(min_instruments, len(order) + 1))
+		instruments = (frozenset(ordered_names[:n]) for n in range(min_instruments, len(order) + 1))
 		V = tuple(V_at_snr_threshold[i] for i in order[min_instruments - 1:])
 		if V[0] <= min_distance:
 			# fewer than the required minimum number of
@@ -702,7 +702,7 @@ class SNRPDF(object):
 		# array:  numpy returns a scalar from sqrt(), but we must
 		# have something that we can iterate over
 		rice_rvs = lambda x: numpy.sqrt(stats.ncx2.rvs(2., x**2.)).reshape(x.shape)
-		for i in xrange(n_samples):
+		for i in range(n_samples):
 			if progressbar is not None:
 				progressbar.increment()
 			# select random sky location and source orbital
@@ -804,7 +804,7 @@ class SNRPDF(object):
 		# falls
 		range_all = slice(None, None)
 		range_low = slice(None, pdf.bins[0][snr_cutoff])
-		for i in xrange(len(instruments)):
+		for i in range(len(instruments)):
 			slices = [range_all] * len(instruments)
 			slices[i] = range_low
 			pdf.array[slices] = 0.
@@ -1042,7 +1042,7 @@ def chunker(seq, size, start = None, stop = None):
 		start = 0
 	if stop is None:
 		stop = len(seq)
-	return (seq[pos:pos + size] for pos in xrange(start, stop, size))
+	return (seq[pos:pos + size] for pos in range(start, stop, size))
 
 
 def normsq_along_one(x):

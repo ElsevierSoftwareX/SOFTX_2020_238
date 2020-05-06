@@ -245,7 +245,7 @@ def slope(x, y):
 	"""
 	slope = numpy.zeros((len(x),), dtype = "double")
 	slope[0] = (y[1] - y[0]) / (x[1] - x[0])
-	for i in xrange(1, len(x) - 1):
+	for i in range(1, len(x) - 1):
 		slope[i] = (y[i + 1] - y[i - 1]) / (x[i + 1] - x[i - 1])
 	slope[-1] = (y[-1] - y[-2]) / (x[-1] - x[-2])
 	return slope
@@ -255,7 +255,7 @@ def upper_err(y, yerr, deltax):
 	z = y + yerr
 	deltax = int(deltax)
 	upper = numpy.zeros((len(yerr),), dtype = "double")
-	for i in xrange(len(yerr)):
+	for i in range(len(yerr)):
 		upper[i] = max(z[max(i - deltax, 0) : min(i + deltax, len(z))])
 	return upper - y
 
@@ -264,7 +264,7 @@ def lower_err(y, yerr, deltax):
 	z = y - yerr
 	deltax = int(deltax)
 	lower = numpy.zeros((len(yerr),), dtype = "double")
-	for i in xrange(len(yerr)):
+	for i in range(len(yerr)):
 		lower[i] = min(z[max(i - deltax, 0) : min(i + deltax, len(z))])
 	return y - lower
 

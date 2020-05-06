@@ -81,7 +81,7 @@ if __name__ == '__main__':
     import time
     
     pidmon = PidMon(sys.argv[1])
-    for x in xrange(1200):
+    for x in range(1200):
         pidmon.update()
         time.sleep(.5)
     

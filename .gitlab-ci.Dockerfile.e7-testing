@@ -1,0 +1,40 @@
+# This is a Dockerfile to build an EL7 MKL-optimized GstLAL 
+# runtime container. 
+
+FROM containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+
+# Labeling/packaging stuff:
+LABEL name="GstLAL Runtime Package, EL7 Testing" \
+      maintainer="Alexander Pace <alexander.pace@ligo.org>" \
+      date="2020-05-06" \
+      support="Reference Platform, EL7 (Testing)"
+
+USER root
+
+## Copy Optimized RPMs to container
+COPY rpms /rpms
+
+# Install Optimized RPMs, delete old RPMs
+RUN yum makecache && \
+      yum -y localinstall /rpms/*.rpm 
+
+# Update gstreamer registry cache:
+ENV GST_REGISTRY_1_0=/usr/share/gstreamer-1.0/.registry.bin
+RUN gst-inspect-1.0
+
+# Clean up and close-out
+
+#RUN rm -rf /rpms && \
+RUN yum clean all
+
+# Export MKL environment variables: 
+
+ENV MKL_INTERFACE_LAYER LP64
+ENV MKL_THREADING_LAYER SEQUENTIAL
+ENV GSTLAL_FIR_WHITEN 0
+ENV TMPDIR /tmp
+
+
+ENTRYPOINT source /opt/intel/bin/compilervars.sh intel64 && \
+           bash
+

@@ -40,7 +40,7 @@ def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
   length = len(psdData)
   deltaF = psd.deltaF
 
-  for i in xrange(length):
+  for i in range(length):
     psdData[i] = psdData[i] / rescale_factor
 
   if not smooth_psd:
@@ -50,7 +50,7 @@ def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
   # First scan for the relevant points
   bowlMin = 1E20
   bowlF = 0
-  for i in xrange(length):
+  for i in range(length):
     f = deltaF * i
     if (f > lowerBowlF) and (f < upperBowlF):
       if psdData[i] < bowlMin:
@@ -62,7 +62,7 @@ def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
   localPos = 0
 
   # Start by smoothing down into the bowl from low F
-  for i in xrange(length):
+  for i in range(length):
     f = deltaF * i
     if (f > lowerBowlF) and (f < bowlF):
       if (localMin == 0):
@@ -79,7 +79,7 @@ def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
   localMin = 0
 
   # And smooth down into the bowl from high F
-  for i in xrange(length-1,-1,-1):
+  for i in range(length-1,-1,-1):
     f = deltaF * i
     if (f < upperBowlF) and (f > bowlF):
       if (localMin == 0):
@@ -96,7 +96,7 @@ def smooth_psd(psd,smooth_psd = False, rescale_factor= 1):
   # And then do the rest
   joinPointsLower = []
   joinPointsUpper = []
-  for i in xrange(length):
+  for i in range(length):
     f = deltaF * i
     if (f < lowerBowlF):
       if (f==0):

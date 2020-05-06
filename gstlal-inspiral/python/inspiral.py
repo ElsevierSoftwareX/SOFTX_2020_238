@@ -747,7 +747,7 @@ class GracedBWrapper(object):
 				idx0 = int((coinc_segment[0] - t0)/dt)
 				idxf = int(math.ceil((coinc_segment[1] - t0)/dt))
 				peak_snr = 0.
-				for idx in xrange(idx0, idxf + 1):
+				for idx in range(idx0, idxf + 1):
 					if abs(snr_time_series_array[idx]) > peak_snr:
 						peak_snr = abs(snr_time_series_array[idx])
 						peak_phase = math.atan2(snr_time_series_array[idx].imag, snr_time_series_array[idx].real)

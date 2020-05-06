@@ -86,7 +86,7 @@ sim_inspiral_table_split = lsctables.New(lsctables.SimInspiralTable)
 sim_inspiral_table.parentNode.replaceChild(sim_inspiral_table_split, sim_inspiral_table)
 
 evensplit = numpy.array_split(sim_inspiral_table,options.nsplit);
-for i in xrange(options.nsplit):
+for i in range(options.nsplit):
 	sim_inspiral_table_split[:] = evensplit[i]
 	ligolw_process.set_process_end_time(process)
 	utils.write_filename(xmldoc, "%s/%s_INJ_SPLIT_%04d.xml"%(options.output_path,options.usertag,i), gz = False, verbose = options.verbose)

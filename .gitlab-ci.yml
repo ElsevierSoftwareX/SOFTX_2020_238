@@ -274,7 +274,7 @@ docker:el7:
 
     # Build the container:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build --pull -t $DOCKER_BRANCH --file .gitlab-ci.Dockerfile.e7 .
+    - docker build --pull -t $DOCKER_BRANCH --file .gitlab-ci.Dockerfile.e7-testing .
     - docker push $DOCKER_BRANCH
   dependencies:
     - level0:rpm:gstlal

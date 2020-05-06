@@ -49,7 +49,7 @@ N = sum(len(lsctables.SnglInspiralTable.get_table(xmldoc)) for fname, xmldoc in 
 # two ID sequences being the same small.
 
 assert N < 5000000, "too many templates:  increase size of draw space"
-ids = sorted(random.sample(xrange(9999999), N))
+ids = sorted(random.sample(range(9999999), N))
 
 # assign the IDs and write back to disk
 
