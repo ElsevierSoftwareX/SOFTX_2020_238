@@ -607,9 +607,9 @@ class LnSignalDensity(LnLRDensity):
 			while 1:
 				yield rvs()
 
-		snr_phase = dict((instrument, iter(snr_phase_gen(snr, phase_0[instrument])).next) for instrument, snr in snr_0.items())
-		#chi2s_over_snr2s = dict((instrument, iter(chi2_over_snr2_gen(instrument, snr)).next) for instrument, snr in snr_0.items())
-		gens_t = dict((instrument, iter(time_gen(sim.time_at_instrument(instrument, {instrument: 0.0}))).next) for instrument in instruments)
+		snr_phase = dict((instrument, iter(snr_phase_gen(snr, phase_0[instrument])).__next__) for instrument, snr in snr_0.items())
+		#chi2s_over_snr2s = dict((instrument, iter(chi2_over_snr2_gen(instrument, snr)).__next__) for instrument, snr in snr_0.items())
+		gens_t = dict((instrument, iter(time_gen(sim.time_at_instrument(instrument, {instrument: 0.0}))).__next__) for instrument in instruments)
 
 		#
 		# yield a sequence of randomly generated parameters for
@@ -653,7 +653,7 @@ class LnSignalDensity(LnLRDensity):
 		try:
 			self.idq_file = ligolw_param.get_pyvalue(xml, u"idq_file")
 		except ValueError as e:
-			print >> sys.stderr, "idq file not found", e
+			print("idq file not found", e, file=sys.stderr)
 			self.idq_file = None
 		self.horizon_factors = ligolw_param.get_pyvalue(xml, u"horizon_factors")
 		if self.horizon_factors is not None:
@@ -967,9 +967,9 @@ class LnNoiseDensity(LnLRDensity):
 		"""
 		snr_slope = 0.8 / len(self.instruments)**3
 
-		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(self.chi2_over_snr2_min, self.chi2_over_snr2_max)))).next) for instrument in self.instruments)
-		t_and_rate_gen = iter(self.triggerrates.random_uniform()).next
-		t_offsets_gen = dict((instruments, self.coinc_rates.plausible_toas(instruments).next) for instruments in self.coinc_rates.all_instrument_combos)
+		snrchi2gens = dict((instrument, iter(self.densities["%s_snr_chi" % instrument].bins.randcoord(ns = (snr_slope, 1.), domain = (slice(self.snr_min, None), slice(self.chi2_over_snr2_min, self.chi2_over_snr2_max)))).__next__) for instrument in self.instruments)
+		t_and_rate_gen = iter(self.triggerrates.random_uniform()).__next__
+		t_offsets_gen = dict((instruments, self.coinc_rates.plausible_toas(instruments).__next__) for instruments in self.coinc_rates.all_instrument_combos)
 		random_randint = random.randint
 		random_sample = random.sample
 		random_uniform = random.uniform

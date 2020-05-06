@@ -57,7 +57,6 @@ except ImportError:
 import itertools
 import math
 import multiprocessing
-import multiprocessing.queues
 import numpy
 import random
 from scipy import interpolate
@@ -563,7 +562,7 @@ class RankingStatPDF(object):
 		threads = []
 		for i in range(nthreads):
 			assert nsamples // nthreads >= 1
-			q = multiprocessing.queues.SimpleQueue()
+			q = multiprocessing.SimpleQueue()
 			p = multiprocessing.Process(target = lambda: self.binned_log_likelihood_ratio_rates_from_samples_wrapper(
 				q,
 				self.signal_lr_lnpdf,
@@ -586,7 +585,7 @@ class RankingStatPDF(object):
 			if p.exitcode:
 				raise Exception("sampling thread failed")
 		if verbose:
-			print >>sys.stderr, "done computing ranking statistic PDFs"
+			print("done computing ranking statistic PDFs", file=sys.stderr)
 
 		#
 		# apply density estimation kernels to counts
@@ -1053,7 +1052,7 @@ def marginalize_pdf_urls(urls, which, ignore_missing_files = False, verbose = Fa
 		#
 
 		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(urls)),
+			print("%d/%d:" % (n, len(urls)), file=sys.stderr)
 		try:
 			xmldoc = ligolw_utils.load_url(url, verbose = verbose, contenthandler = RankingStat.LIGOLWContentHandler)
 		except IOError:
@@ -1064,7 +1063,7 @@ def marginalize_pdf_urls(urls, which, ignore_missing_files = False, verbose = Fa
 			if not ignore_missing_files:
 				raise
 			if verbose:
-				print >>sys.stderr, "Could not load \"%s\" ... skipping as requested" % url
+				print("Could not load \"%s\" ... skipping as requested" % url, file=sys.stderr)
 			continue
 
 		#
