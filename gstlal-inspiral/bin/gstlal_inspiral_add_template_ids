@@ -53,7 +53,7 @@ ids = sorted(random.sample(range(9999999), N))
 
 # assign the IDs and write back to disk
 
-next_id = iter(ids).next
+next_id = iter(ids).__next__
 for fname, xmldoc in documents:
 	for row in lsctables.SnglInspiralTable.get_table(xmldoc):
 		row.template_id = next_id()
