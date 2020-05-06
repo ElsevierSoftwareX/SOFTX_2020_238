@@ -875,6 +875,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 			delay_uploads = options.delay_uploads,
 			kafka_server = options.output_kafka_server,
 			upload_auxiliary_data = True,
+			delta_t = options.coincidence_threshold,
 			verbose = options.verbose
 		),
 		ranking_stat_input_url = options.ranking_stat_input,
