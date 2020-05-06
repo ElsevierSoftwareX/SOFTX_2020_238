@@ -1075,7 +1075,7 @@ class BackgroundVsInjectionPlots(object):
 			self.spin = []
 			self.end_time = []
 
-		def __nonzero__(self):
+		def __bool__(self):
 			return bool(self.snr)
 
 	def __init__(self, snr_min):

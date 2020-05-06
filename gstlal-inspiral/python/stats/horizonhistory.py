@@ -240,7 +240,7 @@ class NearestLeafTree(object):
 				raise IndexError(x)
 			del self.tree[lo]
 
-	def __nonzero__(self):
+	def __bool__(self):
 		"""
 		True if the tree is not empty, False otherwise.
 		"""

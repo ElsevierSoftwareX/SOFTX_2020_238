@@ -149,7 +149,7 @@ class last_coincs(object):
 		return iter(self.coinc_event_index)
 
 
-	def __nonzero__(self):
+	def __bool__(self):
 		return bool(self.coinc_event_index)
 
 
