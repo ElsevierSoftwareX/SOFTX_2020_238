@@ -119,7 +119,7 @@ def get_fir_matrix(xmldoc, fFinal=None, pnorder=4, flower = 40, psd_interp=None,
 	fFinal = max(sngl_inspiral_table.getColumnByName("f_final"))
 	sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 	flower = param.get_pyvalue(xmldoc, 'flower')
-	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+	if verbose: print("f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate), file=sys.stderr)
 
 	snrvec = []
 	Mlist = []
@@ -181,7 +181,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 	if sampleRate is None:
 		sampleRate = int(2**(numpy.ceil(numpy.log2(fFinal)+1)))
 
-	if verbose: print >> sys.stderr, "f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate)
+	if verbose: print("f_min = %f, f_final = %f, sample rate = %f" % (flower, fFinal, sampleRate), file=sys.stderr)
 
 	Amat = {}
 	Bmat = {}
@@ -215,7 +215,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
 		amp, phase, f = waveform(m1, m2, flower, fFinal, sampleRate)
 		if verbose:
-			print >> sys.stderr, "waveform %f (T = %f)" % ((time.time() - start), float(amp.shape[0]/(float(sampleRate))))
+			print("waveform %f (T = %f)" % ((time.time() - start), float(amp.shape[0]/(float(sampleRate)))), file=sys.stderr)
 			start = time.time()
 		if psd_interp is not None:
 
@@ -228,12 +228,12 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 			start = time.time()
                 # get the chirptime
 		length = int(2**numpy.ceil(numpy.log2(amp.shape[0]+autocorrelation_length)))
-		if verbose: print >> sys.stderr, "length = %d, amp length = %d, autocorrelation length = %d" % (length, amp.shape[0], autocorrelation_length)
+		if verbose: print("length = %d, amp length = %d, autocorrelation length = %d" % (length, amp.shape[0], autocorrelation_length), file=sys.stderr)
 
                 # get the IIR response
 		out = spawaveform.iirresponse(length, a1, b0, delay)
 		if verbose:
-			print >> sys.stderr, "create IIR response %f" % (time.time() - start)
+			print("create IIR response %f" % (time.time() - start), file=sys.stderr)
 			start = time.time()
 		out = out[::-1]
 		u = numpy.zeros(length * 1, dtype=numpy.cdouble)
@@ -308,7 +308,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 
 
 
-		if verbose: print>>sys.stderr, "filters per sample rate (rate , num filters)\n",[(k,len(v)) for k,v in a1dict.items()]
+		if verbose: print("filters per sample rate (rate , num filters)\n",[(k,len(v)) for k,v in a1dict.items()], file=sys.stderr)
 
 
 	A = {}
@@ -323,7 +323,7 @@ def makeiirbank(xmldoc, sampleRate = None, padding=1.1, epsilon=0.02, alpha=.99,
 		max_len = max([len(i) for i in Amat[rate]])
 		DmatMin = min([min(elem) for elem in Dmat[rate]])
 		DmatMax = max([max(elem) for elem in Dmat[rate]])
-		if verbose: print>>sys.stderr, "rate %d, dmin %d, dmax %d, max_row %d, max_len %d" % (rate, DmatMin, DmatMax, max_rows, max_len)
+		if verbose: print("rate %d, dmin %d, dmax %d, max_row %d, max_len %d" % (rate, DmatMin, DmatMax, max_rows, max_len), file=sys.stderr)
 		A[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
 		B[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.complex128)
 		D[rate] = numpy.zeros((max_rows, max_len), dtype=numpy.int)

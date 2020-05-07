@@ -359,8 +359,8 @@ def time_slices(
 				accum_time += (1./rate)*segment_samples_max
 
 	if verbose:
-		print>> sys.stderr, "Time freq boundaries: "
-		print>> sys.stderr, time_freq_boundaries
+		print("Time freq boundaries: ", file=sys.stderr)
+		print(time_freq_boundaries, file=sys.stderr)
 
 	return numpy.array(time_freq_boundaries,dtype=[('rate','int'),('begin','float'),('end','float')])
 
