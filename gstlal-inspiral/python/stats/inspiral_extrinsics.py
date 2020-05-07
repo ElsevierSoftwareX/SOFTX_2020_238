@@ -1476,7 +1476,7 @@ class TimePhaseSNR(object):
 		"""
 		# order is dt, dphi and effective distance ratio for each combination
 		# NOTE the instruments argument here really needs to come from calling instrument_pairs()
-		if hasattr(time.values()[0], "__iter__"):
+		if hasattr(list(time.values())[0], "__iter__"):
 			outlen = len(time.values()[0])
 		else:
 			outlen =1
