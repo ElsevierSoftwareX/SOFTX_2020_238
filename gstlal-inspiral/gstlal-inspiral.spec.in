@@ -1,4 +1,5 @@
 %define gstreamername gstreamer1
+%global __python %{__python3}
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
@@ -89,7 +90,7 @@ plugins and programs.
 
 
 %build
-%configure --enable-gtk-doc --disable-massmodel
+%configure --enable-gtk-doc --disable-massmodel PYTHON=python3
 %{__make}
 
 

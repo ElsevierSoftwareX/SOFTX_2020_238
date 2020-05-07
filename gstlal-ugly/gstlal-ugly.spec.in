@@ -1,4 +1,5 @@
 %define gstreamername gstreamer1
+%global __python %{__python3}
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
@@ -93,7 +94,7 @@ plugins and programs.
 
 
 %build
-%configure --enable-gtk-doc
+%configure --enable-gtk-doc PYTHON=python3
 %{__make}
 
 

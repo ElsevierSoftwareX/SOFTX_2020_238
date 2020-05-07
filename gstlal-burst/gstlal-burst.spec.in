@@ -1,4 +1,5 @@
 %define gstreamername gstreamer1
+%global __python %{__python3}
 
 Name: @PACKAGE_NAME@
 Version: @PACKAGE_VERSION@
@@ -78,7 +79,7 @@ and programs.
 
 
 %build
-%configure
+%configure PYTHON=python3
 %{__make}
 
 
