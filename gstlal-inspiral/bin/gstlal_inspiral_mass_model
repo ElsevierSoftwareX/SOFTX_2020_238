@@ -47,6 +47,7 @@ parser = argparse.ArgumentParser(description = "Create analytic mass models for 
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
+parser.add_argument("--min-instrument", metavar='name', type=int, default=2, help='Minimum instruments operating. Specified for calculating horizon distance in uniform in template model.')
 parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, ligo-bns, bbh, uniform-template. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
