@@ -163,18 +163,18 @@ for n, url in enumerate(urls, 1):
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "%d/%d:" % (n, len(urls)),
+		print("%d/%d:" % (n, len(urls)), file=sys.stderr)
 	try:
 		xmldoc = ligolw_utils.load_url(url, contenthandler = far.RankingStat.LIGOLWContentHandler, verbose = options.verbose)
 	except Exception as e:
 		if options.verbose:
-			print >>sys.stderr, "failed to load '%s': %s.  trying to continue with remaining files" % (url, str(e))
+			print("failed to load '%s': %s.  trying to continue with remaining files" % (url, str(e)), file=sys.stderr)
 		failed.append(url)
 		continue
 
 	if not options.force and ligolw_process.doc_includes_process(xmldoc, process_name):
 		if options.verbose:
-			print >>sys.stderr, "already processed, skipping"
+			print("already processed, skipping", file=sys.stderr)
 		xmldoc.unlink()
 		continue
 
@@ -186,14 +186,14 @@ for n, url in enumerate(urls, 1):
 		coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)
 	except KeyError:
 		if options.verbose:
-			print >>sys.stderr, "document does not contain inspiral coincidences.  skipping."
+			print("document does not contain inspiral coincidences.  skipping.", file=sys.stderr)
 		xmldoc.unlink()
 		continue
 
 	process = ligolw_process.register_to_xmldoc(xmldoc, process_name, paramdict, ifos = rankingstat.instruments)
 
 	if options.verbose:
-		print >>sys.stderr, "indexing document ...",
+		print("indexing document ...", file=sys.stderr)
 	sngl_inspiral_table_index = dict((row.event_id, row) for row in lsctables.SnglInspiralTable.get_table(xmldoc))
 	coinc_event_map_index = dict((row.coinc_event_id, []) for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id)
 	for row in lsctables.CoincMapTable.get_table(xmldoc):
@@ -210,7 +210,7 @@ for n, url in enumerate(urls, 1):
 	else:
 		vetoseglists = segments.segmentlistdict()
 	if options.verbose:
-		print >>sys.stderr, "done"
+		print("done", file=sys.stderr)
 
 	#
 	# run likelihood ratio calculation.
