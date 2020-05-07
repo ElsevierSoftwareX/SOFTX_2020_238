@@ -585,7 +585,7 @@ class GracedBWrapper(object):
 		assert self.gracedb_client is not None, ".gracedb_client is None;  did you forget to set .far_threshold?"
 		for gracedb_id in gracedb_ids:
 			if self.verbose:
-				print >>sys.stderr, "posting '%s' to gracedb ID %s ..." % (filename, gracedb_id)
+				print("posting '%s' to gracedb ID %s ..." % (filename, gracedb_id), file=sys.stderr)
 			for attempt in range(1, self.retries + 1):
 				try:
 					resp = self.gracedb_client.writeLog(gracedb_id, message, filename = filename, filecontents = contents, tagname = tag)
@@ -594,10 +594,10 @@ class GracedBWrapper(object):
 				else:
 					if resp.status == http.client.CREATED:
 						break
-				print >>sys.stderr, "gracedb upload of %s for ID %s failed on attempt %d/%d"  % (filename, gracedb_id, attempt, self.retries)
+				print("gracedb upload of %s for ID %s failed on attempt %d/%d"  % (filename, gracedb_id, attempt, self.retries), file=sys.stderr)
 				time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 			else:
-				print >>sys.stderr, "gracedb upload of %s for ID %s failed" % (filename, gracedb_id)
+				print("gracedb upload of %s for ID %s failed" % (filename, gracedb_id), file=sys.stderr)
 
 	def __upload_aux_xmldoc(self, message, filename, tag, xmldoc, gracedb_ids):
 		# check for no-op
@@ -673,7 +673,7 @@ class GracedBWrapper(object):
 			# part way through.
 			#
 
-			print >>sys.stderr, "sending %s to gracedb ..." % filename
+			print("sending %s to gracedb ..." % filename, file=sys.stderr)
 			message = io.StringIO()
 			xmldoc = last_coincs[coinc_event.coinc_event_id]
 			# give the alert all the standard inspiral
@@ -742,7 +742,7 @@ class GracedBWrapper(object):
 					# candidate to gracedb without
 					# subthreshold triggers than to not
 					# upload anything
-					print >>sys.stderr, "something went wrong creating sub-threshold trigger for %s in gracedb upload" % ifo
+					print("something went wrong creating sub-threshold trigger for %s in gracedb upload" % ifo, file=sys.stderr)
 					continue
 				idx0 = int((coinc_segment[0] - t0)/dt)
 				idxf = int(math.ceil((coinc_segment[1] - t0)/dt))
@@ -757,7 +757,7 @@ class GracedBWrapper(object):
 				# NOTE Bayestar needs at least 26.3ms on either side of the snr peak, so only provide an snr time series if we have enough samples
 				min_num_samps = int(math.ceil(0.0263 / dt)) + 1
 				if peak_idx < min_num_samps or snr_time_series_array.shape[0] - peak_idx < min_num_samps:
-					print >>sys.stderr, "not enough samples to produce snr time series for sub-threshold trigger in %s" % ifo
+					print("not enough samples to produce snr time series for sub-threshold trigger in %s" % ifo, file=sys.stderr)
 					continue
 
 				# snr length guaranteed to be odd
@@ -778,7 +778,7 @@ class GracedBWrapper(object):
 						# We dont have enough samples, we need to append zeros
 						snr_time_series_array = numpy.concatenate((snr_time_series_array[idx0:idxf], numpy.zeros(snr_length - (idxf - idx0), dtype=snr_time_series_array.dtype)))
 					else:
-						print >>sys.stderr, "unexpected conditional while making sub-threshold trigger for %s, skipping. idx0 = %d, idxf = %d" % (ifo, idx0, idxf)
+						print("unexpected conditional while making sub-threshold trigger for %s, skipping. idx0 = %d, idxf = %d" % (ifo, idx0, idxf), file=sys.stderr)
 						continue
 				else:
 					snr_time_series_array = snr_time_series_array[idx0:idxf]
@@ -901,19 +901,19 @@ class GracedBWrapper(object):
 						resp_json = resp.json()
 						if resp.status == http.client.CREATED:
 							if self.verbose:
-								print >>sys.stderr, "event assigned grace ID %s" % resp_json["graceid"]
+								print("event assigned grace ID %s" % resp_json["graceid"], file=sys.stderr)
 							gracedb_ids.append(resp_json["graceid"])
 							self.__upload_aux_data("GstLAL internally computed p-astro", "p_astro.json", "p_astro", p_astro, [gracedb_ids[-1]])
 							try:
 								resp = self.gracedb_client.writeLabel(gracedb_ids[-1], 'PASTRO_READY')
 							except gracedb.rest.HTTPError as resp:
-								print >> sys.stderr, resp
+								print(resp, file=sys.stderr)
 							break
-					print >>sys.stderr, "gracedb upload of %s failed on attempt %d/%d" % (filename, attempt, self.retries)
-					print >>sys.stderr, resp_json
+					print("gracedb upload of %s failed on attempt %d/%d" % (filename, attempt, self.retries), file=sys.stderr)
+					print(resp_json, file=sys.stderr)
 					time.sleep(random.lognormal(math.log(self.retry_delay), .5))
 				else:
-					print >>sys.stderr, "gracedb upload of %s failed" % filename
+					print("gracedb upload of %s failed" % filename, file=sys.stderr)
 
 			# save event to disk
 			message.close()

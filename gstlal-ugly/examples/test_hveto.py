@@ -40,7 +40,7 @@ bank_file = """
 """
 bank_filename = "gstlal_excesspower_bank_H1_FAKE-STRAIN_level_0.xml"
 bank_fd = open( bank_filename, "w" )
-print >>bank_fd, bank_file
+print(bank_file, file=bank_fd)
 bank_fd.close()
 
 import pygtk
@@ -107,10 +107,10 @@ mainloop.run()
 
 """
 def get_triggers(elem):
-	print "get triggers called"
+	print("get triggers called")
 	buffer = elem.emit("pull-buffer")
 	for row in SnglBurst.from_buffer(buffer):
-		print row.channel
+		print(row.channel)
 
 appsink = gst.element_factory_make("appsink")
 appsink.connect_after("new-buffer", get_triggers)

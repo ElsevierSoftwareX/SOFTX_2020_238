@@ -14,7 +14,7 @@ cgitb.enable()
 form = cgi.FieldStorage()
 
 # Must be the first line
-print >>sys.stdout, 'Content-type: image/svg+xml\r\n'
+print('Content-type: image/svg+xml\r\n', file=sys.stdout)
 
 if "type" not in form:
 	raise ValueError("must specify type in url, eg. type=plot or type=loglog or type=pie or type=hist")

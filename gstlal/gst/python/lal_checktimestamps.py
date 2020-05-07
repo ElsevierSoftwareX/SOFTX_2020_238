@@ -219,18 +219,18 @@ class lal_checktimestamps(GstBase.BaseTransform):
 		expected_offset = self.offset0 + int(round((buf.pts - self.t0) * float(self.units_per_second) / Gst.SECOND))
 		expected_timestamp = self.t0 + int(round((buf.offset - self.offset0) * Gst.SECOND / float(self.units_per_second)))
 		if buf.offset != expected_offset:
-			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), buf.offset, printable_timestamp(buf.pts), expected_offset, buf.offset - expected_offset)
+			print("%s: timestamp/offset mismatch%s:  got offset %d, buffer timestamp %s corresponds to offset %d (error = %d samples)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), buf.offset, printable_timestamp(buf.pts), expected_offset, buf.offset - expected_offset), file=sys.stderr)
 		elif abs(buf.pts - expected_timestamp) > self.timestamp_fuzz:
-			print >>sys.stderr, "%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), printable_timestamp(buf.pts), buf.offset, printable_timestamp(expected_timestamp), buf.pts - expected_timestamp)
+			print("%s: timestamp/offset mismatch%s:  got timestamp %s, buffer offset %d corresponds to timestamp %s (error = %d ns)" % (self.get_property("name"), (" at discontinuity" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else ""), printable_timestamp(buf.pts), buf.offset, printable_timestamp(expected_timestamp), buf.pts - expected_timestamp), file=sys.stderr)
 
 
 	def do_transform_ip(self, buf):
 		if self.t0 is None or gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT):
 			if self.t0 is None:
 				if not self.silent:
-					print >>sys.stderr, "%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset)
+					print("%s: initial timestamp = %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset), file=sys.stderr)
 			elif gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT):
-				print >>sys.stderr, "%s: DISCONT buffer:  timestamp = %s, offset = %d;  would have been %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset)
+				print("%s: DISCONT buffer:  timestamp = %s, offset = %d;  would have been %s, offset = %d" % (self.get_property("name"), printable_timestamp(buf.pts), buf.offset, printable_timestamp(self.next_timestamp), self.next_offset), file=sys.stderr)
 
 				#
 				# check for timestamp/offset mismatch
@@ -250,9 +250,9 @@ class lal_checktimestamps(GstBase.BaseTransform):
 			#
 
 			if buf.pts != self.next_timestamp:
-				print >>sys.stderr, "%s: got timestamp %s expected %s (discont flag is %s)" % (self.get_property("name"), printable_timestamp(buf.pts), printable_timestamp(self.next_timestamp), "set" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else "not set")
+				print("%s: got timestamp %s expected %s (discont flag is %s)" % (self.get_property("name"), printable_timestamp(buf.pts), printable_timestamp(self.next_timestamp), "set" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else "not set"), file=sys.stderr)
 			if buf.offset != self.next_offset:
-				print >>sys.stderr, "%s: got offset %d expected %d (discont flag is %s)" % (self.get_property("name"), buf.offset, self.next_offset, "set" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else "not set")
+				print("%s: got offset %d expected %d (discont flag is %s)" % (self.get_property("name"), buf.offset, self.next_offset, "set" if gst_buffer_flag_is_set(buf, Gst.BufferFlags.DISCONT) else "not set"), file=sys.stderr)
 
 			#
 			# check for timestamp/offset mismatch
@@ -269,7 +269,7 @@ class lal_checktimestamps(GstBase.BaseTransform):
 		if gst_buffer_flag_is_set(buf, Gst.BufferFlags.GAP):
 			allowed_sizes.append(0)
 		if buf.get_size() not in allowed_sizes:
-			print >>sys.stderr, "%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.get_size(), length, length * self.unit_size)
+			print("%s: got buffer size %d, buffer length %d corresponds to size %d" % (self.get_property("name"), buf.get_size(), length, length * self.unit_size), file=sys.stderr)
 
 		#
 		# reset for next buffer

@@ -47,11 +47,11 @@ if "id" not in form:
 
 baseurl = '%s/%s_' % (form.getvalue("dir"), form.getvalue("id"))
 
-print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
-print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
-print >>sys.stdout, 'Content-type: text/html\r\n'
+print('Cache-Control: no-cache, must-revalidate', file=sys.stdout)
+print('Expires: Mon, 26 Jul 1997 05:00:00 GMT', file=sys.stdout)
+print('Content-type: text/html\r\n', file=sys.stdout)
 
-print """
+print("""
 <html>
 <head>
 <meta http-equiv="Pragma" content="no-cache">
@@ -62,31 +62,32 @@ print """
 <table face="Arial">
 <tr>
 <td><div id='canvasa'>
-"""
+""")
 
 plot(baseurl+'latency_history.txt', "plot", ylabel = "Latency (s)", xlabel = "Time since last trigger (s)")
 
-print """
+print("""
 </div></td>
 <td><div id='canvasb'>
-"""
+""")
 
 plot(baseurl+'latency_histogram.txt', "hist", ylabel = "Count", xlabel = "Latency (s)")
 
 
-print """
+print("""
 </div></td>
 <tr>
 <td><div id='canvasc'>
-"""
+""")
 
 plot(baseurl+'snr_history.txt', "plot", ylabel = "SNR", xlabel = "Time since last trigger (s)")
 
 
-print """
+print("""
 </div></td>
 <td><div id='canvasd'></div></td>
 </table>
 </body>
-"""
+""")
+
 

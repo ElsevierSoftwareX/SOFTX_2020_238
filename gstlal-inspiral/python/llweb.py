@@ -256,11 +256,11 @@ class GstlalWebSummary(object):
 		return 0, "<em class=green>OK</em>"
 
 	def nagios(self):
-		print >>sys.stdout, 'Cache-Control: no-cache, must-revalidate'
-		print >>sys.stdout, 'Expires: Mon, 26 Jul 1997 05:00:00 GMT'
-		print >>sys.stdout, 'Content-type: text/json\r\n'
+		print('Cache-Control: no-cache, must-revalidate', file=sys.stdout)
+		print('Expires: Mon, 26 Jul 1997 05:00:00 GMT', file=sys.stdout)
+		print('Content-type: text/json\r\n', file=sys.stdout)
 		num, txt = self.status()
-		print >>sys.stdout, json.dumps({"nagios_shib_scraper_ver": 0.1, "status_intervals":[{"num_status": num, "txt_status": re.sub('<[^<]+?>', '', txt)}]}, sort_keys=True, indent=4, separators=(',', ': '))
+		print(json.dumps({"nagios_shib_scraper_ver": 0.1, "status_intervals":[{"num_status": num, "txt_status": re.sub('<[^<]+?>', '', txt)}]}, sort_keys=True, indent=4, separators=(',', ': ')), file=sys.stdout)
 
 	def valid_latency(self):
 		out = []

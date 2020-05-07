@@ -148,7 +148,7 @@ tee = elems[-1]
 ##############################
 # tee line to waterfall
 if options.plotSpec:
-	print >>sys.stderr, "plotting spectrogram..."
+	print("plotting spectrogram...", file=sys.stderr)
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
 	elems.append(pipeutil.mkelem("pow"))
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": 2}))
@@ -200,7 +200,7 @@ elems = []
 elems.append(pipeutil.mkelem("lal_sumsquares"))
 
 if options.plotLine:
-	print >>sys.stderr, "plotting lineseries..."
+	print("plotting lineseries...", file=sys.stderr)
 
 	elems.append(pipeutil.mkelem("queue", {"max-size-time": queuesize}))
 	elems.append(pipeutil.mkelem("cairovis_lineseries",

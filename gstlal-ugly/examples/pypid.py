@@ -86,7 +86,7 @@ if __name__ == '__main__':
         time.sleep(.5)
     
     file = open('pidmon.html', 'w')
-    print >>file, "<html><head><title>pidmon</title></head><body>"
+    print("<html><head><title>pidmon</title></head><body>", file=file)
     
     from pylab import *
     keys = [k[1] for k in sorted([(val[1],val[0]) for val in pidmon.values()])]
@@ -105,8 +105,8 @@ if __name__ == '__main__':
         title('%s %s' % (val[0], val[1]))
         legend()
         filename = '%s.png' % key
-        print filename
+        print(filename)
         savefig(filename)
-        print >>file, "<img src=\"%s\"><br>" % filename
-    print >>file, "</body><html>"
+        print("<img src=\"%s\"><br>" % filename, file=file)
+    print("</body><html>", file=file)
     file.close()

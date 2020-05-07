@@ -563,7 +563,7 @@ class SNRPDF(object):
 		#
 
 		if verbose:
-			print >>sys.stderr, "For horizon distances %s, requiring %d instrument(s):" % (", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items())), min_instruments)
+			print("For horizon distances %s, requiring %d instrument(s):" % (", ".join("%s = %.4g Mpc" % item for item in sorted(horizon_distances.items())), min_instruments), file=sys.stderr)
 
 		P_instruments = P_instruments_given_signal(
 			self.quantized_horizon_distances(self.quantize_horizon_distances(horizon_distances).items()),
@@ -573,8 +573,8 @@ class SNRPDF(object):
 
 		if verbose:
 			for key_value in sorted((",".join(sorted(key)), value) for key, value in P_instruments.items()):
-				print >>sys.stderr, "\tP(%s | signal) = %g" % key_value
-			print >>sys.stderr, "generating P(snrs | signal) ..."
+				print("\tP(%s | signal) = %g" % key_value, file=sys.stderr)
+			print("generating P(snrs | signal) ...", file=sys.stderr)
 
 		#
 		# compute P(snrs | instruments, horizon distances, signal)
@@ -1284,7 +1284,7 @@ class TimePhaseSNR(object):
 		self.KDTree = {}
 		for combo in self.combos:
 			if verbose:
-				print >> sys.stderr, "initializing tree for: ", combo
+				print("initializing tree for: ", combo, file=sys.stderr)
 			slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 			self.KDTree[combo] = spatial.cKDTree(self.tree_data[:,slcs])
 
@@ -1294,14 +1294,14 @@ class TimePhaseSNR(object):
 			self.margsky = {}
 			for combo in self.combos:
 				if verbose:
-					print >> sys.stderr, "marginalizing tree for: ", combo
+					print("marginalizing tree for: ", combo, file=sys.stderr)
 				slcs = sorted(sum(self.instrument_pair_slices(self.instrument_pairs(combo)).values(),[]))
 				num_points = self.tree_data.shape[0]
 
 				marg = numpy.zeros(num_points)
 				for cnt, points in enumerate(chunker(self.tree_data[:,slcs], self.numchunks, margstart, margstop)):
 					if verbose:
-						print >> sys.stderr, "%d/%d" % (cnt * self.numchunks, num_points)
+						print("%d/%d" % (cnt * self.numchunks, num_points), file=sys.stderr)
 					Dmat = self.KDTree[combo].query(points, k=num_points, distance_upper_bound = 15.0)[0]
 					marg[margstart + self.numchunks * cnt : margstart + self.numchunks * (cnt+1)] = margprob(Dmat)
 				self.margsky[combo] = numpy.array(marg, dtype="float32")
@@ -1521,11 +1521,11 @@ class TimePhaseSNR(object):
 		time = dict((ifo, numpy.zeros(len(healpix_idxs) * NANGLE**2, dtype="float32")) for ifo in cls.responses)
 
 		if verbose:
-			print >> sys.stderr, "tiling sky: \n"
+			print("tiling sky: \n", file=sys.stderr)
 		cnt = 0
 		for i in healpix_idxs:
 			if verbose:
-				print >> sys.stderr, "sky %04d of %04d\r" % (i, len(healpix_idxs)),
+				print("sky %04d of %04d\r" % (i, len(healpix_idxs)), file=sys.stderr)
 			DEC, RA = healpy.pix2ang(NSIDE, i)
 			DEC -= numpy.pi / 2
 			for COSIOTA in numpy.linspace(-1, 1, NANGLE):
@@ -1540,7 +1540,7 @@ class TimePhaseSNR(object):
 					cnt += 1
 
 		if verbose:
-			print >> sys.stderr, "\n...done"
+			print("\n...done", file=sys.stderr)
 		return time, phase, deff
 
 	def __call__(self, time, phase, snr, horizon):

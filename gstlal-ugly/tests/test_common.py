@@ -112,7 +112,7 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 
 
 def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
-	print >>sys.stderr, "=== Running Test %s ===" % name
+	print("=== Running Test %s ===" % name, file=sys.stderr)
 	mainloop = GObject.MainLoop()
 	pipeline = pipelinefunc(Gst.Pipeline(name = name), name, **pipelinefunc_kwargs)
 	handler = simplehandler.Handler(mainloop, pipeline)

@@ -144,7 +144,7 @@ class Handler(object):
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			print("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg), file=sys.stderr)
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 

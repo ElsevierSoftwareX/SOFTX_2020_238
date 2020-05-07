@@ -626,7 +626,7 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 
 	for i, row in enumerate(template_table):
 		if verbose:
-			print >>sys.stderr, "generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z)
+			print("generating template %d/%d:  m1 = %g, m2 = %g, s1x = %g, s1y = %g, s1z = %g, s2x = %g, s2y = %g, s2z = %g" % (i + 1, len(template_table), row.mass1, row.mass2, row.spin1x, row.spin1y, row.spin1z, row.spin2x, row.spin2y, row.spin2z), file=sys.stderr)
 		# FIXME: ensure the row is in template_table
 		template, autocorrelation, this_sigmasq = workspace.make_whitened_template(row)
 

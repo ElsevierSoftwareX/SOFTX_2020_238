@@ -128,7 +128,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 	if progressbar is not None:
 		progressbar.increment(delta = n_burn)
 	if n_burn and sampler.acceptance_fraction.min() < 0.4:
-		print >>sys.stderr, "\nwarning:  low burn-in acceptance fraction (min = %g)" % sampler.acceptance_fraction.min()
+		print("\nwarning:  low burn-in acceptance fraction (min = %g)" % sampler.acceptance_fraction.min(), file=sys.stderr)
 
 	#
 	# reset and yield positions distributed according to the supplied
@@ -141,7 +141,7 @@ def run_mcmc(n_walkers, n_dim, n_samples_per_walker, lnprobfunc, pos0 = None, ar
 		if progressbar is not None:
 			progressbar.increment()
 	if n_samples_per_walker and sampler.acceptance_fraction.min() < 0.5:
-		print >>sys.stderr, "\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min()
+		print("\nwarning:  low sampler acceptance fraction (min %g)" % sampler.acceptance_fraction.min(), file=sys.stderr)
 
 
 def moment_from_lnpdf(ln_pdf, moment, c = 0.):

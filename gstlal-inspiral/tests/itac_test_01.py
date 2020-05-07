@@ -61,7 +61,7 @@ def peak_test_01a(pipeline):
 
 	def dump_triggers(elem, output = outfile):
 		for row in GSTLALSnglInspiral.from_buffer(elem.emit("pull-buffer")):
-			print >>outfile, row.end_time + row.end_time_ns*1e-9, row.snr, row.chisq, row.chisq_dof
+			print(row.end_time + row.end_time_ns*1e-9, row.snr, row.chisq, row.chisq_dof, file=outfile)
 
 	a.connect_after("new-buffer", dump_triggers)
 	pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, tee)), "itac_test_01a_in.dump")

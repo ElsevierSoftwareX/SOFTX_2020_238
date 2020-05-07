@@ -28,7 +28,7 @@ class PSDHandler(object):
 			self.mainloop.quit()
 		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg)
+			print("error (%s:%d '%s'): %s" % (gerr.domain, gerr.code, gerr.message, dbgmsg), file=sys.stderr)
 			self.pipeline.set_state(gst.STATE_NULL)
 			self.mainloop.quit()
 		elif message.type == gst.MessageType.ELEMENT:
@@ -46,13 +46,13 @@ elems = mkelems_in_bin(pipeline,
 )
 
 # Play pipeline
-print "Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED)
-print pipeline.get_state()
+print("Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED))
+print(pipeline.get_state())
 
 # Seek the source
-print "Seeking:", pipeline.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
+print("Seeking:", pipeline.seek(1.0, gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH,
 	gst.SEEK_TYPE_SET, 0,
-	gst.SEEK_TYPE_SET, 128 * gst.SECOND)
+	gst.SEEK_TYPE_SET, 128 * gst.SECOND))
 
 # Start runloop
 mainloop = gobject.MainLoop()
@@ -60,12 +60,12 @@ mainloop = gobject.MainLoop()
 handler = PSDHandler(mainloop, pipeline, verbose=True)
 
 # Play pipeline
-print "Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING)
+print("Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING))
 
 mainloop.run()
 
 from pylab import *
-print psd
+print(psd)
 loglog(arange(len(handler.psd.data)) * handler.psd.deltaF, sqrt(handler.psd.data))
 xlabel('Frequency [Hz]')
 ylabel('Amplitude spectral density [1/sqrt(Hz)]')

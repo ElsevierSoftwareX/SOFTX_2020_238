@@ -618,7 +618,7 @@ class HorizonHistories(dict):
 				j += 1
 			del items[j:]
 			if verbose:
-				print >>sys.stderr, "\"%s\":  %s horizon history reduced to %.3g%% of original size" % (filename, instrument, 100. * j / (i + 1.))
+				print("\"%s\":  %s horizon history reduced to %.3g%% of original size" % (filename, instrument, 100. * j / (i + 1.)), file=sys.stderr)
 
 			# replace
 			self[instrument] = type(horizon_history)(items)

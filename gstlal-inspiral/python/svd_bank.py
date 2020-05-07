@@ -134,7 +134,7 @@ class BankFragment(object):
 
 	def set_template_bank(self, template_bank, tolerance, snr_thresh, identity_transform = False, verbose = False):
 		if verbose:
-			print >>sys.stderr, "\t%d templates of %d samples" % template_bank.shape
+			print("\t%d templates of %d samples" % template_bank.shape, file=sys.stderr)
 
 		self.orthogonal_template_bank, self.singular_values, self.mix_matrix, self.chifacs = cbc_template_fir.decompose_templates(template_bank, tolerance, identity = identity_transform)
 
@@ -143,8 +143,8 @@ class BankFragment(object):
 		else:
 			self.sum_of_squares_weights = None
 		if verbose:
-			print >>sys.stderr, "\tidentified %d components" % self.orthogonal_template_bank.shape[0]
-			print >>sys.stderr, "\tsum-of-squares expectation value is %g" % self.chifacs.mean()
+			print("\tidentified %d components" % self.orthogonal_template_bank.shape[0], file=sys.stderr)
+			print("\tsum-of-squares expectation value is %g" % self.chifacs.mean(), file=sys.stderr)
 
 
 class Bank(object):
@@ -186,7 +186,7 @@ class Bank(object):
 		self.bank_fragments = [BankFragment(rate,begin,end) for rate,begin,end in time_slices]
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
-				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
+				print("constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start), file=sys.stderr)
 			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity_transform = identity_transform, verbose = verbose)
 
 		if bank_fragment.sum_of_squares_weights is not None:
@@ -194,7 +194,7 @@ class Bank(object):
 		else:
 			self.gate_threshold = 0.
 		if verbose:
-			print >>sys.stderr, "sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold)
+			print("sum-of-squares threshold for false-alarm probability of %.16g:  %.16g" % (gate_fap, self.gate_threshold), file=sys.stderr)
 
 	def get_rates(self):
 		return set(bank_fragment.rate for bank_fragment in self.bank_fragments)
@@ -482,7 +482,7 @@ def svdbank_templates_mapping(filenames, contenthandler, verbose = False):
 	mapping = {}
 	for n, filename in enumerate(filenames, start = 1):
 		if verbose:
-			print >>sys.stderr, "%d/%d:" % (n, len(filenames)),
+			print("%d/%d:" % (n, len(filenames)), file=sys.stderr)
 		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler, verbose = verbose)), [])
 	return mapping
 

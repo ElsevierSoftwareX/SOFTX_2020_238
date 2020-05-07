@@ -231,10 +231,10 @@ def cache_hoft(data_source_info, channel_comment = "cached h(t) for inspiral sea
 
 
 	if verbose:
-		print >>sys.stderr, "assembling pipeline ...",
+		print("assembling pipeline ...", file=sys.stderr)
 	build_pipeline(pipeline, data_source_info, channel_comment = channel_comment, verbose = verbose, **kwargs)
 	if verbose:
-		print >>sys.stderr, "done"
+		print("done", file=sys.stderr)
 
 
 	#
@@ -245,12 +245,12 @@ def cache_hoft(data_source_info, channel_comment = "cached h(t) for inspiral sea
 		raise RuntimeError("pipeline did not enter ready state")
 	datasource.pipeline_seek_for_gps(pipeline, *data_source_info.seg)
 	if verbose:
-		print >>sys.stderr, "setting pipeline state to playing ..."
+		print("setting pipeline state to playing ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 		raise RuntimeError("pipeline did not enter playing state")
 
 	if verbose:
-		print >>sys.stderr, "running pipeline ..."
+		print("running pipeline ...", file=sys.stderr)
 	mainloop.run()
 
 

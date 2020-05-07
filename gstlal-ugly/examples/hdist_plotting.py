@@ -234,11 +234,11 @@ def atomic_print_figure(fig, dest):
     os.rename(hidden_dest, dest)  # atomic operation on same volume
 
 def signal_handler(signal,frame):
-    print >>sys.stderr, "*** SIG %d attempting graceful shutdown... ***" \
-     % (signal,)
+    print("*** SIG %d attempting graceful shutdown... ***" \
+     % (signal,), file=sys.stderr)
     bus = pipeline.get_bus()
     bus.post(gst.message_new_eos(pipeline))
-    print "Exiting with Signal %s" % signal
+    print("Exiting with Signal %s" % signal)
     sys.exit(1)
 
 def update_plot(lock, ifos, figure_path, times, h_dist, theta, phi):
@@ -250,7 +250,7 @@ def update_plot(lock, ifos, figure_path, times, h_dist, theta, phi):
     #Set up some stuff needed for network response plot
     ind=figure_path.rfind("/")
     network_plot_dest= "%s/network_response.png" % figure_path[0:ind]
-    print "Saving network response plot to %s" % network_plot_dest    
+    print("Saving network response plot to %s" % network_plot_dest)
     networks = []
     det_list = []
     
@@ -400,11 +400,11 @@ def make_pipline(opts, fig, lines, times, h_dist, lock):
     return pipe
 
 def run_pipeline(pipeline):
-    print "Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED)
-    print pipeline.get_state()
+    print("Setting state to PAUSED:", pipeline.set_state(gst.STATE_PAUSED))
+    print(pipeline.get_state())
     mainloop = gobject.MainLoop()
     handler = simplehandler.Handler(mainloop, pipeline)
-    print "Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING)
+    print("Setting state to PLAYING:", pipeline.set_state(gst.STATE_PLAYING))
     mainloop.run()
     return
 

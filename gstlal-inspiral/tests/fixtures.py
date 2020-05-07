@@ -42,7 +42,7 @@ class PipelineTestFixture(unittest.TestCase):
 		elif message.type == gst.MESSAGE_ERROR:
 			gerr, dbgmsg = message.parse_error()
 			self.msg_tupl = (gerr.domain, gerr.code, gerr.message, dbgmsg)
-			print >>sys.stderr, "error (%s:%d '%s'): %s" % self.msg_tupl
+			print("error (%s:%d '%s'): %s" % self.msg_tupl, file=sys.stderr)
 			self.mainloop.quit()
 
 	def tearDown(self):
