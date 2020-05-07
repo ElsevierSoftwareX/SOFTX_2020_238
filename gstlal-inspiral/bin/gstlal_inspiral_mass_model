@@ -176,5 +176,5 @@ f = h5py.File(options.output, "w")
 # put in a dummy interval for the piecewise polynomials in SNR
 f.create_dataset("SNR", data = numpy.array([0., 100.]))
 f.create_dataset("coefficients", data = coefficients, compression="gzip")
-f.create_dataset("event_id", data = numpy.array(ids).astype(int))
+f.create_dataset("template_id", data = numpy.array(ids).astype(int))
 f.close()
