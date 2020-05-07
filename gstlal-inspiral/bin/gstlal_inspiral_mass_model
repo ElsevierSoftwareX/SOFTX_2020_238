@@ -47,6 +47,7 @@ parser = argparse.ArgumentParser(description = "Create analytic mass models for 
 parser.add_argument("--template-bank", metavar='name', type=str, help='The input template bank file name.', required = True)
 parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
+parser.add_argument("--min-instrument", metavar='name', type=int, default=2, help='Minimum instruments operating. Specified for calculating horizon distance in uniform in template model.')
 parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, ligo-bns, bbh, uniform-template. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
@@ -106,8 +107,8 @@ for row in sngl_inspiral_table:
 		prob[row.template_id] /= TEMPDENS(mchirp)
 
 	elif options.model == "uniform-template":
-		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
-		prob[row.template_id] = 1.0 / hdist**3
+                hdist = sorted([reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd[ifo])[0] for ifo in psd.keys()])
+                prob[row.template_id] = 1.0 / (hdist[-options.min_instrument]**3)
 
 	elif options.model == "bbh":
 		#
@@ -175,5 +176,5 @@ f = h5py.File(options.output, "w")
 # put in a dummy interval for the piecewise polynomials in SNR
 f.create_dataset("SNR", data = numpy.array([0., 100.]))
 f.create_dataset("coefficients", data = coefficients, compression="gzip")
-f.create_dataset("event_id", data = numpy.array(ids).astype(int))
+f.create_dataset("template_id", data = numpy.array(ids).astype(int))
 f.close()
