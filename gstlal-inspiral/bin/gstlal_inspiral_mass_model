@@ -106,8 +106,8 @@ for row in sngl_inspiral_table:
 		prob[row.template_id] /= TEMPDENS(mchirp)
 
 	elif options.model == "uniform-template":
-		hdist = reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd["H1"])[0]
-		prob[row.template_id] = 1.0 / hdist**3
+                hdist = sorted([reference_psd.HorizonDistance(15, 1024, 1./4., row.mass1, row.mass2, (0., 0., row.spin1z), (0., 0., row.spin2z))(psd[ifo])[0] for ifo in psd.keys()])
+                prob[row.template_id] = 1.0 / (hdist[-options.min_instrument]**3)
 
 	elif options.model == "bbh":
 		#
