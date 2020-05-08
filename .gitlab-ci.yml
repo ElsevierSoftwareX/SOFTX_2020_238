@@ -121,7 +121,9 @@ test:gstlal:
     - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
+    - GLOBIGNORE="*calibration*"
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+    - unset GLOBIGNORE
     - export GSTLAL_FIR_WHITEN=0
     - gst-inspect-1.0
     
@@ -147,7 +149,9 @@ test:gstlal-inspiral:
     - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
+    - GLOBIGNORE="*calibration*"
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+    - unset GLOBIGNORE
     - export GSTLAL_FIR_WHITEN=0
     - gst-inspect-1.0
 
@@ -169,7 +173,9 @@ test:gstlal-burst:
     - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
+    - GLOBIGNORE="*calibration*"
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+    - unset GLOBIGNORE
     - export GSTLAL_FIR_WHITEN=0
     - gst-inspect-1.0
 
