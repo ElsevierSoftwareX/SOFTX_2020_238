@@ -41,6 +41,7 @@ Requires: lalsimulation >= @MIN_LALSIMULATION_VERSION@
 # --- python package requirements --- #
 Requires: python%{python3_pkgversion} >= @MIN_PYTHON_VERSION@
 Requires: python%{python3_pkgversion}-%{gstreamername}
+Obsoletes: python2-%{gstreamername}
 Requires: python%{python3_pkgversion}-gobject >= @MIN_PYGOBJECT_VERSION@
 Requires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
 Requires: python%{python3_pkgversion}-ligo-lw >= @MIN_LIGO_LW_VERSION@
