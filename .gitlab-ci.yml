@@ -237,8 +237,8 @@ pages:
     - export GSTLAL_FIR_WHITEN=0
 
     - yum -y install python3-pip texlive* graphviz python36-matplotlib tzdata
-    - "pip install setuptools sphinx==1.7 sphinx_rtd_theme --only-binary :all:"
-    - "pip install -U pytz --only-binary :all:"
+    - python3 -m pip install setuptools sphinx==1.7 sphinx_rtd_theme
+    - python3 -m pip install -U pytz
     - mkdir -p public/
     - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
