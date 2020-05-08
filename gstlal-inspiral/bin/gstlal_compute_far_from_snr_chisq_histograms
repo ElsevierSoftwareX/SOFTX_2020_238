@@ -183,7 +183,8 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 		if options.verbose:
 			print("already processed, skipping", file=sys.stderr)
 		continue
-	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
+#	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
+	working_filename = dbtables.get_connection_filename(filename, verbose = options.verbose)
 	connection = sqlite3.connect(working_filename)
 
 	#
