@@ -238,7 +238,9 @@ pages:
   stage: nightly-pages
   script:
     # Install RPMs and set up the test environment:
+    - GLOBIGNORE="*calibration*"
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+    - unset GLOBIGNORE
     - gst-inspect-1.0
     - export GSTLAL_FIR_WHITEN=0
 
@@ -273,7 +275,9 @@ docker:el7:
     - mkdir rpms 
 
     # Copy rpms to new container.
+    - GLOBIGNORE="*calibration*"
     - mv rpmbuild/RPMS/x86_64/*.rpm rpms
+    - unset GLOBIGNORE
 
     # Clear out the old rpmbuild directory
     - rm -rf rpmbuild*
