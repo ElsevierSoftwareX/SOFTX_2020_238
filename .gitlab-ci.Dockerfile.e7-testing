@@ -15,8 +15,10 @@ USER root
 COPY rpms /rpms
 
 # Install Optimized RPMs, delete old RPMs
-RUN yum makecache && \
-      yum -y localinstall /rpms/*.rpm 
+RUN GLOBIGNORE="*calibration*" && \
+      yum makecache && \
+      yum -y localinstall /rpms/*.rpm && \
+      unset GLOBIGNORE
 
 # Update gstreamer registry cache:
 ENV GST_REGISTRY_1_0=/usr/share/gstreamer-1.0/.registry.bin
