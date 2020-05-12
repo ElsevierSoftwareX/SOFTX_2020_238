@@ -254,9 +254,9 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 		break;
 
 	case GST_PAD_SINK:
-		/* number of samples available */
+		// number of samples available
 		*othersize = size / unit_size + gst_audioadapter_available_samples(inpaint->adapter);
-		/* number of output bytes to be generated */
+		// number of output bytes to be generated
 		// FIXME Dont hardcode
 		// FIXME Will have to think about this more carefully for
 		// general use. In theory, the procedure depends on exactly how
@@ -269,7 +269,7 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
 		if(*othersize < inpaint->rate * (guint) inpaint->fft_length_seconds)
 			*othersize = 0;
 		else
-			*othersize *= sizeof(double);
+			*othersize = inpaint->rate * (guint) inpaint->fft_length_seconds * sizeof(double);
 		break;
 
 	case GST_PAD_UNKNOWN:
@@ -507,7 +507,8 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 
 	gst_audioadapter_flush_samples(inpaint->adapter, outsamples);
 	GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
-	GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset + inpaint->outbuf_length;
+	inpaint->initial_offset += inpaint->outbuf_length;
+	GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset;
 	GST_BUFFER_PTS(outbuf) = inpaint->t0;
 	GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, inpaint->outbuf_length, inpaint->rate);
 	inpaint->t0 += GST_BUFFER_DURATION(outbuf);
