@@ -466,7 +466,7 @@ class SegmentsTracker(object):
 		segtype, instrument, new_state = seg_state_input
 
 		if self.verbose:
-			print("%s: %s '%s' state transition: %s @ %s".format((elem.get_name() if elem is not None else "<internal>"), instrument, segtype, new_state, str(timestamp)), file= sys.stderr)
+			print("%s: %s '%s' state transition: %s @ %s" % ((elem.get_name() if elem is not None else "<internal>"), instrument, segtype, new_state, str(timestamp)), file= sys.stderr)
 
 		if new_state == "off":
 			# record end of segment
