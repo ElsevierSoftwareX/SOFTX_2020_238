@@ -315,7 +315,7 @@ def write_bank(filename, banks, psd_input, cliplefts = None, cliprights = None, 
 		root.appendChild(ligolw_param.Param.from_pyvalue('new_deltaf', bank.newdeltaF))
 		root.appendChild(ligolw_param.Param.from_pyvalue('working_f_low', bank.working_f_low))
 		root.appendChild(ligolw_param.Param.from_pyvalue('f_low', bank.f_low))
-		root.appendChild(ligolw_param.Param.from_pyvalue('sample_rate_max', bank.sample_rate_max))
+		root.appendChild(ligolw_param.Param.from_pyvalue('sample_rate_max', int(bank.sample_rate_max)))
 		root.appendChild(ligolw_param.Param.from_pyvalue('gstlal_fir_whiten', os.environ['GSTLAL_FIR_WHITEN']))
 
 		# apply clipping to autocorrelations and sigmasq
@@ -378,7 +378,7 @@ def read_banks(filename, contenthandler, verbose = False):
 	# FIXME, right now there is only one instrument so we just pull out the
 	# only psd there is
 	try:
-		raw_psd = lal.series.read_psd_xmldoc(xmldoc).values()[0]
+		raw_psd = list(lal.series.read_psd_xmldoc(xmldoc).values())[0]
 	except ValueError:
 		# the bank file does not contain psd ligolw element.
 		raw_psd = None
