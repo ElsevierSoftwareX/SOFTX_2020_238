@@ -112,6 +112,88 @@ G_DEFINE_TYPE_WITH_CODE(
  * ============================================================================
  */
 
+static void clear_workspace(GSTLALInpaint* inpaint) {
+
+	if(inpaint->output_hoft != NULL) {
+		free(inpaint->output_hoft);
+		inpaint->output_hoft = NULL;
+	}
+
+	if(inpaint->inv_cov_mat_workspace != NULL) {
+		gsl_matrix_free(inpaint->inv_cov_mat_workspace);
+		inpaint->inv_cov_mat_workspace = NULL;
+	}
+
+	if(inpaint->M_trans_mat_workspace != NULL) {
+		gsl_matrix_free(inpaint->M_trans_mat_workspace);
+		inpaint->M_trans_mat_workspace = NULL;
+	}
+
+	if(inpaint->inv_M_trans_mat_workspace != NULL) {
+		gsl_matrix_free(inpaint->inv_M_trans_mat_workspace);
+		inpaint->inv_M_trans_mat_workspace = NULL;
+	}
+
+	if(inpaint->relevant_hoft_workspace != NULL) {
+		gsl_vector_free(inpaint->relevant_hoft_workspace);
+		inpaint->relevant_hoft_workspace = NULL;
+	}
+
+	if(inpaint->inpainted_hoft_workspace != NULL) {
+		gsl_vector_free(inpaint->inpainted_hoft_workspace);
+		inpaint->inpainted_hoft_workspace = NULL;
+	}
+
+}
+
+
+//FIXME Figure out best way to handle errors here, currently I believe it will flag an error available in some GST_DEBUG
+//FIXME Need to call this when any psd properties change
+static void make_workspace(GSTLALInpaint *inpaint) {
+	// Always start by clearing workspace, just in case
+	clear_workspace(inpaint);
+
+	size_t fft_length_samples = (size_t) (inpaint->rate * (guint) inpaint->fft_length_seconds);
+
+	double *output_hoft = calloc(fft_length_samples, sizeof(double));
+	if(output_hoft == NULL)
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+
+
+	gsl_matrix *inv_cov_mat_workspace = gsl_matrix_calloc(fft_length_samples, fft_length_samples);
+	if(inv_cov_mat_workspace == NULL)
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+
+	//FIXME Figure out max duration that can be inpainted, which will set the max size of this matrix and its inverse
+	gsl_matrix *M_trans_mat_workspace = gsl_matrix_calloc(fft_length_samples / 2, fft_length_samples / 2 );
+	if(M_trans_mat_workspace == NULL)
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+
+	gsl_matrix *inv_M_trans_mat_workspace = gsl_matrix_calloc(M_trans_mat_workspace->size1, M_trans_mat_workspace->size2);
+	if(inv_M_trans_mat_workspace == NULL)
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+
+	// Maximum size of relevant h(t) (h(t) used to inpaint the holes) is
+	// the fft length minus the minimum number of samples that can be
+	// inpainted
+	gsl_vector *relevant_hoft_workspace = gsl_vector_calloc(fft_length_samples - 1);
+	if(relevant_hoft_workspace == NULL)
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+
+	// FIXME Figure out max duration that can be inpainted
+	gsl_vector *inpainted_hoft_workspace = gsl_vector_calloc(fft_length_samples / 2);
+	if(inpainted_hoft_workspace == NULL)
+		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
+
+	inpaint->output_hoft = output_hoft;
+	inpaint->inv_cov_mat_workspace = inv_cov_mat_workspace;
+	inpaint->M_trans_mat_workspace = M_trans_mat_workspace;
+	inpaint->inv_M_trans_mat_workspace = inv_M_trans_mat_workspace;
+	inpaint->relevant_hoft_workspace = relevant_hoft_workspace;
+	inpaint->inpainted_hoft_workspace = inpainted_hoft_workspace;
+
+}
+
 // FIXME This function needs to be called each time a new psd is passed in
 static void fft_psd(GSTLALInpaint *inpaint) {
 	// Set up the units
@@ -196,8 +278,10 @@ static gboolean gstlal_inpaint_sink_event(GstBaseTransform *trans, GstEvent *eve
 			gst_structure_get_int(str, "rate", &rate);
 			inpaint->rate = (guint) rate;
 			// FIXME Move elsewhere
-			if(inpaint->psd != NULL)
+			if(inpaint->psd != NULL) {
 				fft_psd(inpaint);
+				make_workspace(inpaint);
+			}
 			break;
 		}
 		case GST_EVENT_TAG:
@@ -288,13 +372,6 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	fprintf(stderr, "in gstlal_inpaint_process...\n");
 	GstFlowReturn result = GST_FLOW_OK;
 	g_assert(inpaint->inv_cov_series->data->length % 2 == 0);
-	// FIXME Set up a matrix workspace at the beginning
-	gsl_matrix *inv_cov_mat = gsl_matrix_alloc(data_length, data_length);
-	if(inv_cov_mat == NULL) {
-		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
-		result = GST_FLOW_ERROR;
-		return result;
-	}
 
 	gint i, j;
 	// The covariance and inverse convariance matrices are symmetric and
@@ -303,12 +380,13 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	// indices, with no difference corresponding to the first entry of the
 	// covariance series.
 	fprintf(stderr, "Setting inverse covariance matrix\n");
+	// FIXME Move to some function (other than make_workspace) so that this can be done only once when inpainting multiple windows (Also add fft_psd function call to this function)
 	// FIXME use gsl_blas_dcopy
-	for(i = 0; i < (gint) inv_cov_mat->size1; i++) {
+	for(i = 0; i < (gint) inpaint->inv_cov_mat_workspace->size1; i++) {
 		for(j=0; j < i; j++)
-			gsl_matrix_set(inv_cov_mat, (guint) i, (guint) j, inpaint->inv_cov_series->data->data[inpaint->inv_cov_series->data->length - (guint) (i - j)]);
-		for(; j < (gint) inv_cov_mat->size2; j++)
-			gsl_matrix_set(inv_cov_mat, (guint) i, (guint) j, inpaint->inv_cov_series->data->data[(guint) (j - i)]);
+			gsl_matrix_set(inpaint->inv_cov_mat_workspace, (guint) i, (guint) j, inpaint->inv_cov_series->data->data[inpaint->inv_cov_series->data->length - (guint) (i - j)]);
+		for(; j < (gint) inpaint->inv_cov_mat_workspace->size2; j++)
+			gsl_matrix_set(inpaint->inv_cov_mat_workspace, (guint) i, (guint) j, inpaint->inv_cov_series->data->data[(guint) (j - i)]);
 	}
 
 	// M is a subset of C^{-1} and is comprised of the rows and columns of
@@ -318,14 +396,11 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	// C^{-1}_{22} C^{-1}_{23} C^{-1}_{24}
 	// C^{-1}_{32} C^{-1}_{33} C^{-1}_{34}
 	// C^{-1}_{42} C^{-1}_{43} C^{-1}_{44}
-	// FIXME Set up a matrix workspace at the beginning and make M a matrix view
-	gsl_matrix *M_trans_mat = gsl_matrix_alloc(hole_length, hole_length);
-	fprintf(stderr, "Setting M\n");
-	// FIXME Use gsl_blas_dcopy
-	for(i = 0; i < (gint) hole_length; i++) {
-		for(j = 0; j < (gint) hole_length; j++)
-			gsl_matrix_set(M_trans_mat, (guint) i, (guint) j, gsl_matrix_get(inv_cov_mat, (guint) i + hole_start, (guint) j + hole_start));
-	}
+	gsl_matrix_view M_trans_mat_view = gsl_matrix_submatrix(inpaint->M_trans_mat_workspace, 0, 0, hole_length, hole_length);
+	gsl_matrix_view inv_cov_submat_view = gsl_matrix_submatrix(inpaint->inv_cov_mat_workspace, hole_start, hole_start, hole_length, hole_length);
+	gsl_matrix_memcpy(&M_trans_mat_view.matrix, &inv_cov_submat_view.matrix);
+
+	gsl_matrix_view inv_M_trans_mat_view = gsl_matrix_submatrix(inpaint->inv_M_trans_mat_workspace, 0, 0, M_trans_mat_view.matrix.size1, M_trans_mat_view.matrix.size2);
 	// Perform an LU decomposition of M, which is required to compute its
 	// inverse using the gsl function gsl_linalg_LU_invert
 	int signum;
@@ -336,21 +411,12 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 		return result;
 	}
 
-	gsl_matrix *M_inv_trans_mat = gsl_matrix_alloc(hole_length, hole_length);
-	if(M_inv_trans_mat == NULL) {
-		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
-		result = GST_FLOW_ERROR;
-		return result;
-	}
-
 	fprintf(stderr, "Performing LU decomposition of M\n");
-	gsl_linalg_LU_decomp(M_trans_mat, permutation, &signum);
+	gsl_linalg_LU_decomp(&M_trans_mat_view.matrix, permutation, &signum);
 	fprintf(stderr, "inverting M\n");
-	gsl_linalg_LU_invert(M_trans_mat, permutation, M_inv_trans_mat);
+	gsl_linalg_LU_invert(&M_trans_mat_view.matrix, permutation, &inv_M_trans_mat_view.matrix);
 	fprintf(stderr, "done inverting M\n");
 	gsl_permutation_free(permutation);
-	// FIXME Set up a matrix workspace at the beginning and make M a matrix view
-	gsl_matrix_free(M_trans_mat);
 
 	// A M^{-1} A^T is a block diagonal matrix with the same dimensions as
 	// C^{-1}, where the only nonzero components are the submatrix M^{-1},
@@ -377,14 +443,14 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 	// product of M^{-1} and submatrices of C^{-1}, one for the columns to
 	// the left of the identity submatrix and another submatrix for the
 	// columns to the right of the identity submatrix.
-	//fprintf(stderr, "Performing A*M^{-1}*A^T*C^{-1}\n");
 	// FIXME Need to address case where holes are at either edge of window
 	fprintf(stderr, "setting left inv cov submatrix\n");
-	gsl_matrix_view left_inv_cov_submat = gsl_matrix_submatrix(inv_cov_mat, hole_start, 0, hole_length, hole_start);
+	gsl_matrix_view left_inv_cov_submat = gsl_matrix_submatrix(inpaint->inv_cov_mat_workspace, hole_start, 0, hole_length, hole_start);
 	fprintf(stderr, "setting right inv cov submatrix\n");
-	gsl_matrix_view right_inv_cov_submat = gsl_matrix_submatrix(inv_cov_mat, hole_start, hole_start + hole_length, hole_length, inv_cov_mat->size2 - hole_start - hole_length);
+	gsl_matrix_view right_inv_cov_submat = gsl_matrix_submatrix(inpaint->inv_cov_mat_workspace, hole_start, hole_start + hole_length, hole_length, inpaint->inv_cov_mat_workspace->size2 - hole_start - hole_length);
 
-	gsl_matrix *F_trans_mat_nontriv_comps = gsl_matrix_alloc(hole_length, inv_cov_mat->size2 - hole_length);
+	// FIXME Move allocation of the inpainting transformation matrix F to make_workspace
+	gsl_matrix *F_trans_mat_nontriv_comps = gsl_matrix_alloc(hole_length, inpaint->inv_cov_mat_workspace->size2 - hole_length);
 	if(F_trans_mat_nontriv_comps == NULL) {
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
 		result = GST_FLOW_ERROR;
@@ -397,39 +463,25 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint data_s
 
 	// Multiply result by -1 to account for subtracting A M^{-1} A^T C^{-1} from identity matrix
 	fprintf(stderr, "Calculating left columns of F\n");
-	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., M_inv_trans_mat, &(left_inv_cov_submat.matrix), 0., &left_F_submat.matrix);
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., &inv_M_trans_mat_view.matrix, &left_inv_cov_submat.matrix, 0., &left_F_submat.matrix);
 	fprintf(stderr, "Calculating right columns of F\n");
-	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., M_inv_trans_mat, &(right_inv_cov_submat.matrix), 0., &right_F_submat.matrix);
-	// FIXME Set up a matrix workspace at the beginning
-	gsl_matrix_free(inv_cov_mat);
-	gsl_matrix_free(M_inv_trans_mat);
+	gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., &inv_M_trans_mat_view.matrix, &right_inv_cov_submat.matrix, 0., &right_F_submat.matrix);
 
-	//gsl_blas_dgemv(CBLAS_TRANSPOSE_t TransA, double alpha, const gsl_matrix * A, const gsl_vector * x, double beta, gsl_vector * y)
 	// The inpaint transformation matrix F only modifies the inpainted
 	// samples, replacing them with linear combinations of the other
 	// samples.
-	gsl_vector *relevant_hoft = gsl_vector_alloc(data_length - hole_length);
-	gsl_vector *inpainted_hoft = gsl_vector_alloc(hole_length);
-	if(inpainted_hoft == NULL || relevant_hoft == NULL) {
-		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure allocating memory");
-		result = GST_FLOW_ERROR;
-		return result;
-	}
+	// Set up views to take advantage of blas for copying needed samples over
+	// FIXME Need to address case where holes are at either edge of window
+	gsl_vector_view relevant_hoft_view = gsl_vector_view_array(inpaint->output_hoft, hole_start);
+	gsl_vector_view inpainted_hoft_view = gsl_vector_view_array(inpaint->output_hoft + hole_start, hole_length);
 
-	for(i = 0; i < (gint) (hole_start - data_start); i++)
-		gsl_vector_set(relevant_hoft, (guint) i, inpaint->transformed_data[(guint) i + data_start]);
-	for(; i < (gint) relevant_hoft->size; i++)
-		gsl_vector_set(relevant_hoft, (guint) i, inpaint->transformed_data[(guint) i + data_start + hole_length]);
-
-	fprintf(stderr, "Computing inpainted data\n");
-	gsl_blas_dgemv(CblasNoTrans, 1., F_trans_mat_nontriv_comps, relevant_hoft, 0.0, inpainted_hoft);
+	fprintf(stderr, "Inpainting data stage 1\n");
+	gsl_blas_dgemv(CblasNoTrans, 1., &left_F_submat.matrix, &relevant_hoft_view.vector, 0.0, &inpainted_hoft_view.vector);
+	relevant_hoft_view = gsl_vector_view_array(inpaint->output_hoft + hole_start + hole_length, data_length - hole_start - hole_length);
+	fprintf(stderr, "Inpainting data stage 2\n");
+	gsl_blas_dgemv(CblasNoTrans, 1., &right_F_submat.matrix, &relevant_hoft_view.vector, 1.0, &inpainted_hoft_view.vector);
 	gsl_matrix_free(F_trans_mat_nontriv_comps);
-	gsl_vector_free(relevant_hoft);
 
-	gsl_vector_view hoft_holes = gsl_vector_view_array(inpaint->transformed_data + hole_start + data_start, hole_length);
-	fprintf(stderr, "copying inpainted data\n");
-	gsl_blas_dcopy(inpainted_hoft, &(hoft_holes.vector));
-	gsl_vector_free(inpainted_hoft);
 	fprintf(stderr, "gstlal_inpaint_process done\n");
 	return result;
 
@@ -464,14 +516,8 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	guint outsamples = inpaint->rate * (guint) inpaint->fft_length_seconds;
 
 	inpaint->outbuf_length = outsamples;
-	inpaint->transformed_data = calloc(outsamples, sizeof(double));
-	if(!inpaint->transformed_data) {
-		GST_ERROR_OBJECT(GST_ELEMENT(trans), "failure allocating memory");
-		result = GST_FLOW_ERROR;
-		return result;
-	}
 	//FIXME Dont hardcode everything for specific test case
-	gst_audioadapter_copy_samples(inpaint->adapter, inpaint->transformed_data, outsamples, NULL, NULL);
+	gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft, outsamples, NULL, NULL);
 
 	//FIXME Dont hardcode everything for specific test case
 	// GW170817 gate: 1187008881.37875 to 1187008881.44125
@@ -502,7 +548,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 
 	GstMapInfo mapinfo;
 	gst_buffer_map(outbuf, &mapinfo, GST_MAP_WRITE);
-	memcpy(mapinfo.data, inpaint->transformed_data, outsamples * sizeof(double));
+	memcpy(mapinfo.data, inpaint->output_hoft, outsamples * sizeof(double));
 	gst_buffer_unmap(outbuf, &mapinfo);
 
 	gst_audioadapter_flush_samples(inpaint->adapter, outsamples);
@@ -573,8 +619,10 @@ static void gstlal_inpaint_set_property(GObject * object, enum property id, cons
 		}
 		gstlal_doubles_from_g_value_array(va, inpaint->psd->data->data, NULL);
 		// FIXME Move elsewhere
-		if(inpaint->rate != 0)
+		if(inpaint->rate != 0) {
 			fft_psd(inpaint);
+			make_workspace(inpaint);
+		}
 		break;
 	}
 
@@ -636,8 +684,7 @@ static void gstlal_inpaint_finalize(GObject * object) {
 	XLALDestroyREAL8TimeSeries(inpaint->inv_cov_series);
 	inpaint->inv_cov_series = NULL;
 
-	free(inpaint->transformed_data);
-	inpaint->transformed_data = NULL;
+	clear_workspace(inpaint);
 
 	G_OBJECT_CLASS(gstlal_inpaint_parent_class)->finalize(object);
 }
@@ -740,7 +787,7 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint) {
 	inpaint->channel_name = NULL;
 	inpaint->units = NULL;
 	inpaint->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, "unit-size", sizeof(double), NULL);
-	inpaint->transformed_data = NULL;
+	inpaint->output_hoft = NULL;
 	inpaint->rate = 0;
 
 	inpaint->initial_offset = 0;

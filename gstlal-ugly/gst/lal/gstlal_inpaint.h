@@ -73,7 +73,7 @@ typedef struct {
 	char *units;
 	guint rate;
 	GstAudioAdapter *adapter;
-	double *transformed_data;
+	double *output_hoft;
 
 	/*
 	 * Buffer time tracking
@@ -85,10 +85,19 @@ typedef struct {
 	/*
 	 * PSD stuff
 	 */
-
 	double fft_length_seconds;
 	REAL8FrequencySeries *psd;
 	REAL8TimeSeries *inv_cov_series;
+
+	/*
+	 * Matrix workspace
+	 */
+	gsl_matrix *inv_cov_mat_workspace;
+	gsl_matrix *M_trans_mat_workspace;
+	gsl_matrix *inv_M_trans_mat_workspace;
+	gsl_vector *relevant_hoft_workspace;
+	gsl_vector *inpainted_hoft_workspace;
+
 } GSTLALInpaint;
 
 
