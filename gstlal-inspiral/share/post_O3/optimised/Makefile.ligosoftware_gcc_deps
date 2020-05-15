@@ -39,6 +39,7 @@ GSTPYTHON=gst-python-1.14.5
 GSTPLUGINSGOOD=gst-plugins-good-1.14.5
 GSTPLUGINSBASE=gst-plugins-base-1.14.5
 GSTREAMER=gstreamer-1.14.5
+PYGOBJECT=pygobject-3.22.0
 GSL=gsl-1.16
 ORC=orc-0.4.26
 FFTW=fftw-3.3.8
@@ -50,6 +51,7 @@ GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
 GSTGOOD_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpng.so
 GSTBASE_TARGET=$(INSTALL_DIR)/lib/libgstapp-1.0.so
 GSTREAMER_TARGET=$(INSTALL_DIR)/lib/libgstreamer-1.0.so
+PYGOBJECT_TARGET=$(PYTHON_DIR)/pygobject-3.22.0-py3.6-linux-x86_64.egg-info
 GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
 GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
 ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
@@ -62,6 +64,7 @@ GSTPYTHON_TAR_TARGET=$(TAR_DIR)/$(GSTPYTHON).tar.xz
 GSTGOOD_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz
 GSTBASE_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz
 GSTREAMER_TAR_TARGET=$(TAR_DIR)/$(GSTREAMER).tar.xz
+PYGOBJECT_TAR_TARGET=$(TAR_DIR)/$(PYGOBJECT).tar.xz
 GSL_TAR_TARGET=$(TAR_DIR)/$(GSL).tar.gz
 ORC_TAR_TARGET=$(TAR_DIR)/$(ORC).tar.xz
 FFTW_TAR_TARGET=$(TAR_DIR)/$(FFTW).tar.gz
@@ -225,11 +228,23 @@ $(GSTBASE_TARGET) : $(GSTREAMER_TARGET)
 	cd $(SRC_DIR)/$(GSTPLUGINSBASE) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer
-$(GSTREAMER_TARGET) : logs/gsl.txt
+$(GSTREAMER_TARGET) : logs/pygobject.txt
 	@echo $(GREEN)gstreamer$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(GSTREAMER).tar.xz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(GSTREAMER) && ./configure --prefix=$(INSTALL_DIR)
 	cd $(SRC_DIR)/$(GSTREAMER) && make -j$(CORES) && make install -j$(CORES)
+
+# pygobject
+pygobject : logs/pygobject.txt
+
+logs/pygobject.txt : $(LOGS_DIR)/gsl.txt $(PYGOBJECT_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(PYGOBJECT_TARGET) : $(GSL_TARGET)
+	@echo $(GREEN)python-gobject$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(PYGOBJECT).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(PYGOBJECT) && ./configure --prefix=$(INSTALL_DIR) --disable-cairo
+	cd $(SRC_DIR)/$(PYGOBJECT) && make -j$(CORES) && make install -j$(CORES)
 
 # GSL
 gsl : logs/gsl.txt
@@ -308,8 +323,11 @@ $(GSTGOOD_TAR_TARGET) : $(GSTBASE_TAR_TARGET)
 $(GSTBASE_TAR_TARGET) : $(GSTREAMER_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-base/$(GSTPLUGINSBASE).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
-$(GSTREAMER_TAR_TARGET) : $(GSL_TAR_TARGET)
+$(GSTREAMER_TAR_TARGET) : $(PYGOBJECT_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gstreamer/$(GSTREAMER).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(PYGOBJECT_TAR_TARGET) : $(GSL_TAR_TARGET)
+	wget --no-check-certificate https://ftp.acc.umu.se/pub/GNOME/sources/pygobject/3.22/$(PYGOBJECT).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSL_TAR_TARGET) : $(ORC_TAR_TARGET)
 	wget --no-check-certificate http://ftp.gnu.org/gnu/gsl/$(GSL).tar.gz --directory-prefix=$(TAR_DIR) -nc
