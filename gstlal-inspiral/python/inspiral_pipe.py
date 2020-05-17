@@ -83,7 +83,7 @@ def online_inspiral_layer(dag, jobs, options):
 	inj_job_tags = []
 
 	if options.ht_gate_threshold_linear is not None:
-		template_mchirp_dict = get_svd_bank_params_online(options.bank_cache.values()[0])
+		template_mchirp_dict = get_svd_bank_params_online(list(options.bank_cache.values())[0])
 	else: # saves cost of reading in svd banks
 		template_mchirp_dict = None
 
@@ -449,9 +449,9 @@ def median_psd_layer(dag, jobs, parent_nodes, options, boundary_seg, instruments
 
 	# FIXME Use machinery in inspiral_pipe.py to create reference_psd.cache
 	median_psd_nodes = []
-	for chunk, nodes in enumerate(dagparts.groups(parent_nodes.values(), 50)):
+	for chunk, nodes in enumerate(dagparts.groups(list(parent_nodes.values()), 50)):
 		median_psd_node = dagparts.DAGNode(jobs['medianPSD'], dag,
-			parent_nodes = parent_nodes.values(),
+			parent_nodes = list(parent_nodes.values()),
 			input_files = {"": [node.output_files["write-psd"] for node in nodes]},
 			output_files = {"output-name": dagparts.T050017_filename(instruments, "REFERENCE_PSD_CHUNK_%04d" % chunk, boundary_seg, '.xml.gz', path = median_psd_path)}
 		)
@@ -534,11 +534,11 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 			bin_offset += i+1
 
 	# Plot template/svd bank jobs
-	primary_ifo = bank_cache.keys()[0]
+	primary_ifo = list(bank_cache.keys())[0]
 	dagparts.DAGNode(
 		jobs['plotBanks'],
 		dag,
-		parent_nodes = sum(svd_nodes.values(),[]),
+		parent_nodes = sum(list(svd_nodes.values()),[]),
 		opts = {"plot-template-bank":"", "output-dir": output_dir},
 		input_files = {"template-bank-file":options.template_bank},
 	)
@@ -601,7 +601,7 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 		this_channel_dict = dict((k, channel_dict[k]) for k in ifos if k in channel_dict)
 
 		# get the svd bank strings
-		svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = this_channel_dict.keys())
+		svd_bank_strings_full = create_svd_bank_strings(svd_nodes, instruments = list(this_channel_dict.keys()))
 
 		# get a mapping between chunk counter and bgbin for setting priorities
 		bgbin_chunk_map = {}
@@ -672,7 +672,7 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 				# setup output names
 				sim_name = sim_tag_from_inj_file(injections)
 
-				bgbin_svd_bank_strings = [bgbin_svdbank for i, bgbin_svdbank in enumerate(zip(sorted(template_mchirp_dict.keys()), svd_bank_strings_full)) if i not in ignore[injections]]
+				bgbin_svd_bank_strings = [bgbin_svdbank for i, bgbin_svdbank in enumerate(zip(sorted(list(template_mchirp_dict.keys())), svd_bank_strings_full)) if i not in ignore[injections]]
 
 				for chunk_counter, bgbin_list in enumerate(dagparts.groups(bgbin_svd_bank_strings, numchunks)):
 					bgbin_indices, svd_bank_strings = zip(*bgbin_list)
@@ -947,12 +947,12 @@ def marginalize_layer(dag, jobs, svd_nodes, lloid_output, lloid_diststats, optio
 	# lloid_output.  svd nodes should be made into a dictionary much
 	# earlier in the code to prevent a mishap
 	if svd_nodes:
-		one_ifo_svd_nodes = dict(("%04d" % n, node) for n, node in enumerate( svd_nodes.values()[0]))
+		one_ifo_svd_nodes = dict(("%04d" % n, node) for n, node in enumerate(list(svd_nodes.values())[0]))
 
 	# Here n counts the bins
 	# FIXME - this is broken for injection dags right now because of marg nodes
 	# first non-injections, which will get skipped if this is an injections-only run
-	for bin_key in sorted(lloid_output[None].keys()):
+	for bin_key in sorted(list(lloid_output[None].keys())):
 		outputs = lloid_output[None][bin_key]
 		diststats = lloid_diststats[bin_key]
 		inputs = [o[0] for o in outputs]
@@ -1012,7 +1012,7 @@ def calc_rank_pdf_layer(dag, jobs, marg_nodes, options, boundary_seg, instrument
 	instruments = "".join(sorted(instrument_set))
 
 	# Here n counts the bins
-	for bin_key in sorted(marg_nodes.keys()):
+	for bin_key in sorted(list(marg_nodes.keys())):
 		rankfile = functools.partial(get_rank_file, instruments, boundary_seg, bin_key)
 
 		calcranknode = dagparts.DAGNode(jobs['calcRankPDFs'], dag,
@@ -1040,7 +1040,7 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 	instruments = "".join(sorted(instrument_set))
 
 	# non-injection jobs
-	for bin_key in sorted(lloid_output[None].keys()):
+	for bin_key in sorted(list(lloid_output[None].keys())):
 		outputs = lloid_output[None][bin_key]
 		diststats = lloid_diststats[bin_key]
 		inputs = [o[0] for o in outputs]
@@ -1058,7 +1058,7 @@ def likelihood_layer(dag, jobs, marg_nodes, lloid_output, lloid_diststats, optio
 	# injection jobs
 	for inj in options.injections:
 		lloid_nodes = lloid_output[sim_tag_from_inj_file(inj)]
-		for bin_key in sorted(lloid_nodes.keys()):
+		for bin_key in sorted(list(lloid_nodes.keys())):
 			outputs = lloid_nodes[bin_key]
 			diststats = lloid_diststats[bin_key]
 			if outputs is not None:
@@ -1351,7 +1351,7 @@ def horizon_dist_layer(dag, jobs, psd_nodes, options, boundary_seg, output_dir, 
 	"""calculate horizon distance
 	"""
 	dagparts.DAGNode(jobs['horizon'], dag,
-		parent_nodes = psd_nodes.values(),
+		parent_nodes = list(psd_nodes.values()),
 		input_files = {"":[node.output_files["write-psd"] for node in psd_nodes.values()]},
 		output_files = {"":dagparts.T050017_filename(instruments, "HORIZON", boundary_seg, '.png', path = output_dir)}
 	)
@@ -1434,7 +1434,7 @@ def load_analysis_output(options):
 def load_svd_dtdphi_map(options):
 	svd_dtdphi_map = {}
 	bank_cache = load_bank_cache(options)
-	instrument_set = bank_cache.keys()
+	instrument_set = list(bank_cache.keys())
 	for ifo, list_of_svd_caches in bank_cache.items():
 		bin_offset = 0
 		for j, svd_caches in enumerate(list_of_svd_caches):
@@ -1538,7 +1538,7 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	the algorithm in the group() function
 	"""
 	outstrs = []
-	ifos = sorted(cachedict.keys())
+	ifos = sorted(list(cachedict.keys()))
 	files = zip(*[[CacheEntry(f).path for f in open(cachedict[ifo],'r').readlines()] for ifo in ifos])
 	for n, bank_group in enumerate(group(files, numbanks)):
 		if maxjobs is not None and n > maxjobs:
@@ -1610,13 +1610,13 @@ def get_bank_params(options, verbose = False):
 
 	max_time = 0
 	template_mchirp_dict = {}
-	for n, cache in enumerate(bank_cache.values()[0]):
+	for n, cache in enumerate(list(bank_cache.values())[0]):
 		for ce in map(CacheEntry, open(cache)):
 			for ce in map(CacheEntry, open(ce.path)):
 				xmldoc = ligolw_utils.load_filename(ce.path, verbose = verbose, contenthandler = LIGOLWContentHandler)
 				snglinspiraltable = lsctables.SnglInspiralTable.get_table(xmldoc)
 				max_time = max(max_time, max(snglinspiraltable.getColumnByName('template_duration')))
-				idx = options.overlap[n]/2
+				idx = options.overlap[n] // 2
 				template_mchirp_dict[ce.path] = [min(snglinspiraltable.getColumnByName('mchirp')[idx:-idx]), max(snglinspiraltable.getColumnByName('mchirp')[idx:-idx])]
 				xmldoc.unlink()
 
@@ -1654,7 +1654,7 @@ def analysis_segments(analyzable_instruments_set, allsegs, boundary_seg, max_tem
 def create_svd_bank_strings(svd_nodes, instruments = None):
 	# FIXME assume that the number of svd nodes is the same per ifo, a good assumption though
 	outstrings = []
-	for i in range(len(svd_nodes.values()[0])):
+	for i in range(len(list(svd_nodes.values())[0])):
 		svd_bank_string = ""
 		for ifo in svd_nodes:
 			if instruments is not None and ifo not in instruments:
@@ -1676,7 +1676,7 @@ def svd_bank_cache_maker(svd_bank_strings, injection = False):
 	svd_cache_entries = []
 	parsed_svd_bank_strings = [inspiral.parse_svdbank_string(single_svd_bank_string) for single_svd_bank_string in svd_bank_strings]
 	for svd_bank_parsed_dict in parsed_svd_bank_strings:
-		for filename in svd_bank_parsed_dict.itervalues():
+		for filename in svd_bank_parsed_dict.values():
 			svd_cache_entries.append(CacheEntry.from_T050017(filename))
 
 	return [svd_cache_entry.url for svd_cache_entry in svd_cache_entries]

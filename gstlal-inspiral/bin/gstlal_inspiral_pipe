@@ -367,11 +367,11 @@ if __name__ == '__main__':
 	if options.bank_cache or options.psd_cache:
 		if options.bank_cache:
 			template_mchirp_dict, bank_cache, max_time = inspiral_pipe.get_bank_params(options)
-			instrument_set = bank_cache.keys()
+			instrument_set = list(bank_cache.keys())
 
 		if options.psd_cache:
 			template_mchirp_dict, svd_nodes, max_time = inspiral_pipe.get_svd_bank_params(options.svd_bank_cache)
-			instrument_set = svd_nodes.keys()
+			instrument_set = list(svd_nodes.keys())
 
 		segsdict = inspiral_pipe.analysis_segments(set(instrument_set), detectors.frame_segments, boundary_seg, max_time, options.min_instruments)
 		instruments = "".join(sorted(instrument_set))
