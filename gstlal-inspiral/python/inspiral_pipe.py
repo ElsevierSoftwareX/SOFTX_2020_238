@@ -1081,7 +1081,7 @@ def sql_cluster_and_merge_layer(dag, jobs, likelihood_nodes, ligolw_add_nodes, o
 	innodes = {}
 
 	# after assigning the likelihoods cluster and merge by sub bank and whether or not it was an injection run
-	for (sim_tag, bin_key), (inputs, likelihood_url, parents) in sorted(likelihood_nodes.items()):
+	for (sim_tag, bin_key), (inputs, likelihood_url, parents) in likelihood_nodes.items():
 		db = inputs_to_db(jobs, inputs, job_type = 'toSqliteNoCache')
 		xml = inputs_to_db(jobs, inputs, job_type = 'ligolwAdd').replace(".sqlite", ".xml.gz")
 		snr_cluster_sql_file = options.snr_cluster_sql_file if sim_tag is None else options.injection_snr_cluster_sql_file
