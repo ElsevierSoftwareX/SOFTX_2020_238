@@ -33,6 +33,7 @@ DAG construction tools.
 """
 
 
+import collections
 import doctest
 import itertools
 import math
@@ -64,7 +65,7 @@ __version__ = "$Revision$" #FIXME
 
 def which(prog):
 	which = subprocess.Popen(['which',prog], stdout=subprocess.PIPE)
-	out = which.stdout.read().strip()
+	out = which.stdout.read().strip().decode('utf-8')
 	if not out:
 		raise ValueError("could not find %s in your path, have you built the proper software and sourced the proper environment scripts?" % prog)
 	return out
@@ -212,10 +213,10 @@ class DAGNode(pipeline.CondorDAGNode):
 		self.cache_inputs = {}
 		self.cache_outputs = {}
 
-		for opt, val in opts.items() + output_files.items() + input_files.items():
+		for opt, val in list(opts.items()) + list(output_files.items()) + list(input_files.items()):
 			if val is None:
 				continue # not the same as val = '' which is allowed
-			if not hasattr(val, "__iter__"): # catches list like things but not strings
+			if isinstance(val, str) or not isinstance(val, collections.Iterable): # catches list like things but not strings
 				if opt == "":
 					self.add_var_arg(val)
 				else:
