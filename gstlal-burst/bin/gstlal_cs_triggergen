@@ -153,7 +153,7 @@ class PipelineHandler(simplehandler.Handler):
 				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(buf_seg, len(events))
 			# put info of each event in the sngl burst table
 			if options.verbose:
-				print >> sys.stderr, "at", buf_timestamp, "got", len(events), "in", set([event.ifo for event in events])
+				print >> sys.stderr, "at", buf_timestamp, "got", len(events), "triggers in", instrument
 			# push the single detector triggers into the StreamBurca instance
 			# the push method returns True if the coincidence engine has new results. in that case, call the pull() method to run the coincidence engine.
 			if events:
@@ -188,12 +188,15 @@ class PipelineHandler(simplehandler.Handler):
 			template_f.data.data[0] = 0.0
 			template_f.data.data[template_f.data.length-1] = 0.0
 			# whiten
-			assert template_f.deltaF == psd.deltaF, "freq interval not same between template and PSD"
-			template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd)
+			if template_f.deltaF != psd.deltaF:
+				if options.verbose:
+					print >> sys.stderr, "interpolating psd..."
+				psd_interp = reference_psd.interpolate_psd(psd, template_f.deltaF)
+				template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd_interp)
+			else:
+				template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd)
 			# Obtain the normalization for getting the amplitude of signal from SNR
 			# Integrate over frequency range covered by template. Note that template_f is already whitened.
-			# FIXME the psd used here is overestimated for Virgo at lower frequencies,
-			# thus result in underestimating the amplitude for Virgo triggers
 			sigmasq = 0.0
 			sigmasq = numpy.trapz(4.0 * template_f.data.data**2, dx = psd.deltaF)
 			self.sigma[instrument][row.central_freq] = numpy.sqrt(sigmasq.real)
@@ -282,13 +285,15 @@ class PipelineHandler(simplehandler.Handler):
 				# template normalization parameter sigma.
 				# The normalization of the horizon distance can be arbitrary
 				# since only the relative difference of sensitivity (PSD) at
-				# different times/detectors is important (probably).
-				# Since sigma is order 10^(19-20), we use sigma for the template
+				# different times/detectors is important.
+				# Since sigma is order 10^(21), we use sigma for the template
 				# with the highest high-f cutoff, and define the horizon distance
-				# to be sigma/10^(19) Mpc. This definition should be consistent in
-				# other places where this quantity is used.
+				# to be sigma/10^(19) Mpc, a familiar number. This definition
+				# should be consistent in other places where this quantity is used.
 				self.horizon_distance = self.sigma[instrument][max(self.sigma[instrument].keys())]/1.e19
 				assert not (math.isnan(self.horizon_distance) or math.isinf(self.horizon_distance))
+				if options.verbose:
+					print >> sys.stderr, "horizon distance for", instrument, ":", self.horizon_distance
 			else:
 				# Burn-in period. Use templates with all zeros so that we won't get any triggers.
 				if options.verbose:
@@ -334,8 +339,9 @@ all_ifos = channel_dict.keys()
 
 if options.reference_psd is not None:
 	psd = series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = series.PSDContentHandler))
-	# check for detector mismatch with channels
-	assert psd.keys() == all_ifos, 'ifo masmatch between psds and channels'
+	# if one is giving reference psds, make sure it covers all detectors
+	# that participate in this job
+	assert set(all_ifos).issubset(set(psd.keys())), 'missing detector in PSD'
 else:
 	psd = None
 
@@ -393,6 +399,8 @@ for filename in options.template_bank:
 	# subsequent files if the template banks exactly match.
 	assert len(template_ids)==0 or template_ids == these_template_ids, "mismatch in template bank between instruments"
 	template_ids = these_template_ids
+
+num_templates = len(template_ids)
 
 
 #
@@ -457,7 +465,10 @@ triggergen = dict.fromkeys(all_ifos, None)
 
 
 for ifo in all_ifos:
-	head = pipeparts.mklalcachesrc(pipeline, options.frame_cache, cache_src_regex = ifo[0], cache_dsc_regex = ifo)
+	if ifo == "V1":
+		head = pipeparts.mklalcachesrc(pipeline, options.frame_cache, cache_src_regex = "V")
+	else:
+		head = pipeparts.mklalcachesrc(pipeline, options.frame_cache, cache_src_regex = ifo[0], cache_dsc_regex = ifo)
 	head = pipeparts.mkframecppchanneldemux(pipeline, head, channel_list = [channel_dict[ifo]])
 	pipeparts.framecpp_channeldemux_set_units(head, {channel_dict[ifo]:"strain"})
 	elem = pipeparts.mkaudioconvert(pipeline, None)
@@ -485,10 +496,14 @@ for ifo in all_ifos:
 	# whitener, resampler and caps filter
 	#
 
-	head = whiten[ifo] = pipeparts.mkwhiten(pipeline, head, fft_length = 8, name = "lal_whiten_%s" % ifo)
-	# high-pass filter with Hann window to suppress low-frequency artifacts in
-	# Virgo detector data
-	head = pipeparts.mkgeneric(pipeline, head, "audiowsincband", length = options.sample_rate + 1, lower_frequency = 1e1, upper_frequency = 1e4, window = 4)
+	# The buffer for O3 Virgo data is for some reason forced to be 4 seconds long, so zero-padding
+	# 2*2 seconds will zero-out all the data in the buffer, resulting in failing to find triggers.
+	# As a hack less amount of zero-padding is done for Virgo.
+	# FIXME This is an O3-only problem, and didn't happen when using O2 V1 data. But why?
+	if ifo == "V1":
+		head = whiten[ifo] = pipeparts.mkwhiten(pipeline, head, fft_length = 4, zero_pad = 1,  name = "lal_whiten_%s" % ifo)
+	else:
+		head = whiten[ifo] = pipeparts.mkwhiten(pipeline, head, fft_length = 8, zero_pad = 2,  name = "lal_whiten_%s" % ifo)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 	head = pipeparts.mkresample(pipeline, head)
 	# FIXME NO hardcoding original sample rate!
@@ -516,7 +531,7 @@ for ifo in all_ifos:
 # so that we can combine the rankingstat objects later on.
 #
 
-rankingstat = stringutils.RankingStat(instruments = seglists.keys(), delta_t = options.delta_t, snr_threshold = options.threshold, min_instruments = 2)
+rankingstat = stringutils.RankingStat(instruments = seglists.keys(), delta_t = options.delta_t, snr_threshold = options.threshold, num_templates = num_templates, min_instruments = 2)
 
 
 #

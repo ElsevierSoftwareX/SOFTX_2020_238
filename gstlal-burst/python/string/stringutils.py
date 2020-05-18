@@ -43,12 +43,12 @@ from ligo.lw import array as ligolw_array
 from ligo.lw import param as ligolw_param
 from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
+from ligo import segments
 from ligo.segments import utils as segmentsUtils
-from . import snglcoinc
+from lalburst import snglcoinc
 from . import string_lr_far
 
 from lal import rate
-# FIXME don't import gstlal modules in lalsuite
 from gstlal import stats as gstlalstats
 
 __author__ = "Kipp Cannon <kipp.cannon@ligo.org>"
@@ -79,10 +79,10 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 	class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 		pass
 
-	def __init__(self, delta_t, snr_threshold, instruments = frozenset(("H1", "L1")), min_instruments = 2):
-		self.numerator = string_lr_far.LnSignalDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, min_instruments = min_instruments)
-		self.denominator = string_lr_far.LnNoiseDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, min_instruments = min_instruments)
-		self.candidates = string_lr_far.LnLRDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, min_instruments = min_instruments)
+	def __init__(self, delta_t, snr_threshold, num_templates, instruments = frozenset(("H1", "L1", "V1")), min_instruments = 2):
+		self.numerator = string_lr_far.LnSignalDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, num_templates = num_templates, min_instruments = min_instruments)
+		self.denominator = string_lr_far.LnNoiseDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, num_templates = num_templates, min_instruments = min_instruments)
+		self.candidates = string_lr_far.LnLRDensity(instruments = instruments, delta_t = delta_t, snr_threshold = snr_threshold, num_templates = num_templates, min_instruments = min_instruments)
 
 	@property
 	def instruments(self):
@@ -108,6 +108,7 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 		new = type(self)(
 			instruments = self.instruments,
 			min_instruments = self.min_instruments,
+			num_templates = self.num_templates,
 			delta_t = self.delta_t,
 			snr_threshold = self.snr_threshold
 		)
@@ -118,9 +119,50 @@ class RankingStat(snglcoinc.LnLikelihoodRatioMixin):
 
 	def kwargs_from_triggers(self, events, offsetvector):
 		assert len(events) >= self.min_instruments
+
+		#
+		# pick a random, but reproducible, trigger to provide a
+		# reference timestamp for, e.g, the \Delta t's between
+		# instruments and the time spanned by the candidate.
+		#
+		# the trigger times are conveyed as offsets-from-epoch.
+		# the trigger times are taken to be their time-shifted
+		# values, the time-shifted reference trigger is used to
+		# define the epoch.  the objective here is to allow the
+		# trigger times to be converted to floats without loss of
+		# precision, without loosing knowledge of the \Delta t's
+		# between triggers, and in such a way that singles always
+		# have a time-shifted offset-from-epoch of 0.
+		#
+		# for the time spanned by the event, we need a segment for
+		# every instrument whether or not it provided a trigger,
+		# and reflecting the offset vector that was considered when
+		# this candidate was formed (the ranking statistic needs to
+		# know when it was we were looking for triggers in the
+		# instruments that failed to provide them).  for
+		# instruments that do not provide a trigger, we time-shift
+		# the reference trigger's interval under the assumption
+		# that because we use exact-match coincidence the interval
+		# is the same for all instruments.
+		#
+
+		reference = min(events, key = lambda event: event.ifo)
+		ref_start, ref_offset = reference.start_time, offsetvector[reference.ifo]
+		# segment spanned by reference event
+		seg = segments.segment(ref_start, ref_start + reference.duration)
+		# initially populate segs dictionary shifting reference
+		# instrument's segment according to offset vectors
+		segs = dict((instrument, seg.shift(ref_offset - offsetvector[instrument])) for instrument in self.instruments)
+		
+		# for any any real triggers we have, use their true
+		# intervals
+		segs.update((event.ifo, segments.segment(event.start_time, event.start_time+event.duration)) for event in events)
+
 		return dict(
+			segments = segs, 
 			snr2s = dict((event.ifo, event.snr**2.) for event in events),
-			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events)
+			chi2s_over_snr2s = dict((event.ifo, event.chisq / event.chisq_dof / event.snr**2.) for event in events),
+			durations = dict((event.ifo, event.duration) for event in events)
 		)
 
 	def ln_lr_from_triggers(self, events, offsetvector):
@@ -243,7 +285,7 @@ class RankingStatPDF(object):
 			nsamples = nsamples)
 
 		if verbose:
-			print("done computing ranking statistic PDFs", file=sys.stderr)
+			print("done computing ranking statistic PDFs", file=sys.stderr) 
 
 		#
 		# apply density estimation kernels to counts
@@ -477,7 +519,7 @@ SET
 	),
 	false_alarm_rate = (
 		SELECT
-			fap_from_rankingstat(coinc_event.likelihood)
+			far_from_rankingstat(coinc_event.likelihood)
 		FROM
 			coinc_event
 		WHERE

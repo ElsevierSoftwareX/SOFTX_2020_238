@@ -59,6 +59,7 @@ def parse_command_line():
 	parser.add_option("-c", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-n", "--ranking-stat-samples", metavar = "N", default = 2**24, type = "int", help = "Construct ranking statistic histograms by drawing this many samples from the ranking statistic generator (default = 2^24).")
 	parser.add_option("-o", "--output", metavar = "filename", help = "Write merged likelihood ratio histograms to this LIGO Light-Weight XML file.")
+	parser.add_option("-s", "--SNRPDF-file", metavar = "filename", action = "append", help = "Read pre-computed SNR PDF from this LIGO Light-Weight XML file (optional).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -66,6 +67,8 @@ def parse_command_line():
 
 	if options.input_cache is not None:
 		filenames = [CacheEntry(line).path for line in open(options.input_cache)]
+	if options.SNRPDF_file is not None:
+		filenames += options.SNRPDF_file
 	if not filenames:
 		raise ValueError("no ranking statistic likelihood data files specified")
 
@@ -93,7 +96,7 @@ options, filenames, paramdict = parse_command_line()
 
 
 #
-# load rankingstat data
+# load likelihood data
 #
 
 

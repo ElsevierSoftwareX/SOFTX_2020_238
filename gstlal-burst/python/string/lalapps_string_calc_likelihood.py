@@ -63,6 +63,7 @@ def parse_command_line():
 	parser.add_option("-c", "--input-cache", metavar = "filename", help = "Also process the files named in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
 	parser.add_option("-l", "--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use.  Can be given more than once.")
 	parser.add_option("--likelihood-cache", metavar = "filename", help = "Also load the likelihood ratio data files listsed in this LAL cache.  See lalapps_path2cache for information on how to produce a LAL cache file.")
+	parser.add_option("-s", "--SNRPDF-file", metavar = "filename", action = "append", help = "Read pre-computed SNR PDF from this LIGO Light-Weight XML file (optional).")
 	parser.add_option("-t", "--tmp-space", metavar = "path", help = "Path to a directory suitable for use as a work area while manipulating the database file.  The database file will be worked on in this directory, and then moved to the final location when complete.  This option is intended to improve performance when running in a networked environment, where there might be a local disk with higher bandwidth than is available to the filesystem on which the final output will reside.")
 	parser.add_option("--vetoes-name", metavar = "name", help = "Set the name of the segment lists to use as vetoes (default = do not apply vetoes).")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
@@ -76,6 +77,8 @@ def parse_command_line():
 	if not options.likelihood_filenames:
 		raise ValueError("no ranking statistic likelihood data files specified")
 
+	if options.SNRPDF_file is not None:
+		options.likelihood_filenames += options.SNRPDF_file
 	if options.input_cache:
 		filenames += [CacheEntry(line).path for line in open(options.input_cache)]
 	if not filenames:
