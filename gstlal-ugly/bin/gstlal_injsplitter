@@ -67,7 +67,7 @@ options, filenames = parse_command_line()
 ###############################################################################
 
 # GETTING COMMAND LINE OPTIONS FOR PRINTING INTO THE TABLE
-opts_dict = dict((k, v) for k, v in options.__dict__.iteritems() if v is not False and v is not None)
+opts_dict = dict((k, v) for k, v in options.__dict__.items() if v is not False and v is not None)
 
 # LOAD INJECTION TABLE
 xmldoc=utils.load_filename(filenames[0], gz=filenames[0].endswith(".gz"), verbose = options.verbose, contenthandler=ContentHandler)
