@@ -37,6 +37,5 @@ ENV GSTLAL_FIR_WHITEN 0
 ENV TMPDIR /tmp
 
 
-ENTRYPOINT source /opt/intel/bin/compilervars.sh intel64 && \
-           bash
+ENTRYPOINT bash
 
