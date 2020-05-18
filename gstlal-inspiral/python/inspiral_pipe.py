@@ -488,8 +488,8 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 				individual_svd_cache = map(CacheEntry, open(individual_svd_cache))
 				for n, f in enumerate(ce.path for ce in individual_svd_cache):
 					# handle template bank clipping
-					clipleft.append(options.overlap[j] / 2)
-					clipright.append(options.overlap[j] / 2)
+					clipleft.append(options.overlap[j] // 2)
+					clipright.append(options.overlap[j] // 2)
 					ids.append("%d_%d" % (i+bin_offset, n))
 					if f in template_mchirp_dict:
 						mchirp_interval = (min(mchirp_interval[0], template_mchirp_dict[f][0]), max(mchirp_interval[1], template_mchirp_dict[f][1]))
