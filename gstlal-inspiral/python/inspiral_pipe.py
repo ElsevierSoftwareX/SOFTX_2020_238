@@ -478,14 +478,14 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 	for ifo, list_of_svd_caches in bank_cache.items():
 		bin_offset = 0
 		for j, svd_caches in enumerate(list_of_svd_caches):
-			svd_caches = map(CacheEntry, open(svd_caches))
+			svd_caches = list(map(CacheEntry, open(svd_caches)))
 			for i, individual_svd_cache in enumerate(ce.path for ce in svd_caches):
 				# First sort out the clipleft, clipright options
 				clipleft = []
 				clipright = []
 				ids = []
 				mchirp_interval = (float("inf"), 0)
-				individual_svd_cache = map(CacheEntry, open(individual_svd_cache))
+				individual_svd_cache = list(map(CacheEntry, open(individual_svd_cache)))
 				for n, f in enumerate(ce.path for ce in individual_svd_cache):
 					# handle template bank clipping
 					clipleft.append(options.overlap[j] // 2)
