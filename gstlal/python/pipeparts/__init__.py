@@ -29,6 +29,7 @@ import os
 import sys
 import threading
 
+import numpy
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -898,7 +899,7 @@ class AppSync(object):
 			# any element (that isn't at eos) that doesn't yet
 			# have a buffer (elements at eos and that are
 			# without buffers aren't in the list)
-			timestamp, elem_with_oldest = min(timestamps)
+			timestamp, elem_with_oldest = min(timestamps, key=lambda x: x[0] if x[0] is not None else -numpy.inf)
 			# if there's an element without a buffer, quit for
 			# now --- we require all non-eos elements to have
 			# buffers before proceding
