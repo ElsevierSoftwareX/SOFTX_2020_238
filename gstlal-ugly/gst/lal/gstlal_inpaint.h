@@ -86,17 +86,17 @@ typedef struct {
 	 * PSD stuff
 	 */
 	double fft_length_seconds;
+	guint fft_length_samples;
 	REAL8FrequencySeries *psd;
 	REAL8TimeSeries *inv_cov_series;
 
 	/*
 	 * Matrix workspace
 	 */
-	gsl_matrix *inv_cov_mat_workspace;
-	gsl_matrix *M_trans_mat_workspace;
-	gsl_matrix *inv_M_trans_mat_workspace;
-	gsl_vector *relevant_hoft_workspace;
-	gsl_vector *inpainted_hoft_workspace;
+	double *inv_cov_mat_workspace;
+	double *M_trans_mat_workspace;
+	double *inv_M_trans_mat_workspace;
+	double *F_trans_mat_workspace;
 
 } GSTLALInpaint;
 
