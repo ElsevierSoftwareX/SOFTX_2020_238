@@ -112,7 +112,7 @@ G_DEFINE_TYPE_WITH_CODE(
  * ============================================================================
  */
 
-static void clear_workspace(GSTLALInpaint* inpaint) {
+static void free_workspace(GSTLALInpaint* inpaint) {
 
 	if(inpaint->output_hoft != NULL) {
 		free(inpaint->output_hoft);
@@ -120,6 +120,7 @@ static void clear_workspace(GSTLALInpaint* inpaint) {
 	}
 
 	g_free(inpaint->inv_cov_mat_workspace);
+	inpaint->inv_cov_mat_workspace = NULL;
 
 	if(inpaint->M_trans_mat_workspace != NULL) {
 		free(inpaint->M_trans_mat_workspace);
@@ -143,7 +144,7 @@ static void clear_workspace(GSTLALInpaint* inpaint) {
 //FIXME Need to call this when any psd properties change
 static void make_workspace(GSTLALInpaint *inpaint) {
 	// Always start by clearing workspace, just in case
-	clear_workspace(inpaint);
+	free_workspace(inpaint);
 
 	inpaint->fft_length_samples = (guint) (inpaint->rate * (guint) inpaint->fft_length_seconds);
 
@@ -667,7 +668,7 @@ static void gstlal_inpaint_finalize(GObject * object) {
 	XLALDestroyREAL8TimeSeries(inpaint->inv_cov_series);
 	inpaint->inv_cov_series = NULL;
 
-	clear_workspace(inpaint);
+	free_workspace(inpaint);
 
 	G_OBJECT_CLASS(gstlal_inpaint_parent_class)->finalize(object);
 }
