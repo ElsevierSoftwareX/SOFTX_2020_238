@@ -6,7 +6,7 @@ FROM containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7
 # Labeling/packaging stuff:
 LABEL name="GstLAL Runtime Package, EL7" \
       maintainer="Alexander Pace <alexander.pace@ligo.org>" \
-      date="2019-10-16" \
+      date="2020-05-22" \
       support="Reference Platform, EL7"
 
 USER root
@@ -34,8 +34,5 @@ ENV MKL_THREADING_LAYER SEQUENTIAL
 ENV GSTLAL_FIR_WHITEN 0
 ENV TMPDIR /tmp
 
-
-ENTRYPOINT source /opt/intel/bin/compilervars.sh intel64 && \
-           #source /opt/rh/devtoolset-7/enable && \
-           bash
+ENTRYPOINT bash
 
