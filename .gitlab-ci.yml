@@ -2,6 +2,8 @@ image: docker:latest
 
 variables:
   DOCKER_DRIVER: overlay
+  DOCKER_BRANCH: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
+  DOCKER_LATEST: $CI_REGISTRY_IMAGE:latest
   BRANCH: $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_NAME
   COMMIT: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
   NIGHTLY: $CI_REGISTRY_IMAGE:nightly
@@ -21,6 +23,8 @@ before_script:
   # stage. 
   - export TMPDIR=/tmp
   - export GSTLAL_FIR_WHITEN=0
+  - yum clean all
+  - yum makecache
     
 cache:
   key: $CI_JOB_NAME
@@ -36,6 +40,7 @@ stages:
     - test-burst
     - test-offline
     - docker
+    - docker-latest
     - nightly-pages
     - verify
 
@@ -104,156 +109,6 @@ level2:rpm:gstlal-burst:
     - level0:rpm:gstlal
     - level1:rpm:gstlal-ugly
 
-#level0:gstlal:
-#  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
-#  stage: level0
-#  script:
-#    - cd gstlal
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#  artifacts:
-#    expire_in: 3h
-#    paths:
-#      - ${GSTLAL_DIR}
-#    when: always
-#  only:
-#    - pushes
-#    - schedules
-#    
-#level1:gstlal-ugly:
-#  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
-#  stage: level1
-#  dependencies:
-#    - level0:gstlal
-#  script:
-#    - cd gstlal-ugly
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#  artifacts:
-#    expire_in: 3h
-#    paths:
-#      - ${GSTLAL_DIR}
-#    when: always
-#  only:
-#    - pushes
-#    - schedules
-#
-#level2:gstlal-calibration:
-#  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
-#  stage: level2
-#  dependencies:
-#    - level1:gstlal-ugly
-#  script:
-#    - cd gstlal-calibration
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#  artifacts:
-#    expire_in: 3h
-#    paths:
-#      - ${GSTLAL_DIR}
-#    when: always
-#  only:
-#    - pushes
-#    - schedules
-#
-#level2:gstlal-inspiral:
-#  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
-#  stage: level2
-#  dependencies:
-#    - level1:gstlal-ugly
-#  script:
-#    - cd gstlal-inspiral
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR} --disable-massmodel
-#    - make
-#    - make install
-#  artifacts:
-#    expire_in: 3h
-#    paths:
-#      - ${GSTLAL_DIR}
-#    when: always
-#  only:
-#    - pushes
-#    - schedules
-#    
-#level2:gstlal-burst:
-#  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
-#  stage: level2
-#  dependencies:
-#    - level1:gstlal-ugly
-#  script:
-#    - cd gstlal-burst
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#  artifacts:
-#    expire_in: 3h
-#    paths:
-#      - ${GSTLAL_DIR}
-#    when: always
-#  only:
-#    - pushes
-#    - schedules
-#  
-#gstlal-verify:
-#  image: containers.ligo.org/alexander-pace/gstlal-dev/gstlal-dev:el7-mkl-1.14
-#  stage: verify
-#  script:
-#    # -------------------------------------------------------------------
-#    #  gstlal
-#    # -------------------------------------------------------------------
-#    #- echo "$PWD" > ./pwd_output.out
-#    - cd gstlal
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#    - cd ..
-#    # -------------------------------------------------------------------
-#    #  gstlal-ugly
-#    # -------------------------------------------------------------------
-#    - cd gstlal-ugly
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#    - cd ..
-#    # -------------------------------------------------------------------
-#    #  gstlal-calibration
-#    # -------------------------------------------------------------------
-#    - cd gstlal-calibration
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#    - cd ..
-#    # -------------------------------------------------------------------
-#    #  gstlal-inspiral
-#    # -------------------------------------------------------------------
-#    - cd gstlal-inspiral
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR} --disable-massmodel
-#    - make
-#    - make install
-#    - cd ..
-#    # -------------------------------------------------------------------
-#    #  gstlal-burst
-#    # -------------------------------------------------------------------
-#    - cd gstlal-burst
-#    - ./00init.sh
-#    - ./configure --prefix=${GSTLAL_DIR}
-#    - make
-#    - make install
-#    - cd ..
-#  only:
-#    - manual
 
 test:gstlal:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7
@@ -265,7 +120,6 @@ test:gstlal:
     - level2:rpm:gstlal-inspiral
     - level2:rpm:gstlal-burst
   script:
-
     # Install RPMs and set up the test environment:
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
     - export GSTLAL_FIR_WHITEN=0
@@ -277,7 +131,7 @@ test:gstlal:
 
     # Run doctests
     - cd gstlal
-    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
+    - python3 -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
   only:
     - schedules
     - pushes
@@ -292,14 +146,13 @@ test:gstlal-inspiral:
     - level2:rpm:gstlal-inspiral
     - level2:rpm:gstlal-burst
   script:
-
     # Install RPMs and set up the test environment:
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
     - export GSTLAL_FIR_WHITEN=0
     - gst-inspect-1.0
 
     - cd gstlal-inspiral
-    - python -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py --ignore python/inspiral_pipe.py --ignore python/plotsnr.py --ignore python/p_astro_gstlal.py
+    - python3 -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py --ignore python/inspiral_pipe.py --ignore python/plotsnr.py --ignore python/p_astro_gstlal.py
   only:
     - schedules
     - pushes
@@ -315,14 +168,13 @@ test:gstlal-burst:
     - level2:rpm:gstlal-inspiral
     - level2:rpm:gstlal-burst
   script:
-
     # Install RPMs and set up the test environment:
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
     - export GSTLAL_FIR_WHITEN=0
     - gst-inspect-1.0
 
     - cd gstlal-burst
-    - python -m pytest -v --doctest-modules --ignore python/excesspower --ignore python/string --ignore tests/trigger_test_01.py
+    - python3 -m pytest -v --doctest-modules --ignore python/excesspower --ignore python/string --ignore tests/trigger_test_01.py
   only:
     - schedules
     - pushes
@@ -338,10 +190,12 @@ test:offline:
     - level2:rpm:gstlal-inspiral
     - level2:rpm:gstlal-burst
   script:
+    # Install RPMs and set up the test environment:
+    - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+
     # Set up directory structure and copy over built-dependencies from container:
     - mkdir public
     # Install RPMs and set up the test environment:
-    - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
     - gst-inspect-1.0
 
     # Export variables for the offline tutorial
@@ -420,8 +274,8 @@ docker:el7:
 
     # Build the container:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build --pull -t $CI_REGISTRY_IMAGE/gstlal:el7 --file .gitlab-ci.Dockerfile.e7 .
-    - docker push $CI_REGISTRY_IMAGE/gstlal:el7
+    - docker build --pull -t $DOCKER_BRANCH --file .gitlab-ci.Dockerfile.e7 .
+    - docker push $DOCKER_BRANCH
   dependencies:
     - level0:rpm:gstlal
     - level1:rpm:gstlal-ugly
@@ -431,4 +285,25 @@ docker:el7:
 
   only:
     - schedules
+
+branch_image:
+  stage: docker
+  script:
+    - mkdir rpms 
+    - mv rpmbuild/RPMS/x86_64/*.rpm rpms
+    - rm -rf rpmbuild*
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker build --pull -t $DOCKER_BRANCH --file .gitlab-ci.Dockerfile.e7 .
+    - docker push $DOCKER_BRANCH
+
+latest_image:
+  stage: docker-latest
+  dependencies:
+    - branch_image
+  only:
+    refs:
+      - master
+  script:
+    - docker tag $DOCKER_BRANCH $DOCKER_LATEST
+    - docker push $DOCKER_LATEST
 
