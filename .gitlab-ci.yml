@@ -287,20 +287,11 @@ docker:el7:
   only:
     - schedules
 
-branch_image:
-  stage: docker
-  script:
-    - mkdir rpms 
-    - mv rpmbuild/RPMS/x86_64/*.rpm rpms
-    - rm -rf rpmbuild*
-    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
-    - docker build --pull -t $DOCKER_BRANCH --file .gitlab-ci.Dockerfile.e7 .
-    - docker push $DOCKER_BRANCH
 
 latest_image:
   stage: docker-latest
   dependencies:
-    - branch_image
+    - docker:el7
   only:
     refs:
       - master
