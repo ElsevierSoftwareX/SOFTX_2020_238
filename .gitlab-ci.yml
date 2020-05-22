@@ -286,6 +286,7 @@ docker:el7:
 
   only:
     - schedules
+    - pushes
 
 
 latest_image:
