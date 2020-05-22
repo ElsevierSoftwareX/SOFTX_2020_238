@@ -464,6 +464,12 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 	svd_nodes = {}
 	new_template_mchirp_dict = {}
 	svd_dtdphi_map = {}
+	autocorrelation_dict = {}
+	for autocorrelation in options.autocorrelation_length:
+		min_chirp_mass, max_chirp_mass, autocorrelation_length  = autocorrelation.split(':')
+		min_chirp_mass, max_chirp_mass, autocorrelation_length = float(min_chirp_mass), float(max_chirp_mass), int(autocorrelation_length)
+		autocorrelation_dict[(min_chirp_mass,max_chirp_mass)] = autocorrelation_length
+
 	for ifo, list_of_svd_caches in bank_cache.items():
 		bin_offset = 0
 		for j, svd_caches in enumerate(list_of_svd_caches):
@@ -487,6 +493,10 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 				svd_bank_name = dagparts.T050017_filename(ifo, '%04d_SVD' % (i+bin_offset,), seg, '.xml.gz', path = jobs['svd'].output_path)
 				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
 					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
+
+				for key, value in autocorrelation_dict.iteritems():
+					if key[0] <= new_template_mchirp_dict['%04d' % (i+bin_offset,)][1] < key[1]:
+						options.autocorrelation_length = value
 
 				svdnode = dagparts.DAGNode(
 					jobs['svd'],
