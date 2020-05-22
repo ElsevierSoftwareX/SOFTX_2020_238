@@ -131,7 +131,7 @@ test:gstlal:
 
     # Run doctests
     - cd gstlal
-    - python3 -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
   only:
     - schedules
     - pushes
@@ -152,7 +152,7 @@ test:gstlal-inspiral:
     - gst-inspect-1.0
 
     - cd gstlal-inspiral
-    - python3 -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py --ignore python/inspiral_pipe.py --ignore python/plotsnr.py --ignore python/p_astro_gstlal.py
+    - python -m pytest -v --doctest-modules --ignore gst/python --ignore tests --ignore python/lloidplots.py --ignore python/llweb.py --ignore python/plotsegments.py --ignore python/plotsensitivity.py --ignore python/snglinspiraltable.py --ignore python/spawaveform.py --ignore python/spiirparts.py --ignore python/imr_utils.py --ignore python/stats/inspiral_extrinsics.py --ignore python/templates.py --ignore python/inspiral_pipe.py --ignore python/plotsnr.py --ignore python/p_astro_gstlal.py
   only:
     - schedules
     - pushes
@@ -174,7 +174,8 @@ test:gstlal-burst:
     - gst-inspect-1.0
 
     - cd gstlal-burst
-    - python3 -m pytest -v --doctest-modules --ignore python/excesspower --ignore python/string --ignore tests/trigger_test_01.py
+
+    - python -m pytest -v --doctest-modules --ignore python/excesspower --ignore python/string --ignore tests/trigger_test_01.py
   only:
     - schedules
     - pushes
