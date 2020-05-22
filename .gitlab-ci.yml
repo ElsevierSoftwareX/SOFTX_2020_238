@@ -291,6 +291,7 @@ docker:el7:
 
 latest_image:
   stage: docker-latest
+  before_script: []
   dependencies:
     - docker:el7
   only:
