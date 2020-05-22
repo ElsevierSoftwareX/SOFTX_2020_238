@@ -94,7 +94,7 @@ def parse_command_line():
 
 	# SVD bank construction options
 	parser.add_option("--overlap", metavar = "num", type = "int", action = "append", help = "set the factor that describes the overlap of the sub banks, must be even!")
-	parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
+	parser.add_option("--autocorrelation-length", metavar = "str", default = '0:1000:351', help = "The chirp mass range and minimum number of samples to use for auto-chisquared. Formatted as min-chirp:max-chirp:AC-length. Samples should be odd. You MUST provide this in a continuous fashion across the entire covered mass space, i.e. 0:15:701,15:1000:351")
 	parser.add_option("--samples-min", type = "int", action = "append", help = "The minimum number of samples to use for time slices default 1024 (can be given multiple times, one for each time --bank-cache is invoked)")
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
@@ -172,6 +172,11 @@ def parse_command_line():
 
 	if not options.overlap and not options.svd_bank_cache:
 		options.overlap = [0]*len(options.bank_cache)
+
+	if options.autocorrelation_length:
+		options.autocorrelation_length = [v for v in options.autocorrelation_length.split(",")]
+		if any(int(autocorrelation_length.split(':')[2]) % 2 ==0 for autocorrelation_length in options.autocorrelation_length):
+			raise ValueError("The autocorrelation length must be an odd number of samples.")
 
 	if not options.svd_bank_cache and any(overlap % 2 for overlap in options.overlap):
 		raise ValueError("overlap must be even")
