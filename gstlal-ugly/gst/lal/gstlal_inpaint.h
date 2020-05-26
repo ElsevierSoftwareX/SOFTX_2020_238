@@ -42,6 +42,7 @@
 
 #include <lal/TimeSeries.h>
 #include <lal/FrequencySeries.h>
+#include <lal/Window.h>
 
 G_BEGIN_DECLS
 
@@ -73,13 +74,14 @@ typedef struct {
 	char *units;
 	guint rate;
 	GstAudioAdapter *adapter;
-	double *output_hoft;
+	// FIXME Is there a reason to not make output_hoft a REAL8TimeSequence instead?
+	REAL8TimeSeries *output_hoft;
+	REAL8Window *hann_window;
 
 	/*
 	 * Buffer time tracking
 	 */
 	guint64 initial_offset;
-	guint64 outbuf_length;
 	GstClockTime t0;
 
 	/*
@@ -91,8 +93,9 @@ typedef struct {
 	REAL8TimeSeries *inv_cov_series;
 
 	/*
-	 * Matrix workspace
+	 * Workspace
 	 */
+	REAL8TimeSeries *hoft_workspace;
 	double *inv_cov_mat_workspace;
 	double *M_trans_mat_workspace;
 	double *inv_M_trans_mat_workspace;
