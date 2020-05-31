@@ -5,13 +5,13 @@ GStreamer elements for gravitational-wave data analysis
 
 [![pipeline status](https://git.ligo.org/lscsoft/gstlal/badges/master/pipeline.svg)](https://git.ligo.org/lscsoft/gstlal/commits/master)
 
-|               | version  | source   |
-| :------------:| :------: | :------: |
-| `gstlal` | 1.5.1  | [gstlal-1.5.1.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-1.5.1.tar.gz)  |
-| `gstlal-ugly`     | 1.6.6  | [gstlal-ugly-1.6.6.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-ugly-1.6.6.tar.gz)  |
-| `gstlal-inspiral`  | 1.6.9 | [gstlal-inspiral-1.6.9.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-inspiral-1.6.9.tar.gz)  |
-| `gstlal-calibration`  |  1.2.11  | [gstlal-calibration-1.2.11.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-calibration-1.2.11.tar.gz)  |
-| `gstlal-burst`  |  0.2.0  | [gstlal-burst-0.2.0.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-burst-0.2.0.tar.gz)  |
+|                      | version  | source   |
+| :------------------: | :------: | :------: |
+| `gstlal`             | 1.6.0    | [gstlal-1.6.0.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-1.6.0.tar.gz)  |
+| `gstlal-ugly`        | 1.7.0    | [gstlal-ugly-1.7.0.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-ugly-1.7.0.tar.gz)  |
+| `gstlal-inspiral`    | 1.7.3    | [gstlal-inspiral-1.7.3.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-inspiral-1.7.3.tar.gz)  |
+| `gstlal-calibration` | 1.2.12   | [gstlal-calibration-1.2.12.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-calibration-1.2.12.tar.gz)  |
+| `gstlal-burst`       | 0.2.1    | [gstlal-burst-0.2.1.tar.gz](http://software.ligo.org/lscsoft/source/gstlal-burst-0.2.1.tar.gz)  |
 
 Full documentation is provided [here](https://lscsoft.docs.ligo.org/gstlal/).
 
