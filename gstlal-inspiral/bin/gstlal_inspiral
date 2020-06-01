@@ -747,7 +747,7 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 	# Choose to optionally reconstruct segments around injections (not
 	# blind injections!)
 	if options.injections:
-		offset_padding = max(math.ceil(abs(row.end))+1 for bank in banks.items()[0][-1] for row in bank.sngl_inspiral_table)
+		offset_padding = max(math.ceil(abs(row.end))+1 for bank in list(banks.items())[0][-1] for row in bank.sngl_inspiral_table)
 		reconstruction_segment_list = simulation.sim_inspiral_to_segment_list(options.injections, pad = offset_padding)
 	elif options.reconstruction_segment:
 		reconstruction_segment_list = segments.segmentlist()
