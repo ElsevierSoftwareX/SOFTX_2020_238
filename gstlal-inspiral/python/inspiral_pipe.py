@@ -547,6 +547,25 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 
 
 def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_dict, template_mchirp_dict):
+	common_opts = {
+		"psd-fft-length": options.psd_fft_length,
+		"frame-segments-name": options.frame_segments_name,
+		"tmp-space": dagparts.condor_scratch_space(),
+		"track-psd": "",
+		"control-peak-time": options.control_peak_time,
+		"coincidence-threshold": options.coincidence_threshold,
+		"singles-threshold": options.singles_threshold,
+		"fir-stride": options.fir_stride,
+		"data-source": "frames",
+		"local-frame-caching": "",
+		"min-instruments": options.min_instruments,
+		"reference-likelihood-file": options.reference_likelihood_file
+	}
+
+	# disable service discovery if using singularity
+	if options.singularity_image:
+		common_opts.update({"disable-service-discovery": ""})
+
 	inspiral_nodes = {}
 	for ifos in segsdict:
 		# FIXME: handles more than 3 ifos with same cpu/memory requests
@@ -609,27 +628,19 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 					# Calculate the appropriate ht-gate-threshold values according to the scale given
 					threshold_values = get_threshold_values(template_mchirp_dict, bgbin_indices, svd_bank_strings, options)
 
+					# non injection options
+					noninj_opts = {
+						"ht-gate-threshold": threshold_values,
+						"gps-start-time": int(seg[0]),
+						"gps-end-time": int(seg[1]),
+						"channel-name": datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+					}
+					noninj_opts.update(common_opts)
+
 					# non injection node
 					noninjnode = dagparts.DAGNode(jobs[inspiral_name], dag,
 						parent_nodes = sum((svd_node_list[numchunks*chunk_counter:numchunks*(chunk_counter+1)] for svd_node_list in svd_nodes.values()),[]),
-						opts = {
-							"psd-fft-length":options.psd_fft_length,
-							"ht-gate-threshold":threshold_values,
-							"frame-segments-name":options.frame_segments_name,
-							"gps-start-time":int(seg[0]),
-							"gps-end-time":int(seg[1]),
-							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-							"tmp-space":dagparts.condor_scratch_space(),
-							"track-psd":"",
-							"control-peak-time":options.control_peak_time,
-							"coincidence-threshold":options.coincidence_threshold,
-							"singles-threshold":options.singles_threshold,
-							"fir-stride":options.fir_stride,
-							"data-source":"frames",
-							"local-frame-caching":"",
-							"min-instruments":options.min_instruments,
-							"reference-likelihood-file":options.reference_likelihood_file
-						},
+						opts = noninj_opts,
 						input_files = {
 							"time-slide-file":options.time_slide_file,
 							"frame-cache":options.frame_cache,
@@ -680,28 +691,20 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 					# Calculate the appropriate ht-gate-threshold values according to the scale given
 					threshold_values = get_threshold_values(template_mchirp_dict, bgbin_indices, svd_bank_strings, options)
 
+					# injection options
+					inj_opts = {
+						"ht-gate-threshold":threshold_values,
+						"gps-start-time":int(seg[0]),
+						"gps-end-time":int(seg[1]),
+						"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
+					}
+					inj_opts.update(common_opts)
+
 					# setup injection node
 					# FIXME: handles more than 3 ifos with same cpu/memory requests
 					injnode = dagparts.DAGNode(jobs[inspiral_inj_name], dag,
 						parent_nodes = parents,
-						opts = {
-							"psd-fft-length":options.psd_fft_length,
-							"ht-gate-threshold":threshold_values,
-							"frame-segments-name":options.frame_segments_name,
-							"gps-start-time":int(seg[0]),
-							"gps-end-time":int(seg[1]),
-							"channel-name":datasource.pipeline_channel_list_from_channel_dict(this_channel_dict),
-							"tmp-space":dagparts.condor_scratch_space(),
-							"track-psd":"",
-							"control-peak-time":options.control_peak_time,
-							"coincidence-threshold":options.coincidence_threshold,
-							"singles-threshold":options.singles_threshold,
-							"fir-stride":options.fir_stride,
-							"data-source":"frames",
-							"local-frame-caching":"",
-							"min-instruments":options.min_instruments,
-							"reference-likelihood-file":options.reference_likelihood_file
-						},
+						opts = inj_opts,
 						input_files = {
 							"time-slide-file":options.inj_time_slide_file,
 							"frame-cache":options.frame_cache,
