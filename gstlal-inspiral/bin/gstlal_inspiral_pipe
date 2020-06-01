@@ -142,6 +142,7 @@ def parse_command_line():
 	# Condor commands
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	parser.add_option("--max-inspiral-jobs", type="int", metavar = "jobs", help = "Set the maximum number of gstlal_inspiral jobs to run simultaneously, default no constraint.")
+	parser.add_option("--singularity-image", metavar = "filename", help = "If set, uses the Singularity image provided as the build environment and sets Singularity-specific condor options.")
 
 	options, filenames = parser.parse_args()
 
@@ -229,6 +230,9 @@ def set_up_jobs(options):
 	default_condor_opts['request_memory'] = "( MemoryUsage ) * 3 / 2"
 	default_condor_opts['periodic_hold'] = "( MemoryUsage >= ( ( RequestMemory ) * 3 / 2 ) )"
 	default_condor_opts['periodic_release'] = "(JobStatus == 5) && ((CurrentTime - EnteredCurrentStatus) > 180) && (HoldReasonCode != 34)"
+
+	if options.singularity_image:
+		default_condor_opts['+SingularityImage'] = '"{}"'.format(options.singularity_image)
 
 	# job-specific condor options
 	ref_psd_condor_opts = default_condor_opts.copy()
