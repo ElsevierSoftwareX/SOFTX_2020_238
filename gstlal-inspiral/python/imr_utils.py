@@ -513,6 +513,21 @@ def sim_to_distance_chirp_mass_bins_function(sim):
 	"""
 	return (sim.distance, sim.mchirp)
 
+
+def sim_to_distance_duration_bins_function(sim, f_low = 15.):
+	"""
+	create a function to map a sim to a distance, duration NDBins based object
+	"""
+	template_duration = chirptime.imr_time(
+		f_low,
+		sim.mass1*lal.MSUN_SI,
+		sim.mass2*lal.MSUN_SI,
+		numpy.sqrt(numpy.dot(sim.spin1, sim.spin1)),
+		numpy.sqrt(numpy.dot(sim.spin2, sim.spin2))
+	)
+	return (sim.distance, template_duration)
+
+
 def symmetrize_sims(sims, col1, col2):
 	"""
 	symmetrize by two columns that should be symmetric.  For example mass1 and mass2

@@ -73,6 +73,20 @@ def source_type_distance_chirp_mass_bins_from_sims(sims, distbins = 200):
         return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.5, 2.0, 4.5, 45., 450])])
     #return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0.8, 1.74, 8.07, 14.92, 21.77, 100.0, 218.00, 450.0])])
 
+def source_type_distance_duration_bins_from_sims(sims, distbins = 200):
+    """
+    Given a list of the injections, guess at the template duration and
+    distance bins.
+    """
+    dist_mchirp_vals = map(imr_utils.sim_to_distance_chirp_mass_bins_function, sims)
+
+    distances = [tup[0] for tup in dist_mchirp_vals]
+
+    if min(distances) == max(distances):
+        return rate.NDBins([rate.LinearBins(min(distances)-1.0, max(distances)+1.0, 1), rate.IrregularBins([0., 2., 10., numpy.inf])])
+    else:
+        return rate.NDBins([rate.LinearBins(min(distances), max(distances), distbins), rate.IrregularBins([0., 2., 10., numpy.inf])])
+
 def chirp_mass(m1,m2):
     m1 = numpy.array(m1)
     m2 = numpy.array(m2)
@@ -253,6 +267,9 @@ class upper_limit(object):
         if bin_type == "Source_Type":
             self.bins = source_type_distance_chirp_mass_bins_from_sims(self.total_injections[inst], distbins = opts.dist_bins)
             self.sim_to_bins = imr_utils.sim_to_distance_chirp_mass_bins_function
+        if bin_type == "Duration":
+            self.bins = source_type_distance_duration_bins_from_sims(self.total_injections[inst], distbins = opts.dist_bins)
+            self.sim_to_bins = imr_utils.sim_to_distance_duration_bins_function
 
         return self.bins, self.sim_to_bins
 
@@ -371,6 +388,9 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     # bin by source type
     parser.add_option("--bin-by-source-type", default = False, action = "store_true", help = "Bin injections by source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0")
 
+    # bin by duration
+    parser.add_option("--bin-by-duration", default = False, action = "store_true", help = "Bin injections by template duration when estimating the search efficiency.")
+
     opts, filenames = parser.parse_args()
     opts.injection_database.extend(filenames)
 
@@ -387,6 +407,8 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
         opts.bin_types.append("Mass_Ratio")
     if opts.bin_by_source_type:
         opts.bin_types.append("Source_Type")
+    if opts.bin_by_duration:
+        opts.bin_types.append("Duration")
 
     if opts.max_mass_ratio and (opts.max_mass_ratio < 1):
         raise ValueError, "The maximum mass ratio must be >=1!"
@@ -611,6 +633,13 @@ for bin_type in opts.bin_types:
                 if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
                     continue
                 label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
+            if bin_type == "Duration":
+                if mlo[0] == 0:
+                    label = "$t_\mathrm{template} \leq %.2f \,\mathrm{s}$" % mhi[0]
+                elif numpy.isinf(mhi[0]):
+                    label = "$t_\mathrm{template} > %.2f \,\mathrm{s}$" % mlo[0]
+                else:
+                    label = "$%.2f \,\mathrm{s} < t_\mathrm{template} \leq %.2f \,\mathrm{s}$" % (mlo[0], mhi[0])
             labels.append(label)
 
             # NOTE create regular plots, and define log x,y scales below
