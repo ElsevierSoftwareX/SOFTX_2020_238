@@ -140,4 +140,4 @@ for (cid, time, ifos) in cids:
 			setattr(fullrow, attr, getattr(thisrow, attr))
 		sngl.append(fullrow)
 
-	ligolw_utils.write_filename(xmldocmain, '%s-LLOID-%d-0.xml.gz' % (ifos.replace(",",""), time), gz=True, verbose=True)
+	ligolw_utils.write_filename(xmldocmain, '%s-GSTLAL_AllSky-%d-0.xml.gz' % (ifos.replace(",",""), time), gz=True, verbose=True)
