@@ -117,7 +117,7 @@ def parse_command_line():
 		# FIXME don't hard code
 		if options.df == "bandwidth":
 			for ifo in psd:
-				bandwidths += [templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo])]
+				bandwidths += [templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo]) for row in bank.sngl_inspiral_table]
 		horizon_factors.update(bank.horizon_factors)
 	if options.df == "bandwidth":
 		# don't let the bandwidth get too small
