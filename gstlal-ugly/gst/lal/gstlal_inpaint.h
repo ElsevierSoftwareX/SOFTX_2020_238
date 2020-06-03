@@ -81,7 +81,8 @@ typedef struct {
 	/*
 	 * Buffer time tracking
 	 */
-	guint64 initial_offset;
+	guint64 next_offset_out;
+	guint64 adapter_initial_offset;
 	GstClockTime t0;
 
 	/*

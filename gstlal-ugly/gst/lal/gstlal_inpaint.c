@@ -379,7 +379,6 @@ static gboolean gstlal_inpaint_transform_size(GstBaseTransform *trans, GstPadDir
  * inpainting algorithm
  */
 static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_start, guint hole_length) {
-	fprintf(stderr, "in gstlal_inpaint_process...\n");
 	GstFlowReturn result = GST_FLOW_OK;
 	g_assert(inpaint->inv_cov_series->data->length % 2 == 0);
 	gsl_matrix_view inv_cov_mat_view = gsl_matrix_view_array(inpaint->inv_cov_mat_workspace, inpaint->fft_length_samples, inpaint->fft_length_samples);
@@ -390,7 +389,6 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 	// matrix only depends on the difference between the row and column
 	// indices, with no difference corresponding to the first entry of the
 	// covariance series.
-	fprintf(stderr, "Setting inverse covariance matrix\n");
 	// FIXME Move to some function (other than make_workspace) so that this can be done only once when inpainting multiple windows (Also add fft_psd function call to this function)
 	gsl_vector_view cov_series_view, cov_matrix_row_view;
 	for(i = 0; i < inpaint->fft_length_samples; i++) {
@@ -427,11 +425,8 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 		return result;
 	}
 
-	fprintf(stderr, "Performing LU decomposition of M\n");
 	gsl_linalg_LU_decomp(&M_trans_mat_view.matrix, permutation, &signum);
-	fprintf(stderr, "inverting M\n");
 	gsl_linalg_LU_invert(&M_trans_mat_view.matrix, permutation, &inv_M_trans_mat_view.matrix);
-	fprintf(stderr, "done inverting M\n");
 	gsl_permutation_free(permutation);
 
 	// A M^{-1} A^T is a block diagonal matrix with the same dimensions as
@@ -469,7 +464,6 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 		gsl_matrix_view left_inv_cov_submat = gsl_matrix_submatrix(&inv_cov_mat_view.matrix, hole_start, 0, hole_length, hole_start);
 		gsl_matrix_view left_F_submat = gsl_matrix_submatrix(&F_trans_mat_view.matrix, 0, 0, hole_length, hole_start);
 		// Multiply result by -1 to account for subtracting A M^{-1} A^T C^{-1} from identity matrix
-		fprintf(stderr, "Calculating left columns of F\n");
 		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., &inv_M_trans_mat_view.matrix, &left_inv_cov_submat.matrix, 0., &left_F_submat.matrix);
 
 		// The inpaint transformation matrix F only modifies the inpainted
@@ -477,7 +471,6 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 		// samples.
 		relevant_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data, hole_start);
 
-		fprintf(stderr, "Inpainting data stage 1\n");
 		gsl_blas_dgemv(CblasNoTrans, 1., &left_F_submat.matrix, &relevant_hoft_view.vector, 0.0, &inpainted_hoft_view.vector);
 	}
 	// Now compute the columns to the right of the identity submatrix, if
@@ -486,7 +479,6 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 		gsl_matrix_view right_inv_cov_submat = gsl_matrix_submatrix(&inv_cov_mat_view.matrix, hole_start, hole_start + hole_length, hole_length, inpaint->fft_length_samples - hole_start - hole_length);
 		gsl_matrix_view right_F_submat = gsl_matrix_submatrix(&F_trans_mat_view.matrix, 0, hole_start, hole_length, F_trans_mat_view.matrix.size2 - hole_start);
 		// Multiply result by -1 to account for subtracting A M^{-1} A^T C^{-1} from identity matrix
-		fprintf(stderr, "Calculating right columns of F\n");
 		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., &inv_M_trans_mat_view.matrix, &right_inv_cov_submat.matrix, 0., &right_F_submat.matrix);
 		relevant_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + hole_start + hole_length, inpaint->fft_length_samples - hole_start - hole_length);
 		// If there were columns to the left of the identify submatrix,
@@ -498,11 +490,9 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 			b = 1.0;
 		else
 			b = 0.0;
-		fprintf(stderr, "Inpainting data stage 2\n");
 		gsl_blas_dgemv(CblasNoTrans, 1., &right_F_submat.matrix, &relevant_hoft_view.vector, b, &inpainted_hoft_view.vector);
 	}
 
-	fprintf(stderr, "gstlal_inpaint_process done\n");
 	return result;
 
 }
@@ -523,7 +513,8 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	// FIXME Need to add logic to look for disconts and such
 	if(inpaint->t0 == GST_CLOCK_TIME_NONE) {
 		inpaint->t0 = GST_BUFFER_PTS(inbuf);
-		inpaint->initial_offset = GST_BUFFER_OFFSET(inbuf);
+		inpaint->next_offset_out = GST_BUFFER_OFFSET(inbuf);
+		inpaint->adapter_initial_offset = GST_BUFFER_OFFSET(inbuf);
 	}
 	gst_buffer_ref(inbuf); // If this is not called, buffer will be unref'd by calling code
 	gst_audioadapter_push(inpaint->adapter, inbuf);
@@ -531,19 +522,20 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 	gint n_samples = (gint) gst_audioadapter_available_samples(inpaint->adapter);
 	if(n_samples < (gint) inpaint->fft_length_samples / 2) {
 		gst_buffer_set_size(outbuf,  0);
-		GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
-		GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset;
+		GST_BUFFER_OFFSET(outbuf) = inpaint->next_offset_out;
+		GST_BUFFER_OFFSET_END(outbuf) = inpaint->next_offset_out;
 		GST_BUFFER_PTS(outbuf) = inpaint->t0;
 		GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, 0, inpaint->rate);
 		return result;
 	}
 
-	for(outsamples = 0; gst_audioadapter_available_samples(inpaint->adapter) >= inpaint->fft_length_samples / 2;) {
+	for(outsamples = 0; gst_audioadapter_available_samples(inpaint->adapter) >= inpaint->fft_length_samples / 2 && outsamples == 0;) {
 		//FIXME Dont hardcode everything for specific test case
 		//FIXME Need to be a lot smarter about tracking time
 		gst_audioadapter_copy_samples(inpaint->adapter, inpaint->hoft_workspace->data->data + inpaint->fft_length_samples / 4, inpaint->fft_length_samples / 2, NULL, NULL);
 		XLALINT8NSToGPS(&inpaint->hoft_workspace->epoch, inpaint->t0);
-		XLALGPSAdd(&inpaint->hoft_workspace->epoch, (double) ((gint) outsamples - (gint) inpaint->fft_length_samples / 4));
+		g_assert_cmpuint(inpaint->adapter_initial_offset, >=, inpaint->next_offset_out);
+		XLALGPSAdd(&inpaint->hoft_workspace->epoch, (double) ((gint) outsamples - (gint) inpaint->fft_length_samples / 4 + (gint) (inpaint->adapter_initial_offset - inpaint->next_offset_out)) / (double) inpaint->rate);
 
 		//FIXME Dont hardcode everything for specific test case
 		// GW170817 gate: 1187008881.37875 to 1187008881.44125
@@ -568,7 +560,6 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 		}
 
 		if(gate_min < G_MAXUINT) {
-
 			// Apply Hann window to data
 			if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
 				GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
@@ -576,7 +567,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				return GST_FLOW_ERROR;
 			}
 
-			fprintf(stderr, "n_samples = %u, outsamples = %u, gate_min = %u, gate_max = %u, t0=%u + 1e-9*%u\n", n_samples, inpaint->fft_length_samples / 4, gate_min, gate_max + 1, (guint) (inpaint->t0 / 1000000000), (guint) ( inpaint->t0 - 1000000000*(inpaint->t0 / 1000000000)));
+			//fprintf(stderr, "n_samples = %u, outsamples = %u, gate_min = %u, gate_max = %u, t0=%u + 1e-9*%u\n", n_samples, inpaint->fft_length_samples / 4, gate_min, gate_max + 1, (guint) (inpaint->t0 / 1000000000), (guint) ( inpaint->t0 - 1000000000*(inpaint->t0 / 1000000000)));
 			if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
 				return GST_FLOW_ERROR;
 
@@ -671,6 +662,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_dcopy(&hoft_workspace_view.vector, &output_hoft_view.vector);
 				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
 				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
 			} else if(gate_min >= inpaint->fft_length_samples / 2) {
 				// Second iteration where the workspace time-series includes times to inpaint
@@ -690,6 +682,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
 				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
 				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
 			} else if(gate_min >= inpaint->fft_length_samples / 4) {
 				// Third iteration where the workspace time-series includes times to inpaint
@@ -709,15 +702,16 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
-				if(gate_max + 1 >= inpaint->fft_length_samples / 2)
+				if(gate_max + 1 >= inpaint->fft_length_samples / 2) {
 					// End of inpainted time is not contained in the data being flushed
 					gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
-				else {
+				} else {
 					// End of inpainted time is contained in data being flushed, thus need to copy non-inpainted samples out of the adapter
 					gst_audioadapter_flush_samples(inpaint->adapter, 1 + gate_max - inpaint->fft_length_samples / 4);
 					gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data + gate_max + 1, inpaint->fft_length_samples / 2 - 1 - gate_max, NULL, NULL);
 					gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 2 - 1 - gate_max);
 				}
+				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
 				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
 				XLALGPSAdd(&inpaint->output_hoft->epoch, -1.0 * (double) inpaint->fft_length_samples / 4);
 			} else if(gate_max + 1 >= inpaint->fft_length_samples / 2) {
@@ -736,6 +730,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
 				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
 				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
 			} else if(gate_max + 1 >= inpaint->fft_length_samples / 4) {
 				// Either the fourth iteration or fifth iteration where the workspace time-series includes times to inpaint
@@ -759,8 +754,10 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft + gate_max + 1, inpaint->fft_length_samples / 2 - 1 - gate_max, NULL, NULL);
 				// Flush more to have flushed a total of fft_length_samples/4
 				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 2 - 1 - gate_max);
+				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
 				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
-			} else {
+			} else if(inpaint->next_offset_out != inpaint->adapter_initial_offset) {
+				// FIXME FIXME FIXME Will probably need to change this when the hardcoded inpainted times are removed
 				// The last iteration where the workspace time-series includes times to inpaint
 				// Already copied untouched samples from before inpainted samples to output in last iteration
 				// Add inpainted samples from this iteration to inpainted samples from previous iteration
@@ -776,12 +773,25 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
 				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
+			} else {
+				// FIXME FIXME FIXME Will probably need to change this when the hardcoded inpainted times are removed
+				// First iteration after inpainting that does not actually contain inpainted samples
+				// FIXME Find a workaround to only do one copy when not inpainting any samples, currently doing 3...
+				gsl_vector_view hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + inpaint->fft_length_samples / 4, inpaint->fft_length_samples / 4);
+				gsl_vector_view output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data, inpaint->fft_length_samples / 4);
+				gsl_blas_dcopy(&hoft_workspace_view.vector, &output_hoft_view.vector);
+				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
+				XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
 			}
 		} else {
+			// FIXME FIXME FIXME Will probably need to change this when the hardcoded inpainted times are removed
 			// FIXME Find a workaround to only do one copy when not inpainting any samples, currently doing 3...
 			gsl_vector_view hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + inpaint->fft_length_samples / 4, inpaint->fft_length_samples / 4);
-			gsl_vector_view output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data, inpaint->fft_length_samples);
+			gsl_vector_view output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data, inpaint->fft_length_samples / 4);
 			gsl_blas_dcopy(&hoft_workspace_view.vector, &output_hoft_view.vector);
+			gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+			inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
 			XLALINT8NSToGPS(&inpaint->output_hoft->epoch, inpaint->t0);
 		}
 
@@ -795,10 +805,11 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 			memcpy(mapinfo.data, inpaint->output_hoft->data->data, inpaint->fft_length_samples / 4 * sizeof(double));
 			gst_buffer_unmap(outbuf, &mapinfo);
 
-			gst_audioadapter_flush_samples(inpaint->adapter, outsamples);
-			GST_BUFFER_OFFSET(outbuf) = inpaint->initial_offset;
-			inpaint->initial_offset += (guint64) outsamples;
-			GST_BUFFER_OFFSET_END(outbuf) = inpaint->initial_offset;
+			//gst_audioadapter_flush_samples(inpaint->adapter, outsamples);
+			GST_BUFFER_OFFSET(outbuf) = inpaint->next_offset_out;
+			inpaint->next_offset_out += (guint64) outsamples;
+			g_assert_cmpuint(inpaint->adapter_initial_offset, >=, inpaint->next_offset_out);
+			GST_BUFFER_OFFSET_END(outbuf) = inpaint->next_offset_out;
 			GST_BUFFER_PTS(outbuf) = inpaint->t0;
 			GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, outsamples, inpaint->rate);
 			inpaint->t0 += GST_BUFFER_DURATION(outbuf);
@@ -808,10 +819,17 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 		if(gate_min < G_MAXUINT) {
 			memmove(inpaint->output_hoft->data->data, inpaint->output_hoft->data->data + inpaint->fft_length_samples / 4, 3*inpaint->fft_length_samples / 4 * sizeof(double));
 			XLALGPSAdd(&inpaint->output_hoft->epoch, (double) (inpaint->fft_length_samples / 4));
-			gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+			//gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
 		}
 	}
 
+	if(outsamples == 0) {
+		gst_buffer_set_size(outbuf,  0);
+		GST_BUFFER_OFFSET(outbuf) = inpaint->next_offset_out;
+		GST_BUFFER_OFFSET_END(outbuf) = inpaint->next_offset_out;
+		GST_BUFFER_PTS(outbuf) = inpaint->t0;
+		GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, 0, inpaint->rate);
+	}
 
 	return result;
 }
@@ -1042,7 +1060,8 @@ static void gstlal_inpaint_init(GSTLALInpaint *inpaint) {
 	inpaint->adapter = g_object_new(GST_TYPE_AUDIOADAPTER, "unit-size", sizeof(double), NULL);
 	inpaint->rate = 0;
 
-	inpaint->initial_offset = 0;
+	inpaint->next_offset_out = 0;
+	inpaint->adapter_initial_offset = 0;
 	inpaint->t0 = GST_CLOCK_TIME_NONE;
 
 	inpaint->fft_length_seconds = DEFAULT_FFT_LENGTH_SECONDS;
