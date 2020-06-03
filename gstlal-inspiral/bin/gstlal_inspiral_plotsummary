@@ -161,7 +161,7 @@ def parse_command_line():
 	options, filenames = parser.parse_args()
 
 	if options.plot_group is not None:
-		options.plot_group = sorted(map(int, options.plot_group))
+		options.plot_group = sorted(list(map(int, options.plot_group)))
 
 	if (options.plot_group is None or set(options.plot_group) & set((1, 5))) and options.likelihood_file is None:
 		raise ValueError("Must provide --likelihood-file to generate plots in groups 1 and/or 5.")
@@ -1477,7 +1477,7 @@ def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box):
 	#
 
 	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = map(expected_count, expected_count_x)
+	expected_count_y = list(map(expected_count, expected_count_x))
 	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
 	#
@@ -1533,7 +1533,7 @@ def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar):
 	#
 
 	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = map(expected_count, expected_count_x)
+	expected_count_y = list(map(expected_count, expected_count_x))
 	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
 
 	#
