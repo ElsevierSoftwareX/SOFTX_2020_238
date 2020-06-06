@@ -19,11 +19,11 @@
 
 
 from collections import deque
+import io
 import os
 import logging
 from optparse import OptionParser
 import shutil
-from io import StringIO
 import sys
 
 import h5py
@@ -106,8 +106,8 @@ class PSDHandler(simplehandler.Handler):
 		(result, mapinfo) = buf.map(Gst.MapFlags.READ)
 		if mapinfo.data:
 			# First noise
-			s = StringIO.StringIO(mapinfo.data)
-			data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().split('\n') if x])
+			s = io.BytesIO(mapinfo.data)
+			data = numpy.array([(float(x.split()[0]), abs(float(x.split()[1]))) for x in s.getvalue().decode('utf-8').split('\n') if x])
 			ix = numpy.argmax(data, axis=0)[1]
 			self.timedeq.append(buftime)
 			self.datadeq['noise'].append(data[ix,1])
@@ -193,14 +193,14 @@ if __name__ == '__main__':
 	gw_data_source_info = datasource.GWDataSourceInfo(options)
 
 	# only support one channel
-	instrument = gw_data_source_info.channel_dict.keys()[0]
+	instrument = list(gw_data_source_info.channel_dict.keys())[0]
 
 	#
 	# build pipeline
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "building pipeline ..."
+		print("building pipeline ...", file=sys.stderr)
 	mainloop = GObject.MainLoop()
 	pipeline = Gst.Pipeline(name="DQ")
 	handler = PSDHandler(mainloop, pipeline, out_path = options.out_path, instrument = instrument, agg_sink = agg_sink)
@@ -222,18 +222,18 @@ if __name__ == '__main__':
 	#
 
 	if options.verbose:
-		print >>sys.stderr, "putting pipeline into READY state ..."
+		print("putting pipeline into READY state ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter READY state")
 	if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# FIXME what about nds online?
 		datasource.pipeline_seek_for_gps(pipeline, *gw_data_source_info.seg)
 	if options.verbose:
-		print >>sys.stderr, "putting pipeline into PLAYING state ..."
+		print("putting pipeline into PLAYING state ...", file=sys.stderr)
 	if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter PLAYING state")
 	if options.verbose:
-		print >>sys.stderr, "running pipeline ..."
+		print("running pipeline ...", file=sys.stderr)
 	mainloop.run()
 
 	if options.verbose:
-		print >>sys.stderr, "Shutting down"
+		print("Shutting down", file=sys.stderr)
