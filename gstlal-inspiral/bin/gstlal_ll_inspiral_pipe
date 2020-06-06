@@ -73,9 +73,13 @@ def set_up_jobs(options):
 	jobs = {}
 
 	# condor commands
-	inspiral_condor_commands = dagparts.condor_command_dict_from_opts(options.inspiral_condor_command, {"want_graceful_removal": "True", "kill_sig": "15"})
-	non_inspiral_condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command, {"want_graceful_removal": "True", "kill_sig": "15"})
-	local_condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command)
+	condor_opts = {"want_graceful_removal": "True", "kill_sig": "15"}
+	if options.singularity_image:
+		condor_opts['+SingularityImage'] = '"{}"'.format(options.singularity_image)
+
+	inspiral_condor_commands = dagparts.condor_command_dict_from_opts(options.inspiral_condor_command, condor_opts)
+	non_inspiral_condor_commands = dagparts.condor_command_dict_from_opts(options.non_inspiral_condor_command, condor_opts)
+	local_condor_commands = dagparts.condor_command_dict_from_opts(options.local_condor_command, condor_opts)
 
 	# set up jobs
 	jobs['gstlalInspiral'] = dagparts.DAGJob('gstlal_inspiral', condor_commands = inspiral_condor_commands)
@@ -170,6 +174,7 @@ def parse_command_line():
 	parser.add_option("--non-inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--local-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value can be given multiple times")
 	parser.add_option("--inspiral-condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value for inspiral jobs can be given multiple times")
+	parser.add_option("--singularity-image", metavar = "filename", help = "If set, uses the Singularity image provided as the build environment and sets Singularity-specific condor options.")
 	parser.add_option("--injection-file", metavar = "filename", default = [], action = "append", help = "The injection xml files that corresponds to the low latency injections for given mass bins: only used for making missed found plots. 0000:0002:Injection_1.xml, 0002:0004:Injection_2.xml")
 	parser.add_option("--state-backup-destination", metavar = "URL", help = "Location to back state up to, e.g. gstlalcbc@ldas-pcdev1.ligo.caltech.edu.")
 	parser.add_option("--web-dir", help = "set the output path to write the ''offline'' style web page to")

@@ -158,7 +158,7 @@ def online_inspiral_layer(dag, jobs, options):
 
 		# disable service discovery if using singularity
 		if options.singularity_image:
-			common_opts.update({"disable-service-discovery", ""})
+			common_opts.update({"disable-service-discovery": ""})
 
 		inspNode = dagparts.DAGNode(jobs['gstlalInspiral'], dag, [],
 			opts = common_opts,
