@@ -138,6 +138,7 @@ def parse_command_line():
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	parser.add_option("--num-banks", metavar = "str", help = "the number of banks per job. can be given as a list like 1,2,3,4 then it will split up the bank cache into N groups with M banks each.")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
+	parser.add_option("--singularity-image", metavar = "filename", help = "If set, uses the Singularity image provided as the build environment and sets Singularity-specific condor options.")
 	options, filenames = parser.parse_args()
 
 	ac_seglist = []
@@ -173,8 +174,18 @@ try:
 	os.mkdir("logs")
 except:
 	pass
+
 dag = dagparts.DAG(options.output_name)
-svdJob = dagparts.DAGJob("gstlal_svd_bank", tag_base = "gstlal_svd_bank_%s" % ifo, condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, {"want_graceful_removal":"True", "kill_sig":"15"}))
+
+condor_opts = {
+	"want_graceful_removal": "True",
+	"kill_Sig": "15"
+}
+if options.singularity_image:
+	condor_opts['+SingularityImage'] = '"{}"'.format(options.singularity_image)
+
+svdJob = dagparts.DAGJob("gstlal_svd_bank", tag_base = "gstlal_svd_bank_%s" % ifo, condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, condor_opts))
+
 # Assumes cache is sorted by chirpmass or whatever the SVD sorting algorithm that was chosen
 files = [CacheEntry(line).path for line in open(options.bank_cache)]
 
