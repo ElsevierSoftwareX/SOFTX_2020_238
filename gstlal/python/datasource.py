@@ -501,12 +501,12 @@ class GWDataSourceInfo(object):
 
 		if options.state_channel_name is not None:
 			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
-			instrument = state_channel_dict_from_options.keys()[0]
+			instrument = list(state_channel_dict_from_options.keys())[0]
 			self.state_channel_dict.update( state_channel_dict_from_options )
 
 		if options.dq_channel_name is not None:
 			dq_channel_dict_from_options = channel_dict_from_channel_list( options.dq_channel_name )
-			instrument = dq_channel_dict_from_options.keys()[0]
+			instrument = list(dq_channel_dict_from_options.keys())[0]
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
 
 		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}

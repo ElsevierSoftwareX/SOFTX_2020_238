@@ -286,7 +286,7 @@ def aggregator_layer(dag, jobs, options, job_tags):
 	# analysis-based aggregation jobs
 	# FIXME don't hard code the 1000
 	max_agg_jobs = 1000
-	agg_job_bounds = range(0, len(job_tags), max_agg_jobs) + [max_agg_jobs]
+	agg_job_bounds = list(range(0, len(job_tags), max_agg_jobs)) + [max_agg_jobs]
 	agg_routes = list(dagparts.groups(agg_routes, max(max_agg_jobs // (4 * len(job_tags)), 1))) + ["far_history"]
 	for routes in agg_routes:
 		these_options = dict(agg_options)
@@ -1540,7 +1540,7 @@ def build_bank_groups(cachedict, numbanks = [2], maxjobs = None):
 	outstrs = []
 	ifos = sorted(list(cachedict.keys()))
 	files = zip(*[[CacheEntry(f).path for f in open(cachedict[ifo],'r').readlines()] for ifo in ifos])
-	for n, bank_group in enumerate(group(files, numbanks)):
+	for n, bank_group in enumerate(group(list(files), numbanks)):
 		if maxjobs is not None and n > maxjobs:
 			break
 		c = dict(zip(ifos, zip(*bank_group)))
