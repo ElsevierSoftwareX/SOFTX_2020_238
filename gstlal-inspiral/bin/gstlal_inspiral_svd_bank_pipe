@@ -199,8 +199,8 @@ bank_ids = [0]
 for i, f in enumerate(groups):
 	# handle the edges by not clipping so you retain the template bank as intended.  
 	mchirp = get_chirpmass_from_bank_file(f, options)
-	clipleft = [options.overlap / 2] * len(f) # overlap must be even
-	clipright = [options.overlap / 2] * len(f) # overlap must be even
+	clipleft = [options.overlap // 2] * len(f) # overlap must be even
+	clipright = [options.overlap // 2] * len(f) # overlap must be even
 	bank_ids = range(bank_ids[-1] + 1, bank_ids[-1] + 1 + len(f))
 	svd_bank_name = dagparts.T050017_filename(ifo, "GSTLAL_SVD_BANK_%d" % i, (0, 0), ".xml.gz", path = svdJob.output_path)
 	svd_bank_name = os.path.join(os.getcwd(), svd_bank_name)
