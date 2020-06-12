@@ -704,13 +704,14 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 			if instrument == 'H1' or instrument == 'L1':
 				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
 					pad.set_property(prop, val)
-				snr.srcpads[0].link(pad)
 			else:
 				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
 					pad.set_property(prop, val)
-				snr.srcpads[0].link(pad)
 		else:
 			raise NotImplementedError("Currently only 'autochisq' is supported")
+		# replace this line with the commented-out line below if diagnostic sink is needed
+		snr.srcpads[0].link(pad)
+		#snr.get_request_pad("src_%d" % len(snr.srcpads)).link(pad)
 		# FIXME:  find a way to use less memory without this hack
 		del bank.autocorrelation_bank
 		#pipeparts.mknxydumpsink(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkqueue(pipeline, snr)), "snr_%s.dump" % suffix, segment = nxydump_segment)
