@@ -196,7 +196,9 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 static gboolean get_instrument_pad_pointer(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad)
 {
 	gboolean result = TRUE;
-	if(strcmp(itacacpad->instrument, "H1") == 0)
+	if(strcmp(itacacpad->instrument, "G1") == 0)
+		itacac->G1_itacacpad = itacacpad;
+	else if(strcmp(itacacpad->instrument, "H1") == 0)
 		itacac->H1_itacacpad = itacacpad;
 	else if(strcmp(itacacpad->instrument, "K1") == 0)
 		itacac->K1_itacacpad = itacacpad;
@@ -845,6 +847,8 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 	guint channel, peak_sample;
 
 	// First zero the tmp_snr_mat objects in the other pads
+	if(strcmp(itacacpad->instrument, "G1") != 0 && itacac->G1_itacacpad != NULL && !itacac->G1_itacacpad->waiting)
+		memset(itacac->G1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "H1") != 0 && itacac->H1_itacacpad != NULL && !itacac->H1_itacacpad->waiting)
 		memset(itacac->H1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "K1") != 0 && itacac->K1_itacacpad != NULL && !itacac->K1_itacacpad->waiting)
@@ -869,6 +873,8 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 		}
 
 		peak_sample = itacacpad->maxdata->samples[channel];
+		if(strcmp(itacacpad->instrument, "G1") != 0 && itacac->G1_itacacpad != NULL && !itacac->G1_itacacpad->waiting)
+			get_snr_series(itacac, itacac->G1_itacacpad, channel, peak_sample);
 		if(strcmp(itacacpad->instrument, "H1") != 0 && itacac->H1_itacacpad != NULL && !itacac->H1_itacacpad->waiting)
 			get_snr_series(itacac, itacac->H1_itacacpad, channel, peak_sample);
 		if(strcmp(itacacpad->instrument, "K1") != 0 && itacac->K1_itacacpad != NULL && !itacac->K1_itacacpad->waiting)
@@ -882,26 +888,31 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 }
 
 static GstBuffer* assemble_srcbuf(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, GstBuffer *srcbuf) {
-	if(strcmp(itacacpad->instrument, "H1") == 0) {
+	if(strcmp(itacacpad->instrument, "G1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->G1_itacacpad->snr_matrix_view), itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->G1_itacacpad->snr_matrix_view), itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+	} else if(strcmp(itacacpad->instrument, "H1") == 0) {
+		if(srcbuf == NULL)
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+		else
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
 	} else if(strcmp(itacacpad->instrument, "K1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
 	} else if(strcmp(itacacpad->instrument, "L1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
 	} else if(strcmp(itacacpad->instrument, "V1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view), itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view), itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view) );
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view) );
 	}
 	return srcbuf;
 }
@@ -1072,9 +1083,9 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			srcbuf = assemble_srcbuf(itacac, itacacpad, srcbuf);
 		} else if(triggers_generated) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, NULL);
 			}
 		}
 
@@ -1534,6 +1545,7 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 	reset_time_and_offset(itacac);
 
 	itacac->EOS = FALSE;
+	itacac->G1_itacacpad = NULL;
 	itacac->H1_itacacpad = NULL;
 	itacac->K1_itacacpad = NULL;
 	itacac->L1_itacacpad = NULL;
