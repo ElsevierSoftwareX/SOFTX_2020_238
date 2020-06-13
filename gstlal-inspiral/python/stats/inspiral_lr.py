@@ -84,7 +84,7 @@ TYPICAL_HORIZON_DISTANCE = 150.
 def idq_interp(idq_file):
 	# set a default function to simply return 0
 	out = {}
-	for ifo in ("H1", "L1", "V1", "K1"):
+	for ifo in ("H1", "L1", "V1", "K1", "G1"):
 		out[ifo] = lambda x: numpy.zeros(len(x))
 	if idq_file is not None:
 		import h5py
