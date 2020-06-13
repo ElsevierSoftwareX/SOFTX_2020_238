@@ -58,6 +58,7 @@ static PyObject *LIGOTimeGPSType = NULL;
 typedef struct {
 	PyObject_HEAD
 	SnglInspiralTable row;
+	COMPLEX8TimeSeries *G1_snr;
 	COMPLEX8TimeSeries *H1_snr;
 	COMPLEX8TimeSeries *K1_snr;
 	COMPLEX8TimeSeries *L1_snr;
@@ -231,6 +232,45 @@ static int template_id_set(PyObject *obj, PyObject *val, void *null)
 	return 0;
 }
 
+static PyObject *G1_snr_component_get(PyObject *obj, void *data)
+{
+	COMPLEX8TimeSeries *G1_snr = ((gstlal_GSTLALSnglInspiral *) obj)->G1_snr;
+	const char *name = data;
+
+	if(!G1_snr) {
+		PyErr_SetString(PyExc_ValueError, "no snr time series available");
+		return NULL;
+	}
+	if(!strcmp(name, "_G1_snr_name")) {
+		return PyString_FromString(G1_snr->name);
+	} else if(!strcmp(name, "_G1_snr_epoch_gpsSeconds")) {
+		return PyInt_FromLong(G1_snr->epoch.gpsSeconds);
+	} else if(!strcmp(name, "_G1_snr_epoch_gpsNanoSeconds")) {
+		return PyInt_FromLong(G1_snr->epoch.gpsNanoSeconds);
+	} else if(!strcmp(name, "_G1_snr_f0")) {
+		return PyFloat_FromDouble(G1_snr->f0);
+	} else if(!strcmp(name, "_G1_snr_deltaT")) {
+		return PyFloat_FromDouble(G1_snr->deltaT);
+	} else if(!strcmp(name, "_G1_snr_sampleUnits")) {
+		char *s = XLALUnitToString(&G1_snr->sampleUnits);
+		PyObject *result = PyString_FromString(s);
+		XLALFree(s);
+		return result;
+	} else if(!strcmp(name, "_G1_snr_data_length")) {
+		return PyInt_FromLong(G1_snr->data->length);
+	} else if(!strcmp(name, "_G1_snr_data")) {
+		npy_intp dims[] = {G1_snr->data->length};
+		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, G1_snr->data->data);
+		if(!array)
+			return NULL;
+		Py_INCREF(obj);
+		PyArray_SetBaseObject((PyArrayObject *) array, obj);
+		return array;
+	}
+	PyErr_BadArgument();
+	return NULL;
+}
+
 static PyObject *H1_snr_component_get(PyObject *obj, void *data)
 {
 	COMPLEX8TimeSeries *H1_snr = ((gstlal_GSTLALSnglInspiral *) obj)->H1_snr;
@@ -393,34 +433,42 @@ static struct PyGetSetDef getset[] = {
 	{"channel", pylal_inline_string_get, pylal_inline_string_set, "channel", &(struct pylal_inline_string_description) {offsetof(gstlal_GSTLALSnglInspiral, row.channel), LIGOMETA_CHANNEL_MAX}},
 	{"end", end_get, end_set, "end", NULL},
 	{"template_id", template_id_get, template_id_set, "template_id", NULL},
+	{"_G1_snr_name", G1_snr_component_get, NULL, ".G1_snr.name", "_G1_snr_name"},
 	{"_H1_snr_name", H1_snr_component_get, NULL, ".H1_snr.name", "_H1_snr_name"},
 	{"_K1_snr_name", K1_snr_component_get, NULL, ".K1_snr.name", "_K1_snr_name"},
 	{"_L1_snr_name", L1_snr_component_get, NULL, ".L1_snr.name", "_L1_snr_name"},
 	{"_V1_snr_name", V1_snr_component_get, NULL, ".V1_snr.name", "_V1_snr_name"},
+	{"_G1_snr_epoch_gpsSeconds", G1_snr_component_get, NULL, ".G1_snr.epoch.gpsSeconds", "_G1_snr_epoch_gpsSeconds"},
 	{"_H1_snr_epoch_gpsSeconds", H1_snr_component_get, NULL, ".H1_snr.epoch.gpsSeconds", "_H1_snr_epoch_gpsSeconds"},
 	{"_K1_snr_epoch_gpsSeconds", K1_snr_component_get, NULL, ".K1_snr.epoch.gpsSeconds", "_K1_snr_epoch_gpsSeconds"},
 	{"_L1_snr_epoch_gpsSeconds", L1_snr_component_get, NULL, ".L1_snr.epoch.gpsSeconds", "_L1_snr_epoch_gpsSeconds"},
 	{"_V1_snr_epoch_gpsSeconds", V1_snr_component_get, NULL, ".V1_snr.epoch.gpsSeconds", "_V1_snr_epoch_gpsSeconds"},
+	{"_G1_snr_epoch_gpsNanoSeconds", G1_snr_component_get, NULL, ".G1_snr.epoch.gpsNanoSeconds", "_G1_snr_epoch_gpsNanoSeconds"},
 	{"_H1_snr_epoch_gpsNanoSeconds", H1_snr_component_get, NULL, ".H1_snr.epoch.gpsNanoSeconds", "_H1_snr_epoch_gpsNanoSeconds"},
 	{"_K1_snr_epoch_gpsNanoSeconds", K1_snr_component_get, NULL, ".K1_snr.epoch.gpsNanoSeconds", "_K1_snr_epoch_gpsNanoSeconds"},
 	{"_L1_snr_epoch_gpsNanoSeconds", L1_snr_component_get, NULL, ".L1_snr.epoch.gpsNanoSeconds", "_L1_snr_epoch_gpsNanoSeconds"},
 	{"_V1_snr_epoch_gpsNanoSeconds", V1_snr_component_get, NULL, ".V1_snr.epoch.gpsNanoSeconds", "_V1_snr_epoch_gpsNanoSeconds"},
+	{"_G1_snr_f0", G1_snr_component_get, NULL, ".G1_snr.f0", "_G1_snr_f0"},
 	{"_H1_snr_f0", H1_snr_component_get, NULL, ".H1_snr.f0", "_H1_snr_f0"},
 	{"_K1_snr_f0", K1_snr_component_get, NULL, ".K1_snr.f0", "_K1_snr_f0"},
 	{"_L1_snr_f0", L1_snr_component_get, NULL, ".L1_snr.f0", "_L1_snr_f0"},
 	{"_V1_snr_f0", V1_snr_component_get, NULL, ".V1_snr.f0", "_V1_snr_f0"},
+	{"_G1_snr_deltaT", G1_snr_component_get, NULL, ".G1_snr.deltaT", "_G1_snr_deltaT"},
 	{"_H1_snr_deltaT", H1_snr_component_get, NULL, ".H1_snr.deltaT", "_H1_snr_deltaT"},
 	{"_K1_snr_deltaT", K1_snr_component_get, NULL, ".K1_snr.deltaT", "_K1_snr_deltaT"},
 	{"_L1_snr_deltaT", L1_snr_component_get, NULL, ".L1_snr.deltaT", "_L1_snr_deltaT"},
 	{"_V1_snr_deltaT", V1_snr_component_get, NULL, ".V1_snr.deltaT", "_V1_snr_deltaT"},
+	{"_G1_snr_sampleUnits", G1_snr_component_get, NULL, ".G1_snr.sampleUnits", "_G1_snr_sampleUnits"},
 	{"_H1_snr_sampleUnits", H1_snr_component_get, NULL, ".H1_snr.sampleUnits", "_H1_snr_sampleUnits"},
 	{"_K1_snr_sampleUnits", K1_snr_component_get, NULL, ".K1_snr.sampleUnits", "_K1_snr_sampleUnits"},
 	{"_L1_snr_sampleUnits", L1_snr_component_get, NULL, ".L1_snr.sampleUnits", "_L1_snr_sampleUnits"},
 	{"_V1_snr_sampleUnits", V1_snr_component_get, NULL, ".V1_snr.sampleUnits", "_V1_snr_sampleUnits"},
+	{"_G1_snr_data_length", G1_snr_component_get, NULL, ".G1_snr.data.length", "_G1_snr_data_length"},
 	{"_H1_snr_data_length", H1_snr_component_get, NULL, ".H1_snr.data.length", "_H1_snr_data_length"},
 	{"_K1_snr_data_length", K1_snr_component_get, NULL, ".K1_snr.data.length", "_K1_snr_data_length"},
 	{"_L1_snr_data_length", L1_snr_component_get, NULL, ".L1_snr.data.length", "_L1_snr_data_length"},
 	{"_V1_snr_data_length", V1_snr_component_get, NULL, ".V1_snr.data.length", "_V1_snr_data_length"},
+	{"_G1_snr_data", G1_snr_component_get, NULL, ".G1_snr.data", "_G1_snr_data"},
 	{"_H1_snr_data", H1_snr_component_get, NULL, ".H1_snr.data", "_H1_snr_data"},
 	{"_K1_snr_data", K1_snr_component_get, NULL, ".K1_snr.data", "_K1_snr_data"},
 	{"_L1_snr_data", L1_snr_component_get, NULL, ".L1_snr.data", "_L1_snr_data"},
@@ -448,6 +496,8 @@ static PyObject *__new__(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
 static void __del__(PyObject *self)
 {
+	if(((gstlal_GSTLALSnglInspiral *) self)->G1_snr != NULL)
+		XLALDestroyCOMPLEX8TimeSeries(((gstlal_GSTLALSnglInspiral *) self)->G1_snr);
 	if(((gstlal_GSTLALSnglInspiral *) self)->H1_snr != NULL)
 		XLALDestroyCOMPLEX8TimeSeries(((gstlal_GSTLALSnglInspiral *) self)->H1_snr);
 	if(((gstlal_GSTLALSnglInspiral *) self)->K1_snr != NULL)
@@ -491,6 +541,33 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 		}
 		((gstlal_GSTLALSnglInspiral*)item)->row = gstlal_snglinspiral->parent;
 
+		/* duplicate the SNR time series */
+		if(gstlal_snglinspiral->G1_length)
+		{
+			const size_t G1_nbytes = sizeof(gstlal_snglinspiral->snr[0]) * gstlal_snglinspiral->G1_length;
+			if (data + G1_nbytes > end)
+			{
+				Py_DECREF(item);
+				Py_DECREF(result);
+				PyErr_SetString(PyExc_ValueError, "buffer overrun while copying G1 SNR time series");
+				return NULL;
+			}
+			COMPLEX8TimeSeries *series = XLALCreateCOMPLEX8TimeSeries("snr", &gstlal_snglinspiral->epoch, 0., gstlal_snglinspiral->deltaT, &lalDimensionlessUnit, gstlal_snglinspiral->G1_length);
+			if (!series)
+			{
+				Py_DECREF(item);
+				Py_DECREF(result);
+				PyErr_SetString(PyExc_MemoryError, "out of memory");
+				return NULL;
+			}
+
+			memcpy(series->data->data, gstlal_snglinspiral->snr, G1_nbytes);
+			data += G1_nbytes;
+			((gstlal_GSTLALSnglInspiral*)item)->G1_snr = series;
+		} else
+			((gstlal_GSTLALSnglInspiral*)item)->G1_snr = NULL;
+
+
 		if(gstlal_snglinspiral->H1_length)
 		{
 			const size_t H1_nbytes = sizeof(gstlal_snglinspiral->snr[0]) * gstlal_snglinspiral->H1_length;
@@ -510,14 +587,13 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				return NULL;
 			}
 
-			memcpy(series->data->data, gstlal_snglinspiral->snr, H1_nbytes);
+			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->G1_length]), H1_nbytes);
 			data += H1_nbytes;
 			((gstlal_GSTLALSnglInspiral*)item)->H1_snr = series;
 		} else
 			((gstlal_GSTLALSnglInspiral*)item)->H1_snr = NULL;
 
 
-		/* duplicate the SNR time series */
 		if(gstlal_snglinspiral->K1_length)
 		{
 			const size_t K1_nbytes = sizeof(gstlal_snglinspiral->snr[0]) * gstlal_snglinspiral->K1_length;
@@ -537,7 +613,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				return NULL;
 			}
 
-			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->H1_length]), K1_nbytes);
+			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->G1_length + gstlal_snglinspiral->H1_length]), K1_nbytes);
 			data += K1_nbytes;
 			((gstlal_GSTLALSnglInspiral*)item)->K1_snr = series;
 		} else
@@ -564,7 +640,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				return NULL;
 			}
 
-			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->H1_length + gstlal_snglinspiral->K1_length]), L1_nbytes);
+			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->G1_length + gstlal_snglinspiral->H1_length + gstlal_snglinspiral->K1_length]), L1_nbytes);
 			data += L1_nbytes;
 			((gstlal_GSTLALSnglInspiral*)item)->L1_snr = series;
 		} else
@@ -589,7 +665,7 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 				return NULL;
 			}
 
-			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->H1_length + gstlal_snglinspiral->K1_length + gstlal_snglinspiral->L1_length]), V1_nbytes);
+			memcpy(series->data->data, &(gstlal_snglinspiral->snr[gstlal_snglinspiral->G1_length + gstlal_snglinspiral->H1_length + gstlal_snglinspiral->K1_length + gstlal_snglinspiral->L1_length]), V1_nbytes);
 			data += V1_nbytes;
 			((gstlal_GSTLALSnglInspiral*)item)->V1_snr = series;
 		} else
@@ -612,6 +688,14 @@ static PyObject *from_buffer(PyObject *cls, PyObject *args)
 	return tuple;
 }
 
+
+static PyObject *_G1_snr_time_series_deleter(PyObject *self, PyObject *args)
+{
+	XLALDestroyCOMPLEX8TimeSeries(((gstlal_GSTLALSnglInspiral *) self)->G1_snr);
+	((gstlal_GSTLALSnglInspiral *) self)->G1_snr = NULL;
+	Py_INCREF(Py_None);
+	return Py_None;
+}
 
 static PyObject *_H1_snr_time_series_deleter(PyObject *self, PyObject *args)
 {
@@ -650,10 +734,14 @@ static PyObject *random_obj(PyObject *cls, PyObject *args)
 	gstlal_GSTLALSnglInspiral *new = (gstlal_GSTLALSnglInspiral *) __new__((PyTypeObject *) cls, NULL, NULL);
 	unsigned i;
 
+	new->G1_snr = XLALCreateCOMPLEX8TimeSeries("", &(LIGOTimeGPS) {0, 0}, 0., 1. / 16384, &lalDimensionlessUnit, 16384);
 	new->H1_snr = XLALCreateCOMPLEX8TimeSeries("", &(LIGOTimeGPS) {0, 0}, 0., 1. / 16384, &lalDimensionlessUnit, 16384);
 	new->K1_snr = XLALCreateCOMPLEX8TimeSeries("", &(LIGOTimeGPS) {0, 0}, 0., 1. / 16384, &lalDimensionlessUnit, 16384);
 	new->L1_snr = XLALCreateCOMPLEX8TimeSeries("", &(LIGOTimeGPS) {0, 0}, 0., 1. / 16384, &lalDimensionlessUnit, 16384);
 	new->V1_snr = XLALCreateCOMPLEX8TimeSeries("", &(LIGOTimeGPS) {0, 0}, 0., 1. / 16384, &lalDimensionlessUnit, 16384);
+
+	for(i = 0; i < new->G1_snr->data->length; i++)
+		new->G1_snr->data->data[i] = 0.;
 
 	for(i = 0; i < new->H1_snr->data->length; i++)
 		new->H1_snr->data->data[i] = 0.;
@@ -673,11 +761,12 @@ static PyObject *random_obj(PyObject *cls, PyObject *args)
 
 static struct PyMethodDef methods[] = {
 	{"from_buffer", from_buffer, METH_VARARGS | METH_CLASS, "Construct a tuple of GSTLALSnglInspiral objects from a buffer object.  The buffer is interpreted as a C array of GSTLALSnglInspiral structures.  All data is copied, the buffer can be deallocated afterwards."},
+	{"_G1_snr_time_series_deleter", _G1_snr_time_series_deleter, METH_NOARGS, "Release the G1 SNR time series attached to the GSTLALSnglInspiral object."},
 	{"_H1_snr_time_series_deleter", _H1_snr_time_series_deleter, METH_NOARGS, "Release the H1 SNR time series attached to the GSTLALSnglInspiral object."},
 	{"_K1_snr_time_series_deleter", _K1_snr_time_series_deleter, METH_NOARGS, "Release the K1 SNR time series attached to the GSTLALSnglInspiral object."},
 	{"_L1_snr_time_series_deleter", _L1_snr_time_series_deleter, METH_NOARGS, "Release the L1 SNR time series attached to the GSTLALSnglInspiral object."},
 	{"_V1_snr_time_series_deleter", _V1_snr_time_series_deleter, METH_NOARGS, "Release the V1 SNR time series attached to the GSTLALSnglInspiral object."},
-	{"random", random_obj, METH_NOARGS | METH_CLASS, "Make a GSTLALSnglInspiral with an SNR time series attached to it for L1, H1, V1, and K1 to assist with writing test code."},
+	{"random", random_obj, METH_NOARGS | METH_CLASS, "Make a GSTLALSnglInspiral with an SNR time series attached to it for G1, H1, K1, L1, and V1 to assist with writing test code."},
 	{NULL,}
 };
 
