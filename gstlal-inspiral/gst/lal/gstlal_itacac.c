@@ -140,13 +140,13 @@ static int reset_time_and_offset(GSTLALItacac *itacac) {
 	// there is an assert that guarantees this
 	itacac->next_output_offset = 0;
 	itacac->next_output_timestamp = GST_CLOCK_TIME_NONE;
-        return 0;
+	return 0;
 }
 
 static guint gst_audioadapter_available_samples(GstAudioAdapter *adapter) {
-        guint size;
-        g_object_get(adapter, "size", &size, NULL);
-        return size;
+	guint size;
+	g_object_get(adapter, "size", &size, NULL);
+	return size;
 }
 
 static void free_bank(GSTLALItacacPad *itacacpad) {
@@ -173,7 +173,7 @@ static void update_peak_info_from_autocorrelation_properties(GSTLALItacacPad *it
 		//
 		itacacpad->snr_matrix_view = gsl_matrix_complex_float_view_array((float *) itacacpad->snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
 		itacacpad->tmp_snr_matrix_view = gsl_matrix_complex_float_view_array((float *) itacacpad->tmp_snr_mat, autocorrelation_length(itacacpad), autocorrelation_channels(itacacpad));
-        }
+	}
 }
 
 /*
@@ -190,13 +190,15 @@ static gboolean taglist_extract_string(GstObject *object, GstTagList *taglist, c
 		GST_WARNING_OBJECT(object, "unable to parse \"%s\" from %" GST_PTR_FORMAT, tagname, taglist);
 		return FALSE;
 	}
-        return TRUE;
+	return TRUE;
 }
 
 static gboolean get_instrument_pad_pointer(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad)
 {
 	gboolean result = TRUE;
-	if(strcmp(itacacpad->instrument, "H1") == 0)
+	if(strcmp(itacacpad->instrument, "G1") == 0)
+		itacac->G1_itacacpad = itacacpad;
+	else if(strcmp(itacacpad->instrument, "H1") == 0)
 		itacac->H1_itacacpad = itacacpad;
 	else if(strcmp(itacacpad->instrument, "K1") == 0)
 		itacac->K1_itacacpad = itacacpad;
@@ -308,7 +310,7 @@ static gboolean sink_event(GstAggregator *agg, GstAggregatorPad *aggpad, GstEven
 				g_mutex_unlock(&itacacpad->bank_lock);
 				result &= get_instrument_pad_pointer(itacac, itacacpad);
 			}
-                        break;
+			break;
 
 		}
 		case GST_EVENT_EOS:
@@ -435,7 +437,7 @@ static void gstlal_itacac_pad_set_property(GObject *object, enum padproperty id,
 		g_mutex_unlock(&itacacpad->bank_lock);
 		break;
 
-        case ARG_AUTOCORRELATION_MASK: 
+	case ARG_AUTOCORRELATION_MASK: 
 		g_mutex_lock(&itacacpad->bank_lock);
 
 		if(itacacpad->autocorrelation_mask)
@@ -478,7 +480,7 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 		g_mutex_unlock(&itacacpad->bank_lock);
 		break;
 
-        case ARG_SIGMASQ:
+	case ARG_SIGMASQ:
 		g_mutex_lock(&itacacpad->bank_lock);
 		if(itacacpad->bankarray) {
 			g_assert(itacac != NULL);
@@ -497,13 +499,13 @@ static void gstlal_itacac_pad_get_property(GObject *object, enum padproperty id,
 	case ARG_AUTOCORRELATION_MATRIX:
 		g_mutex_lock(&itacacpad->bank_lock);
 		if(itacacpad->autocorrelation_matrix)
-                        g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(itacacpad->autocorrelation_matrix));
-                else {
-                        GST_WARNING_OBJECT(itacacpad, "no autocorrelation matrix");
+			g_value_take_boxed(value, gstlal_g_value_array_from_gsl_matrix_complex(itacacpad->autocorrelation_matrix));
+		else {
+			GST_WARNING_OBJECT(itacacpad, "no autocorrelation matrix");
 			g_value_take_boxed(value, g_array_sized_new(TRUE, TRUE, sizeof(double), 0));
-                        }
-                g_mutex_unlock(&itacacpad->bank_lock);
-                break;
+		}
+		g_mutex_unlock(&itacacpad->bank_lock);
+		break;
 
 	case ARG_AUTOCORRELATION_MASK:
 		g_mutex_lock(&itacacpad->bank_lock);
@@ -581,9 +583,9 @@ static void copy_nongapsamps(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, g
 	gsl_matrix_set(itacacpad->data->duration_dataoffset_trigwindowoffset_peakfindinglength_matrix, data_container_index, 3, (double) peak_finding_length);
 
 	// copy the samples that we will call the peak finding library on (if no events are found the result will be a GAP)
-        if(itacac->peak_type == GSTLAL_PEAK_COMPLEX)
+	if(itacac->peak_type == GSTLAL_PEAK_COMPLEX)
 		gst_audioadapter_copy_samples(itacacpad->adapter, (float complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
-        else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
+	else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX)
 		gst_audioadapter_copy_samples(itacacpad->adapter, (double complex *) itacacpad->data->data + offset_from_copied_data * itacacpad->maxdata->channels, copysamps, NULL, NULL);
 }
 
@@ -623,9 +625,9 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 	// AEP- 180417 Turning XLAL Errors off
 	old_gsl_error_handler=gsl_set_error_handler_off();
 
-        if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
-                // Find the peak, making sure to put the data pointer at the start of the interval we care about
-                gstlal_float_complex_peak_over_window_interp(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, peak_finding_length);
+	if(itacac->peak_type == GSTLAL_PEAK_COMPLEX) {
+		// Find the peak, making sure to put the data pointer at the start of the interval we care about
+		gstlal_float_complex_peak_over_window_interp(this_maxdata, (float complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
 		//"how many instruments were on test", the correct thing to do
 		//is probably to add metadata to the buffer containing
@@ -639,9 +641,9 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 			}
 		}
 	}
-        else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
-                // Find the peak, making sure to put the data pointer at the start of the interval we care about
-                gstlal_double_complex_peak_over_window_interp(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, peak_finding_length);
+	else if(itacac->peak_type == GSTLAL_PEAK_DOUBLE_COMPLEX) {
+		// Find the peak, making sure to put the data pointer at the start of the interval we care about
+		gstlal_double_complex_peak_over_window_interp(this_maxdata, (double complex *) itacacpad->data->data + peak_finding_start * this_maxdata->channels, peak_finding_length);
 		//FIXME At the moment, empty triggers are added to inform the
 		//"how many instruments were on test", the correct thing to do
 		//is probably to add metadata to the buffer containing
@@ -655,8 +657,8 @@ static void generate_triggers(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, 
 			}
 		}
 	}
-        else
-                g_assert_not_reached();
+	else
+		g_assert_not_reached();
 
 	// AEP- 180417 Turning XLAL Errors back on
 	gsl_set_error_handler(old_gsl_error_handler);
@@ -845,6 +847,8 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 	guint channel, peak_sample;
 
 	// First zero the tmp_snr_mat objects in the other pads
+	if(strcmp(itacacpad->instrument, "G1") != 0 && itacac->G1_itacacpad != NULL && !itacac->G1_itacacpad->waiting)
+		memset(itacac->G1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "H1") != 0 && itacac->H1_itacacpad != NULL && !itacac->H1_itacacpad->waiting)
 		memset(itacac->H1_itacacpad->tmp_snr_mat, 0, autocorrelation_channels(itacacpad) * itacac->autocorrelation_length * itacacpad->maxdata->unit);
 	if(strcmp(itacacpad->instrument, "K1") != 0 && itacac->K1_itacacpad != NULL && !itacac->K1_itacacpad->waiting)
@@ -869,6 +873,8 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 		}
 
 		peak_sample = itacacpad->maxdata->samples[channel];
+		if(strcmp(itacacpad->instrument, "G1") != 0 && itacac->G1_itacacpad != NULL && !itacac->G1_itacacpad->waiting)
+			get_snr_series(itacac, itacac->G1_itacacpad, channel, peak_sample);
 		if(strcmp(itacacpad->instrument, "H1") != 0 && itacac->H1_itacacpad != NULL && !itacac->H1_itacacpad->waiting)
 			get_snr_series(itacac, itacac->H1_itacacpad, channel, peak_sample);
 		if(strcmp(itacacpad->instrument, "K1") != 0 && itacac->K1_itacacpad != NULL && !itacac->K1_itacacpad->waiting)
@@ -882,26 +888,31 @@ static void populate_snr_in_other_detectors(GSTLALItacac *itacac, GSTLALItacacPa
 }
 
 static GstBuffer* assemble_srcbuf(GSTLALItacac *itacac, GSTLALItacacPad *itacacpad, GstBuffer *srcbuf) {
-	if(strcmp(itacacpad->instrument, "H1") == 0) {
+	if(strcmp(itacacpad->instrument, "G1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->G1_itacacpad->snr_matrix_view), itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, &(itacac->G1_itacacpad->snr_matrix_view), itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+	} else if(strcmp(itacacpad->instrument, "H1") == 0) {
+		if(srcbuf == NULL)
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+		else
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->H1_itacacpad->snr_matrix_view), itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
 	} else if(strcmp(itacacpad->instrument, "K1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->K1_itacacpad->snr_matrix_view), itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
 	} else if(strcmp(itacacpad->instrument, "L1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->L1_itacacpad->snr_matrix_view), itacac->V1_itacacpad != NULL ? &(itacac->V1_itacacpad->tmp_snr_matrix_view) : NULL);
 	} else if(strcmp(itacacpad->instrument, "V1") == 0) {
 		if(srcbuf == NULL)
-			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view), itacac->difftime);
+			srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view), itacac->difftime);
 		else
-			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view) );
+			gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, itacac->G1_itacacpad != NULL ? &(itacac->G1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->H1_itacacpad != NULL ? &(itacac->H1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->K1_itacacpad != NULL ? &(itacac->K1_itacacpad->tmp_snr_matrix_view) : NULL, itacac->L1_itacacpad != NULL ? &(itacac->L1_itacacpad->tmp_snr_matrix_view) : NULL, &(itacac->V1_itacacpad->snr_matrix_view) );
 	}
 	return srcbuf;
 }
@@ -916,8 +927,8 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 	GstBuffer *srcbuf = NULL;
 	guint availablesamps;
 
-        // Make sure we have enough samples to produce a trigger
-        // FIXME Currently assumes every pad has the same n
+	// Make sure we have enough samples to produce a trigger
+	// FIXME Currently assumes every pad has the same n
 	for(padlist = element->sinkpads; padlist != NULL; padlist = padlist->next) {
 		GSTLALItacacPad *itacacpad = GSTLAL_ITACAC_PAD(padlist->data);
 		if(gst_audioadapter_available_samples( itacacpad->adapter ) <= itacacpad->n + 2*itacacpad->maxdata->pad && !itacacpad->EOS && !itacacpad->waiting) {
@@ -1072,9 +1083,9 @@ static GstFlowReturn process(GSTLALItacac *itacac) {
 			srcbuf = assemble_srcbuf(itacac, itacacpad, srcbuf);
 		} else if(triggers_generated) {
 			if(srcbuf == NULL) {
-				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, itacac->difftime);
+				srcbuf = gstlal_snglinspiral_new_buffer_from_peak(itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, NULL, itacac->difftime);
 			} else {
-				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL);
+				gstlal_snglinspiral_append_peak_to_buffer(srcbuf, itacacpad->maxdata, itacacpad->bankarray, GST_PAD((itacac->aggregator).srcpad), itacac->next_output_offset, itacacpad->n, itacac->next_output_timestamp, itacac->rate, itacacpad->chi2, NULL, NULL, NULL, NULL, NULL);
 			}
 		}
 
@@ -1340,7 +1351,7 @@ static void gstlal_itacac_pad_class_init(GSTLALItacacPadClass *klass)
 	// Properties
 	//
 
-        g_object_class_install_property(
+	g_object_class_install_property(
 		gobject_class,
 		ARG_N,
 		g_param_spec_uint(
@@ -1534,6 +1545,7 @@ static void gstlal_itacac_init(GSTLALItacac *itacac)
 	reset_time_and_offset(itacac);
 
 	itacac->EOS = FALSE;
+	itacac->G1_itacacpad = NULL;
 	itacac->H1_itacacpad = NULL;
 	itacac->K1_itacacpad = NULL;
 	itacac->L1_itacacpad = NULL;
