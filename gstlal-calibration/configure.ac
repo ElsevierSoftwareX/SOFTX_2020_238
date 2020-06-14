@@ -18,6 +18,7 @@ AC_CONFIG_FILES([ \
 	bin/Makefile \
 	debian/control \
 	debian/Makefile \
+	lib/gstlal-calibration.pc \
 	lib/Makefile \
 	gst/Makefile \
 	gst/lal/Makefile \

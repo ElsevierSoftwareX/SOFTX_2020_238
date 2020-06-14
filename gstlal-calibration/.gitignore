@@ -1,4 +1,5 @@
 gstlal-calibration.spec
+lib/gstlal-calibration.pc
 tests/check_calibration/Filters/**
 tests/check_calibration/Frames/**
 tests/check_calibration/BB_injections/**

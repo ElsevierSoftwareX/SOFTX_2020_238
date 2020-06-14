@@ -27,7 +27,6 @@ matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 16
 matplotlib.rcParams['legend.fontsize'] = 14
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib import rc
 rc('text', usetex=True)
