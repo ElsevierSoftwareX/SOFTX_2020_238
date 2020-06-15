@@ -100,7 +100,7 @@ long COMPLEX double long_sum_array_ ## LONG ## COMPLEX ## DTYPE(LONG COMPLEX DTY
 	long COMPLEX double sum = 0.0; \
 	LONG COMPLEX DTYPE *ptr, *end = array + N; \
 	for(ptr = array; ptr < end; ptr += cadence) \
-		sum += *array; \
+		sum += *ptr; \
  \
 	return sum; \
 }
@@ -706,10 +706,11 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 			for(j = i % N_mini; j < N; j += N_mini, j += (j == i ? N_mini : 0)) { \
 				exp_index = (j * (i / N_mini)) % N; \
 				/* Do a multiplication only if we have to */ \
-				if(exp_index) \
+				if(exp_index) { \
 					fd_data[j] += fd_data_copy[copy_index] * exp_array[exp_index]; \
-				else \
+				} else { \
 					fd_data[j] += fd_data_copy[copy_index]; \
+				} \
 			} \
 		} \
 	} \
@@ -1157,7 +1158,7 @@ LONG complex DTYPE *gstlal_prime_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_da
 		fd_data = g_malloc(N * sizeof(long complex double)); \
  \
 	for(i = 0; i < N; i++) \
-		fd_data[i] = exp_array2[i] * A_n_conv_B_n[i]; \
+		fd_data[i] = exp_array2[i] * A_n_conv_B_n[i] / M; \
  \
 	/* Done */ \
 	g_free(b_n); \
@@ -1240,7 +1241,7 @@ LONG complex DTYPE *gstlal_prime_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, gui
 		fd_data = g_malloc((return_full ? N : N_out) * sizeof(long complex double)); \
  \
 	for(i = 0; i < N_out; i++) \
-		fd_data[i] = exp_array2[i] * A_n_conv_B_n[i]; \
+		fd_data[i] = exp_array2[i] * A_n_conv_B_n[i] / M; \
  \
 	if(return_full && N > 2) { \
 		/* Then fill in the second half */ \
@@ -1340,7 +1341,7 @@ LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, gu
 		td_data = g_malloc(*N * sizeof(long double)); \
  \
 	for(i = 0; i < *N; i++) \
-		td_data[i] = creall(exp_array2[i] * A_n_conv_B_n[i]); \
+		td_data[i] = creall(exp_array2[i] * A_n_conv_B_n[i]) / M; \
  \
 	if(normalize) { \
 		for(i = 0; i < *N; i++) \
@@ -1380,11 +1381,11 @@ LONG COMPLEX double *rand_array ## LONG ## COMPLEX(guint N) { \
 	time_t t; \
 	srand((unsigned) time(&t)); \
 	for(i = 0; i < N; i++) \
-		array[i] += (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
-	if(sizeof(COMPLEX double) > 8) { \
-		for(i = 0; i < N; i++) \
-			array[i] += I * (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
-	} \
+		array[i] += i; /*(rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX);*/ \
+	/*if(sizeof(COMPLEX double) > 8) { \
+	 *	for(i = 0; i < N; i++) \
+	 *		array[i] += I * (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
+	}*/ \
 	return array; \
 }
 
@@ -1599,13 +1600,8 @@ void rfft_test_inverse(guint N_start, guint N_end, guint cadence) {
 
 void compare_fft(guint N_start, guint N_end, guint cadence) {
 
-	guint i, j, max_error_index_dft = 0;
-	long double test;
-	long double max_error_dft = 0.0;
-	long double avg_error_dft = 0.0;
-	guint max_error_index_prime = 0;
-	long double max_error_prime = 0.0;
-	long double avg_error_prime = 0.0;
+	guint i, j, max_error_index_dft, max_error_index_prime;
+	long double test, max_error_dft, avg_error_dft, max_error_prime, avg_error_prime;
 
 	g_print("\n====================================================================\n");
 	g_print("================ COMPARING DFT, FFT, AND PRIME_FFT =================\n");
@@ -1621,6 +1617,12 @@ void compare_fft(guint N_start, guint N_end, guint cadence) {
 		long complex double *dft = gstlal_dft_longdouble(dftinput, i, NULL, FALSE, NULL);
 		long complex double *fft = gstlal_fft_longdouble(fftinput, i, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, NULL);
 		long complex double *prime_fft = gstlal_prime_fft_longdouble(primefftinput, i, FALSE, NULL, 0, NULL, 0, NULL, NULL);
+		max_error_index_dft = 0;
+		max_error_index_prime = 0;
+		max_error_dft = 0.0;
+		avg_error_dft = 0.0;
+		max_error_prime = 0.0;
+		avg_error_prime = 0.0;
 		for(j = 0; j < i; j++) {
 			test = cabsl(dft[j] / fft[j] - 1);
 			max_error_index_dft = test > max_error_dft ? j : max_error_index_dft;
