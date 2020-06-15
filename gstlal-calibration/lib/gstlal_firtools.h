@@ -156,9 +156,9 @@ long complex double *pad_zeros_Acomplexdouble(complex double *data, guint N, gui
 
 long complex double *pad_zeros_Alongcomplexdouble(long complex double *data, guint N, guint N_conj, long complex double *exp_array, guint M);
 
-complex double *pad_zeros_B(complex double *b_n, guint N, guint M);
+complex double *pad_zeros_B(complex double *b_n, guint N, guint N_out, guint M);
 
-long complex double *pad_zeros_Blong(long complex double *b_n, guint N, guint M);
+long complex double *pad_zeros_Blong(long complex double *b_n, guint N, guint N_out, guint M);
 
 guint *find_prime_factors(guint N, guint *num_factors);
 

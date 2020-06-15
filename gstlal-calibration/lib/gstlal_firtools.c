@@ -221,13 +221,14 @@ PAD_ZEROS_A(long, complex, double, l, );
 
 
 #define PAD_ZEROS_B(LONG, LLL) \
-LONG complex double *pad_zeros_B ## LONG(LONG complex double *b_n, guint N, guint M) { \
+LONG complex double *pad_zeros_B ## LONG(LONG complex double *b_n, guint N, guint N_out, guint M) { \
  \
 	guint i; \
 	LONG complex double *B_n = g_malloc0(M * sizeof(LONG complex double)); \
-	B_n[0] = b_n[0]; \
+	for(i = 0; i < N_out; i++) \
+		B_n[i] = b_n[i]; \
 	for(i = 1; i < N ; i++) \
-		B_n[M - i] = B_n[i] = b_n[i]; \
+		B_n[M - i] = b_n[i]; \
  \
 	return B_n; \
 }
@@ -633,10 +634,10 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 		prime_factors_need_freed = TRUE; \
  \
 		/* Check if we will need to use gstlal_prime_fft_() for this */ \
-		if(prime_factors[num_factors - 2] >= 37) { \
-			/* Find the first member greater than or equal to 37 */ \
+		if(prime_factors[num_factors - 2] >= 107) { \
+			/* Find the first member greater than or equal to 107 */ \
 			guint i = 0; \
-			while(prime_factors[i] < 37) \
+			while(prime_factors[i] < 107) \
 				i += 1; \
  \
 			/* Compute a good padded length for Bluestein's algorithm */ \
@@ -653,7 +654,7 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 			M_prime_factors_need_freed = TRUE; \
 		} \
 	} \
-	if(exp_array == NULL && prime_factors[0] < 37) { \
+	if(exp_array == NULL && prime_factors[0] < 107) { \
 		/*
 		 * Make array of exp(-2 pi i f t) to multiply.  This is expensive, so only make
 		 * the code do it once.
@@ -665,7 +666,7 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 	if(fd_data == NULL) \
 		fd_data = g_malloc0(N * sizeof(long complex double)); \
  \
-	if(prime_factors[0] >= 37) \
+	if(prime_factors[0] >= 107) \
 		/* Use Bluestein's algorithm for a prime-length fft */ \
 		gstlal_prime_fft_ ## LONG ## DTYPE(td_data, N, inverse, M_exp_array2, M, M_prime_factors, M_num_factors, M_exp_array, fd_data); \
  \
@@ -784,10 +785,10 @@ LONG complex DTYPE *gstlal_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 		prime_factors_need_freed = TRUE; \
  \
 		/* Check if we will need to use gstlal_prime_fft_() for this */ \
-		if(prime_factors[num_factors - 2] >= 61) { \
-			/* Find the first member greater than or equal to 61 */ \
+		if(prime_factors[num_factors - 2] >= 607) { \
+			/* Find the first member greater than or equal to 607 */ \
 			guint i = 0; \
-			while(prime_factors[i] < 61) \
+			while(prime_factors[i] < 607) \
 				i += 1; \
  \
 			/* Compute a good padded length for Bluestein's algorithm */ \
@@ -804,7 +805,7 @@ LONG complex DTYPE *gstlal_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 			M_prime_factors_need_freed = TRUE; \
 		} \
 	} \
-	if(exp_array == NULL && prime_factors[0] < 61) { \
+	if(exp_array == NULL && prime_factors[0] < 607) { \
 		/*
 		 * Make array of exp(-2 pi i f t) to multiply.  This is expensive, so only make
 		 * the code do it once.
@@ -813,7 +814,7 @@ LONG complex DTYPE *gstlal_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 		exp_array_need_freed = TRUE; \
 	} \
  \
-	if(prime_factors[0] >= 61) { \
+	if(prime_factors[0] >= 607) { \
 		/* Use Bluestein's algorithm for a prime-length fft */ \
 		if(fd_data == NULL) \
 			fd_data = g_malloc0((return_full ? N : N_out) * sizeof(long complex double)); \
@@ -954,10 +955,10 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		prime_factors_need_freed = TRUE; \
  \
 		/* Check if we will need to use gstlal_prime_irfft_() for this */ \
-		if(prime_factors[num_factors - 2] >= 17) { \
-			/* Find the first member greater than or equal to 17 */ \
+		if(prime_factors[num_factors - 2] >= 113) { \
+			/* Find the first member greater than or equal to 113 */ \
 			guint i = 0; \
-			while(prime_factors[i] < 17) \
+			while(prime_factors[i] < 113) \
 				i++; \
  \
 			/* Compute a good padded length for Bluestein's algorithm */ \
@@ -974,10 +975,10 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 			M_irfft_prime_factors_need_freed = TRUE; \
 		} \
 		/* Check if we will need to use gstlal_prime_fft_() for this */ \
-		if(prime_factors[num_factors - 2] >= 37) { \
-			/* Find the first member greater than or equal to 37 */ \
+		if(prime_factors[num_factors - 2] >= 107) { \
+			/* Find the first member greater than or equal to 107 */ \
 			guint i = 0; \
-			while(prime_factors[i] < 37) \
+			while(prime_factors[i] < 107) \
 				i++; \
  \
 			/* Compute a good padded length for Bluestein's algorithm */ \
@@ -995,7 +996,7 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		} \
 	} \
  \
-	if(exp_array == NULL && prime_factors[0] < 17) { \
+	if(exp_array == NULL && prime_factors[0] < 113) { \
 		/*
 		 * Make array of exp(-2 pi i f t) to multiply.  This is expensive, so only make
 		 * the code do it once.
@@ -1007,7 +1008,7 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 	if(td_data == NULL) \
 		td_data = g_malloc0(*N * sizeof(long double)); \
  \
-	if(prime_factors[0] >= 17) \
+	if(prime_factors[0] >= 113) \
 		/* Use Bluestein's algorithm for a prime-length fft */ \
 		gstlal_prime_irfft_ ## LONG ## DTYPE(fd_data, N_in, N, normalize, M_irfft_exp_array2, M_irfft, M_irfft_prime_factors, M_irfft_num_factors, M_irfft_exp_array, td_data); \
 	else if(prime_factors[0] == *N) \
@@ -1128,6 +1129,7 @@ LONG complex DTYPE *gstlal_prime_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_da
 		prime_factors = find_prime_factors_M(2 * N - 1, &M, &num_factors); \
 		prime_factors_need_freed = TRUE; \
 	} \
+ \
 	if(exp_array == NULL) { \
 		exp_array = find_exp_array(M, FALSE); \
 		exp_array_need_freed = TRUE; \
@@ -1135,7 +1137,7 @@ LONG complex DTYPE *gstlal_prime_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_da
  \
 	long complex double *A_n = pad_zeros_A ## LONG ## complex ## DTYPE(td_data, N, 0, exp_array2, M); \
 	long complex double *b_n = conj_array_longdouble(exp_array2, N); \
-	long complex double *B_n = pad_zeros_Blong(b_n, N, M); \
+	long complex double *B_n = pad_zeros_Blong(b_n, N, N, M); \
  \
 	/*
 	 * Do the convolution using the convolution theorem and the Cooley-Tukey algorithm, and
@@ -1218,7 +1220,7 @@ LONG complex DTYPE *gstlal_prime_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, gui
  \
 	long complex double *A_n = pad_zeros_A ## LONG ## DTYPE(td_data, N, 0, exp_array2, M); \
 	long complex double *b_n = conj_array_longdouble(exp_array2, N); \
-	long complex double *B_n = pad_zeros_Blong(b_n, N, M); \
+	long complex double *B_n = pad_zeros_Blong(b_n, N, N_out, M); \
  \
 	/*
 	 * Do the convolution using the convolution theorem and the Cooley-Tukey algorithm, and
@@ -1250,7 +1252,6 @@ LONG complex DTYPE *gstlal_prime_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, gui
 	} \
  \
 	/* Done */ \
-	g_free(A_n_conv_B_n); \
 	g_free(b_n); \
 	g_free(B_n_fft); \
 	g_free(A_n_conv_B_n); \
@@ -1316,9 +1317,10 @@ LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, gu
 		exp_array = find_exp_array(M, FALSE); \
 		exp_array_need_freed = TRUE; \
 	} \
-	long complex double *A_n = pad_zeros_A ## LONG  ## complex## DTYPE(fd_data, N_in, *N - N_in, exp_array2, M); \
+ \
+	long complex double *A_n = pad_zeros_A ## LONG  ## complex ## DTYPE(fd_data, N_in, *N - N_in, exp_array2, M); \
 	long complex double *b_n = conj_array_longdouble(exp_array2, *N); \
-	long complex double *B_n = pad_zeros_Blong(b_n, *N, M); \
+	long complex double *B_n = pad_zeros_Blong(b_n, *N, *N, M); \
  \
 	/*
 	 * Do the convolution using the convolution theorem and the Cooley-Tukey algorithm, and
@@ -1349,7 +1351,6 @@ LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, gu
 	} \
  \
 	/* Done */ \
-	g_free(A_n_conv_B_n); \
 	g_free(b_n); \
 	g_free(B_n_fft); \
 	g_free(A_n_conv_B_n); \
@@ -1381,11 +1382,11 @@ LONG COMPLEX double *rand_array ## LONG ## COMPLEX(guint N) { \
 	time_t t; \
 	srand((unsigned) time(&t)); \
 	for(i = 0; i < N; i++) \
-		array[i] += i; /*(rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX);*/ \
-	/*if(sizeof(COMPLEX double) > 8) { \
-	 *	for(i = 0; i < N; i++) \
-	 *		array[i] += I * (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
-	}*/ \
+		array[i] += (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
+	if(sizeof(COMPLEX double) > 8) { \
+		for(i = 0; i < N; i++) \
+			array[i] += I * (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
+	} \
 	return array; \
 }
 
