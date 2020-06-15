@@ -77,12 +77,12 @@ TYPECAST_TYPEIN_TO_TYPEOUT(long, double, , double, complex);
 #define SUM_ARRAY(LONG, COMPLEX, DTYPE) \
 LONG COMPLEX DTYPE sum_array_ ## LONG ## COMPLEX ## DTYPE(LONG COMPLEX DTYPE *array, guint N, guint cadence) { \
  \
-        LONG COMPLEX DTYPE sum = 0.0; \
-        LONG COMPLEX DTYPE *ptr, *end = array + N; \
-        for(ptr = array; ptr < end; ptr += cadence) \
-                sum += *array; \
+	LONG COMPLEX DTYPE sum = 0.0; \
+	LONG COMPLEX DTYPE *ptr, *end = array + N; \
+	for(ptr = array; ptr < end; ptr += cadence) \
+		sum += *array; \
  \
-        return sum; \
+	return sum; \
 }
 
 
@@ -225,10 +225,9 @@ LONG complex double *pad_zeros_B ## LONG(LONG complex double *b_n, guint N, guin
  \
 	guint i; \
 	LONG complex double *B_n = g_malloc0(M * sizeof(LONG complex double)); \
-	for(i = 0; i < N; i++) \
-		B_n[i] = b_n[i]; \
-	for(i = 1; i < N ; i--) \
-		B_n[M - i] = b_n[i]; \
+	B_n[0] = b_n[0]; \
+	for(i = 1; i < N ; i++) \
+		B_n[M - i] = B_n[i] = b_n[i]; \
  \
 	return B_n; \
 }
@@ -246,18 +245,19 @@ guint *find_prime_factors(guint N, guint *num_factors) {
 
 	/* Allocate as much memory as we could possibly need */
 	guint *prime_factors = g_malloc(((guint) log2((double) N) + 1) * sizeof(guint));
+	guint *ptr = prime_factors;
 	guint factor = 2;
 	while(factor <= N) {
 		if(N % factor)
 			factor += 1;
 		else {
-			*prime_factors = factor;
-			prime_factors++;
+			*ptr = factor;
+			ptr++;
 			(*num_factors)++;
 			N /= factor;
 		}
 	}
-	*prime_factors = 1;
+	*ptr = 1;
 	(*num_factors)++;
 
 	return prime_factors;
@@ -273,46 +273,59 @@ guint *find_prime_factors_M(guint M_min, guint *M, guint *num_factors) {
 	*M = (guint) pow(2.0, 1.0 + (guint) log2(M_min - 1.0));
 	*num_factors = (guint) log2((double) *M) + 1;
 
-	guint *prime_factors = g_malloc(*num_factors * sizeof(guint));
-	gpointer ptr = prime_factors;
-	gpointer end = prime_factors + *num_factors * sizeof(guint);
-	guint *pfptr, *pfend = end;
-	for(pfptr = ptr; pfptr < pfend; pfptr++)
-		*pfptr = 2;
+	guint i, *prime_factors;
 
 	if(9 * *M >= 16 * M_min && *M >= 16) {
-		prime_factors[*num_factors - 5] = prime_factors[*num_factors - 4] = 3;
-		prime_factors[*num_factors - 3] = 1;
 		*num_factors -= 2;
 		*M = *M * 9 / 16;
+		prime_factors = g_malloc(*num_factors * sizeof(guint));
+		prime_factors[*num_factors - 3] = prime_factors[*num_factors - 2] = 3;
+		prime_factors[*num_factors - 1] = 1;
+		for(i = 0; i < *num_factors - 3; i++)
+			prime_factors[i] = 2;
 		return prime_factors;
 	} else if(5 * *M >= 8 * M_min && *M >= 8) {
-		prime_factors[*num_factors - 4] = 5;
-		prime_factors[*num_factors - 3] = 1;
 		*num_factors -= 2;
 		*M = *M * 5 / 8;
+		prime_factors = g_malloc(*num_factors * sizeof(guint));
+		prime_factors[*num_factors - 2] = 5;
+		prime_factors[*num_factors - 1] = 1;
+		for(i = 0; i < *num_factors - 2; i++)
+			prime_factors[i] = 2;
 		return prime_factors;
 	} else if(3 * *M >= 4 * M_min && *M >= 4) {
-		prime_factors[*num_factors - 3] = 3;
-		prime_factors[*num_factors - 2] = 1;
 		*num_factors -= 1;
 		*M = *M * 3 / 4;
+		prime_factors = g_malloc(*num_factors * sizeof(guint));
+		prime_factors[*num_factors - 2] = 3;
+		prime_factors[*num_factors - 1] = 1;
+		for(i = 0; i < *num_factors - 2; i++)
+			prime_factors[i] = 2;
 		return prime_factors;
 	} else if(7 * *M >= 8 * M_min && *M >= 8) {
-		prime_factors[*num_factors - 4] = 7;
-		prime_factors[*num_factors - 3] = 1;
 		*num_factors -= 2;
 		*M = *M * 7 / 8;
+		prime_factors = g_malloc(*num_factors * sizeof(guint));
+		prime_factors[*num_factors - 2] = 7;
+		prime_factors[*num_factors - 1] = 1;
+		for(i = 0; i < *num_factors - 2; i++)
+			prime_factors[i] = 2;
 		return prime_factors;
 	} else if(15 * *M >= 16 * M_min && *M >= 16) {
-		prime_factors[*num_factors - 5] = 3;
-		prime_factors[*num_factors - 4] = 5;
-		prime_factors[*num_factors - 3] = 1;
 		*num_factors -= 2;
 		*M = *M * 15 / 16;
+		prime_factors = g_malloc(*num_factors * sizeof(guint));
+		prime_factors[*num_factors - 3] = 3;
+		prime_factors[*num_factors - 2] = 5;
+		prime_factors[*num_factors - 1] = 1;
+		for(i = 0; i < *num_factors - 3; i++)
+			prime_factors[i] = 2;
 		return prime_factors;
 	} else {
+		prime_factors = g_malloc(*num_factors * sizeof(guint));
 		prime_factors[*num_factors - 1] = 1;
+		for(i = 0; i < *num_factors - 1; i++)
+			prime_factors[i] = 2;
 		return prime_factors;
 	}
 }
@@ -1132,13 +1145,13 @@ LONG complex DTYPE *gstlal_prime_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_da
 	long complex double *A_n_conv_B_n = g_malloc0(M * sizeof(long complex double)); \
 	long complex double *conj_exp_array = conj_array_longdouble(exp_array, M); \
 	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, A_n_fft); \
-	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, B_n_fft); \
+	gstlal_fft_longdouble(B_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, B_n_fft); \
  \
 	guint i; \
 	for(i = 0; i < M; i++) \
 		A_n_fft[i] *= B_n_fft[i]; \
  \
-	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, conj_exp_array, TRUE, 0, NULL, 0, NULL, NULL, A_n_conv_B_n); \
+	gstlal_fft_longdouble(A_n_fft, M, prime_factors, num_factors, conj_exp_array, TRUE, 0, NULL, 0, NULL, NULL, A_n_conv_B_n); \
  \
 	if(fd_data == NULL) \
 		fd_data = g_malloc(N * sizeof(long complex double)); \
@@ -1147,11 +1160,7 @@ LONG complex DTYPE *gstlal_prime_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_da
 		fd_data[i] = exp_array2[i] * A_n_conv_B_n[i]; \
  \
 	/* Done */ \
-	g_free(A_n_conv_B_n); \
-	g_free(A_n); \
 	g_free(b_n); \
-	g_free(B_n); \
-	g_free(A_n_fft); \
 	g_free(B_n_fft); \
 	g_free(A_n_conv_B_n); \
 	g_free(conj_exp_array); \
@@ -1159,8 +1168,9 @@ LONG complex DTYPE *gstlal_prime_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_da
 		g_free(exp_array2); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
-	if(prime_factors_need_freed) \
+	if(prime_factors_need_freed) { \
 		g_free(prime_factors); \
+	} \
  \
 	if(sizeof(LONG DTYPE) < sizeof(long double)) \
 		return typecast_longcomplexdouble_to_ ## LONG ## complex ## DTYPE(fd_data, N); \
@@ -1218,13 +1228,13 @@ LONG complex DTYPE *gstlal_prime_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, gui
 	long complex double *A_n_conv_B_n = g_malloc0(M * sizeof(long complex double)); \
 	long complex double *conj_exp_array = conj_array_longdouble(exp_array, M); \
 	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, A_n_fft); \
-	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, B_n_fft); \
+	gstlal_fft_longdouble(B_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, B_n_fft); \
  \
 	guint i; \
 	for(i = 0; i < M; i++) \
 		A_n_fft[i] *= B_n_fft[i]; \
  \
-	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, conj_exp_array, TRUE, 0, NULL, 0, NULL, NULL, A_n_conv_B_n); \
+	gstlal_fft_longdouble(A_n_fft, M, prime_factors, num_factors, conj_exp_array, TRUE, 0, NULL, 0, NULL, NULL, A_n_conv_B_n); \
  \
 	if(fd_data == NULL) \
 		fd_data = g_malloc((return_full ? N : N_out) * sizeof(long complex double)); \
@@ -1240,10 +1250,7 @@ LONG complex DTYPE *gstlal_prime_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, gui
  \
 	/* Done */ \
 	g_free(A_n_conv_B_n); \
-	g_free(A_n); \
 	g_free(b_n); \
-	g_free(B_n); \
-	g_free(A_n_fft); \
 	g_free(B_n_fft); \
 	g_free(A_n_conv_B_n); \
 	g_free(conj_exp_array); \
@@ -1321,13 +1328,13 @@ LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, gu
 	long complex double *A_n_conv_B_n = g_malloc0(M * sizeof(long complex double)); \
 	long complex double *conj_exp_array = conj_array_longdouble(exp_array, M); \
 	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, A_n_fft); \
-	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, B_n_fft); \
+	gstlal_fft_longdouble(B_n, M, prime_factors, num_factors, exp_array, FALSE, 0, NULL, 0, NULL, NULL, B_n_fft); \
  \
 	guint i; \
 	for(i = 0; i < M; i++) \
 		A_n_fft[i] *= B_n_fft[i]; \
  \
-	gstlal_fft_longdouble(A_n, M, prime_factors, num_factors, conj_exp_array, TRUE, 0, NULL, 0, NULL, NULL, A_n_conv_B_n); \
+	gstlal_fft_longdouble(A_n_fft, M, prime_factors, num_factors, conj_exp_array, TRUE, 0, NULL, 0, NULL, NULL, A_n_conv_B_n); \
  \
 	if(td_data == NULL) \
 		td_data = g_malloc(*N * sizeof(long double)); \
@@ -1342,10 +1349,7 @@ LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, gu
  \
 	/* Done */ \
 	g_free(A_n_conv_B_n); \
-	g_free(A_n); \
 	g_free(b_n); \
-	g_free(B_n); \
-	g_free(A_n_fft); \
 	g_free(B_n_fft); \
 	g_free(A_n_conv_B_n); \
 	g_free(conj_exp_array); \
