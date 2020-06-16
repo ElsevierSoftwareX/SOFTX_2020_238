@@ -19,14 +19,11 @@
 
 
 import argparse
-import json
 import logging
-from multiprocessing import Pool
 import sys, os
 import time
 import timeit
 import StringIO
-import numpy
 import threading 
 from gstlal import bottle
 import socket
@@ -34,13 +31,13 @@ import base64
 import uuid
 import shutil
 
-#from ligo.scald import io
 from gstlal import far
 from gstlal import httpinterface
 from gstlal import servicediscovery
 from ligo import lw
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
+from ligo.scald.io import kafka
 
 
 def service_domain(gracedb_search, gracedb_pipeline):
@@ -138,42 +135,19 @@ class ZeroLagCounts(object):
 			ligolw_utils.write_url(self.__get_zerolag_rankingstatpdf_xmldoc(zlpdf), fname, gz = fname.endswith(".gz"), verbose = verbose, trap_signals = None)
 
 
-
-def retrieve_triggers(consumer, jobs, route_name = 'coinc', timeout = 1000, max_records = 1000):
-	"""!
-	A function to pull triggers from kafka for a set of jobs (topics) and
-	route_name (key in the incoming json messages)
-	"""
-	triggers = []
-	
-	### retrieve timeseries for all routes and topics
-	msg_pack = consumer.poll(timeout_ms = timeout, max_records = max_records)
-	for tp, messages in msg_pack.items():
-		for message in messages:
-			try:
-				triggers.extend(message.value)
-			except KeyError: ### no route in message
-				pass
-	
-	return triggers
-
 # Read command line options
 def parse_command_line():
 
 	parser = argparse.ArgumentParser(description="Online trigger counter")
 
 	# directory to put everything in
-	parser.add_argument("--job-start", type=int, help="job id to start aggregating from")
-	parser.add_argument("--route", action="store", default="coinc", help="Specify the route where triggers are stored in.")
+	parser.add_argument("--topic", default="triggers", help="Specify the topic where triggers are located.")
 	parser.add_argument("--output-period", type = float, default = 3600., help = "Wait this many seconds between writing the output file (default = 3600)")
-	parser.add_argument("--num-jobs", action="store", type=int, default=10, help="number of running jobs")
-	parser.add_argument("--job-tag", help = "Collect URLs for jobs reporting this job tag (default = collect all gstlal_inspiral URLs).")
-	parser.add_argument("--num-threads", type = int, default = 16, help = "Number of threads to use concurrently, default 16.")
-	parser.add_argument("--kafka-server", action="store", help="Specify kakfa server to read data from, example: 10.14.0.112:9092")
+	parser.add_argument("-u", "--uri", default="kafka://localhost:9092", help="specify Kafka URI to read metrics from. default = kafka://localhost:9092.")
 	parser.add_argument("--output", default="zerolag_rankingstatpdf.xml.gz", help = "Choose the output file. Default zerolag_rankingstatpdf.xml.gz")
 	parser.add_argument("--gracedb-pipeline", default = "gstlal", help = "Name of pipeline to provide in GracedB uploads (default is gstlal).")
 	parser.add_argument("--gracedb-search", default = "LowMass", help = "Name of search to provide in GracedB uploads (default is LowMass).")
-	parser.add_argument("-v","--verbose", default=False, action="store_true", help = "Print to stdout in addition to writing to automatically generated log.")
+	parser.add_argument("-v", "--verbose", default=False, action="store_true", help = "Be verbose.")
 
 	args = parser.parse_args()
 
@@ -213,49 +187,25 @@ if __name__ == '__main__':
 	open("gstlal_ll_inspiral_trigger_counter_registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
 
-	# FIXME don't hardcode some of these?
-	jobs = ["%04d" % b for b in numpy.arange(options.job_start, options.job_start + options.num_jobs)]
-
+	# set up logging
 	log_level = logging.DEBUG if options.verbose else logging.INFO
 	logging.basicConfig(format = '%(asctime)s | gstlal_ll_inspiral_trigger_counter : %(levelname)s : %(message)s')
 	logging.getLogger().setLevel(log_level)
 
-	pool = Pool(options.num_threads)
-
-	# We instantiate multiple consumers (based on --num-threads) to subscribe to all of our topics, i.e., jobs
-	if options.kafka_server:
-		from kafka import KafkaConsumer
-		consumer = KafkaConsumer(
-			options.route,
-			bootstrap_servers=[options.kafka_server],
-			key_deserializer=lambda m: json.loads(m.decode('utf-8')),
-			value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-			group_id='%s_trigger_counter' % jobs[0],
-			auto_offset_reset='latest',
-			max_poll_interval_ms = 60000,
-			session_timeout_ms=30000,
-			heartbeat_interval_ms=10000,
-			reconnect_backoff_ms=5000,
-			reconnect_backoff_max_ms=30000
-		)
-	else:
-		consumer = None
+	# instantiate a consumer to subscribe to all of our topics, i.e., jobs
+	client = kafka.Client(options.uri)
+	client.subscribe(options.topic)
 
 	# start an infinite loop to keep updating and aggregating data
 	logging.info("starting up...")
 	while True:
 
-		if consumer:
-			# this is not threadsafe!
-			logging.debug("retrieving data from kafka")
-			start = timeit.default_timer()
-			triggers = retrieve_triggers(consumer, jobs, route_name = options.route, max_records = 2 * len(jobs))
-			elapsed = timeit.default_timer() - start
-			logging.debug("time to retrieve data: %.1f s" % elapsed)
-		else:
-			logging.debug("retrieving data from bottle routes")
-			triggers = io.http.retrieve_triggers(options.base_dir, jobs, options.job_tag, route_name = options.route, num_threads=options.num_threads)
-
+		logging.debug("retrieving data from kafka")
+		start = timeit.default_timer()
+		msgs = [msg for msg in client.query(max_messages=2000)]
+		triggers = kafka.parse_triggers(msgs)
+		elapsed = timeit.default_timer() - start
+		logging.debug("time to retrieve data: %.1f s" % elapsed)
 
 		# store and reduce data for each job
 		if triggers:
@@ -265,7 +215,7 @@ if __name__ == '__main__':
 			num = ZLC.add_coincs(triggers)
 
 			elapsed = timeit.default_timer() - start
-			logging.debug("time to store/reduce %d triggers: %.1f s" % (num, elapsed))
+			logging.debug("time to add %d triggers: %.1f s" % (num, elapsed))
 		else:
 			logging.debug("no triggers to process")
 
@@ -274,10 +224,9 @@ if __name__ == '__main__':
 			ZLC.snapshot_output_url(options.output, verbose = True)
 			time_since_last = time.time()
 
-	# close connection to consumer if using kafka
-	if consumer:
-		logging.info("shutting down consumer...")
-		consumer.close()
+	# close connection to client
+	logging.info("shutting down client...")
+	client.close()
 
 	#
 	# always end on an error so that condor won't think we're done and will

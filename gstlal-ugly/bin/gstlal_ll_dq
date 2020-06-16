@@ -29,6 +29,7 @@ import sys
 import h5py
 import numpy
 from scipy import signal
+import yaml
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -59,18 +60,10 @@ def parse_command_line():
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--sample-rate", metavar = "Hz", default = 4096, type = "int", help = "Sample rate at which to generate the PSD, default 16384 Hz")
 	parser.add_option("--psd-fft-length", metavar = "s", default = 16, type = "int", help = "FFT length, default 8s")
+	parser.add_option("--scald-config", metavar = "path", help = "sets ligo-scald options based on yaml configuration.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
-	parser.add_option("--num-threads", type = int, default = 2, help = "Number of threads to use concurrently, default 2.")
-	parser.add_option("--data-backend", default="hdf5", help = "Choose the backend for data to be stored into, options: [hdf5|influx]. default = hdf5.")
-	parser.add_option("--influx-hostname", help = "Specify the hostname for the influxDB database. Required if --data-backend = influx.")
-	parser.add_option("--influx-port", help = "Specify the port for the influxDB database. Required if --data-backend = influx.")
-	parser.add_option("--influx-database-name", help = "Specify the database name for the influxDB database. Required if --data-backend = influx.")
-	parser.add_option("--enable-auth", action = "store_true", default=False, help = "If set, enables authentication for the influx aggregator.")
-	parser.add_option("--enable-https", action = "store_true", default=False, help = "If set, enables HTTPS connections for the influx aggregator.")
 
 	options, filenames = parser.parse_args()
-
-	assert options.data_backend in ('hdf5', 'influx'), '--data-backend must be one of [hdf5|influx]'
 
 	return options, filenames
 
@@ -179,14 +172,12 @@ if __name__ == '__main__':
 	logging.basicConfig(level = log_level, format = "%(asctime)s %(levelname)s:%(processName)s(%(process)d):%(funcName)s: %(message)s")
 
 	# set up aggregator sink
-	if options.data_backend == 'influx':
-		agg_sink = influx.Aggregator(hostname=options.influx_hostname, port=options.influx_port, db=options.influx_database_name, auth=options.enable_auth, https=options.enable_https)
-	else: ### hdf5 data backend
-		agg_sink = hdf5.Aggregator(rootdir=options.out_path, num_processes=options.num_threads)
+	with open(options.scald_config, 'r') as f:
+		agg_config = yaml.safe_load(f)
+	agg_sink = influx.Aggregator(**agg_config["backends"]["default"])
 
 	# register measurement schemas for aggregators
-	for route in ('noise', 'range_history'):
-		agg_sink.register_schema(route, columns='data', column_key='data', tags='job', tag_key='job')
+	agg_sink.load(path=options.scald_config)
 
 	# parse the generic "source" options, check for inconsistencies is done inside
 	# the class init method
