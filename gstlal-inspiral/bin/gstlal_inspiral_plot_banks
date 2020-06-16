@@ -134,6 +134,7 @@ def plot_template_bank(filename_template, sngl_inspiral_table):
 
 		fig, axes = create_plot(ax1, ax2, aspect = aspect)
 		mrkr, markersize = marker_and_size(len(col1))
+		print(mrkr, markersize)
 		axes.loglog(col1,col2, mrkr, markersize = markersize)
 		axes.set_xlim(min(col1), max(col1))
 		axes.set_ylim(min(col2), max(col2))
