@@ -518,13 +518,11 @@ class GracedBWrapper(object):
 
 		# set up kafka producer
 		if kafka_server is not None:
-			from kafka import KafkaProducer
-			self.producer = KafkaProducer(
-				bootstrap_servers=[kafka_server],
-				value_serializer=lambda m: json.dumps(m).encode('utf-8'),
-			)
+			from ligo.scald.io import kafka
+			self.client = kafka.Client("kafka://{}".format(kafka_server))
+			self.client.subscribe(["events", "ranking_stat"])
 		else:
-			self.producer = None
+			self.client = None
 
 	@property
 	def far_threshold(self):
@@ -859,12 +857,12 @@ class GracedBWrapper(object):
 			)
 
 			# send event data to kafka
-			if self.producer:
+			if self.client:
 				psd_fobj = io.StringIO()
 				ligolw_utils.write_fileobj(lalseries.make_psd_xmldoc(psddict), psd_fobj, gz = False)
-				self.producer.send(
+				self.client.write(
 					"events",
-					value = {
+					{
 						"far": coinc_inspiral_index[coinc_event.coinc_event_id].combined_far,
 						"snr": coinc_inspiral_index[coinc_event.coinc_event_id].snr,
 						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
@@ -880,9 +878,9 @@ class GracedBWrapper(object):
 				with open(rankingstat_filename, "w") as fileobj:
 					ligolw_utils.write_fileobj(rankingstat_xmldoc_func(), fileobj, gz = True)
 
-				self.producer.send(
+				self.client.write(
 					"ranking_stat",
-					value = {
+					{
 						"ranking_data_path": os.path.realpath(rankingstat_filename),
 						"time": coinc_inspiral_index[coinc_event.coinc_event_id].end_time,
 						"time_ns": coinc_inspiral_index[coinc_event.coinc_event_id].end_time_ns,

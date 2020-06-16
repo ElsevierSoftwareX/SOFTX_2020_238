@@ -175,18 +175,25 @@ class EyeCandy(object):
 		bottle.route("/ram_history.txt")(self.web_get_ram_history)
 
 		#
-		# Setup kafka producer
+		# Setup kafka client
 		#
 
 		if self.kafka_server is not None:
-			from kafka import KafkaProducer
-			self.producer = KafkaProducer(
-				bootstrap_servers=[self.kafka_server],
-				key_serializer=lambda m: json.dumps(m).encode('utf-8'),
-				value_serializer=lambda m: json.dumps(m).encode('utf-8'),
-			)
+			from ligo.scald.io import kafka
+
+			snr_routes = ["%s_snr_history" % ifo for ifo in instruments]
+			network_routes = ["likelihood_history", "snr_history", "latency_history"]
+			state_routes = ["%s_strain_dropped" % ifo for ifo in instruments]
+			usage_routes = ["ram_history"]
+			gates = ["%ssegments" % gate for gate in ("statevector", "dqvector", "whiteht")]
+			seg_routes = ["%s_%s" % (ifo, gate) for ifo in instruments for gate in gates]
+
+			topics = list(itertools.chain(snr_routes, network_routes, usage_routes, state_routes, seg_routes))
+
+			self.client = kafka.Client("kafka://{}".format(self.kafka_server))
+			self.client.subscribe(topics)
 		else:
-			self.producer = None
+			self.client = None
 
 		# FIXME, it is silly to store kafka data like this since we
 		# have all the other data structures, but since we are also
@@ -267,7 +274,7 @@ class EyeCandy(object):
 			self.time_since_last_state = t
 
 		# send state/segment information to kafka every second
-		if self.producer is not None and (t - self.time_since_last_state) >= 1:
+		if self.client is not None and (t - self.time_since_last_state) >= 1:
 			self.time_since_last_state = t
 			for ii, column in enumerate(["time", "data"]):
 				self.kafka_data["ram_history"][column].append(float(self.ram_history[-1][ii]))
@@ -304,7 +311,7 @@ class EyeCandy(object):
 			# Send all of the kafka messages and clear the data
 			#self.producer.send(self.tag, self.kafka_data)
 			for route in self.kafka_data.keys():
-				self.producer.send(route, key=self.tag, value=self.kafka_data[route])
+				self.client.write(route, self.kafka_data[route], tags=self.tag)
 			# This line forces the send but is blocking!! not the
 			# best idea for production running since we value
 			# latency over getting metric data out
