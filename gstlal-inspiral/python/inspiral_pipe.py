@@ -251,26 +251,10 @@ def event_plotter_layer(dag, jobs, options):
 def aggregator_layer(dag, jobs, options, job_tags):
 	# set up common settings for aggregation jobs
 	agg_options = {
-		"dump-period": 0,
-		"base-dir": "aggregator",
-		"job-tag": os.getcwd(),
-		"num-jobs": len(job_tags),
-		"num-threads": 2,
-		"job-start": 0,
-		"kafka-server": options.output_kafka_server,
-		"data-backend": options.agg_data_backend,
+		"config": options.scald_config,
+		"data-type": "timeseries",
+		"uri": "kafka://{}@{}".format(options.analysis_tag, options.output_kafka_server),
 	}
-
-	if options.agg_data_backend == 'influx':
-		agg_options.update({
-			"influx-database-name": options.influx_database_name,
-			"influx-hostname": options.influx_hostname,
-			"influx-port": options.influx_port,
-		})
-		if options.enable_auth:
-			agg_options.update({"enable-auth": ""})
-		if options.enable_https:
-			agg_options.update({"enable-https": ""})
 
 	# define routes used for aggregation jobs
 	snr_routes = ["%s_snr_history" % ifo for ifo in options.channel_dict]
@@ -286,76 +270,50 @@ def aggregator_layer(dag, jobs, options, job_tags):
 	# analysis-based aggregation jobs
 	# FIXME don't hard code the 1000
 	max_agg_jobs = 1000
-	agg_job_bounds = list(range(0, len(job_tags), max_agg_jobs)) + [max_agg_jobs]
+	agg_job_bounds = list(range(0, len(job_tags), max_agg_jobs))
 	agg_routes = list(dagparts.groups(agg_routes, max(max_agg_jobs // (4 * len(job_tags)), 1))) + ["far_history"]
 	for routes in agg_routes:
 		these_options = dict(agg_options)
-		these_options["route"] = routes
-		if routes == "far_history":
-			these_options["data-type"] = "min"
-		else:
-			these_options["data-type"] = "max"
+		these_options["topic"] = routes
 
-		for ii, (aggstart, aggend) in enumerate(zip(agg_job_bounds[:-1], agg_job_bounds[1:])):
-			these_options["job-start"] = aggstart
-			these_options["num-jobs"] = aggend - aggstart
+		for ii, _ in enumerate(agg_job_bounds):
 			if ii == 0: ### elect first aggregator per route as leader
 				these_options["across-jobs"] = ""
-				aggNode = dagparts.DAGNode(jobs['aggLeader'], dag, [], opts = these_options)
+				aggNode = dagparts.DAGNode(jobs['aggLeader'], dag, [], input_files = {"": "aggregate"}, opts = these_options)
 			else:
-				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], opts = these_options)
+				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], input_files = {"": "aggregate"}, opts = these_options)
 
 	# segment-based jobs
 	seg_routes = list(dagparts.groups(seg_routes, max(max_agg_jobs // (4 * len(job_tags)), 1)))
 	for routes in seg_routes:
 		these_options = dict(agg_options)
-		these_options["route"] = routes
-		these_options["data-type"] = "min"
+		these_options["topic"] = routes
 
-		for ii, (aggstart, aggend) in enumerate(zip(agg_job_bounds[:-1], agg_job_bounds[1:])):
-			these_options["job-start"] = aggstart
-			these_options["num-jobs"] = aggend - aggstart
+		for ii, _ in enumerate(agg_job_bounds):
 			if ii == 0: ### elect first aggregator per route as leader
 				these_options["across-jobs"] = ""
-				aggNode = dagparts.DAGNode(jobs['aggLeader'], dag, [], opts = these_options)
+				aggNode = dagparts.DAGNode(jobs['aggLeader'], dag, [], input_files = {"": "aggregate"}, opts = these_options)
 			else:
-				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], opts = these_options)
+				aggNode = dagparts.DAGNode(jobs['agg'], dag, [], input_files = {"": "aggregate"}, opts = these_options)
 
 	# Trigger counting
 	trigcount_options = {
-		"output-period": 300,
-		"num-jobs": len(job_tags),
-		"num-threads": 2,
-		"job-start": 0,
-		"kafka-server": options.output_kafka_server,
+		"uri": "kafka://{}@{}".format(options.analysis_tag, options.output_kafka_server),
 		"gracedb-search": options.gracedb_search,
 		"gracedb-pipeline": options.gracedb_pipeline,
+		"output-period": 300,
 	}
 	dagparts.DAGNode(jobs['trigcount'], dag, [], opts = trigcount_options)
 
 	# Trigger aggregation
 	trigagg_options = {
-		"dump-period": 0,
-		"base-dir": "aggregator",
-		"job-tag": os.getcwd(),
-		"num-jobs": len(job_tags),
-		"num-threads": 2,
-		"job-start": 0,
-		"kafka-server": options.output_kafka_server,
-		"data-backend": options.agg_data_backend,
+		"config": options.scald_config,
+		"data-type": "triggers",
+		"topic": "coinc",
+		"uri": "kafka://{}@{}".format(options.analysis_tag, options.output_kafka_server),
 	}
-	if options.agg_data_backend == 'influx':
-		trigagg_options.update({
-			"influx-database-name": options.influx_database_name,
-			"influx-hostname": options.influx_hostname,
-			"influx-port": options.influx_port,
-		})
-		if options.enable_auth:
-			trigagg_options.update({"enable-auth": ""})
-		if options.enable_https:
-			trigagg_options.update({"enable-https": ""})
 
-	return dagparts.DAGNode(jobs['trigagg'], dag, [], opts = trigagg_options)
+	return dagparts.DAGNode(jobs['trigagg'], dag, [], input_files = {"": "aggregate"}, opts = trigagg_options)
 
 
 def dq_monitor_layer(dag, jobs, options):
@@ -386,21 +344,10 @@ def dq_monitor_layer(dag, jobs, options):
 			"dq-vector-on-bits": options.dq_vector_on_bits,
 			"dq-vector-off-bits": options.dq_vector_off_bits,
 			"data-source": options.data_source,
+			"scald-config": options.scald_config,
 			"out-path": outpath,
-			"data-backend": options.agg_data_backend,
 		}
 		common_opts.update(datasource_opts)
-
-		if options.agg_data_backend == 'influx':
-			common_opts.update({
-				"influx-database-name": options.influx_database_name,
-				"influx-hostname": options.influx_hostname,
-				"influx-port": options.influx_port,
-			})
-			if options.enable_auth:
-				common_opts.update({"enable-auth": ""})
-			if options.enable_https:
-				common_opts.update({"enable-https": ""})
 
 		ll_dq_jobs.append(dagparts.DAGNode(jobs['dq'], dag, [], opts = common_opts))
 
