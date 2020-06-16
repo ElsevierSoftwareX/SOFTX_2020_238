@@ -754,6 +754,8 @@ class CondorJob(object):
 
     if list(self.__options.keys()) or list(self.__short_options.keys()) or self.__arguments:
       subfile.write( 'arguments = "' )
+      for c in self.__arguments:
+        subfile.write( ' ' + c )
       for c in self.__options.keys():
         if self.__options[c]:
           subfile.write( ' --' + c + ' ' + self.__options[c] )
@@ -764,8 +766,6 @@ class CondorJob(object):
           subfile.write( ' -' + c + ' ' + self.__short_options[c] )
         else:
           subfile.write( ' -' + c )
-      for c in self.__arguments:
-        subfile.write( ' ' + c )
       subfile.write( ' "\n' )
 
     for cmd in self.__condor_cmds.keys():
@@ -1499,11 +1499,26 @@ class CondorDAGNode(object):
     pat = re.compile(r'\$\((.+)\)')
     argpat = re.compile(r'\d+')
 
-    # first parse the options and replace macros with values
-    options = self.job().get_opts()
-    macros = self.get_opts()
+    # first parse the arguments and replace macros with values
+    args = self.job().get_args()
+    macros = self.get_args()
 
     cmd_list = []
+
+    for a in args:
+      m = pat.search(a)
+      if m:
+        arg_index = int(argpat.findall(a)[0])
+        try:
+          cmd_list.append(("%s" % macros[arg_index], ""))
+        except IndexError:
+          cmd_list.append("")
+      else:
+        cmd_list.append(("%s" % a, ""))
+
+    # second parse the options and replace macros with values
+    options = self.job().get_opts()
+    macros = self.get_opts()
 
     for k in options:
       val = options[k]
@@ -1516,7 +1531,7 @@ class CondorDAGNode(object):
       else:
         cmd_list.append(("--%s" % k, str(val)))
 
-    # second parse the short options and replace macros with values
+    # lastly parse the short options and replace macros with values
     options = self.job().get_short_opts()
 
     for k in options:
@@ -1529,21 +1544,6 @@ class CondorDAGNode(object):
         cmd_list.append(("-%s" % k, str(value)))
       else:
         cmd_list.append(("-%s" % k, str(val)))
-
-    # lastly parse the arguments and replace macros with values
-    args = self.job().get_args()
-    macros = self.get_args()
-
-    for a in args:
-      m = pat.search(a)
-      if m:
-        arg_index = int(argpat.findall(a)[0])
-        try:
-          cmd_list.append(("%s" % macros[arg_index], ""))
-        except IndexError:
-          cmd_list.append("")
-      else:
-        cmd_list.append(("%s" % a, ""))
 
     return cmd_list
 
