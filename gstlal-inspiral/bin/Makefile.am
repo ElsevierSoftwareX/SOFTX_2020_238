@@ -62,7 +62,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_combine_injection_sets \
 	gstlal_inspiral_svd_bank \
 	gstlal_inspiral_svd_bank_pipe \
-	gstlal_ll_inspiral_aggregator \
 	gstlal_ll_inspiral_calculate_range \
 	gstlal_ll_inspiral_daily_page \
 	gstlal_ll_inspiral_daily_page_online \
@@ -74,7 +73,6 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_pipe \
 	gstlal_ll_inspiral_plot_sensitivity \
 	gstlal_ll_inspiral_save_state \
-	gstlal_ll_inspiral_trigger_aggregator \
 	gstlal_ll_inspiral_trigger_counter \
 	gstlal_inspiral_summary_page \
 	gstlal_inspiral_summary_page_lite \
