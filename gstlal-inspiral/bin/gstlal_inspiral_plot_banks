@@ -110,7 +110,7 @@ def marker_and_size(n):
 	if n > 2000:
 		return "ko", (10000.0 / n)**0.7
 	else:
-		return "k.", None
+		return "k.", 5.
 
 def create_plot(x_label = None, y_label = None, width = 165.0, aspect = golden_ratio):
 	fig = matplotlib.figure.Figure()
