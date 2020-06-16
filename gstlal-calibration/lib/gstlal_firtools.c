@@ -43,10 +43,9 @@
 LONGOUT COMPLEX DTYPEOUT *typecast_ ## LONGIN ## COMPLEX ## DTYPEIN ## _to_ ## LONGOUT ## COMPLEX ## DTYPEOUT(LONGIN COMPLEX DTYPEIN *data, guint N) { \
  \
 	COMPLEX LONGOUT DTYPEOUT *outdata = g_malloc(N * sizeof(LONGOUT COMPLEX DTYPEOUT)); \
-	COMPLEX LONGOUT DTYPEOUT *ptr, *end; \
-	end = outdata + N * sizeof(LONGOUT COMPLEX DTYPEOUT); \
-	for(ptr = outdata; ptr < end; ptr++, data++) \
-		*ptr = (LONGOUT COMPLEX DTYPEOUT) *data; \
+	guint i; \
+	for(i = 0; i < N; i++) \
+		outdata[i] = (LONGOUT COMPLEX DTYPEOUT) data[i]; \
  \
 	g_free(data); \
  \
@@ -1774,8 +1773,8 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	 * Estimate how long each process should take.  This is based on data taken from
 	 * ldas-pcdev5 on the LHO cluster in June 2020.
 	 */ \
-	double seconds_per_iteration_double = 4.775e-10 * N * N + 1.858e-6 * N; \
-	double seconds_per_iteration_longdouble = 1.296e-9 * N * N + 5.064e-6 * N; \
+	double seconds_per_iteration_double = 2.861e-10 * N * N - 9.134e-9 * N; \
+	double seconds_per_iteration_longdouble = 9.422e-10 * N * N + 2.403e-9 * N; \
  \
 	guint double_iterations = (guint) (max_time / 2.0 / seconds_per_iteration_double); \
 	guint longdouble_iterations = (guint) (max_time / 2.0 / seconds_per_iteration_longdouble); \
@@ -1802,7 +1801,7 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	 * Note that kaiser() takes beta = pi * alpha as an argument.  Due to symmetry, we need to
 	 * use only half of the window.
 	 */ \
-	double *dpss = (double *) kaiser_double(N, (double) (PI * alpha), NULL); \
+	double *dpss = kaiser_double(N, (double) (PI * alpha), NULL); \
  \
 	/*
 	 * Now use power iteration to get our approximation closer to the true DPSS window.  This
