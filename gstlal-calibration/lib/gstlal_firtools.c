@@ -79,7 +79,7 @@ LONG COMPLEX DTYPE sum_array_ ## LONG ## COMPLEX ## DTYPE(LONG COMPLEX DTYPE *ar
 	LONG COMPLEX DTYPE sum = 0.0; \
 	LONG COMPLEX DTYPE *ptr, *end = array + N; \
 	for(ptr = array; ptr < end; ptr += cadence) \
-		sum += *array; \
+		sum += *ptr; \
  \
 	return sum; \
 }
@@ -1381,10 +1381,12 @@ LONG COMPLEX double *rand_array ## LONG ## COMPLEX(guint N) { \
 	time_t t; \
 	srand((unsigned) time(&t)); \
 	for(i = 0; i < N; i++) \
-		array[i] += (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
+		array[i] += (rand() - RAND_MAX / 2.0) / RAND_MAX; \
+		/* * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); */ \
 	if(sizeof(COMPLEX double) > 8) { \
 		for(i = 0; i < N; i++) \
-			array[i] += I * (rand() - RAND_MAX / 2.0) / RAND_MAX * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); \
+			array[i] += I * (rand() - RAND_MAX / 2.0) / RAND_MAX; \
+			/* * pow(10.0, (rand() - RAND_MAX / 2.0) * 5.0 / RAND_MAX); */ \
 	} \
 	return array; \
 }
@@ -1859,11 +1861,12 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
  \
 	if(data != NULL) { \
 		for(i = 0; i < N; i++) \
-			full_dpss[i] *= data[i]; \
-		g_free(data); \
-	} \
+			data[i] *= full_dpss[i]; \
+		g_free(full_dpss); \
+		return data; \
  \
-	return full_dpss; \
+	} else \
+		return full_dpss; \
 }
 
 
@@ -1912,11 +1915,11 @@ LONG DTYPE *kaiser_ ## LONG ## DTYPE(guint N, double beta, LONG DTYPE *data) { \
  \
 	if(data != NULL) { \
 		for(i = 0; i < N; i++) \
-			kwin[i] *= data[i]; \
-		g_free(data); \
-	} \
- \
-	return kwin; \
+			data[i] *= kwin[i]; \
+		g_free(kwin); \
+		return data; \
+	} else \
+		return kwin; \
 }
 
 
@@ -1982,11 +1985,12 @@ LONG DTYPE *DolphChebyshev_ ## LONG ## DTYPE(guint N, double alpha, LONG DTYPE *
  \
 	if(data != NULL) { \
 		for(i = 0; i < N; i++) \
-			dcwin[i] *= data[i]; \
-		g_free(data); \
-	} \
+			data[i] *= dcwin[i]; \
+		g_free(dcwin); \
+		return data; \
  \
-	return dcwin; \
+	} else \
+		return dcwin; \
 }
 
 
