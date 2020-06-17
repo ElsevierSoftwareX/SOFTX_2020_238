@@ -268,29 +268,29 @@ complex double *mat_times_vec_complexdouble(complex double *mat, guint N, comple
 
 long complex double *mat_times_vec_longcomplexdouble(long complex double *mat, guint N, long complex double *vec, guint n);
 
-float *dpss_float(guint N, double alpha, double max_time, float *data);
+float *dpss_float(guint N, double alpha, double max_time, float *data, gboolean half_window);
 
-double *dpss_double(guint N, double alpha, double max_time, double *data);
+double *dpss_double(guint N, double alpha, double max_time, double *data, gboolean half_window);
 
-long double *dpss_longdouble(guint N, double alpha, double max_time, long double *data);
+long double *dpss_longdouble(guint N, double alpha, double max_time, long double *data, gboolean half_window);
 
 long double I0(long double x, long double *factorials_inv2);
 
-float *kaiser_float(guint N, double beta, float *data);
+float *kaiser_float(guint N, double beta, float *data, gboolean half_window);
 
-double *kaiser_double(guint N, double beta, double *data);
+double *kaiser_double(guint N, double beta, double *data, gboolean half_window);
 
-long double *kaiser_longdouble(guint N, double beta, long double *data);
+long double *kaiser_longdouble(guint N, double beta, long double *data, gboolean half_window);
 
 long double compute_Tn(long double x, guint n);
 
 long complex double *compute_W0_lagged(guint N, double alpha);
 
-float *DolphChebyshev_float(guint N, double alpha, float *data);
+float *DolphChebyshev_float(guint N, double alpha, float *data, gboolean half_window);
 
-double *DolphChebyshev_double(guint N, double alpha, double *data);
+double *DolphChebyshev_double(guint N, double alpha, double *data, gboolean half_window);
 
-long double *DolphChebyshev_longdouble(guint N, double alpha, long double *data);
+long double *DolphChebyshev_longdouble(guint N, double alpha, long double *data, gboolean half_window);
 
 float *fir_resample_float(float *data, guint N_in, guint N_out);
 

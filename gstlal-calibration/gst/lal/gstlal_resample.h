@@ -37,6 +37,32 @@
 
 
 G_BEGIN_DECLS
+
+
+/*
+ * gstlal_resample_window_type enum
+ */
+
+
+enum gstlal_resample_window_type {
+	GSTLAL_RESAMPLE_DPSS = 0,
+	GSTLAL_RESAMPLE_KAISER,
+	GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV
+};
+
+
+#define GSTLAL_RESAMPLE_WINDOW_TYPE  \
+	(gstlal_resample_window_get_type())
+
+
+GType gstlal_resample_window_get_type(void);
+
+
+/*
+ * lal_resample element
+ */
+
+
 #define GSTLAL_RESAMPLE_TYPE \
 	(gstlal_resample_get_type())
 #define GSTLAL_RESAMPLE(obj) \
@@ -86,6 +112,7 @@ struct _GSTLALResample {
 	/* properties */
 	guint quality;
 	gboolean zero_latency;
+	enum gstlal_resample_window_type window;
 
 	/* filter */
 	double complex dxdt0;

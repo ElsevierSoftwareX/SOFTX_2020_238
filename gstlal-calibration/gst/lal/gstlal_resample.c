@@ -53,11 +53,45 @@
 
 
 #include <gstlal/gstlal.h>
+#include <gstlal-calibration/gstlal_firtools.h>
 #include <gstlal_resample.h>
 
 
 #define SHORT_SINC_LENGTH 33
 #define LONG_SINC_LENGTH 193
+
+
+/*
+ * ============================================================================
+ *
+ *				Custom Types
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * PSD mode enum
+ */
+
+
+GType gstlal_resample_window_get_type(void) {
+
+	static GType type = 0;
+
+	if(!type) {
+		static GEnumValue values[] = {
+			{GSTLAL_RESAMPLE_DPSS, "GSTLAL_RESAMPLE_DPSS", "Maximize energy concentration in main lobe"},
+			{GSTLAL_RESAMPLE_KAISER, "GSTLAL_RESAMPLE_KAISER", "Simple approximtion to DPSS window"},
+			{GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV, "GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("GSTLAL_RESAMPLE_WINDOW", values);
+	}
+
+	return type;
+}
 
 
 /*
@@ -1050,11 +1084,10 @@ static void prepare_element(GSTLALResample *element) {
 		 * In this case, we are filtering inputs with a sinc table and then downsampling.
 		 * max_end_samples is the maximum number of samples that could need to be stored
 		 * between buffers. It is one less than the length of the sinc table in samples.
-		 * The sinc table is tapered at the ends using a Hann window to the third power.
-		 * The cut-off frequency is also slightly below the Nyquist frequency in order to
-		 * minimize aliasing. Given the parameter choices here, input signals are
-		 * attenuated by a factor < 1% at the Nyquist frequency, regardless of the length
-		 * of the sinc filter.
+		 * The sinc table is tapered at the ends using a DPSS window, a Kaiser window, or
+		 * a Dolph-Chebyshev window, depending on the choice of the user. The cutoff
+		 * frequency is below the Nyquist frequency by half the width of the main lobe of
+		 * the window function, in order to minimize aliasing.
 		 */
 		int sinc_length_at_low_rate = (int) (element->quality == 4) * SHORT_SINC_LENGTH + (int) (element->quality == 5) * LONG_SINC_LENGTH;
 		element->max_end_samples = (((gint32) sinc_length_at_low_rate * inv_cadence) / 2) * 2;
@@ -1064,14 +1097,36 @@ static void prepare_element(GSTLALResample *element) {
 		/* index_end_samples records locations in end_samples of the next output sample and the newest sample in end_samples. */
 		element->index_end_samples = g_malloc(2 * sizeof(gint32));
 
-		/* To save memory, we use symmetry and only record half of the sinc table */
-		element->sinc_table = g_malloc((1 + element->max_end_samples / 2) * sizeof(double));
+		/* To save memory, we use symmetry and record only half of the sinc table */
+		element->sinc_length = element->max_end_samples + 1;
+		element->sinc_table = g_malloc((1 + element->sinc_length / 2) * sizeof(double));
 		*(element->sinc_table) = 1.0;
 		gint32 i;
 		double sin_arg;
-		for(i = 1; i <= element->max_end_samples / 2; i++) {
-			sin_arg = M_PI * i / inv_cadence / (1.0 + 4.825 / sinc_length_at_low_rate);
-			element->sinc_table[i] = pow(cos(M_PI * i / (element->max_end_samples * 1.15)), 6) * sin(sin_arg) / sin_arg;
+		/* Frequency resolution in units of frequency bins of the sinc table */ \
+		double alpha = (1 + sinc_length_at_low_rate / 24.0); \
+		/* Low-pass cutoff frequency as a fraction of the sampling frequency of the sinc table */ \
+		double f_cut = 0.5 / inv_cadence - alpha / element->sinc_length; \
+		for(i = 1; i <= element->sinc_length / 2; i++) {
+			sin_arg = 2 * M_PI * f_cut * i;
+			element->sinc_table[i] = sin(sin_arg) / sin_arg;
+		}
+
+		/* Apply a window function */
+		switch(element->window) {
+		case GSTLAL_RESAMPLE_DPSS:
+			dpss_double(element->sinc_length, M_PI * alpha, 5.0, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_KAISER:
+			kaiser_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV:
+			DolphChebyshev_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
+			break;
+		default:
+			GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+			g_assert_not_reached();
+			break;
 		}
 
 		/* normalize sinc_table to make the DC gain exactly 1 */
@@ -1090,12 +1145,15 @@ static void prepare_element(GSTLALResample *element) {
 		 * In this case, we are filtering inputs with a sinc table and upsampling.
 		 * max_end_samples is the maximum number of samples that could need to be stored
 		 * between buffers. It is slightly shorter than the length of the sinc table in time.
-		 * The sinc table is tapered at the ends using a Hann window to the third power.
-		 * To upsample, the inputs are shifted relative to the sinc filter by one sample
-		 * period of the upsampled rate for each consecutive output sample. This creates a
-		 * smooth data stream that contains the original frequency content without adding
-		 * additional frequency content due to imaging effects.
+		 * The sinc table is tapered at the ends using a DPSS window, a Kaiser window, or
+		 * a Dolph-Chebyshev window, depending on the choice of the user. The cutoff
+		 * frequency is below the Nyquist frequency by half the width of the main lobe of the
+		 * window function. To upsample, the inputs are shifted relative to the sinc filter
+		 * by one sample period of the upsampled rate for each consecutive output sample.
+		 * This creates a smooth data stream that contains the original frequency content
+		 * without adding additional frequency content due to imaging effects.
 		 */
+		int sinc_length_at_low_rate = (int) (element->quality == 4) * SHORT_SINC_LENGTH + (int) (element->quality == 5) * LONG_SINC_LENGTH;
 		element->max_end_samples = (gint32) (element->quality == 4) * SHORT_SINC_LENGTH + (gint32) (element->quality == 5) * LONG_SINC_LENGTH;
 		element->sinc_length = (gint32) (1 + element->max_end_samples * cadence);
 
@@ -1110,12 +1168,33 @@ static void prepare_element(GSTLALResample *element) {
 		*(element->sinc_table) = 1.0;
 		gint32 i, j;
 		double sin_arg;
+		/* Frequency resolution in units of frequency bins of the sinc table */ \
+		double alpha = (1 + sinc_length_at_low_rate / 24.0); \
+		/* Low-pass cutoff frequency as a fraction of the sampling frequency of the sinc table */ \
+		double f_cut = 0.5 / cadence - alpha / element->sinc_length; \
 		for(i = 1; i <= element->sinc_length / 2; i++) {
-			sin_arg = M_PI * i * element->rate_in / element->rate_out;
-			element->sinc_table[i] = pow(cos(M_PI * i / (element->sinc_length * 1.15)), 6) * sin(sin_arg) / sin_arg;
+			sin_arg = 2 * M_PI * f_cut * i;
+			element->sinc_table[i] = sin(sin_arg) / sin_arg;
 		}
 		/* Since sinc_table's length is one more than a multiple of cadence, we need to account for times when an extra input is being filtered */
 		element->sinc_table[element->sinc_length / 2] /= 2;
+
+		/* Apply a window function */
+		switch(element->window) {
+		case GSTLAL_RESAMPLE_DPSS:
+			dpss_double(element->sinc_length, M_PI * alpha, 5.0, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_KAISER:
+			kaiser_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV:
+			DolphChebyshev_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
+			break;
+		default:
+			GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+			g_assert_not_reached();
+			break;
+		}
 
 		/*
 		 * Normalize sinc_table to make the DC gain exactly 1. We need to account for the fact
@@ -1658,7 +1737,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 
 enum property {
 	ARG_QUALITY = 1,
-	ARG_ZERO_LATENCY
+	ARG_ZERO_LATENCY,
+	ARG_WINDOW
 };
 
 
@@ -1677,6 +1757,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	case ARG_ZERO_LATENCY:
 		element->zero_latency = g_value_get_boolean(value);
+		break;
+	case ARG_WINDOW:
+		element->window = g_value_get_enum(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1699,6 +1782,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_ZERO_LATENCY:
 		g_value_set_boolean(value, element->zero_latency);
+		break;
+	case ARG_WINDOW:
+		g_value_set_enum(value, element->window);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1804,6 +1890,18 @@ static void gstlal_resample_class_init(GSTLALResampleClass *klass) {
 			"If set to true, applies a timestamp shift in order to make the latency zero.\n\t\t\t"
 			"Default is false",
 			FALSE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_WINDOW,
+		g_param_spec_enum(
+			"window",
+			"Window Function",
+			"What window function to apply to the sinc table",
+			GSTLAL_RESAMPLE_WINDOW_TYPE,
+			GSTLAL_RESAMPLE_DPSS,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

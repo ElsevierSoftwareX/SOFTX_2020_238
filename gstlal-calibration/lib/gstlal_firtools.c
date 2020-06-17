@@ -1769,7 +1769,7 @@ MAT_TIMES_VEC(long, complex, double);
 
 
 #define DPSS(LONG, DTYPE) \
-LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG DTYPE *data) { \
+LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG DTYPE *data, gboolean half_window) { \
  \
 	/*
 	 * Estimate how long each process should take.  This is based on data taken from
@@ -1803,7 +1803,7 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	 * Note that kaiser() takes beta = pi * alpha as an argument.  Due to symmetry, we need to
 	 * use only half of the window.
 	 */ \
-	double *dpss = kaiser_double(N, (double) (PI * alpha), NULL); \
+	double *dpss = kaiser_double(N, (double) (PI * alpha), NULL, FALSE); \
  \
 	/*
 	 * Now use power iteration to get our approximation closer to the true DPSS window.  This
@@ -1859,14 +1859,15 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
  \
 	g_free(new_dpss); \
  \
+	guint start = half_window ? N / 2 : 0; \
 	if(data != NULL) { \
-		for(i = 0; i < N; i++) \
-			data[i] *= full_dpss[i]; \
+		for(i = 0; i < N - start; i++) \
+			data[i] *= full_dpss[start + i]; \
 		g_free(full_dpss); \
 		return data; \
  \
 	} else \
-		return full_dpss; \
+		return full_dpss + start; \
 }
 
 
@@ -1891,7 +1892,7 @@ long double I0(long double x, long double *factorials_inv2) {
 
 
 #define KAISER(LONG, DTYPE) \
-LONG DTYPE *kaiser_ ## LONG ## DTYPE(guint N, double beta, LONG DTYPE *data) { \
+LONG DTYPE *kaiser_ ## LONG ## DTYPE(guint N, double beta, LONG DTYPE *data, gboolean half_window) { \
  \
 	long double *factorials_inv2 = g_malloc(35 * sizeof(long double)); \
 	factorials_inv2[0] = 1.0L; \
@@ -1913,13 +1914,14 @@ LONG DTYPE *kaiser_ ## LONG ## DTYPE(guint N, double beta, LONG DTYPE *data) { \
 	else \
 		kwin = (LONG DTYPE *) win; \
  \
+	guint start = half_window ? N / 2 : 0; \
 	if(data != NULL) { \
-		for(i = 0; i < N; i++) \
-			data[i] *= kwin[i]; \
+		for(i = 0; i < N - start; i++) \
+			data[i] *= kwin[start + i]; \
 		g_free(kwin); \
 		return data; \
 	} else \
-		return kwin; \
+		return kwin + start; \
 }
 
 
@@ -1967,7 +1969,7 @@ long complex double *compute_W0_lagged(guint N, double alpha) {
 
 
 #define DOLPH_CHEBYSHEV(LONG, DTYPE) \
-LONG DTYPE *DolphChebyshev_ ## LONG ## DTYPE(guint N, double alpha, LONG DTYPE *data) { \
+LONG DTYPE *DolphChebyshev_ ## LONG ## DTYPE(guint N, double alpha, LONG DTYPE *data, gboolean half_window) { \
  \
 	guint n = N / 2 + 1; \
 	long complex double *W0 = compute_W0_lagged(N, alpha); \
@@ -1983,14 +1985,15 @@ LONG DTYPE *DolphChebyshev_ ## LONG ## DTYPE(guint N, double alpha, LONG DTYPE *
 	else \
 		dcwin = (LONG DTYPE *) win; \
  \
+	guint start = half_window ? N / 2 : 0; \
 	if(data != NULL) { \
-		for(i = 0; i < N; i++) \
-			data[i] *= dcwin[i]; \
+		for(i = 0; i < N - start; i++) \
+			data[i] *= dcwin[start + i]; \
 		g_free(dcwin); \
 		return data; \
  \
 	} else \
-		return dcwin; \
+		return dcwin + start; \
 }
 
 
@@ -2085,7 +2088,7 @@ LONG COMPLEX DTYPE *fir_resample_ ## LONG ## COMPLEX ## DTYPE(LONG COMPLEX DTYPE
 	 * Apply a Kaiser window.  Note that the chosen cutoff frequency is below the
 	 * lower Nyquist rate just enough to be at the end of the main lobe.
 	 */ \
-	sinc = kaiser_ ## LONG ## DTYPE(sinc_length, (double) (PI * alpha), sinc); \
+	sinc = kaiser_ ## LONG ## DTYPE(sinc_length, (double) (PI * alpha), sinc, FALSE); \
  \
 	/*
 	 * Normalize the sinc filter.  Since, in general, not every tap gets used for
