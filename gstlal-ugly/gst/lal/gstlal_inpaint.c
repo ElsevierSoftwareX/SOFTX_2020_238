@@ -162,6 +162,7 @@ static void make_workspace(GSTLALInpaint *inpaint) {
 	inpaint->hoft_workspace = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / inpaint->rate, &strain_units, inpaint->fft_length_samples);
 	if(inpaint->hoft_workspace == NULL)
 		GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "failure creating REAL8TimeSeries");
+	memset(inpaint->hoft_workspace->data->data, 0.0, inpaint->fft_length_samples * sizeof(double));
 
 	inpaint->output_hoft = XLALCreateREAL8TimeSeries(NULL, &GPS_ZERO, 0.0, (double) 1.0 / inpaint->rate, &strain_units, inpaint->fft_length_samples);
 	if(inpaint->output_hoft == NULL)
@@ -456,7 +457,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 	// columns to the right of the identity submatrix.
 
 	gsl_matrix_view F_trans_mat_view = gsl_matrix_view_array(inpaint->F_trans_mat_workspace, hole_length, inpaint->fft_length_samples - hole_length);
-	gsl_vector_view inpainted_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + hole_start, hole_length);
+	gsl_vector_view inpainted_hoft_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + hole_start, hole_length);
 	gsl_vector_view relevant_hoft_view;
 	// First compute the columns to the left of the identity submatrix, if
 	// there are any, and then use those to partially inpaint the holes
@@ -469,7 +470,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 		// The inpaint transformation matrix F only modifies the inpainted
 		// samples, replacing them with linear combinations of the other
 		// samples.
-		relevant_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data, hole_start);
+		relevant_hoft_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, hole_start);
 
 		gsl_blas_dgemv(CblasNoTrans, 1., &left_F_submat.matrix, &relevant_hoft_view.vector, 0.0, &inpainted_hoft_view.vector);
 	}
@@ -480,7 +481,7 @@ static GstFlowReturn gstlal_inpaint_process(GSTLALInpaint *inpaint, guint hole_s
 		gsl_matrix_view right_F_submat = gsl_matrix_submatrix(&F_trans_mat_view.matrix, 0, hole_start, hole_length, F_trans_mat_view.matrix.size2 - hole_start);
 		// Multiply result by -1 to account for subtracting A M^{-1} A^T C^{-1} from identity matrix
 		gsl_blas_dgemm(CblasNoTrans, CblasNoTrans, -1., &inv_M_trans_mat_view.matrix, &right_inv_cov_submat.matrix, 0., &right_F_submat.matrix);
-		relevant_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + hole_start + hole_length, inpaint->fft_length_samples - hole_start - hole_length);
+		relevant_hoft_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + hole_start + hole_length, inpaint->fft_length_samples - hole_start - hole_length);
 		// If there were columns to the left of the identify submatrix,
 		// add the result of the inpainting process to the partially
 		// inpainted samples. If not, replace the samples being
@@ -560,17 +561,6 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 		}
 
 		if(gate_min < G_MAXUINT) {
-			// Apply Hann window to data
-			if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
-				GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
-				XLALClearErrno();
-				return GST_FLOW_ERROR;
-			}
-
-			//fprintf(stderr, "n_samples = %u, outsamples = %u, gate_min = %u, gate_max = %u, t0=%u + 1e-9*%u\n", n_samples, inpaint->fft_length_samples / 4, gate_min, gate_max + 1, (guint) (inpaint->t0 / 1000000000), (guint) ( inpaint->t0 - 1000000000*(inpaint->t0 / 1000000000)));
-			if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
-				return GST_FLOW_ERROR;
-
 			// if the gate doesn't begin until a quarter way
 			// through the window, then we aren't outputting any
 			// inpainted samples in the next output, so just copy
@@ -657,9 +647,21 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				// |<--workspace epoch, sample index 0, sample time inpaint->t0 - fft_length-samples / 4
 				//         |<--output epoch, sample index fft_length_samples / 4
 				//                |<--last sample of output, sample index fft_length_samples / 2 - 1
+				// Apply Hann window to data
+				if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
+					GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+				// Undo window normalization term applied by lal
+				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, inpaint->fft_length_samples);
+				gsl_blas_dscal(sqrt(inpaint->hann_window->sumofsquares / (double) inpaint->hann_window->data->length), &hoft_workspace_view.vector);
+
+				if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
+					return GST_FLOW_ERROR;
 				gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data, inpaint->fft_length_samples / 4, NULL, NULL);
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
-				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
+				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min - inpaint->fft_length_samples / 4, 1 + gate_max - gate_min);
 				gsl_blas_dcopy(&hoft_workspace_view.vector, &output_hoft_view.vector);
 				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
 				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
@@ -677,9 +679,20 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				//         |<--inpaint->t0
 				//         |<--output epoch, sample index fft_length_samples / 4
 				//                |<--last sample of output, sample index fft_length_samples / 2 - 1
+				// Apply Hann window to data
+				if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
+					GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+				// Undo window normalization term applied by lal
+				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, inpaint->fft_length_samples);
+				gsl_blas_dscal(sqrt(inpaint->hann_window->sumofsquares / (double) inpaint->hann_window->data->length), &hoft_workspace_view.vector);
+				if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
+					return GST_FLOW_ERROR;
 				gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data, inpaint->fft_length_samples / 4, NULL, NULL);
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
-				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
+				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min - inpaint->fft_length_samples / 4, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
 				gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
 				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
@@ -698,9 +711,20 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				// 00000000111111111111111111111110
 				// |<--workspace epoch, sample index 0, sample index 0, sample time inpaint->t0 - fft_length-samples / 4
 				// |<--output epoch, sample index 0 (no samples to output this iteration)
-				gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data + inpaint->fft_length_samples/4, gate_min - inpaint->fft_length_samples / 4, NULL, NULL);
+				// Apply Hann window to data
+				if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
+					GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+				// Undo window normalization term applied by lal
+				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, inpaint->fft_length_samples);
+				gsl_blas_dscal(sqrt(inpaint->hann_window->sumofsquares / (double) inpaint->hann_window->data->length), &hoft_workspace_view.vector);
+				if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
+					return GST_FLOW_ERROR;
+				gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data, gate_min - inpaint->fft_length_samples / 4, NULL, NULL);
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
-				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
+				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min - inpaint->fft_length_samples / 4, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
 				if(gate_max + 1 >= inpaint->fft_length_samples / 2) {
 					// End of inpainted time is not contained in the data being flushed
@@ -708,7 +732,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				} else {
 					// End of inpainted time is contained in data being flushed, thus need to copy non-inpainted samples out of the adapter
 					gst_audioadapter_flush_samples(inpaint->adapter, 1 + gate_max - inpaint->fft_length_samples / 4);
-					gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data + gate_max + 1, inpaint->fft_length_samples / 2 - 1 - gate_max, NULL, NULL);
+					gst_audioadapter_copy_samples(inpaint->adapter, inpaint->output_hoft->data->data + gate_max + 1 - inpaint->fft_length_samples / 4, inpaint->fft_length_samples / 2 - 1 - gate_max, NULL, NULL);
 					gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 2 - 1 - gate_max);
 				}
 				inpaint->adapter_initial_offset += (guint64) inpaint->fft_length_samples / 4;
@@ -726,6 +750,17 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				// |<--workspace epoch, sample index 0, sample time inpaint->t0
 				// |<--output epoch, sample index 0
 				//        |<--last sample of output, sample index fft_length_samples / 4 - 1
+				// Apply Hann window to data
+				if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
+					GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+				// Undo window normalization term applied by lal
+				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, inpaint->fft_length_samples);
+				gsl_blas_dscal(sqrt(inpaint->hann_window->sumofsquares / (double) inpaint->hann_window->data->length), &hoft_workspace_view.vector);
+				if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
+					return GST_FLOW_ERROR;
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
@@ -745,6 +780,17 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				// |<--workspace epoch, sample index 0, sample time inpaint->t0
 				// |<--output epoch, sample index 0
 				//        |<--last sample of output, sample index fft_length_samples / 4 - 1
+				// Apply Hann window to data
+				if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
+					GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+				// Undo window normalization term applied by lal
+				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, inpaint->fft_length_samples);
+				gsl_blas_dscal(sqrt(inpaint->hann_window->sumofsquares / (double) inpaint->hann_window->data->length), &hoft_workspace_view.vector);
+				if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
+					return GST_FLOW_ERROR;
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
@@ -769,6 +815,17 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				// |<--workspace epoch, sample index 0, sample time inpaint->t0
 				// |<--output epoch, sample index 0
 				//        |<--last sample of output, sample index fft_length_samples / 4 - 1
+				// Apply Hann window to data
+				if(!XLALUnitaryWindowREAL8Sequence(inpaint->hoft_workspace->data, inpaint->hann_window)) {
+					GST_ERROR_OBJECT(GST_ELEMENT(inpaint), "XLALUnitaryWindowREAL8Sequence() failed: %s", XLALErrorString(XLALGetBaseErrno()));
+					XLALClearErrno();
+					return GST_FLOW_ERROR;
+				}
+				// Undo window normalization term applied by lal
+				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data, inpaint->fft_length_samples);
+				gsl_blas_dscal(sqrt(inpaint->hann_window->sumofsquares / (double) inpaint->hann_window->data->length), &hoft_workspace_view.vector);
+				if(gstlal_inpaint_process(inpaint, gate_min, gate_max - gate_min + 1) == GST_FLOW_ERROR)
+					return GST_FLOW_ERROR;
 				hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + gate_min, 1 + gate_max - gate_min);
 				output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data + gate_min, 1 + gate_max - gate_min);
 				gsl_blas_daxpy(1.0, &hoft_workspace_view.vector, &output_hoft_view.vector);
@@ -777,6 +834,7 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 				// FIXME FIXME FIXME Will probably need to change this when the hardcoded inpainted times are removed
 				// First iteration after inpainting that does not actually contain inpainted samples
 				// FIXME Find a workaround to only do one copy when not inpainting any samples, currently doing 3...
+				g_assert_cmpuint(inpaint->adapter_initial_offset, ==, inpaint->next_offset_out);
 				gsl_vector_view hoft_workspace_view = gsl_vector_view_array(inpaint->hoft_workspace->data->data + inpaint->fft_length_samples / 4, inpaint->fft_length_samples / 4);
 				gsl_vector_view output_hoft_view = gsl_vector_view_array(inpaint->output_hoft->data->data, inpaint->fft_length_samples / 4);
 				gsl_blas_dcopy(&hoft_workspace_view.vector, &output_hoft_view.vector);
@@ -813,13 +871,16 @@ static GstFlowReturn gstlal_inpaint_transform(GstBaseTransform *trans, GstBuffer
 			GST_BUFFER_PTS(outbuf) = inpaint->t0;
 			GST_BUFFER_DURATION(outbuf) = (GstClockTime) gst_util_uint64_scale_int_round(GST_SECOND, outsamples, inpaint->rate);
 			inpaint->t0 += GST_BUFFER_DURATION(outbuf);
+			// FIXME Dont hardcode inpainted times
+			if(gate_min < G_MAXUINT) {
+				memmove(inpaint->output_hoft->data->data, inpaint->output_hoft->data->data + inpaint->fft_length_samples / 4, 3*inpaint->fft_length_samples / 4 * sizeof(double));
+				XLALGPSAdd(&inpaint->output_hoft->epoch, (double) (inpaint->fft_length_samples / 4));
+				//memset(inpaint->hoft_workspace->data->data, 0.0, inpaint->fft_length_samples / 4 * sizeof(double));
+				//memset(inpaint->hoft_workspace->data->data + 3*inpaint->fft_length_samples / 4, 0.0, inpaint->fft_length_samples / 4 * sizeof(double));
+				memset(inpaint->hoft_workspace->data->data, 0.0, inpaint->fft_length_samples * sizeof(double));
+				//gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
+			}
 
-		}
-		// FIXME Dont hardcode inpainted times
-		if(gate_min < G_MAXUINT) {
-			memmove(inpaint->output_hoft->data->data, inpaint->output_hoft->data->data + inpaint->fft_length_samples / 4, 3*inpaint->fft_length_samples / 4 * sizeof(double));
-			XLALGPSAdd(&inpaint->output_hoft->epoch, (double) (inpaint->fft_length_samples / 4));
-			//gst_audioadapter_flush_samples(inpaint->adapter, inpaint->fft_length_samples / 4);
 		}
 	}
 
@@ -946,6 +1007,8 @@ static void gstlal_inpaint_finalize(GObject * object) {
 	free(inpaint->channel_name);
 	free(inpaint->units);
 
+
+	// FIXME Make sure to push any samples in the adapter before clearing
 	gst_audioadapter_clear(inpaint->adapter);
 	g_object_unref(inpaint->adapter);
 	inpaint->adapter = NULL;
