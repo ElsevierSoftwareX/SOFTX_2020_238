@@ -1,0 +1,11 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: libgstlalcalibration
+Description: LAL/Gstreamer Library (the calibration bits)
+Version: @VERSION@
+Requires: glib-2.0 gsl gstlal gstreamer-@GSTREAMER_RELEASE@ lal lalmetaio
+Libs: -L${libdir} -lgstlalcalibration
+Cflags: -I${includedir}
