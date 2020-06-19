@@ -71,7 +71,7 @@
 
 
 /*
- * PSD mode enum
+ * window type enum
  */
 
 
@@ -1115,13 +1115,13 @@ static void prepare_element(GSTLALResample *element) {
 		/* Apply a window function */
 		switch(element->window) {
 		case GSTLAL_RESAMPLE_DPSS:
-			dpss_double(element->sinc_length, M_PI * alpha, 5.0, element->sinc_table, TRUE);
+			dpss_double(element->sinc_length, alpha, 5.0, element->sinc_table, TRUE);
 			break;
 		case GSTLAL_RESAMPLE_KAISER:
 			kaiser_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
 			break;
 		case GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV:
-			DolphChebyshev_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
+			DolphChebyshev_double(element->sinc_length, alpha, element->sinc_table, TRUE);
 			break;
 		default:
 			GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
@@ -1182,13 +1182,13 @@ static void prepare_element(GSTLALResample *element) {
 		/* Apply a window function */
 		switch(element->window) {
 		case GSTLAL_RESAMPLE_DPSS:
-			dpss_double(element->sinc_length, M_PI * alpha, 5.0, element->sinc_table, TRUE);
+			dpss_double(element->sinc_length, alpha, 5.0, element->sinc_table, TRUE);
 			break;
 		case GSTLAL_RESAMPLE_KAISER:
 			kaiser_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
 			break;
 		case GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV:
-			DolphChebyshev_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
+			DolphChebyshev_double(element->sinc_length, alpha, element->sinc_table, TRUE);
 			break;
 		default:
 			GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");

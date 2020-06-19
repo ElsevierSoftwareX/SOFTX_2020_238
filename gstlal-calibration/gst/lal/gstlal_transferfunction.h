@@ -35,6 +35,30 @@
 G_BEGIN_DECLS
 
 
+/*
+ * gstlal_transferfunction_window_type enum
+ */
+
+
+enum gstlal_transferfunction_window_type {
+        GSTLAL_TRANSFERFUNCTION_DPSS = 0,
+        GSTLAL_TRANSFERFUNCTION_KAISER,
+        GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV
+};
+
+
+#define GSTLAL_TRANSFERFUNCTION_WINDOW_TYPE  \
+        (gstlal_transferfunction_window_get_type())
+
+
+GType gstlal_transferfunction_window_get_type(void);
+
+
+/*
+ * lal_transferfunction element
+ */
+
+
 #define GSTLAL_TRANSFERFUNCTION_TYPE \
 	(gstlal_transferfunction_get_type())
 #define GSTLAL_TRANSFERFUNCTION(obj) \
@@ -87,8 +111,8 @@ struct _GSTLALTransferFunction {
 			float *sinc_table;
 			gint64 sinc_length;
 			gint64 sinc_taps_per_df;
-			float *fir_window;
-			double *tukey;
+			float *fd_fir_window;
+			double *fir_window;
 			float *leftover_data;
 			gint64 num_leftover;
 			complex float *ffts;
@@ -117,8 +141,8 @@ struct _GSTLALTransferFunction {
 			double *sinc_table;
 			gint64 sinc_length;
 			gint64 sinc_taps_per_df;
+			double *fd_fir_window;
 			double *fir_window;
-			double *tukey;
 			double *leftover_data;
 			gint64 num_leftover;
 			complex double *ffts;
@@ -171,6 +195,7 @@ struct _GSTLALTransferFunction {
 	complex double *transfer_functions;
 	double *fir_filters;
 	guint64 fir_endtime;
+	enum gstlal_transferfunction_window_type window;
 };
 
 

@@ -80,10 +80,44 @@
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
+#include <gstlal-calibration/gstlal_firtools.h>
 #include <gstlal_transferfunction.h>
 
 
 #define SINC_LENGTH 25
+
+
+/*
+ * ============================================================================
+ *
+ *			      Custom Types
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * window type mode enum
+ */
+
+
+GType gstlal_transferfunction_window_get_type(void) {
+
+	static GType type = 0;
+
+	if(!type) {
+		static GEnumValue values[] = {
+			{GSTLAL_TRANSFERFUNCTION_DPSS, "GSTLAL_TRANSFERFUNCTION_DPSS", "Maximize energy concentration in main lobe"},
+			{GSTLAL_TRANSFERFUNCTION_KAISER, "GSTLAL_TRANSFERFUNCTION_KAISER", "Simple approximtion to DPSS window"},
+			{GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV, "GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("GSTLAL_TRANSFERFUNCTION_WINDOW", values);
+	}
+
+	return type;
+}
 
 
 /*
@@ -130,6 +164,7 @@ enum property {
 	ARG_TRANSFER_FUNCTIONS,
 	ARG_FIR_FILTERS,
 	ARG_FIR_ENDTIME,
+	ARG_WINDOW,
 	ARG_FAKE
 };
 
@@ -468,7 +503,7 @@ DEFINE_UPDATE_TRANSFER_FUNCTIONS(double, );
 
 
 #define DEFINE_UPDATE_FIR_FILTERS(DTYPE, F_OR_BLANK) \
-static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *tukey, double *fir_filters) { \
+static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *fir_window, double *fir_filters) { \
  \
 	gboolean success = TRUE; \
 	int i; \
@@ -495,7 +530,7 @@ static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions,
 		/* Apply the Tukey window and copy to fir_filters */ \
 		DTYPE *real_filter = (DTYPE *) fir_filter; \
 		for(j = 0; j < fir_length; j++) { \
-			fir_filters[i * fir_length + j] = tukey[j] * real_filter[j]; \
+			fir_filters[i * fir_length + j] = fir_window[j] * real_filter[j]; \
 			success &= isnormal(fir_filters[i * fir_length + j]) || fir_filters[i * fir_length + j] == 0.0; \
 		} \
 	} \
@@ -879,7 +914,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		} \
 		/* Update FIR filters if we want */ \
 		if(success && element->make_fir_filters) { \
-			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fir_window, element->workspace.w ## S_OR_D ## pf.tukey, element->fir_filters); \
+			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fd_fir_window, element->workspace.w ## S_OR_D ## pf.fir_window, element->fir_filters); \
 			if(success) { \
 				GST_LOG_OBJECT(element, "Just computed new FIR filters"); \
 				/* Let other elements know about the update */ \
@@ -1051,7 +1086,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
 				/* Update FIR filters if we want */
 				if(success && element->make_fir_filters) {
-					success &= update_fir_filters_float(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wspf.fir_filter, element->workspace.wspf.fir_plan, element->workspace.wspf.fir_window, element->workspace.wspf.tukey, element->fir_filters);
+					success &= update_fir_filters_float(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wspf.fir_filter, element->workspace.wspf.fir_plan, element->workspace.wspf.fd_fir_window, element->workspace.wspf.fir_window, element->fir_filters);
 					if(success) {
 						GST_LOG_OBJECT(element, "Just computed new FIR filters");
 						/* Let other elements know about the update */
@@ -1126,7 +1161,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
 				/* Update FIR filters if we want */
 				if(success && element->make_fir_filters) {
-					success &= update_fir_filters_double(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wdpf.fir_filter, element->workspace.wdpf.fir_plan, element->workspace.wdpf.fir_window, element->workspace.wdpf.tukey, element->fir_filters);
+					success &= update_fir_filters_double(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wdpf.fir_filter, element->workspace.wdpf.fir_plan, element->workspace.wdpf.fd_fir_window, element->workspace.wdpf.fir_window, element->fir_filters);
 					if(success) {
 						GST_LOG_OBJECT(element, "Just computed new FIR filters");
 						/* Let other elements know about the update */
@@ -1208,9 +1243,9 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		g_free(element->fir_filters);
 		element->fir_filters = NULL;
 	}
-	if(element->workspace.wspf.fir_window) {
-		g_free(element->workspace.wspf.fir_window);
-		element->workspace.wspf.fir_window = NULL;
+	if(element->workspace.wspf.fd_fir_window) {
+		g_free(element->workspace.wspf.fd_fir_window);
+		element->workspace.wspf.fd_fir_window = NULL;
 	}
 	if(element->workspace.wspf.sinc_table) {
 		g_free(element->workspace.wspf.sinc_table);
@@ -1269,9 +1304,9 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		fftwf_destroy_plan(element->workspace.wspf.fir_plan);
 		gstlal_fftw_unlock();
 	}
-	if(element->workspace.wspf.fir_window) {
-		g_free(element->workspace.wspf.fir_window);
-		element->workspace.wspf.fir_window = NULL;
+	if(element->workspace.wspf.fd_fir_window) {
+		g_free(element->workspace.wspf.fd_fir_window);
+		element->workspace.wspf.fd_fir_window = NULL;
 	}
 	if(element->workspace.wdpf.sinc_table) {
 		g_free(element->workspace.wdpf.sinc_table);
@@ -1371,6 +1406,10 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	}
 
 	/* Prepare workspace for finding transfer functions and FIR filters */
+	/* Frequency resolution in units of frequency bins of fft data */
+	double fft_alpha = maximum(maximum(element->frequency_resolution / element->rate, 1.0 / element->fir_length), 1.0 / element->fft_length) * element->fft_length;
+	/* Frequency resolution in units of frequency bins of the FIR filters */
+	double fir_alpha = maximum(maximum(element->frequency_resolution / element->rate, 1.0 / element->fir_length), 1.0 / element->fft_length) * element->fir_length;
 	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
 
 		/*
@@ -1379,9 +1418,24 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		gint64 i, i_stop, i_start;
 		if(!element->workspace.wspf.fft_window) {
-			element->workspace.wspf.fft_window = g_malloc(element->fft_length * sizeof(*element->workspace.wspf.fft_window));
-			for(i = 0; i < element->fft_length; i++)
-				element->workspace.wspf.fft_window[i] = (float) pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
+			switch(element->window) {
+			case GSTLAL_TRANSFERFUNCTION_DPSS:
+				element->workspace.wspf.fft_window = dpss_float(element->fft_length, fft_alpha, 5.0, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_KAISER:
+				element->workspace.wspf.fft_window = kaiser_float(element->fft_length, M_PI * fft_alpha, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
+				element->workspace.wspf.fft_window = DolphChebyshev_float(element->fft_length, fft_alpha, NULL, FALSE);
+				break;
+
+			default:
+				GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+				g_assert_not_reached();
+				break;
+			}
 		}
 
 		if(!element->workspace.wspf.sinc_table) {
@@ -1400,13 +1454,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
 				 * frequency resolution). If fir_length is an integer multiple or divisor of fft_length, taps_per_df is 1.
 				 */
-				gint64 common_denomimator, short_length, long_length;
+				gint64 common_denominator, short_length, long_length;
 				short_length = minimum64(fd_fft_length - 1, fd_fir_length - 1);
 				long_length = maximum64(fd_fft_length - 1, fd_fir_length - 1);
-				common_denomimator = long_length;
-				while(common_denomimator % short_length)
-					common_denomimator += long_length;
-				element->workspace.wspf.sinc_taps_per_df = common_denomimator / long_length;
+				common_denominator = long_length;
+				while(common_denominator % short_length)
+					common_denominator += long_length;
+				element->workspace.wspf.sinc_taps_per_df = common_denominator / long_length;
 				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
 				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length / element->rate, element->frequency_resolution * element->fft_length / element->rate), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
 				element->workspace.wspf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
@@ -1418,14 +1472,17 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				float sin_arg, normalization;
 				for(i = 1; i <= element->workspace.wspf.sinc_length / 2; i++) {
 					sin_arg = M_PI * i / taps_per_osc;
-					element->workspace.wspf.sinc_table[i] = powf(cosf(M_PI * i / (element->workspace.wspf.sinc_length * 1.07)), 6) * sinf(sin_arg) / sin_arg;
+					element->workspace.wspf.sinc_table[i] = sinf(sin_arg) / sin_arg;
 				}
+
+				/* Window the sinc table */
+				kaiser_float(element->workspace.wspf.sinc_length, 10.0, element->workspace.wspf.sinc_table, TRUE);
 
 				/* 
 				 * Normalize the sinc table to make the DC gain exactly 1. We need to account for the fact 
 				 * that the density of taps in the filter could be higher than the density of input samples.
 				 */
-				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denomimator / short_length : element->workspace.wspf.sinc_taps_per_df;
+				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denominator / short_length : element->workspace.wspf.sinc_taps_per_df;
 				for(i = 0; i < (taps_per_input + 1) / 2; i++) {
 					normalization = 0.0;
 					for(j = i; j <= element->workspace.wspf.sinc_length / 2; j += taps_per_input)
@@ -1450,32 +1507,33 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			}
 		}
 
-		if(element->make_fir_filters && (!element->workspace.wspf.fir_window)) {
+		if(element->make_fir_filters && (!element->workspace.wspf.fd_fir_window)) {
 
 			/*
 			 * Make a frequency-domain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wspf.fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wspf.fir_window));
+			element->workspace.wspf.fd_fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wspf.fd_fir_window));
 
 			/* Initialize to ones */
 			for(i = 0; i < fd_fir_length; i++)
-				element->workspace.wspf.fir_window[i] = 1.0;
+				element->workspace.wspf.fd_fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
 			float df_per_hz = (fd_fir_length - 1.0) / f_nyquist;
+			int freq_res_samples = (int) (fir_alpha + 0.5);
 
 			/* high-pass filter */
 			/* Remove low frequencies */
-			i_stop = (gint64) (element->high_pass * df_per_hz / 2.0 + 0.5);
+			i_stop = (gint64) (element->high_pass * df_per_hz + 0.5) - freq_res_samples;
 			for(i = 0; i < i_stop; i++)
-				element->workspace.wspf.fir_window[i] = 0.0;
+				element->workspace.wspf.fd_fir_window[i] = 0.0;
 
-			/* Apply half of a Hann window raised to the fourth power */
+			/* Apply half of a Hann window */
 			i_start = i_stop;
-			i_stop = (gint64) (element->high_pass * df_per_hz + 0.5);
+			i_stop += freq_res_samples;
 			for(i = i_start; i < i_stop; i++)
-				element->workspace.wspf.fir_window[i] *= (float) pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 8.0);
+				element->workspace.wspf.fd_fir_window[i] *= (float) pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 			/* low-pass filter */
 			if(element->low_pass > 0) {
@@ -1483,36 +1541,40 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				i_start = (gint64) (element->low_pass * df_per_hz + 0.5);
 				i_stop = minimum64(fd_fir_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
-					element->workspace.wspf.fir_window[i] *= (float) pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
+					element->workspace.wspf.fd_fir_window[i] *= (float) pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
 				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
-					element->workspace.wspf.fir_window[i] = 0.0;
+					element->workspace.wspf.fd_fir_window[i] = 0.0;
 			}
 
 			/*
-			 * Make a time-domain Tukey window so that the filter falls off smoothly at the edges
+			 * Make a time-domain window to apply to the FIR filters.
 			 */
 
-			gint64 edge_to_corner = (gint64) (0.45 * element->fir_length);
+			if(!element->workspace.wspf.fir_window) {
 
-			element->workspace.wspf.tukey = g_malloc(element->fir_length * sizeof(*element->workspace.wspf.tukey));
+				switch(element->window) {
+				case GSTLAL_TRANSFERFUNCTION_DPSS:
+					element->workspace.wspf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE);
+					break;
 
-			/* first curve of window */
-			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wspf.tukey[i] = (float) (element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fir_length);
+				case GSTLAL_TRANSFERFUNCTION_KAISER:
+					element->workspace.wspf.fir_window = kaiser_double(element->fir_length, M_PI * fir_alpha, NULL, FALSE);
+					break;
 
-			/* flat top of window */
-			i_stop = element->fir_length - edge_to_corner;
-			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wspf.tukey[i] = (float) (element->make_fir_filters / (double) element->fir_length);
+				case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
+					element->workspace.wspf.fir_window = DolphChebyshev_double(element->fir_length, fir_alpha, NULL, FALSE);
+					break;
 
-			/* last curve of window */
-			i_start = i_stop;
-			for(i = i_start; i < element->fir_length; i++)
-				element->workspace.wspf.tukey[i] = (float) (element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fir_length - i_start)), 2.0) / element->fir_length);
+				default:
+					GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+					g_assert_not_reached();
+					break;
+				}
+			}
 		}
 
 		/* intermediate data storage */
@@ -1561,9 +1623,24 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		gint64 i, i_stop, i_start;
 		if(!element->workspace.wdpf.fft_window) {
-			element->workspace.wdpf.fft_window = g_malloc(element->fft_length * sizeof(*element->workspace.wdpf.fft_window));
-			for(i = 0; i < element->fft_length; i++)
-				element->workspace.wdpf.fft_window[i] = pow(sin(M_PI * i / (element->fft_length - 1)), 2.0);
+			switch(element->window) {
+			case GSTLAL_TRANSFERFUNCTION_DPSS:
+				element->workspace.wdpf.fft_window = dpss_double(element->fft_length, fft_alpha, 5.0, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_KAISER:
+				element->workspace.wdpf.fft_window = kaiser_double(element->fft_length, M_PI * fft_alpha, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
+				element->workspace.wdpf.fft_window = DolphChebyshev_double(element->fft_length, fft_alpha, NULL, FALSE);
+				break;
+
+			default:
+				GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+				g_assert_not_reached();
+				break;
+			}
 		}
 
 		if(!element->workspace.wdpf.sinc_table) {
@@ -1582,13 +1659,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
 				 * frequency resolution). If fir_length is an integer multiple of divisor of fft_length, taps_per_df is 1.
 				 */
-				gint64 common_denomimator, short_length, long_length;
+				gint64 common_denominator, short_length, long_length;
 				short_length = minimum64(fd_fft_length - 1, fd_fir_length - 1);
 				long_length = maximum64(fd_fft_length - 1, fd_fir_length - 1);
-				common_denomimator = long_length;
-				while(common_denomimator % short_length)
-					common_denomimator += long_length;
-				element->workspace.wspf.sinc_taps_per_df = common_denomimator / long_length;
+				common_denominator = long_length;
+				while(common_denominator % short_length)
+					common_denominator += long_length;
+				element->workspace.wspf.sinc_taps_per_df = common_denominator / long_length;
 				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
 				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length / element->rate, element->frequency_resolution * element->fft_length / element->rate), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
 				element->workspace.wdpf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
@@ -1600,14 +1677,17 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				double sin_arg, normalization;
 				for(i = 1; i <= element->workspace.wdpf.sinc_length / 2; i++) {
 					sin_arg = M_PI * i / taps_per_osc;
-					element->workspace.wdpf.sinc_table[i] = pow(cos(M_PI * i / (element->workspace.wdpf.sinc_length * 1.07)), 6) * sin(sin_arg) / sin_arg;
+					element->workspace.wdpf.sinc_table[i] = sin(sin_arg) / sin_arg;
 				}
+
+				/* Window the sinc table */
+				kaiser_double(element->workspace.wdpf.sinc_length, 10.0, element->workspace.wdpf.sinc_table, TRUE);
 
 				/* 
 				 * Normalize the sinc table to make the DC gain exactly 1. We need to account for the fact 
 				 * that the density of taps in the filter could be higher than the density of input samples.
 				 */
-				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denomimator / short_length : element->workspace.wspf.sinc_taps_per_df;
+				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denominator / short_length : element->workspace.wspf.sinc_taps_per_df;
 				for(i = 0; i < (taps_per_input + 1) / 2; i++) {
 					normalization = 0.0;
 					for(j = i; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
@@ -1632,32 +1712,33 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			}
 		}
 
-		if(element->make_fir_filters && (!element->workspace.wdpf.fir_window)) {
+		if(element->make_fir_filters && (!element->workspace.wdpf.fd_fir_window)) {
 
 			/*
 			 * Make a frequency-donain window to roll off low and high frequencies
 			 */
 
-			element->workspace.wdpf.fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wdpf.fir_window));
+			element->workspace.wdpf.fd_fir_window = g_malloc(fd_fir_length * sizeof(*element->workspace.wdpf.fd_fir_window));
 
 			/* Initialize to ones */
 			for(i = 0; i < fd_fir_length; i++)
-				element->workspace.wdpf.fir_window[i] = 1.0;
+				element->workspace.wdpf.fd_fir_window[i] = 1.0;
 
 			int f_nyquist = element->rate / 2;
 			double df_per_hz = (fd_fir_length - 1.0) / f_nyquist;
+			int freq_res_samples = (int) (fir_alpha + 0.5);
 
 			/* high-pass filter */
 			/* Remove low frequencies */
-			i_stop = (gint64) (element->high_pass * df_per_hz / 2.0 + 0.5);
+			i_stop = (gint64) (element->high_pass * df_per_hz + 0.5) - freq_res_samples;
 			for(i = 0; i < i_stop; i++)
-				element->workspace.wdpf.fir_window[i] = 0.0;
+				element->workspace.wdpf.fd_fir_window[i] = 0.0;
 
-			/* Apply half of a Hann window raised to the fourth power */
+			/* Apply half of a Hann window */
 			i_start = i_stop;
-			i_stop = (gint64) (element->high_pass * df_per_hz + 0.5);
+			i_stop += freq_res_samples;
 			for(i = i_start; i < i_stop; i++)
-				element->workspace.wdpf.fir_window[i] *= pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 8.0);
+				element->workspace.wdpf.fd_fir_window[i] *= pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 			/* low-pass filter */
 			if(element->low_pass > 0) {
@@ -1665,36 +1746,40 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				i_start = (gint64) (element->low_pass * df_per_hz + 0.5);
 				i_stop = minimum64(fd_fir_length, 1.4 * i_start);
 				for(i = i_start; i < i_stop; i++)
-					element->workspace.wdpf.fir_window[i] *= pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
+					element->workspace.wdpf.fd_fir_window[i] *= pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
 				i_start = i_stop;
 				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
-					element->workspace.wdpf.fir_window[i] = 0.0;
+					element->workspace.wdpf.fd_fir_window[i] = 0.0;
 			}
 
 			/*
-			 * Make a time-domain Tukey window so that the filter falls off smoothly at the edges
+			 * Make a time-domain window to apply to the FIR filters.
 			 */
 
-			gint64 edge_to_corner = (gint64) (0.45 * element->fir_length);
+			if(!element->workspace.wdpf.fir_window) {
 
-			element->workspace.wdpf.tukey = g_malloc(element->fir_length * sizeof(*element->workspace.wdpf.tukey));
+				switch(element->window) {
+				case GSTLAL_TRANSFERFUNCTION_DPSS:
+					element->workspace.wdpf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE);
+					break;
 
-			/* first curve of window */
-			for(i = 0; i < edge_to_corner; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(sin((M_PI / 2.0) * i / edge_to_corner), 2.0) / element->fir_length;
+				case GSTLAL_TRANSFERFUNCTION_KAISER:
+					element->workspace.wdpf.fir_window = kaiser_double(element->fir_length, M_PI * fir_alpha, NULL, FALSE);
+					break;
 
-			/* flat top of window */
-			i_stop = element->fir_length - edge_to_corner;
-			for(i = edge_to_corner; i < i_stop; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters / (double) element->fir_length;
+				case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
+					element->workspace.wdpf.fir_window = DolphChebyshev_double(element->fir_length, fir_alpha, NULL, FALSE);
+					break;
 
-			/* last curve of window */
-			i_start = i_stop;
-			for(i = i_start; i < element->fir_length; i++)
-				element->workspace.wdpf.tukey[i] = element->make_fir_filters * pow(cos((M_PI / 2.0) * (i + 1 - i_start) / (element->fir_length - i_start)), 2.0) / element->fir_length;
+				default:
+					GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+					g_assert_not_reached();
+					break;
+				}
+			}
 		}
 
 		/* intermediate data storage */
@@ -2021,6 +2106,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->fir_timeshift = g_value_get_int64(value);
 		break;
 
+	case ARG_WINDOW:
+		element->window = g_value_get_enum(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -2176,6 +2265,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_uint64(value, element->fir_endtime);
 		break;
 
+	case ARG_WINDOW:
+		g_value_set_enum(value, element->window);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -2230,12 +2323,12 @@ static void finalize(GObject *object) {
 		g_free(element->workspace.wspf.autocorrelation_matrix);
 		element->workspace.wspf.autocorrelation_matrix = NULL;
 		if(element->make_fir_filters) {
-			g_free(element->workspace.wspf.fir_window);
-			element->workspace.wspf.fir_window = NULL;
+			g_free(element->workspace.wspf.fd_fir_window);
+			element->workspace.wspf.fd_fir_window = NULL;
 			g_free(element->workspace.wspf.sinc_table);
 			element->workspace.wspf.sinc_table = NULL;
-			g_free(element->workspace.wspf.tukey);
-			element->workspace.wspf.tukey = NULL;
+			g_free(element->workspace.wspf.fir_window);
+			element->workspace.wspf.fir_window = NULL;
 		}
 
 		if(element->use_median) {
@@ -2283,12 +2376,12 @@ static void finalize(GObject *object) {
 		g_free(element->workspace.wdpf.autocorrelation_matrix);
 		element->workspace.wdpf.autocorrelation_matrix = NULL;
 		if(element->make_fir_filters) {
-			g_free(element->workspace.wdpf.fir_window);
-			element->workspace.wdpf.fir_window = NULL;
+			g_free(element->workspace.wdpf.fd_fir_window);
+			element->workspace.wdpf.fd_fir_window = NULL;
 			g_free(element->workspace.wdpf.sinc_table);
 			element->workspace.wdpf.sinc_table = NULL;
-			g_free(element->workspace.wdpf.tukey);
-			element->workspace.wdpf.tukey = NULL;
+			g_free(element->workspace.wdpf.fir_window);
+			element->workspace.wdpf.fir_window = NULL;
 		}
 
 		if(element->use_median) {
@@ -2598,6 +2691,14 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		0, G_MAXUINT64, G_MAXUINT64,
 		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
+	properties[ARG_WINDOW] = g_param_spec_enum(
+		"window",
+		"Window Function",
+		"What window function to apply to incoming data and to the FIR filters",
+		GSTLAL_TRANSFERFUNCTION_WINDOW_TYPE,
+		GSTLAL_TRANSFERFUNCTION_DPSS,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 
 
 	g_object_class_install_property(
@@ -2709,6 +2810,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_FIR_ENDTIME,
 		properties[ARG_FIR_ENDTIME]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_WINDOW,
+		properties[ARG_WINDOW]
 	);
 }
 
