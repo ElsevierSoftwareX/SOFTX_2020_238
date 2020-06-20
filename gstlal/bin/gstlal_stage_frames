@@ -1,0 +1,159 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2011-2020  Kipp Cannon, Chad Hanna, Drew Keppel
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+import numpy
+from optparse import OptionParser
+import os
+import sys
+
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import GObject, Gst
+GObject.threads_init()
+Gst.init(None)
+
+import lal
+
+from gstlal import pipeparts
+from gstlal import reference_psd
+from gstlal import simplehandler
+from gstlal import datasource
+from gstlal import multirate_datasource
+from ligo.lw import utils as ligolw_utils
+
+
+
+##
+# Extract and validate the command line options
+#
+def parse_command_line():
+	parser = OptionParser(description = __doc__)
+
+	#
+	# Append data source options
+	#
+
+	datasource.append_options(parser)
+
+	#
+	# Append program specific options
+	#
+
+	parser.add_option("--sample-rate", metavar = "Hz", default = 16384, type = "int", help = "Sample rate at which to generate the data, should be less than or equal to the sample rate of the measured psds provided, default = 16384 Hz, max 16384 Hz")
+	parser.add_option("--output-path", metavar = "name", default = ".", help = "Path to output frame files (default = \".\").")
+	parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
+	parser.add_option("--frame-type", metavar = "name", help = "Frame type, required")
+	parser.add_option("--frame-duration", metavar = "s", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
+	parser.add_option("--frames-per-file", metavar = "n", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	#
+	# Parse options
+	#
+
+	options, filenames = parser.parse_args()
+
+	if options.sample_rate > 16384:
+		raise ValueError("--sample-rate must be <= 16384")
+
+	if options.frame_type is None:
+		raise ValueError("--frame-type is required")
+
+
+	return options, filenames
+
+
+#
+# Main
+#
+
+options, filenames = parse_command_line()
+
+## Parse the command line options into a python.datasource.GWDataSourceInfo class instance
+gw_data_source = datasource.GWDataSourceInfo(options)
+
+## Assume instrument is the first and only key of the python.datasource.GWDataSourceInfo.channel_dict
+instrument = gw_data_source.channel_dict.keys()[0]
+
+# disable progress reports if not verbose
+if not options.verbose:
+	pipeparts.mkprogressreport = lambda pipeline, src, *args: src
+
+# set default output channel if not set by user
+if options.output_channel_name is None:
+	options.output_channel_name = gw_data_source.channel_dict[instrument]
+
+## Setup the pipeline
+pipeline = Gst.Pipeline(name=os.path.split(sys.argv[0])[1])
+
+## Main loop 
+mainloop = GObject.MainLoop()
+
+## An instance of the python.simplehandler.Handler class
+handler = simplehandler.Handler(mainloop, pipeline)
+
+## Set the pipeline head to basic input from datasource.mkbasicsrc()
+# FIXME: fake source causes problems when making large buffers, so block_size needs to be overwritten
+gw_data_source.block_size = 8 * options.sample_rate
+head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source, instrument, verbose = options.verbose)
+
+## Set the pipeline head to be verbose with pipeparts.mkprogressreport()
+head = pipeparts.mkprogressreport(pipeline, head, "frames")
+
+## Downsample to requested rate
+head = pipeparts.mkinterpolator(pipeline, head)
+caps = "audio/x-raw, rate=%d" % options.sample_rate
+head = pipeparts.mkcapsfilter(pipeline, head, caps)
+
+if not os.path.isdir(options.output_path):
+	try:
+		os.makedirs(options.output_path)
+	except:
+		print >> sys.stderr, "Unable to make directory ", options.output_path
+		pass
+else:
+	print "Target output directory already exists."
+
+## create frames
+head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.output_channel_name): head}, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file)
+
+## Write the frames to disk
+head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_type, path = options.output_path)
+
+# Put O(100000 s) frames in each directory
+#head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, 5))
+
+# Run it
+if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter READY state")
+datasource.pipeline_seek_for_gps(pipeline, gw_data_source.seg[0], gw_data_source.seg[1])
+if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
+	raise RuntimeError("pipeline failed to enter PLAYING state")
+
+## Debugging output
+if "GST_DEBUG_DUMP_DOT_DIR" in os.environ:
+	pipeparts.write_dump_dot(pipeline, "%s_PLAYING" % pipeline.get_name(), verbose = True)
+
+	## Setup a signal handler to intercept SIGINT in order to write the pipeline graph at ctrl+C before cleanly shutting down
+	class SigHandler(simplehandler.OneTimeSignalHandler):
+		def do_on_call(self, signum, frame):
+			pipeparts.write_dump_dot(pipeline, "%s_SIGINT" % pipeline.get_name(), verbose = True)
+
+	sighandler = SigHandler(pipeline)
+
+mainloop.run()

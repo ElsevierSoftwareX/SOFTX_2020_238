@@ -12,6 +12,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_coinc_extractor_dag \
 	gstlal_inspiral_compute_dtdphideff_cov_matrix \
 	gstlal_inspiral_compress_ranking_stat \
+	gstlal_inspiral_config \
 	gstlal_inspiral_add_dt_dphi_snr_ratio_pdfs \
 	gstlal_inspiral_calc_snr \
 	gstlal_inspiral_create_dt_dphi_snr_ratio_pdfs \
@@ -58,6 +59,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_reset_likelihood \
 	gstlal_inspiral_reset_zerolag_counts \
 	gstlal_inspiral_combine_injection_sets \
+	gstlal_inspiral_svd_bank \
 	gstlal_inspiral_svd_bank_pipe \
 	gstlal_ll_inspiral_aggregator \
 	gstlal_ll_inspiral_calculate_range \

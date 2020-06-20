@@ -1,0 +1,170 @@
+#!/usr/bin/env python
+#
+# Copyright (C) 2010  Kipp Cannon, Chad Hanna, Leo Singer
+# Copyright (C) 2009  Kipp Cannon, Chad Hanna
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""Build time-sliced, SVD'd filter banks for use with gstlal_inspiral"""
+
+
+#
+#
+# =============================================================================
+#
+#                                   Preamble
+#
+# =============================================================================
+#
+
+
+from optparse import OptionParser
+import numpy
+
+
+import lal.series
+from lal.utils import CacheEntry
+from ligo.lw import utils as ligolw_utils
+from ligo.lw import lsctables
+from gstlal import svd_bank
+from gstlal.stats import inspiral_lr
+
+
+### This program will create svd bank files; see gstlal_svd_bank for more information
+###
+### Usage examples
+### --------------
+###
+### 1. Typical use::
+###
+### 	gstlal_svd_bank --reference-psd reference_psd.xml --samples-min 1024 \
+###	--bank-id 0 --ortho-gate-fap 0.5 --flow 40.0 \
+###	--template-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml \
+###	--svd-tolerance 0.9995
+###	--write-svd-bank /mnt/qfs3/gstlalcbc/engineering/5/bns_bank_40Hz/svd_0000-H1_split_bank-H1-TMPLTBANK-871147516-2048.xml \
+###	--samples-max-64 4096 --clipleft 0 --autocorrelation-length 351 --samples-max-256 1024 --clipright 20 --samples-max 4096
+###
+### 2. Please add more!
+###
+### Review Status
+### -------------
+###
+### +-------------------------------------------------+------------------------------------------+------------+
+### | Names                                           | Hash                                     | Date       |
+### +=================================================+==========================================+============+
+### | Florent, Sathya, Duncan Me., Jolien, Kipp, Chad | 7536db9d496be9a014559f4e273e1e856047bf71 | 2014-04-30 |
+### +-------------------------------------------------+------------------------------------------+------------+
+###
+
+
+#
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+
+parser = OptionParser(description = __doc__)
+parser.add_option("--flow", metavar = "Hz", type = "float", default = 40.0, help = "Set the template low-frequency cut-off (default = 40.0).")
+parser.add_option("--sample-rate", metavar = "Hz", type = "int", help = "Set the sample rate.  If not set, the sample rate will be based on the template frequency.  The sample rate must be at least twice the highest frequency in the templates. If provided it must be a power of two")
+parser.add_option("--padding", metavar = "pad", type = "float", default = 1.5, help = "Fractional amount to pad time slices.")
+parser.add_option("--svd-tolerance", metavar = "match", type = "float", default = 0.9999, help = "Set the SVD reconstruction tolerance (default = 0.9999).")
+parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
+parser.add_option("--instrument-override", metavar = "ifo", help = "Override the ifo column of the single inspiral tables")
+parser.add_option("--template-bank-cache", metavar = "filename", help = "Provide a cache file with the names of the LIGO light-weight XML file from which to load the template bank.")
+parser.add_option("--ortho-gate-fap", metavar = "probability", type = "float", default = 0.5, help = "Set the orthogonal SNR projection gate false-alarm probability (default = 0.5).")
+parser.add_option("--write-svd-bank", metavar = "filename", help = "Set the filename in which to save the template bank (required).")
+parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+parser.add_option("--autocorrelation-length", type = "int", default = 201, help = "The minimum number of samples to use for auto-chisquared, default 201 should be odd")
+parser.add_option("--samples-min", type = "int", default = 1024, help = "The minimum number of samples to use for time slices default 1024")
+parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
+parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies between 64Hz and 256 Hz, default 2048")
+parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
+
+options, template_banks = parser.parse_args()
+
+if options.template_bank_cache:
+	template_banks.extend([CacheEntry(line).url for line in open(options.template_bank_cache)])
+
+required_options = ("reference_psd", "write_svd_bank")
+
+missing_options = [option for option in required_options if getattr(options, option) is None]
+if missing_options:
+	raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in sorted(missing_options)))
+
+if not options.autocorrelation_length % 2:
+	raise ValueError("--autocorrelation-length must be odd")
+
+if options.sample_rate is not None and (not numpy.log2(options.sample_rate) == int(numpy.log2(options.sample_rate))):
+	raise ValueError("--sample-rate must be a power of two")
+
+
+
+#
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+def extract_subbank_info(banks, verbose = options.verbose):
+	var = {"clipleft": [], "clipright": [], "bank-id": []}
+	for bank in banks:
+		bank_xmldoc = ligolw_utils.load_url(bank, contenthandler = svd_bank.DefaultContentHandler, verbose = verbose)
+		process_params = lsctables.ProcessParamsTable.get_table(bank_xmldoc)
+		for row in process_params:
+			param = row.param.replace("--","")
+			if param in var:
+				var[param].append(row.value)
+	assert (len(var["clipleft"]) == len(var["clipright"]) == len(var["bank-id"]) == len(banks))
+	return var["clipleft"], var["clipright"], var["bank-id"]
+
+
+cliplefts, cliprights, bank_ids = extract_subbank_info(template_banks)
+cliplefts = [int(cl) for cl in cliplefts]
+cliprights = [int(cr) for cr in cliprights]
+
+psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=lal.series.PSDContentHandler))
+
+
+svd_bank.write_bank(
+	options.write_svd_bank,
+	[svd_bank.build_bank(
+		template_bank,
+		psd,
+		options.flow,
+		options.ortho_gate_fap,
+		inspiral_lr.LnLRDensity.snr_min,
+		options.svd_tolerance,
+		padding = options.padding,
+		verbose = options.verbose,
+		autocorrelation_length = options.autocorrelation_length,
+		samples_min = options.samples_min,
+		samples_max_256 = options.samples_max_256,
+		samples_max_64 = options.samples_max_64, 
+		samples_max = options.samples_max,
+		bank_id = bank_id,
+		contenthandler = svd_bank.DefaultContentHandler,
+		sample_rate = options.sample_rate,
+		instrument_override = options.instrument_override
+	) for (template_bank, bank_id) in zip(template_banks, bank_ids)],
+	psd,
+	cliplefts,
+	cliprights
+)

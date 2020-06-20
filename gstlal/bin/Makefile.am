@@ -11,4 +11,5 @@ dist_bin_SCRIPTS = \
 	gstlal_psd_xml_from_asd_txt \
 	gstlal_reference_psd \
 	gstlal_spectrum_movie \
+	gstlal_stage_frames \
 	gstlal_plot_psd_horizon
