@@ -206,7 +206,7 @@ class Bank(object):
 
 
 
-def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None, sample_rate = None):
+def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_tolerance, padding = 1.5, identity_transform = False, verbose = False, autocorrelation_length = 201, samples_min = 1024, samples_max_256 = 1024, samples_max_64 = 2048, samples_max = 4096, bank_id = None, contenthandler = None, sample_rate = None, instrument_override = None):
 	"""!
 	Return an instance of a Bank class.
 
@@ -233,6 +233,11 @@ def build_bank(template_bank_url, psd, flow, ortho_gate_fap, snr_threshold, svd_
 
 	# Get sngl inspiral table
 	bank_sngl_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
+
+	# override instrument if needed (this is useful if a generic instrument independent bank file is provided
+	if instrument_override is not None:
+		for row in bank_sngl_table:
+			row.ifo = instrument_override
 
 	# Choose how to break up templates in time
 	time_freq_bounds = templates.time_slices(
