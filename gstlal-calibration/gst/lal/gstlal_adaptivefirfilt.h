@@ -33,6 +33,30 @@
 G_BEGIN_DECLS
 
 
+/*
+ * gstlal_adaptivefirfilt_window_type enum
+ */
+
+
+enum gstlal_adaptivefirfilt_window_type {
+	GSTLAL_ADAPTIVEFIRFILT_DPSS = 0,
+	GSTLAL_ADAPTIVEFIRFILT_KAISER,
+	GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV
+};
+
+
+#define GSTLAL_ADAPTIVEFIRFILT_WINDOW_TYPE  \
+	(gstlal_adaptivefirfilt_window_get_type())
+
+
+GType gstlal_adaptivefirfilt_window_get_type(void);
+
+
+/*
+ * lal_adaptivefirfilt element
+ */
+
+
 #define GSTLAL_ADAPTIVEFIRFILT_TYPE \
 	(gstlal_adaptivefirfilt_get_type())
 #define GSTLAL_ADAPTIVEFIRFILT(obj) \
@@ -94,14 +118,14 @@ struct _GSTLALAdaptiveFIRFilt {
 	gboolean minimize_filter_length;
 	double *adaptive_filter;
 	gint64 adaptive_filter_length;
-	double tukey_param;
-	double *tukey;
-	gint64 tukey_length;
+	double *window;
+	double frequency_resolution;
 	gint filter_sample_rate;
 	gint64 filter_timeshift;
 	guint64 filter_endtime;
 	gboolean write_to_screen;
 	char *filename;
+	enum gstlal_adaptivefirfilt_window_type window_type;
 };
 
 

@@ -97,7 +97,7 @@
 
 
 /*
- * window type mode enum
+ * window type enum
  */
 
 

@@ -73,7 +73,41 @@
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
+#include <gstlal-calibration/gstlal_firtools.h>
 #include <gstlal_adaptivefirfilt.h>
+
+
+/*
+ * ============================================================================
+ *
+ *			    Custom Types
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * window type enum
+ */
+
+
+GType gstlal_adaptivefirfilt_window_get_type(void) {
+
+	static GType type = 0;
+
+	if(!type) {
+		static GEnumValue values[] = {
+			{GSTLAL_ADAPTIVEFIRFILT_DPSS, "GSTLAL_ADAPTIVEFIRFILT_DPSS", "Maximize energy concentration in main lobe"},
+			{GSTLAL_ADAPTIVEFIRFILT_KAISER, "GSTLAL_ADAPTIVEFIRFILT_KAISER", "Simple approximtion to DPSS window"},
+			{GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV, "GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("GSTLAL_ADAPTIVEFIRFILT_WINDOW", values);
+	}
+
+	return type;
+}
 
 
 /*
@@ -110,12 +144,13 @@ enum property {
 	ARG_MINIMIZE_FILTER_LENGTH,
 	ARG_ADAPTIVE_FILTER,
 	ARG_ADAPTIVE_FILTER_LENGTH,
-	ARG_TUKEY_PARAM,
+	ARG_FREQUENCY_RESOLUTION,
 	ARG_FILTER_SAMPLE_RATE,
 	ARG_FILTER_TIMESHIFT,
 	ARG_FILTER_ENDTIME,
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
+	ARG_WINDOW,
 	ARG_FAKE
 };
 
@@ -411,11 +446,9 @@ static void average_input_data_ ## DTYPE(GSTLALAdaptiveFIRFilt *element, complex
 				/* Convolve the variable filter with the static filter */ \
 				convolve_and_chop((double *) element->variable_filter, element->variable_filter_length, element->static_filter, element->static_filter_length, element->adaptive_filter, element->adaptive_filter_length); \
  \
-				/* Apply the Tukey window so that the filter falls off smoothly at the edges */ \
-				for(i = 0; i < element->tukey_length; i++) { \
-					element->adaptive_filter[i] *= element->tukey[i]; \
-					element->adaptive_filter[element->adaptive_filter_length - 1 - i] *= element->tukey[i]; \
-				} \
+				/* Apply the window function so that the filter falls off smoothly at the edges */ \
+				for(i = 0; i < element->adaptive_filter_length; i++) \
+					element->adaptive_filter[i] *= element->window[i]; \
  \
 				GST_LOG_OBJECT(element, "Just computed new FIR filter"); \
  \
@@ -512,6 +545,10 @@ static gboolean start(GstBaseSink *sink) {
 		else
 			element->variable_filter_length = element->num_zeros + element->num_static_zeros + 1;
 	}
+	if(element->adaptive_filter_length * element->frequency_resolution < element->filter_sample_rate) {
+		GST_WARNING_OBJECT(element, "frequency-resolution is too fine.  Resetting frequency-resolution to be equal to the inverse of the filter length in seconds.");
+		element->frequency_resolution = (double) element->filter_sample_rate / element->adaptive_filter_length;
+	}
 
 	return TRUE;
 }
@@ -604,12 +641,27 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	if(!element->adaptive_filter)
 		element->adaptive_filter = g_malloc(element->adaptive_filter_length * sizeof(*element->adaptive_filter));
 
-	/* Make a Tukey window as specified by element properties */
-	element->tukey_length = (gint64) (element->tukey_param * element->adaptive_filter_length / 2);
-	element->tukey = g_malloc(element->tukey_length * sizeof(*element->tukey));
-	gint64 i;
-	for(i = 0; i < element->tukey_length; i++)
-		element->tukey[i] = pow(sin(M_PI * i / 2.0 / element->tukey_length), 2.0);
+	/* Make a window function as specified by element properties */
+	/* Frequency resolution in units of frequency bins of fft data */
+	double alpha = element->frequency_resolution * element->adaptive_filter_length / element->filter_sample_rate;
+	switch(element->window_type) {
+	case GSTLAL_ADAPTIVEFIRFILT_DPSS:
+		element->window = dpss_double(element->adaptive_filter_length, alpha, 5.0, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_KAISER:
+		element->window = kaiser_double(element->adaptive_filter_length, M_PI * alpha, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV:
+		element->window = DolphChebyshev_double(element->adaptive_filter_length, alpha, NULL, FALSE);
+		break;
+
+	default:
+		GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+		g_assert_not_reached();
+		break;
+	}
 
 	if(!element->variable_filter && !element->minimize_filter_length) {
 		/* Allocate memory for fftw to do an inverse Fourier transform of the filter. */
@@ -703,6 +755,8 @@ static gboolean stop(GstBaseSink *sink) {
 	element->adaptive_filter = NULL;
 	g_free(element->filename);
 	element->filename = NULL;
+	g_free(element->window);
+	element->window = NULL;
 
 	return TRUE;
 }
@@ -818,8 +872,8 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->adaptive_filter_length = g_value_get_int64(value);
 		break;
 
-	case ARG_TUKEY_PARAM:
-		element->tukey_param = g_value_get_double(value);
+	case ARG_FREQUENCY_RESOLUTION:
+		element->frequency_resolution = g_value_get_double(value);
 		break;
 
 	case ARG_FILTER_SAMPLE_RATE:
@@ -836,6 +890,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 
 	case ARG_FILENAME:
 		element->filename = g_value_dup_string(value);
+		break;
+
+	case ARG_WINDOW:
+		element->window_type = g_value_get_enum(value);
 		break;
 
 	default:
@@ -960,8 +1018,8 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_int64(value, element->adaptive_filter_length);
 		break;
 
-	case ARG_TUKEY_PARAM:
-		g_value_set_double(value, element->tukey_param);
+	case ARG_FREQUENCY_RESOLUTION:
+		g_value_set_double(value, element->frequency_resolution);
 		break;
 
 	case ARG_FILTER_SAMPLE_RATE:
@@ -982,6 +1040,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_FILENAME:
 		g_value_set_string(value, element->filename);
+		break;
+
+	case ARG_WINDOW:
+		g_value_set_enum(value, element->window_type);
 		break;
 
 	default:
@@ -1202,13 +1264,12 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		1, G_MAXINT64, 16384,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_TUKEY_PARAM] = g_param_spec_double(
-		"tukey-param",
-		"Tukey Window Parameter",
-		"This parameter sets the shape of the Tukey window applied to the adaptive\n\t\t\t"
-		"filter. It is the fraction of the window that is curved. Therefore,\n\t\t\t"
-		"tukey-param = 0.0 means no Tukey window is applied, and tukey-param = 1.0\n\t\t\t"
-		"means that a Hann window is applied.",
+	properties[ARG_FREQUENCY_RESOLUTION] = g_param_spec_double(
+		"frequency-resolution",
+		"Frequency Resolution of FIR filter",
+		"This parameter sets the frequency resolution (in Hz) of the window function\n\t\t\t"
+		"applied to the adaptive filter.  It must be greater than the inverse of the\n\t\t\t"
+		"length of the filter in seconds; otherwise, it will be overridden.",
 		0.0, 1.0, 0.0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -1252,6 +1313,14 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		"Name of file to write computed FIR filters to. If not given, no file\n\t\t\t"
 		"is produced.",
 		NULL,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_WINDOW] = g_param_spec_enum(
+		"window-type",
+		"Window Function Type",
+		"What window function to apply to the FIR filters",
+		GSTLAL_ADAPTIVEFIRFILT_WINDOW_TYPE,
+		GSTLAL_ADAPTIVEFIRFILT_DPSS,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 
@@ -1318,8 +1387,8 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_TUKEY_PARAM,
-		properties[ARG_TUKEY_PARAM]
+		ARG_FREQUENCY_RESOLUTION,
+		properties[ARG_FREQUENCY_RESOLUTION]
 	);
 	g_object_class_install_property(
 		gobject_class,
@@ -1345,6 +1414,11 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		gobject_class,
 		ARG_FILENAME,
 		properties[ARG_FILENAME]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_WINDOW,
+		properties[ARG_WINDOW]
 	);
 }
 
@@ -1375,10 +1449,10 @@ static void gstlal_adaptivefirfilt_init(GSTLALAdaptiveFIRFilt *element) {
 	element->static_filter_length = 0;
 	element->adaptive_filter = NULL;
 	element->adaptive_filter_length = 0;
-	element->tukey_param = 0.0;
-	element->tukey = NULL;
-	element->tukey_length = 0;
+	element->frequency_resolution = 0.0;
+	element->window = NULL;
 	element->filename = NULL;
+	element->window_type = 0;
 
 	gst_base_sink_set_sync(GST_BASE_SINK(element), FALSE);
 	gst_base_sink_set_async_enabled(GST_BASE_SINK(element), FALSE);
