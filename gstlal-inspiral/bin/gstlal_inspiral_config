@@ -34,15 +34,36 @@ class gYAML(object):
 		return self._svdstats
 
 	def __override(self, arg):
+		"""
+		This function provides composite values that are
+		derived from the config according to various 
+		conventions
+		"""
+
 		if "inspiral.ht-gate-threshold." in arg:
 			sbin = arg.split(".")[-1]
 			mc = float(self.svdstats[sbin]["median_mchirp"])
 			(x1,y1),(x2,y2) = [[float (y) for y in x.split(":")] for x in self("inspiral.ht-gate-threshold-linear").split("-")]
 			return (y2-y1) / (x2-x1) * (mc - x1) + y1
+
+		if "svd.autocorrelation-length." in arg:
+			ac1,mct,ac2 = self("svd.auto-chisq-len-range").split(":")
+			sbin = arg.split(".")[-1]
+			mc = float(self.svdstats[sbin]["median_mchirp"])
+			return ac1 if mc < mct else ac2
+
 		if "svd.number-of-svd-bins" in arg:
 			return len(self.svdstats)
+
+		if "svd.bins" in arg:
+			return " ".join(self.svdstats.keys())
+
 		if "init.num-segs-per-job" in arg:
 			return int(self("init.num-cores")) * int(self("init.insp-procs-override-factor")) // int(self("svd.number-of-svd-bins")) + 1
+		if "stage.data-find-server-str" in arg:
+			data_find_server = self("stage.data-find-server").strip()
+			return "" if len(data_find_server) == 0 else "--server %s" % data_find_server
+
 		# default is an empty string which means not found
 		return ""			
 
