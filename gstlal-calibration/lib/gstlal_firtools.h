@@ -192,29 +192,29 @@ double *gstlal_irdft_double(complex double *fd_data, guint N_in, guint *N, long 
 
 long double *gstlal_irdft_longdouble(long complex double *fd_data, guint N_in, guint *N, long complex double *exp_array, gboolean normalize, long double *td_data);
 
-complex float *gstlal_fft_float(complex float *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean inverse, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data);
+complex float *gstlal_fft_float(complex float *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean inverse, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data, gboolean free_input);
 
-complex double *gstlal_fft_double(complex double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean inverse, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data);
+complex double *gstlal_fft_double(complex double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean inverse, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data, gboolean free_input);
 
-long complex double *gstlal_fft_longdouble(long complex double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean inverse, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data);
+long complex double *gstlal_fft_longdouble(long complex double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean inverse, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data, gboolean free_input);
 
-complex float *gstlal_ifft_float(complex float *fd_data, guint N, gboolean normalize);
+complex float *gstlal_ifft_float(complex float *fd_data, guint N, gboolean normalize, gboolean free_input);
 
-complex double *gstlal_ifft_double(complex double *fd_data, guint N, gboolean normalize);
+complex double *gstlal_ifft_double(complex double *fd_data, guint N, gboolean normalize, gboolean free_input);
 
-long complex double *gstlal_ifft_longdouble(long complex double *fd_data, guint N, gboolean normalize);
+long complex double *gstlal_ifft_longdouble(long complex double *fd_data, guint N, gboolean normalize, gboolean free_input);
 
-complex float *gstlal_rfft_float(float *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean return_full, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data);
+complex float *gstlal_rfft_float(float *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean return_full, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data, gboolean free_input);
 
-complex double *gstlal_rfft_double(double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean return_full, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data);
+complex double *gstlal_rfft_double(double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean return_full, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data, gboolean free_input);
 
-long complex double *gstlal_rfft_longdouble(long double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean return_full, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data);
+long complex double *gstlal_rfft_longdouble(long double *td_data, guint N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean return_full, guint M, guint *M_prime_factors, guint M_num_factors, long complex double *M_exp_array2, long complex double *M_exp_array, long complex double *fd_data, gboolean free_input);
 
-float *gstlal_irfft_float(complex float *fd_data, guint N_in, guint *N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean normalize, guint M_fft, guint *M_fft_prime_factors, guint M_fft_num_factors, long complex double *M_fft_exp_array2, long complex double *M_fft_exp_array, guint M_irfft, guint *M_irfft_prime_factors, guint M_irfft_num_factors, long complex double *M_irfft_exp_array2, long complex double *M_irfft_exp_array, long double *td_data);
+float *gstlal_irfft_float(complex float *fd_data, guint N_in, guint *N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean normalize, guint M_fft, guint *M_fft_prime_factors, guint M_fft_num_factors, long complex double *M_fft_exp_array2, long complex double *M_fft_exp_array, guint M_irfft, guint *M_irfft_prime_factors, guint M_irfft_num_factors, long complex double *M_irfft_exp_array2, long complex double *M_irfft_exp_array, long double *td_data, gboolean free_input);
 
-double *gstlal_irfft_double(complex double *fd_data, guint N_in, guint *N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean normalize, guint M_fft, guint *M_fft_prime_factors, guint M_fft_num_factors, long complex double *M_fft_exp_array2, long complex double *M_fft_exp_array, guint M_irfft, guint *M_irfft_prime_factors, guint M_irfft_num_factors, long complex double *M_irfft_exp_array2, long complex double *M_irfft_exp_array, long double *td_data);
+double *gstlal_irfft_double(complex double *fd_data, guint N_in, guint *N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean normalize, guint M_fft, guint *M_fft_prime_factors, guint M_fft_num_factors, long complex double *M_fft_exp_array2, long complex double *M_fft_exp_array, guint M_irfft, guint *M_irfft_prime_factors, guint M_irfft_num_factors, long complex double *M_irfft_exp_array2, long complex double *M_irfft_exp_array, long double *td_data, gboolean free_input);
 
-long double *gstlal_irfft_longdouble(long complex double *fd_data, guint N_in, guint *N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean normalize, guint M_fft, guint *M_fft_prime_factors, guint M_fft_num_factors, long complex double *M_fft_exp_array2, long complex double *M_fft_exp_array, guint M_irfft, guint *M_irfft_prime_factors, guint M_irfft_num_factors, long complex double *M_irfft_exp_array2, long complex double *M_irfft_exp_array, long double *td_data);
+long double *gstlal_irfft_longdouble(long complex double *fd_data, guint N_in, guint *N, guint *prime_factors, guint num_factors, long complex double *exp_array, gboolean normalize, guint M_fft, guint *M_fft_prime_factors, guint M_fft_num_factors, long complex double *M_fft_exp_array2, long complex double *M_fft_exp_array, guint M_irfft, guint *M_irfft_prime_factors, guint M_irfft_num_factors, long complex double *M_irfft_exp_array2, long complex double *M_irfft_exp_array, long double *td_data, gboolean free_input);
 
 complex float *gstlal_prime_fft_float(complex float *td_data, guint N, gboolean inverse, long complex double *exp_array2, guint M, guint *prime_factors, guint num_factors, long complex double *exp_array, long complex double *fd_data);
 

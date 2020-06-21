@@ -27,8 +27,6 @@
 #include <gst/gst.h>
 #include <gst/base/gstbasesink.h>
 
-#include <fftw3.h>
-
 
 G_BEGIN_DECLS
 
@@ -41,7 +39,8 @@ G_BEGIN_DECLS
 enum gstlal_adaptivefirfilt_window_type {
 	GSTLAL_ADAPTIVEFIRFILT_DPSS = 0,
 	GSTLAL_ADAPTIVEFIRFILT_KAISER,
-	GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV
+	GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV,
+	GSTLAL_ADAPTIVEFIRFILT_NONE
 };
 
 
@@ -99,8 +98,6 @@ struct _GSTLALAdaptiveFIRFilt {
 	complex double *input_average;
 	gint64 num_in_avg;
 	gboolean filter_has_gain;
-	double complex *variable_filter;
-	fftw_plan variable_filter_plan;
 
 	/* properties */
 	gint64 update_samples;
@@ -112,12 +109,18 @@ struct _GSTLALAdaptiveFIRFilt {
 	complex double *static_poles;
 	int num_static_poles;
 	double phase_measurement_frequency;
+	complex double *static_model;
+	gint64 static_model_length;
 	double *static_filter;
 	gint64 static_filter_length;
-	gint64 variable_filter_length;
 	gboolean minimize_filter_length;
 	double *adaptive_filter;
 	gint64 adaptive_filter_length;
+	double *padded_filter;
+	gint64 padded_filter_length;
+	gint64 pad_samples;
+	complex double *padded_model;
+	gint64 padded_model_length;
 	double *window;
 	double frequency_resolution;
 	gint filter_sample_rate;

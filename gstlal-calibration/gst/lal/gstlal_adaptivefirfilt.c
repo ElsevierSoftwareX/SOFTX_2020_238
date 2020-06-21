@@ -58,14 +58,6 @@
 
 
 /*
- * stuff from FFTW
- */
-
-
-#include <fftw3.h>
-
-
-/*
  * our own stuff
  */
 
@@ -100,6 +92,7 @@ GType gstlal_adaptivefirfilt_window_get_type(void) {
 			{GSTLAL_ADAPTIVEFIRFILT_DPSS, "GSTLAL_ADAPTIVEFIRFILT_DPSS", "Maximize energy concentration in main lobe"},
 			{GSTLAL_ADAPTIVEFIRFILT_KAISER, "GSTLAL_ADAPTIVEFIRFILT_KAISER", "Simple approximtion to DPSS window"},
 			{GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV, "GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{GSTLAL_ADAPTIVEFIRFILT_NONE, "GSTLAL_ADAPTIVEFIRFILT_NONE", "Do not apply a window function"},
 			{0, NULL, NULL}
 		};
 
@@ -140,7 +133,7 @@ enum property {
 	ARG_STATIC_POLES,
 	ARG_PHASE_MEASUREMENT_FREQUENCY,
 	ARG_STATIC_FILTER,
-	ARG_VARIABLE_FILTER_LENGTH,
+	ARG_STATIC_MODEL,
 	ARG_MINIMIZE_FILTER_LENGTH,
 	ARG_ADAPTIVE_FILTER,
 	ARG_ADAPTIVE_FILTER_LENGTH,
@@ -150,7 +143,7 @@ enum property {
 	ARG_FILTER_ENDTIME,
 	ARG_WRITE_TO_SCREEN,
 	ARG_FILENAME,
-	ARG_WINDOW,
+	ARG_WINDOW_TYPE,
 	ARG_FAKE
 };
 
@@ -267,33 +260,15 @@ double *convolve(double *filter1, int length1, double *filter2, int length2, dou
 }
 
 
-static void convolve_and_chop(double *filter1, gint64 length1, double *filter2, gint64 length2, double *convolved_filter, gint64 convolved_length) {
-
-	gint64 i, j, chop_samples, j_start, j_stop;
-
-	/* Deal with any samples we need to remove from the edges */
-	chop_samples = length1 + length2 - 1 - convolved_length; /* total samples being removed */
-	chop_samples = chop_samples / 2 + chop_samples % 2; /* samples removed from start of filter */
-
-	memset(convolved_filter, 0, convolved_length * sizeof(*convolved_filter));
-	for(i = 0; i < length1; i++) {
-		j_start = max64(chop_samples - i, 0);
-		j_stop = min64(convolved_length + chop_samples - i, length2);
-		for(j = j_start; j < j_stop; j++)
-			convolved_filter[i + j - chop_samples] += filter1[i] * filter2[j];
-	}
-}
-
-
-static gboolean update_variable_filter(complex double *variable_filter, gint64 variable_filter_length, int filter_sample_rate, fftw_plan variable_filter_plan, complex double *input_average, int num_zeros, int num_poles, gboolean filter_has_gain, complex double *static_zeros, int num_static_zeros, complex double *static_poles, int num_static_poles, double phase_measurement_frequency) {
+static gboolean update_padded_filter(complex double *padded_model, gint64 padded_model_length, double *padded_filter, gint64 padded_filter_length, int filter_sample_rate, complex double *input_average, int num_zeros, int num_poles, gboolean filter_has_gain, complex double *static_zeros, int num_static_zeros, complex double *static_poles, int num_static_poles, double phase_measurement_frequency, complex double *static_model, gint64 static_model_length) {
 
 	/*
 	 * Compute the filter in the frequency domain
 	 */
 
-	gint64 n, fd_variable_filter_length = variable_filter_length / 2 + 1;
+	gint64 n;
 	int m;
-	complex double gain, two_pi_i_df_t, df = (complex double) filter_sample_rate / 2.0 / (fd_variable_filter_length - 1.0);
+	complex double gain, two_pi_i_df_t, df = (complex double) filter_sample_rate / 2.0 / (padded_model_length - 1.0);
 
 	if(filter_has_gain && phase_measurement_frequency) {
 		/*
@@ -303,13 +278,13 @@ static gboolean update_variable_filter(complex double *variable_filter, gint64 v
 		 * increments. The rest of the parameters in the exp() are constant.
 		 */
 
-		gain = (complex double) cabs(input_average[num_zeros + num_poles]) / variable_filter_length;
-		two_pi_i_df_t = clog(input_average[num_zeros + num_poles] / gain / variable_filter_length) / phase_measurement_frequency * df;
+		gain = (complex double) cabs(input_average[num_zeros + num_poles]) / padded_filter_length;
+		two_pi_i_df_t = clog(input_average[num_zeros + num_poles] / gain / padded_filter_length) / phase_measurement_frequency * df;
 	} else if(filter_has_gain) {
-		gain = input_average[num_zeros + num_poles] / variable_filter_length;
+		gain = input_average[num_zeros + num_poles] / padded_filter_length;
 		two_pi_i_df_t = 0.0;
 	} else {
-		gain = (complex double) 1.0 / variable_filter_length;
+		gain = (complex double) 1.0 / padded_filter_length;
 		two_pi_i_df_t = 0.0;
 	}
 
@@ -320,88 +295,105 @@ static gboolean update_variable_filter(complex double *variable_filter, gint64 v
 	 * rest of the parameters in the exp() are constant. 
 	 */
 
-	for(n = 0; n < fd_variable_filter_length; n += 2)
-		variable_filter[n] = gain * cexp(two_pi_i_df_t * n);
+	for(n = 0; n < padded_model_length; n += 2)
+		padded_model[n] = gain * cexp(two_pi_i_df_t * n);
 
 	/* Negating every other value adds a delay of half the length of the filter, centering it in time. */
-	for(n = 1; n < fd_variable_filter_length; n += 2)
-		variable_filter[n] = -gain * cexp(two_pi_i_df_t * n);
+	for(n = 1; n < padded_model_length; n += 2)
+		padded_model[n] = -gain * cexp(two_pi_i_df_t * n);
 
 	/* Now add zeros and poles */
-	for(n = 0; n < fd_variable_filter_length; n++) {
+	for(n = 0; n < padded_model_length; n++) {
 		/* variable zeros */
 		for(m = 0; m < num_zeros; m++)
-			variable_filter[n] *= 1.0 + I * n * df / input_average[m];
+			padded_model[n] *= 1.0 + I * n * df / input_average[m];
 		/* variable poles */
 		for(m = num_zeros; m < num_zeros + num_poles; m++)
-			variable_filter[n] /= 1.0 + I * n * df / input_average[m];
+			padded_model[n] /= 1.0 + I * n * df / input_average[m];
 		/* static zeros */
 		for(m = 0; m < num_static_zeros; m++)
-			variable_filter[n] *= 1.0 + I * n * df / static_zeros[m];
+			padded_model[n] *= 1.0 + I * n * df / static_zeros[m];
 		/* static poles */
 		for(m = 0; m < num_static_poles; m++)
-			variable_filter[n] /= 1.0 + I * n * df / static_poles[m];
+			padded_model[n] /= 1.0 + I * n * df / static_poles[m];
 	}
 
-	/* Make sure the DC and Nyquist components are purely real */
-	variable_filter[0] = creal(variable_filter[0]);
-	variable_filter[fd_variable_filter_length - 1] = creal(variable_filter[fd_variable_filter_length - 1]);
+	if(static_model_length > 0) {
+		/* Multiply by the static model */
+		for(n = 0; n < padded_model_length; n++)
+			padded_model[n] *= static_model[n];
+	}
+
+	/* Make sure the DC component is real */
+	padded_model[0] = creal(padded_model[0]);
+
+	if(!(padded_filter_length % 2))
+		/* Make sure the Nyquist component is real */
+		padded_model[padded_model_length - 1] = creal(padded_model[padded_model_length - 1]);
 
 	/* Take the inverse Fourier transform */
-	fftw_execute(variable_filter_plan);
+	double *padded_filter_temp = gstlal_irfft_double(padded_model, padded_model_length, (guint *) &padded_filter_length, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, FALSE);
 
 	/* Check if the filter has sain values in it */
 	gboolean success = TRUE;
-	for(n = 0; n < variable_filter_length; n++)
-		success &= isnormal(((double *) variable_filter)[n]) || ((double *) variable_filter)[n] == 0.0;
+	for(n = 0; n < padded_filter_length; n++) {
+		success &= isnormal(padded_filter_temp[n]) || padded_filter_temp[n] == 0.0;
+		padded_filter[n] = padded_filter_temp[n];
+	}
+
+	g_free(padded_filter_temp);
 
 	return success;
 }
 
 
-static gboolean update_variable_filter_minimized(double *variable_filter, int variable_filter_length, int filter_sample_rate, complex double *input_average, int num_zeros, gboolean filter_has_gain, complex double *static_zeros, int num_static_zeros) {
+static gboolean update_adaptive_filter_minimized(double *adaptive_filter, int adaptive_filter_length, int filter_sample_rate, complex double *input_average, int num_zeros, gboolean filter_has_gain, complex double *static_zeros, int num_static_zeros, double *static_filter, gint64 static_filter_length) {
 
 	int i;
 
 	if(num_zeros) {
 		/* There is at least one zero computed from inputs. We compute a two-tap filter based on the first of these */
-		*variable_filter = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(*input_average));
-		variable_filter[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+		*adaptive_filter = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+		adaptive_filter[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(*input_average));
 	} else if(num_static_zeros) {
 		/* There are no inputs that are zeros, but we wish to compute a two-tap filter from a static zero instead */
-		*variable_filter = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(*input_average));
-		variable_filter[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+		*adaptive_filter = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(*input_average));
+		adaptive_filter[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(*input_average));
 	} else {
 		/* There are no zeros, only a gain */
-		*variable_filter = 1.0;
+		*adaptive_filter = 1.0;
 	}
 
 	if(num_zeros + num_static_zeros > 1) {
-		/* We will convolve the variable filter with more two-tap filters to complete it */
-		double *tempfilt = g_malloc(2 * sizeof(*variable_filter));
+		/* We will convolve the filter with more two-tap filters to complete it */
+		double *tempfilt = g_malloc(2 * sizeof(*adaptive_filter));
 		for(i = 1; i < num_zeros; i++) {
 			*tempfilt = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(input_average[i]));
 			tempfilt[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(input_average[i]));
-			convolve(variable_filter, i + 1, tempfilt, 2, variable_filter);
+			convolve(adaptive_filter, i + 1, tempfilt, 2, adaptive_filter);
 		}
 		for(i = num_zeros ? num_zeros : 1; i < num_zeros + num_static_zeros; i++) {
 			*tempfilt = 0.5 + filter_sample_rate / (2.0 * M_PI * creal(static_zeros[i - num_zeros]));
 			tempfilt[1] = 0.5 - filter_sample_rate / (2.0 * M_PI * creal(static_zeros[i - num_zeros]));
-			convolve(variable_filter, i + 1, tempfilt, 2, variable_filter);
+			convolve(adaptive_filter, i + 1, tempfilt, 2, adaptive_filter);
 		}
 		g_free(tempfilt);
 	}
 
+	/* Convolve with a static filter if there is one */
+	if(static_filter_length > 0)
+		convolve(adaptive_filter, num_zeros + num_static_zeros + 1, static_filter, static_filter_length, adaptive_filter);
+
 	/* Include a gain factor if there is one */
 	if(filter_has_gain) {
-		for(i = 0; i < variable_filter_length; i++)
-			variable_filter[i] *= creal(input_average[num_zeros]);
+		for(i = 0; i < adaptive_filter_length; i++)
+			adaptive_filter[i] *= creal(input_average[num_zeros]);
 	}
 
 	/* Check if the filter has sain values in it */
 	gboolean success = TRUE;
-	for(i = 0; i < variable_filter_length; i++)
-		success &= isnormal(((double *) variable_filter)[i]);
+	for(i = 0; i < adaptive_filter_length; i++)
+		success &= isnormal((adaptive_filter)[i]);
 
 	return success;
 }
@@ -436,20 +428,19 @@ static void average_input_data_ ## DTYPE(GSTLALAdaptiveFIRFilt *element, complex
 			for(j = 0; j < element->channels; j++) \
 				element->input_average[j] /= element->num_in_avg; \
  \
-			/* Update variable portion of adaptive FIR filter */ \
+			/* Update the adaptive FIR filter */ \
 			gboolean success; \
 			if(element->minimize_filter_length) \
-				success = update_variable_filter_minimized((double *) element->variable_filter, (int) element->variable_filter_length, element->filter_sample_rate, element->input_average, element->num_zeros, element->filter_has_gain, element->static_zeros, element->num_static_zeros); \
+				success = update_adaptive_filter_minimized(element->adaptive_filter, (int) element->adaptive_filter_length, element->filter_sample_rate, element->input_average, element->num_zeros, element->filter_has_gain, element->static_zeros, element->num_static_zeros, element->static_filter, element->static_filter_length); \
 			else \
-				success = update_variable_filter(element->variable_filter, element->variable_filter_length, element->filter_sample_rate, element->variable_filter_plan, element->input_average, element->num_zeros, element->num_poles, element->filter_has_gain, element->static_zeros, element->num_static_zeros, element->static_poles, element->num_static_poles, element->phase_measurement_frequency); \
+				success = update_padded_filter(element->padded_model, element->padded_model_length, element->padded_filter, element->padded_filter_length, element->filter_sample_rate, element->input_average, element->num_zeros, element->num_poles, element->filter_has_gain, element->static_zeros, element->num_static_zeros, element->static_poles, element->num_static_poles, element->phase_measurement_frequency, element->static_model, element->static_model_length); \
 			if(success) { \
-				/* Convolve the variable filter with the static filter */ \
-				convolve_and_chop((double *) element->variable_filter, element->variable_filter_length, element->static_filter, element->static_filter_length, element->adaptive_filter, element->adaptive_filter_length); \
  \
 				/* Apply the window function so that the filter falls off smoothly at the edges */ \
-				for(i = 0; i < element->adaptive_filter_length; i++) \
-					element->adaptive_filter[i] *= element->window[i]; \
- \
+				if(element->window) { \
+					for(i = 0; i < element->adaptive_filter_length; i++) \
+						element->adaptive_filter[i] *= element->window[i]; \
+				} \
 				GST_LOG_OBJECT(element, "Just computed new FIR filter"); \
  \
 				/* Let other elements know about the update */ \
@@ -464,10 +455,9 @@ static void average_input_data_ ## DTYPE(GSTLALAdaptiveFIRFilt *element, complex
 				} \
  \
 				/* Write FIR filter to the screen or a file if we want */ \
-				if(element->write_to_screen || element->filename) { \
-					write_filter((double *) element->variable_filter, gst_element_get_name(element), "Variable", element->variable_filter_length, element->write_to_screen, element->filename, TRUE); \
+				if(element->write_to_screen || element->filename) \
 					write_filter((double *) element->adaptive_filter, gst_element_get_name(element), "Adaptive", element->adaptive_filter_length, element->write_to_screen, element->filename, TRUE); \
-				} \
+ \
 			} \
 			element->num_in_avg = 0; \
 			for(j = 0; j < element->channels; j++) \
@@ -529,25 +519,92 @@ static gboolean start(GstBaseSink *sink) {
 	if(element->filename)
 		remove(element->filename);
 
-	/* If no static filter is provided, the filter is just 1 */
-	if(element->static_filter_length == 0) {
-		element->static_filter_length = 1;
-		element->static_filter = g_malloc(sizeof(*element->static_filter));
-		*element->static_filter = 1.0;
-	}
-
 	/* Sanity checks */
 	if(element->average_samples > element->update_samples)
 		GST_ERROR_OBJECT(element, "average_samples cannot be greater than update_samples");
 	if(element->minimize_filter_length) {
-		if(element->num_poles || element->num_static_poles)
-			GST_WARNING_OBJECT(element, "Cannot set option minimize_filter_length = True if there are poles. Keeping variable_filter_length as is.");
-		else
-			element->variable_filter_length = element->num_zeros + element->num_static_zeros + 1;
+		if(element->num_poles || element->num_static_poles) {
+			GST_WARNING_OBJECT(element, "Cannot set option minimize_filter_length = True if there are poles. Keeping adaptive_filter_length as is.");
+			element->minimize_filter_length = FALSE;
+		} else {
+			element->adaptive_filter_length = element->num_zeros + element->num_static_zeros + 1;
+			element->adaptive_filter_length += (element->static_filter_length > 0 ? element->static_filter_length - 1 : 0);
+		}
 	}
 	if(element->adaptive_filter_length * element->frequency_resolution < element->filter_sample_rate) {
 		GST_WARNING_OBJECT(element, "frequency-resolution is too fine.  Resetting frequency-resolution to be equal to the inverse of the filter length in seconds.");
 		element->frequency_resolution = (double) element->filter_sample_rate / element->adaptive_filter_length;
+	}
+
+	/*
+	 * Memory allocation
+	 */
+
+	if(element->input_average) {
+		g_free(element->input_average);
+		element->input_average = NULL;
+	}
+	element->input_average = g_malloc(element->channels * sizeof(*element->input_average));
+	memset(element->input_average, 0, element->channels * sizeof(*element->input_average));
+
+	/* Make a window function as specified by element properties */
+	/* Frequency resolution in units of frequency bins of fft data */
+	double alpha = element->frequency_resolution * element->adaptive_filter_length / element->filter_sample_rate;
+	switch(element->window_type) {
+	case GSTLAL_ADAPTIVEFIRFILT_DPSS:
+		element->window = dpss_double(element->adaptive_filter_length, alpha, 5.0, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_KAISER:
+		element->window = kaiser_double(element->adaptive_filter_length, M_PI * alpha, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV:
+		element->window = DolphChebyshev_double(element->adaptive_filter_length, alpha, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_NONE:
+		element->window = NULL;
+		break;
+
+	default:
+		GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
+		g_assert_not_reached();
+		break;
+	}
+
+	if(!element->adaptive_filter && !element->minimize_filter_length) {
+		/* We are making a frequency-domain model and using gstlal_irfft to produce the adaptive filter. */
+		if(element->static_model_length == 0 && element->static_filter_length != 0) {
+			/* Then compute the static frequency-domain model from the static filter */
+			element->static_model = gstlal_rfft_double(element->static_filter, (guint) element->static_filter_length, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, NULL, FALSE);
+			element->static_model_length = element->static_filter_length / 2 + 1;
+		}
+
+		/* We may need to upsample the static model or the adaptive model */
+		element->padded_model_length = element->adaptive_filter_length > element->static_filter_length ? element->adaptive_filter_length : element->static_filter_length;
+		element->padded_filter_length = 2 * (element->padded_model_length - 1) + element->adaptive_filter_length % 2;
+
+		element->padded_model = g_malloc(element->padded_model_length * sizeof(*element->padded_model));
+		element->padded_filter = g_malloc(element->padded_filter_length * sizeof(*element->padded_filter));
+
+		/* How many pad samples are there at the beginning of the padded filter? */
+		element->pad_samples = (element->padded_filter_length - element->adaptive_filter_length) / 2;
+
+		/* Set the pointer to the adaptive filter to the right location */
+		element->adaptive_filter = element->padded_filter + element->pad_samples;
+
+		/*  Upsample if we need to */
+		if(element->static_model_length != 0 && element->static_model_length < element->padded_model_length) {
+			element->static_model = fir_resample_complexdouble(element->static_model, (guint) element->static_model_length, (guint) element->padded_model_length);
+			element->static_model_length = element->padded_model_length;
+		}
+
+	} else if (!element->adaptive_filter) {
+		/* Allocate memory for the adaptive filter, but in this case, no fft's are necessary */
+		element->padded_filter = g_malloc(element->adaptive_filter_length * sizeof(*element->adaptive_filter));
+		element->adaptive_filter = element->padded_filter;
+		element->pad_samples = 0;
 	}
 
 	return TRUE;
@@ -619,69 +676,6 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	else
 		GST_ERROR_OBJECT(element, "Number of channels must equal number of zeros plus number of poles, or one more than this. channels = %d, zeros + poles = %d", element->channels, element->num_zeros + element->num_poles);
 
-	/*
-	 * Memory allocation
-	 */
-
-	if(element->input_average) {
-		g_free(element->input_average);
-		element->input_average = NULL;
-	}
-	element->input_average = g_malloc(element->channels * sizeof(*element->input_average));
-	memset(element->input_average, 0, element->channels * sizeof(*element->input_average));
-
-	/* Check that the requested adaptive filter length is feasible and allocate memory */
-	if(element->adaptive_filter_length > element->variable_filter_length + element->static_filter_length - 1) {
-		GST_WARNING_OBJECT(element, "Adaptive filter length cannot be greater than sum of variable filter length and static filter length minus one. Resetting.");
-		element->adaptive_filter_length = element->variable_filter_length + element->static_filter_length - 1;
-		if(element->adaptive_filter)
-			g_free(element->adaptive_filter);
-		element->adaptive_filter = NULL;
-	}
-	if(!element->adaptive_filter)
-		element->adaptive_filter = g_malloc(element->adaptive_filter_length * sizeof(*element->adaptive_filter));
-
-	/* Make a window function as specified by element properties */
-	/* Frequency resolution in units of frequency bins of fft data */
-	double alpha = element->frequency_resolution * element->adaptive_filter_length / element->filter_sample_rate;
-	switch(element->window_type) {
-	case GSTLAL_ADAPTIVEFIRFILT_DPSS:
-		element->window = dpss_double(element->adaptive_filter_length, alpha, 5.0, NULL, FALSE);
-		break;
-
-	case GSTLAL_ADAPTIVEFIRFILT_KAISER:
-		element->window = kaiser_double(element->adaptive_filter_length, M_PI * alpha, NULL, FALSE);
-		break;
-
-	case GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV:
-		element->window = DolphChebyshev_double(element->adaptive_filter_length, alpha, NULL, FALSE);
-		break;
-
-	default:
-		GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
-		g_assert_not_reached();
-		break;
-	}
-
-	if(!element->variable_filter && !element->minimize_filter_length) {
-		/* Allocate memory for fftw to do an inverse Fourier transform of the filter. */
-		gstlal_fftw_lock();
-
-		GST_LOG_OBJECT(element, "starting FFTW planning");
-
-		gint64 fd_variable_filter_length = element->variable_filter_length / 2 + 1;
-		element->variable_filter = (complex double *) fftw_malloc(fd_variable_filter_length * sizeof(*element->variable_filter));
-		element->variable_filter_plan = fftw_plan_dft_c2r_1d(element->variable_filter_length, element->variable_filter, (double *) element->variable_filter, FFTW_ESTIMATE);
-
-		GST_LOG_OBJECT(element, "FFTW planning complete");
-
-		gstlal_fftw_unlock();
-
-	} else if (!element->variable_filter) {
-		/* Allocate memory for the variable filter, but in this case, no fft's are necessary */
-		element->variable_filter = g_malloc(element->variable_filter_length * sizeof(*element->variable_filter) / 2);
-	}
-
 	return success;
 }
 
@@ -737,26 +731,42 @@ static gboolean stop(GstBaseSink *sink) {
 
 	GSTLALAdaptiveFIRFilt *element = GSTLAL_ADAPTIVEFIRFILT(sink);
 
-	gstlal_fftw_lock();
-	fftw_free(element->variable_filter);
-	element->variable_filter = NULL;
-	fftw_destroy_plan(element->variable_filter_plan);
-	gstlal_fftw_unlock();
-
-	g_free(element->input_average);
-	element->input_average = NULL;
-	g_free(element->static_zeros);
-	element->static_zeros = NULL;
-	g_free(element->static_poles);
-	element->static_poles = NULL;
-	g_free(element->static_filter);
-	element->static_filter = NULL;
-	g_free(element->adaptive_filter);
-	element->adaptive_filter = NULL;
-	g_free(element->filename);
-	element->filename = NULL;
-	g_free(element->window);
-	element->window = NULL;
+	if(element->padded_filter) {
+		g_free(element->padded_filter);
+		element->padded_filter = NULL;
+	}
+	if(element->padded_model) {
+		g_free(element->padded_model);
+		element->padded_model = NULL;
+	}
+	if(element->input_average) {
+		g_free(element->input_average);
+		element->input_average = NULL;
+	}
+	if(element->static_zeros) {
+		g_free(element->static_zeros);
+		element->static_zeros = NULL;
+	}
+	if(element->static_poles) {
+		g_free(element->static_poles);
+		element->static_poles = NULL;
+	}
+	if(element->static_model) {
+		g_free(element->static_model);
+		element->static_model = NULL;
+	}
+	if(element->static_filter) {
+		g_free(element->static_filter);
+		element->static_filter = NULL;
+	}
+	if(element->filename) {
+		g_free(element->filename);
+		element->filename = NULL;
+	}
+	if(element->window) {
+		g_free(element->window);
+		element->window = NULL;
+	}
 
 	return TRUE;
 }
@@ -841,6 +851,25 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->phase_measurement_frequency = g_value_get_double(value);
 		break;
 
+	case ARG_STATIC_MODEL:
+		if(element->static_model) {
+			g_free(element->static_model);
+			element->static_model = NULL;
+		}
+		element->static_model_length = gst_value_array_get_size(value);
+		if(element->static_model_length % 2)
+			GST_ERROR_OBJECT(element, "Array length for property static-model must be even");
+		double *double_static_model = g_malloc(element->static_model_length * sizeof(double));
+		int n;
+		for(n = 0; n < element->static_model_length; n++)
+			double_static_model[n] = g_value_get_double(gst_value_array_get_value(value, n));
+		element->static_model = (complex double *) double_static_model;
+
+		/* Since we passed a complex array as though it were real, it is actually only half as long. */
+		element->static_model_length /= 2;
+
+		break;
+
 	case ARG_STATIC_FILTER:
 		if(element->static_filter) {
 			g_free(element->static_filter);
@@ -858,10 +887,6 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 			element->static_filter = g_malloc(sizeof(*element->static_filter));
 			*element->static_filter = 1.0;
 		}
-		break;
-
-	case ARG_VARIABLE_FILTER_LENGTH:
-		element->variable_filter_length = g_value_get_int64(value);
 		break;
 
 	case ARG_MINIMIZE_FILTER_LENGTH:
@@ -892,7 +917,7 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->filename = g_value_dup_string(value);
 		break;
 
-	case ARG_WINDOW:
+	case ARG_WINDOW_TYPE:
 		element->window_type = g_value_get_enum(value);
 		break;
 
@@ -970,6 +995,25 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_double(value, element->phase_measurement_frequency);
 		break;
 
+	case ARG_STATIC_MODEL: ;
+		GValue staticmodel = G_VALUE_INIT;
+		g_value_init(&staticmodel, GST_TYPE_ARRAY);
+		if(element->static_model) {
+			double *double_static_model = (double *) element->static_model;
+			int n;
+			for(n = 0; n < 2 * element->static_model_length; n++) {
+				GValue staticmodelval = G_VALUE_INIT;
+				g_value_init(&staticmodelval, G_TYPE_DOUBLE);
+				g_value_set_double(&staticmodelval, double_static_model[n]);
+				gst_value_array_append_value(&staticmodel, &staticmodelval);
+				g_value_unset(&staticmodelval);
+			}
+		}
+		g_value_copy(&staticmodel, value);
+		g_value_unset(&staticmodel);
+
+		break;
+
 	case ARG_STATIC_FILTER: ;
 		GValue staticfilter = G_VALUE_INIT;
 		g_value_init(&staticfilter, GST_TYPE_ARRAY);
@@ -986,10 +1030,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_copy(&staticfilter, value);
 		g_value_unset(&staticfilter);
 
-		break;
-
-	case ARG_VARIABLE_FILTER_LENGTH:
-		g_value_set_int64(value, element->variable_filter_length);
 		break;
 
 	case ARG_MINIMIZE_FILTER_LENGTH:
@@ -1042,7 +1082,7 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, element->filename);
 		break;
 
-	case ARG_WINDOW:
+	case ARG_WINDOW_TYPE:
 		g_value_set_enum(value, element->window_type);
 		break;
 
@@ -1052,23 +1092,6 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 	}
 
 	GST_OBJECT_UNLOCK(element);
-}
-
-
-/*
- * finalize()
- */
-
-
-static void finalize(GObject *object) {
-
-	GSTLALAdaptiveFIRFilt *element = GSTLAL_ADAPTIVEFIRFILT(object);
-
-	if(element->variable_filter) {
-		g_free(element->variable_filter);
-		element->variable_filter = NULL;
-	}
-	G_OBJECT_CLASS(gstlal_adaptivefirfilt_parent_class)->finalize(object);
 }
 
 
@@ -1100,7 +1123,6 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 
 	gobject_class->set_property = GST_DEBUG_FUNCPTR(set_property);
 	gobject_class->get_property = GST_DEBUG_FUNCPTR(get_property);
-	gobject_class->finalize = GST_DEBUG_FUNCPTR(finalize);
 
 	gst_element_class_set_details_simple(
 		element_class,
@@ -1154,18 +1176,18 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 	properties[ARG_NUM_ZEROS] = g_param_spec_int(
 		"num-zeros",
 		"Number of Zeros",
-		"Number of zeros in the variable filter. This will set the number of channels\n\t\t\t"
-		"assumed to represent zeros in the filter. The element assumes that these\n\t\t\t"
-		"channels come first.",
+		"Number of variable zeros in the adaptive filter. This will set the number of \n\t\t\t"
+		"channels assumed to represent zeros in the filter. The element assumes that\n\t\t\t"
+		"these channels come first.",
 		0, G_MAXINT, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_NUM_POLES] = g_param_spec_int(
 		"num-poles",
 		"Number of Poles",
-		"Number of poles in the variable filter. This will set the number of channels\n\t\t\t"
-		"assumed to represent poles in the filter. The element assumes that these\n\t\t\t"
-		"channels come second after the zeros.",
+		"Number of variable poles in the adaptive filter. This will set the number of\n\t\t\t"
+		"channels assumed to represent poles in the filter. The element assumes that\n\t\t\t"
+		"these channels come second after the zeros.",
 		0, G_MAXINT, 0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -1208,6 +1230,20 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_STATIC_MODEL] = gst_param_spec_array(
+		"static-model",
+		"Static Model",
+		"A static frequency-domain model that is multiplied by the computed adaptive\n\t\t\t"
+		"filter in the frequency domain",
+		g_param_spec_double(
+			"static-model-sample",
+			"Static Model Sample",
+			"A sample from the static model",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		),
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 	properties[ARG_STATIC_FILTER] = gst_param_spec_array(
 		"static-filter",
 		"Static Filter",
@@ -1219,15 +1255,6 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 			-G_MAXDOUBLE, G_MAXDOUBLE, 0.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
 		),
-		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
-	);
-	properties[ARG_VARIABLE_FILTER_LENGTH] = g_param_spec_int64(
-		"variable-filter-length",
-		"Variable Filter Length",
-		"Length in samples of variable filter produced. This length does not include\n\t\t\t"
-		"the length of the static filter. The total filter length will be at most one\n\t\t\t"
-		"less than the sum of the variable filter length and the static filter length.",
-		1, G_MAXINT64, 16384,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_MINIMIZE_FILTER_LENGTH] = g_param_spec_boolean(
@@ -1258,9 +1285,8 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 	properties[ARG_ADAPTIVE_FILTER_LENGTH] = g_param_spec_int64(
 		"adaptive-filter-length",
 		"Adaptive Filter Length",
-		"Length in samples of adaptive filter produced. This length cannot be more\n\t\t\t"
-		"than sum of the variable filter length and the static filter length minus\n\t\t\t"
-		"one. If it is less than this, the edges will be removed symmetrically.",
+		"Length in samples of adaptive filter produced.  This will be overridden if\n\t\t\t"
+		"minimize-filter-length is set to TRUE.",
 		1, G_MAXINT64, 16384,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
@@ -1270,7 +1296,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		"This parameter sets the frequency resolution (in Hz) of the window function\n\t\t\t"
 		"applied to the adaptive filter.  It must be greater than the inverse of the\n\t\t\t"
 		"length of the filter in seconds; otherwise, it will be overridden.",
-		0.0, 1.0, 0.0,
+		0.0, G_MAXDOUBLE, 0.0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
 	properties[ARG_FILTER_SAMPLE_RATE] = g_param_spec_int(
@@ -1315,7 +1341,7 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		NULL,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
-	properties[ARG_WINDOW] = g_param_spec_enum(
+	properties[ARG_WINDOW_TYPE] = g_param_spec_enum(
 		"window-type",
 		"Window Function Type",
 		"What window function to apply to the FIR filters",
@@ -1362,13 +1388,13 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_STATIC_FILTER,
-		properties[ARG_STATIC_FILTER]
+		ARG_STATIC_MODEL,
+		properties[ARG_STATIC_MODEL]
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_VARIABLE_FILTER_LENGTH,
-		properties[ARG_VARIABLE_FILTER_LENGTH]
+		ARG_STATIC_FILTER,
+		properties[ARG_STATIC_FILTER]
 	);
 	g_object_class_install_property(
 		gobject_class,
@@ -1417,8 +1443,8 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_WINDOW,
-		properties[ARG_WINDOW]
+		ARG_WINDOW_TYPE,
+		properties[ARG_WINDOW_TYPE]
 	);
 }
 
@@ -1437,18 +1463,23 @@ static void gstlal_adaptivefirfilt_init(GSTLALAdaptiveFIRFilt *element) {
 
 	element->input_average = NULL;
 	element->num_in_avg = 0;
-	element->variable_filter = NULL;
-	element->variable_filter_length = 0;
 	element->static_zeros = NULL;
 	element->num_static_zeros = 0;
 	element->num_zeros = 0;
 	element->static_poles = NULL;
 	element->num_static_poles = 0;
 	element->num_poles = 0;
+	element->static_model = NULL;
+	element->static_model_length = 0;
 	element->static_filter = NULL;
 	element->static_filter_length = 0;
 	element->adaptive_filter = NULL;
 	element->adaptive_filter_length = 0;
+	element->padded_filter = NULL;
+	element->padded_filter_length = 0;
+	element->pad_samples = 0;
+	element->padded_model = NULL;
+	element->padded_model_length = 0;
 	element->frequency_resolution = 0.0;
 	element->window = NULL;
 	element->filename = NULL;
