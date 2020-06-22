@@ -6,6 +6,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral \
 	gstlal_inspiral_add_mass_models \
 	gstlal_inspiral_add_template_ids \
+	gstlal_inspiral_bank_splitter \
 	gstlal_inspiral_calc_likelihood \
 	gstlal_inspiral_calc_rank_pdfs \
 	gstlal_inspiral_coinc_extractor \
