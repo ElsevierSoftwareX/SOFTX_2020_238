@@ -137,6 +137,13 @@ def mktransferfunction(pipeline, src, **properties):
 
 def mkadaptivefirfilt(pipeline, src, **properties):
 	# Make sure each array property is formatted correctly
+	if "static_model" in properties:
+		staticmodel = properties.pop("static_model")
+		if staticmodel is not None:
+			static_model = []
+			for i in range(len(staticmodel)):
+				static_model.append(float(staticmodel[i]))
+			properties["static_model"] = static_model
 	if "static_filter" in properties:
 		staticfilt = properties.pop("static_filter")
 		if staticfilt is not None:
