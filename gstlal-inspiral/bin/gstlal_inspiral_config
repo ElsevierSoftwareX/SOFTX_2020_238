@@ -60,6 +60,8 @@ class gYAML(object):
 
 		if "init.num-segs-per-job" in arg:
 			return int(self("inspiral.num-cores")) * int(self("inspiral.insp-procs-override-factor")) // int(self("svd.number-of-svd-bins")) + 1
+		if "init.duration" in arg:
+			return int(self("init.stop")) - int(self("init.start"))
 		if "stage.data-find-server-str" in arg:
 			data_find_server = self("stage.data-find-server").strip()
 			return "" if len(data_find_server) == 0 else "--server %s" % data_find_server
