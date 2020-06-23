@@ -280,13 +280,11 @@ static double get_gains(GSTLALTDwhiten *element, guint64 offset, struct kernelin
  */
 
 
-static double inner_product(const double *vec1, const double *vec2, gsize n)
+static double inner_product(gsl_vector *vec1, gsl_vector *vec2)
 {
-	double output = 0.;
+	double output;
 
-	while(n--)
-		output += *vec1++ * *vec2++;
-
+	gsl_blas_ddot(vec1, vec2, &output);
 	return output;
 }
 
@@ -351,10 +349,12 @@ static unsigned tddfilter(GSTLALTDwhiten *element, GstMapInfo *mapinfo, unsigned
 		 * kernels.
 		 */
 
-		for(i = 0; i < output_length; i++) {
+		gsl_vector_view input_view = gsl_vector_view_array(input, kernelinfo->length);
+		gsl_vector_view kernel_view = gsl_vector_view_array(kernelinfo->kernel, kernelinfo->length);
+		for(i = 0; i < output_length; i++, input_view.vector.data++) {
 			gain0 = get_gains(element, element->next_out_offset + i, kernelinfo, &gain1);
 
-			output[i] = output[i] * gain0 + inner_product(kernelinfo->kernel, input + i, kernelinfo->length) * gain1;
+			output[i] = output[i] * gain0 + inner_product(&kernel_view.vector, &input_view.vector) * gain1;
 		}
 
 		/*
