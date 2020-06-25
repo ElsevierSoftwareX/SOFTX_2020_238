@@ -165,6 +165,19 @@ def mkadaptivefirfilt(pipeline, src, **properties):
 			for i in range(0, len(staticp)):
 				static_poles.append(float(staticp[i]))
 			properties["static_poles"] = static_poles
+	if "window_type" in properties:
+		win = properties.pop("window_type")
+		if win in [None, 3]:
+			win = 3
+		elif win in ['DC', 'dolph_chebyshev', 'DolphChebyshev', 'DOLPH_CHEBYSHEV', 2]:
+			win = 2
+		elif win in ['kaiser', 'Kaiser', 'KAISER', 1]:
+			win = 1
+		elif win in ['dpss', 'DPSS', 'Slepian', 'slepian', 'SLEPIAN', 0]:
+			win = 0
+		else:
+			raise ValueError("Unknown window function %s" % win)
+		properties["window_type"] = win
 	return pipeparts.mkgeneric(pipeline, src, "lal_adaptivefirfilt", **properties)
 
 def mkpow(pipeline, src, **properties):
@@ -470,89 +483,138 @@ def removeDC(pipeline, head, rate):
 
 	return mkadder(pipeline, list_srcs(pipeline, head, DC))
 
-def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, filter_latency = 0.5, td = True):
+def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, filter_latency = 0.5, freq_res = 0.0, td = True):
 	length = int(length * rate)
-	if not length % 2:
-		length += 1 # Make sure the filter length is odd
+
+	# Find alpha, and the actual frequency resolution
+	alpha = freq_res * length / rate if freq_res > 0.0 else 3.0
+	alpha = 1.0 if alpha < 1.0 else alpha
+	freq_res = alpha * rate / length
+
+	# Adjust the cutoff frequency to "protect" the passband.
+	if fcut != 0.0:
+		fcut += 0.75 * freq_res
 
 	# Compute a low-pass filter.
-	lowpass = numpy.sinc(2 * float(fcut) / rate * (numpy.arange(length) - (length - 1) / 2))
-	lowpass *= numpy.blackman(length)
+	lowpass = numpy.sinc(2 * numpy.float128(fcut) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
+	alpha = freq_res * length / rate if freq_res > 0.0 else 3.0
+	lowpass *= fir.kaiser(length, numpy.pi * alpha) # fir.DPSS(length, alpha, max_time = 10)
 	lowpass /= numpy.sum(lowpass)
+	lowpass = numpy.float64(lowpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency + 0.5), fir_matrix = [lowpass], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency + 0.25), fir_matrix = [lowpass], time_domain = td)
 
-def highpass(pipeline, head, rate, length = 1.0, fcut = 9.0, filter_latency = 0.5, td = True):
+def highpass(pipeline, head, rate, length = 1.0, fcut = 10.0, filter_latency = 0.5, freq_res = 0.0, td = True):
 	length = int(length * rate)
-	if not length % 2:
-		length += 1 # Make sure the filter length is odd
+
+	# Find alpha, and the actual frequency resolution
+	alpha = freq_res * length / rate if freq_res > 0.0 else 3.0
+	alpha = 1.0 if alpha < 1.0 else alpha
+	freq_res = alpha * rate / length
+
+	# Adjust the cutoff frequency to "protect" the passband.
+	fcut -= 0.75 * freq_res
 
 	# Compute a low-pass filter.
-	lowpass = numpy.sinc(2 * float(fcut) / rate * (numpy.arange(length) - (length - 1) / 2))
-	lowpass *= numpy.blackman(length)
+	lowpass = numpy.sinc(2 * numpy.float128(fcut) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
+	lowpass *= fir.kaiser(length, numpy.pi * alpha) # fir.DPSS(length, alpha, max_time = 10)
 	lowpass /= numpy.sum(lowpass)
 
 	# Create a high-pass filter from the low-pass filter through spectral inversion.
 	highpass = -lowpass
-	highpass[int((length - 1) / 2)] += 1
+	highpass[int((length - 1) // 2)] += 1
+
+	highpass = numpy.float64(highpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency + 0.5), fir_matrix = [highpass], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * filter_latency + 0.25), fir_matrix = [highpass], time_domain = td)
 
-def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, td = True):
-	length = int(length * rate / 2)
-	if not length % 2:
-		length += 1 # Make sure the filter length is odd
+def bandpass(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, freq_res = 0.0, td = True):
+	length = int(length * rate)
+
+	# Find alpha, and the actual frequency resolution
+	alpha = freq_res * length / rate if freq_res > 0.0 else 3.0
+	alpha = 1.0 if alpha < 1.0 else alpha
+	freq_res = alpha * rate / length
+
+	# Adjust the cutoff frequency to "protect" the passband.
+	f_low -= 0.75 * freq_res
+
+	# Make a DPSS window
+	dpss = fir.kaiser(length, numpy.pi * alpha) # fir.DPSS(length, alpha, max_time = 10)
 
 	# Compute a temporary low-pass filter.
-	lowpass = numpy.sinc(2 * float(f_low) / rate * (numpy.arange(length) - (length - 1) / 2))
-	lowpass *= numpy.blackman(length)
+	lowpass = numpy.sinc(2 * numpy.float128(f_low) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
+	lowpass *= dpss
 	lowpass /= numpy.sum(lowpass)
 
 	# Create the high-pass filter from the low-pass filter through spectral inversion.
 	highpass = -lowpass
-	highpass[(length - 1) / 2] += 1
+	highpass[(length - 1) // 2] += 1
+
+	# Adjust the cutoff frequency to "protect" the passband.
+	f_high += 0.75 * freq_res
 
 	# Compute the low-pass filter.
-	lowpass = numpy.sinc(2 * float(f_high) / rate * (numpy.arange(length) - (length - 1) / 2))
-	lowpass *= numpy.blackman(length)
+	lowpass = numpy.sinc(2 * numpy.float128(f_high) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
+	lowpass *= dpss
 	lowpass /= numpy.sum(lowpass)
 
-	# Convolve the high-pass and low-pass filters to make a band-pass filter
-	bandpass = numpy.convolve(highpass, lowpass)
+	# Do a circular convolution of the high-pass and low-pass filters to make a band-pass filter.
+	bandpass = numpy.zeros(length, dtype = numpy.float128)
+	for i in range(length):
+		bandpass[i] = numpy.sum(highpass * numpy.roll(lowpass, (length - 1) // 2 - i))
+
+	bandpass = numpy.float64(bandpass)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.5), fir_matrix = [bandpass], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.25), fir_matrix = [bandpass], time_domain = td)
 
-def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, td = True):
-	length = int(length * rate / 2)
-	if not length % 2:
-		length += 1 # Make sure the filter length is odd
+def bandstop(pipeline, head, rate, length = 1.0, f_low = 100, f_high = 400, filter_latency = 0.5, freq_res = 0.0, td = True):
+	length = int(length * rate)
+
+	# Find alpha, and the actual frequency resolution
+	alpha = freq_res * length / rate if freq_res > 0.0 else 3.0
+	alpha = 1.0 if alpha < 1.0 else alpha
+	freq_res = alpha * rate / length
+
+	# Adjust the cutoff frequency to "protect" the passband.
+	f_low += 0.75 * freq_res
+
+	# Make a DPSS window
+	dpss = fir.kaiser(length, numpy.pi * alpha) # fir.DPSS(length, alpha, max_time = 10)
 
 	# Compute a temporary low-pass filter.
-	lowpass = numpy.sinc(2 * float(f_low) / rate * (numpy.arange(length) - (length - 1) / 2))
-	lowpass *= numpy.blackman(length)
+	lowpass = numpy.sinc(2 * numpy.float128(f_low) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
+	lowpass *= dpss
 	lowpass /= numpy.sum(lowpass)
 
-	# Create a high-pass filter from the low-pass filter through spectral inversion.
+	# Create the high-pass filter from the low-pass filter through spectral inversion.
 	highpass = -lowpass
-	highpass[(length - 1) / 2] += 1
+	highpass[(length - 1) // 2] += 1
 
-	# Compute a low-pass filter.
-	lowpass = numpy.sinc(2 * float(f_high) / rate * (numpy.arange(length) - (length - 1) / 2))
-	lowpass *= numpy.blackman(length)
+	# Adjust the cutoff frequency to "protect" the passband.
+	f_high -= 0.75 * freq_res
+
+	# Compute the low-pass filter.
+	lowpass = numpy.sinc(2 * numpy.float128(f_high) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
+	lowpass *= dpss
 	lowpass /= numpy.sum(lowpass)
 
-	# Convolve the high-pass and low-pass filters to make a temporary band-pass filter
-	bandpass = numpy.convolve(highpass, lowpass)
+	# Do a circular convolution of the high-pass and low-pass filters to make a temporary band-pass filter.
+	bandpass = numpy.zeros(length, dtype = numpy.float128)
+	for i in range(length):
+		bandpass[i] = numpy.sum(highpass * numpy.roll(lowpass, (length - 1) // 2 - i))
 
 	# Create a band-stop filter from the band-pass filter through spectral inversion.
 	bandstop = -bandpass
-	bandstop[length - 1] += 1
+	bandstop[(length - 1) // 2] += 1
+
+	bandstop = numpy.float64(bandstop)
 
 	# Now apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.5), fir_matrix = [bandstop], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = int((length - 1) * 2 * filter_latency + 0.25), fir_matrix = [bandstop], time_domain = td)
 
 def linear_phase_filter(pipeline, head, shift_samples, num_samples = 256, gain = 1.0, filter_update = None, sample_rate = 2048, update_samples = 320, average_samples = 1, phase_measurement_frequency = 100, taper_length = 320, kernel_endtime = None, filter_timeshift = 0):
 
@@ -587,12 +649,12 @@ def linear_phase_filter(pipeline, head, shift_samples, num_samples = 256, gain =
 		if kernel_endtime is None:
 			# Update filter as soon as new filter is available, and do it with minimal latency
 			head = pipeparts.mkgeneric(pipeline, head, "lal_tdwhiten", kernel = sinc_filter[::-1], latency = filter_latency_samples, taper_length = taper_length)
-			filter_update = mkadaptivefirfilt(pipeline, filter_update, variable_filter_length = num_samples, adaptive_filter_length = num_samples, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency, tukey_param = 0.5)
+			filter_update = mkadaptivefirfilt(pipeline, filter_update, variable_filter_length = num_samples, adaptive_filter_length = num_samples, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency)
 			filter_update.connect("notify::adaptive-filter", update_filter, head, "adaptive_filter", "kernel")
 		else:
 			# Update filters at specified timestamps to ensure reproducibility
 			head = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, head), "lal_tdwhiten", kernel = sinc_filter[::-1], latency = filter_latency_samples, taper_length = taper_length, kernel_endtime = kernel_endtime)
-			filter_update = mkadaptivefirfilt(pipeline, filter_update, variable_filter_length = num_samples, adaptive_filter_length = num_samples, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency, filter_timeshift = filter_timeshift, tukey_param = 0.5)
+			filter_update = mkadaptivefirfilt(pipeline, filter_update, variable_filter_length = num_samples, adaptive_filter_length = num_samples, update_samples = update_samples, average_samples = average_samples, filter_sample_rate = sample_rate, phase_measurement_frequency = phase_measurement_frequency, filter_timeshift = filter_timeshift)
 			filter_update.connect("notify::adaptive-filter", update_filter, head, "adaptive_filter", "kernel")
 			filter_update.connect("notify::filter-endtime", update_property_simple, head, "filter_endtime", "kernel_endtime", 1)
 	return head
@@ -1348,11 +1410,11 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		if parallel_mode:
-			minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass)), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length, kernel_endtime = 0)
+			minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass, freq_res = high_pass / 3.0)), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length, kernel_endtime = 0)
 			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 			transfer_functions.connect("notify::fir-endtime", update_property_simple, minus_noise, "fir_endtime", "kernel_endtime", 1)
 		else:
-			minus_noise = pipeparts.mkgeneric(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length)
+			minus_noise = pipeparts.mkgeneric(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass, freq_res = high_pass / 3.0), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length)
 			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 		signal_minus_noise.append(mkresample(pipeline, minus_noise, 4, False, signal_rate))
 

@@ -8,9 +8,9 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1263002240 | bc)
+START = $(shell echo 1267948818 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1263004800 | bc)
+END = $(shell echo 1267950818 | bc)
 
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
@@ -22,7 +22,7 @@ GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1265142330_no_response_corr_test.ini
 #H1GDS_1265142330_no_response_corr_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
-DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_1239472998.ini
+DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1256655618_v2_test.ini
 EXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_exactKappas_1239472998.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
@@ -36,7 +36,8 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: DCS_BB_injection_plots
+all: filters_tf_DCS DCS_pcal2darm_plots
+#DCS_BB_injection_plots
 
 ###############################################
 ### These commands should change less often ###

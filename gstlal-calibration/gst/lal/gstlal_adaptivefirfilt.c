@@ -532,20 +532,21 @@ static gboolean start(GstBaseSink *sink) {
 		}
 	}
 	if(element->adaptive_filter_length * element->frequency_resolution < element->filter_sample_rate) {
-		GST_WARNING_OBJECT(element, "frequency-resolution is too fine.  Resetting frequency-resolution to be equal to the inverse of the filter length in seconds.");
-		element->frequency_resolution = (double) element->filter_sample_rate / element->adaptive_filter_length;
+		if(element->frequency_resolution > 0.0) {
+			/*
+			 * The user set an invalid frequency resolution, so give a warning and
+			 * set the finest resolution that is within reason.
+			 */
+			GST_WARNING_OBJECT(element, "frequency-resolution is too fine.  Resetting frequency-resolution to be equal to the inverse of the filter length in seconds.");
+			element->frequency_resolution = (double) element->filter_sample_rate / element->adaptive_filter_length;
+		} else
+			/* This is the default value, so set the resolution to a typical value. */
+			element->frequency_resolution = 3.0 * element->filter_sample_rate / element->adaptive_filter_length;
 	}
 
 	/*
 	 * Memory allocation
 	 */
-
-	if(element->input_average) {
-		g_free(element->input_average);
-		element->input_average = NULL;
-	}
-	element->input_average = g_malloc(element->channels * sizeof(*element->input_average));
-	memset(element->input_average, 0, element->channels * sizeof(*element->input_average));
 
 	/* Make a window function as specified by element properties */
 	/* Frequency resolution in units of frequency bins of fft data */
@@ -675,6 +676,13 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		element->filter_has_gain = TRUE;
 	else
 		GST_ERROR_OBJECT(element, "Number of channels must equal number of zeros plus number of poles, or one more than this. channels = %d, zeros + poles = %d", element->channels, element->num_zeros + element->num_poles);
+
+	if(element->input_average) {
+		g_free(element->input_average);
+		element->input_average = NULL;
+	}
+	element->input_average = g_malloc(element->channels * sizeof(*element->input_average));
+	memset(element->input_average, 0, element->channels * sizeof(*element->input_average));
 
 	return success;
 }
@@ -1295,7 +1303,10 @@ static void gstlal_adaptivefirfilt_class_init(GSTLALAdaptiveFIRFiltClass *klass)
 		"Frequency Resolution of FIR filter",
 		"This parameter sets the frequency resolution (in Hz) of the window function\n\t\t\t"
 		"applied to the adaptive filter.  It must be greater than the inverse of the\n\t\t\t"
-		"length of the filter in seconds; otherwise, it will be overridden.",
+		"length of the filter in seconds; otherwise, it will be overridden.  If unset\n\t\t\t"
+		"or set to zero (default), the frequency resolution will be reset to 3\n\t\t\t"
+		"frequency bins, or 3 times the inverse of the temporal duratation of the\n\t\t\t"
+		"adaptive filter.",
 		0.0, G_MAXDOUBLE, 0.0,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);

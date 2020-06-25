@@ -911,10 +911,10 @@ def mat_times_vec(mat, vec):
 	n = len(vec)
 	outvec = np.zeros(n, dtype = type(mat[0]))
 	for i in range(n):
-		reordered_mat = np.copy(mat[N-1-i:N-1-n-i:-1])
+		reordered_mat = np.copy(mat[N-1-i:N-1-n-i:-1]) if N > n + i else np.copy(mat[N-1-i::-1])
 		reordered_mat[i:N-n] += mat[:N-n-i]
 		reordered_mat[:i] += mat[i:0:-1]
-		outvec[i] = np.matmul(vec, reordered_mat)
+		outvec[i] = np.sum(vec * reordered_mat)
 	# Normalize
 	return outvec / outvec[-1]
 
@@ -1059,7 +1059,7 @@ def DolphChebyshev(N, alpha, return_double = False):
 
 	N = int(N)
 	win = irfft(compute_W0_lagged(N, alpha), return_double = return_double)
-	return win / max(win)
+	return win / win[N // 2]
 
 
 #
