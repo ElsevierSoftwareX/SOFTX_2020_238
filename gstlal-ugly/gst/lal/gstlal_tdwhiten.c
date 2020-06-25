@@ -306,6 +306,9 @@ static unsigned tddfilter(GSTLALTDwhiten *element, GstMapInfo *mapinfo, unsigned
 	unsigned poped_kernels;
 	double *input;
 	double *output = (double *) mapinfo->data;
+	gsl_vector_view input_view;
+	gsl_vector_view kernel_view;
+	
 
 	/*
 	 * clip number of output samples to buffer size
@@ -349,8 +352,8 @@ static unsigned tddfilter(GSTLALTDwhiten *element, GstMapInfo *mapinfo, unsigned
 		 * kernels.
 		 */
 
-		gsl_vector_view input_view = gsl_vector_view_array(input, kernelinfo->length);
-		gsl_vector_view kernel_view = gsl_vector_view_array(kernelinfo->kernel, kernelinfo->length);
+		input_view = gsl_vector_view_array(input, kernelinfo->length);
+		kernel_view = gsl_vector_view_array(kernelinfo->kernel, kernelinfo->length);
 		for(i = 0; i < output_length; i++, input_view.vector.data++) {
 			gain0 = get_gains(element, element->next_out_offset + i, kernelinfo, &gain1);
 
