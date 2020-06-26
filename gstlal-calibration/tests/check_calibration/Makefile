@@ -36,7 +36,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: filters_tf_DCS DCS_pcal2darm_plots
+all: noise_subtraction_ASD_DCS filters_tf_DCS DCS_pcal2darm_plots
 #DCS_BB_injection_plots
 
 ###############################################
@@ -211,7 +211,7 @@ SRC_detuning_C00: $(IFO)1_C00_frames.cache
 	python timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_C00_frames.cache --channel-list 'GDS-CALIB_F_S_SQUARED,GDS-CALIB_SRC_Q_INVERSE'
 
 noise_subtraction_ASD_DCS: $(IFO)1_hoft_DCS_frames.cache
-	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-fmin 2450 --ASD-fmax 2550 --ratio-fmin 2450 --ratio-fmax 2550 --ASD-min 1e-23 --ASD-max 1e-21 --ratio-min 0
+	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-fmin 1 --ASD-fmax 8192 --ratio-fmin 10 --ratio-fmax 1000 --ASD-min 1e-24 --ASD-max 1e-18 --ratio-min 0
 
 noise_subtraction_ASD_DCS_LINES: $(IFO)1_hoft_DCS_frames.cache
 	./ASD_plots --ifo $(IFO)1 --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --frame-cache-list '$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN_CLEAN' --ASD-fmin 0.3

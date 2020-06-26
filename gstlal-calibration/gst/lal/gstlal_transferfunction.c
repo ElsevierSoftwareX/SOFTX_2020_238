@@ -165,6 +165,7 @@ enum property {
 	ARG_FIR_FILTERS,
 	ARG_FIR_ENDTIME,
 	ARG_WINDOW,
+	ARG_USE_FIR_FFT,
 	ARG_FAKE
 };
 
@@ -503,7 +504,7 @@ DEFINE_UPDATE_TRANSFER_FUNCTIONS(double, );
 
 
 #define DEFINE_UPDATE_FIR_FILTERS(DTYPE, F_OR_BLANK) \
-static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *fir_window, double *fir_filters) { \
+static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions, int num_tfs, gint64 fir_length, int sample_rate, complex DTYPE *fir_filter, fftw ## F_OR_BLANK ## _plan fir_plan, DTYPE *fd_window, double *fir_window, double *fir_filters, gboolean use_fir_fft) { \
  \
 	gboolean success = TRUE; \
 	int i; \
@@ -525,14 +526,21 @@ static gboolean update_fir_filters_ ## DTYPE(complex double *transfer_functions,
 		fir_filter[fd_fir_length - 1] = (complex DTYPE) creal ## F_OR_BLANK(fir_filter[fd_fir_length - 1]); \
  \
 		/* Take the inverse Fourier transform */ \
-		fftw ## F_OR_BLANK ## _execute(fir_plan); \
+		DTYPE *real_filter; \
+		if(use_fir_fft) { \
+			real_filter = gstlal_irfft_ ## DTYPE(fir_filter, (guint) fd_fir_length, NULL, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, 0, NULL, 0, NULL, NULL, NULL, FALSE); \
+		} else { \
+			fftw ## F_OR_BLANK ## _execute(fir_plan); \
+			real_filter = (DTYPE *) fir_filter; \
+		} \
  \
-		/* Apply the Tukey window and copy to fir_filters */ \
-		DTYPE *real_filter = (DTYPE *) fir_filter; \
+		/* Apply the window and copy to fir_filters */ \
 		for(j = 0; j < fir_length; j++) { \
 			fir_filters[i * fir_length + j] = fir_window[j] * real_filter[j]; \
 			success &= isnormal(fir_filters[i * fir_length + j]) || fir_filters[i * fir_length + j] == 0.0; \
 		} \
+		if(use_fir_fft) \
+			g_free(real_filter); \
 	} \
  \
 	return success; \
@@ -552,12 +560,14 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 	g_assert(!(src_size % element->unit_size)); \
 	src_size /= element->unit_size; \
  \
-	gint64 i, j, k, m, num_ffts, num_ffts_in_avg_if_nogap, k_start, k_stop, first_index, first_index2, fd_fft_length, fd_tf_length, stride, num_tfs; \
+	gint64 i, j, k, m, num_ffts, num_ffts_in_avg_if_nogap, k_start, k_stop, first_index, first_index2, fd_fft_length, fd_tf_length, stride, num_tfs, notch_start, notch_end; \
 	fd_fft_length = element->fft_length / 2 + 1; \
 	fd_tf_length = element->fir_length / 2 + 1; \
 	stride = element->fft_length - element->fft_overlap; \
 	num_tfs = element->channels - 1; \
 	DTYPE *real_fft = (DTYPE *) element->workspace.w ## S_OR_D ## pf.fft; \
+	complex DTYPE *firfft; \
+	complex DTYPE fft_start, fft_end; \
  \
 	/* How many FFTs would there be in the average if there had been no gaps in the data used for transfer functions? Useful for parallel mode. */ \
 	num_ffts_in_avg_if_nogap = element->parallel_mode ? (element->sample_count - (gint64) src_size - element->update_samples - element->fft_overlap) / stride : element->workspace.w ## S_OR_D ## pf.num_ffts_in_avg; \
@@ -585,22 +595,33 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				real_fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * src[j + element->channels * (k - k_start)]; \
  \
 			/* Take an FFT */ \
-			fftw ## F_OR_BLANK ## _execute(element->workspace.w ## S_OR_D ## pf.plan); \
+			if(element->use_fir_fft) { \
+				firfft = gstlal_rfft_ ## DTYPE(real_fft, (guint) element->fft_length, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, NULL, FALSE); \
  \
-			/* Copy FFT to the proper location */ \
-			first_index = j * fd_fft_length; \
-			for(k = 0; k < fd_fft_length; k++) \
-				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
+				/* Copy FFT to the proper location */ \
+				first_index = j * fd_fft_length; \
+				for(k = 0; k < fd_fft_length; k++) \
+					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = firfft[k]; \
  \
+				g_free(firfft); \
+ \
+			} else { \
+				fftw ## F_OR_BLANK ## _execute(element->workspace.w ## S_OR_D ## pf.plan); \
+ \
+				/* Copy FFT to the proper location */ \
+				first_index = j * fd_fft_length; \
+				for(k = 0; k < fd_fft_length; k++) \
+					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
+			} \
 			/* Fill in any requested "notches" with straight lines */ \
 			int n; \
 			for(n = 0; n < element->num_notches; n++) { \
-				gint64 notch_start = element->notch_indices[2 * n]; \
-				gint64 notch_end = element->notch_indices[2 * n + 1]; \
-				complex DTYPE fft_start = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n]]; \
-				complex DTYPE fft_end = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n + 1]]; \
+				notch_start = j * fd_fft_length + element->notch_indices[2 * n]; \
+				notch_end = j * fd_fft_length + element->notch_indices[2 * n + 1]; \
+				fft_start = element->workspace.w ## S_OR_D ## pf.ffts[notch_start]; \
+				fft_end = element->workspace.w ## S_OR_D ## pf.ffts[notch_end]; \
 				for(k = notch_start + 1; k < notch_end; k++) \
-					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = fft_start * (k - notch_start) / (notch_end - notch_start) + fft_end * (notch_end - k) / (notch_end - notch_start); \
+					element->workspace.w ## S_OR_D ## pf.ffts[k] = fft_start * (k - notch_start) / (notch_end - notch_start) + fft_end * (notch_end - k) / (notch_end - notch_start); \
 			} \
 		} \
  \
@@ -709,22 +730,34 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 				real_fft[k] = element->workspace.w ## S_OR_D ## pf.fft_window[k] * ptr[first_index + k * element->channels]; \
  \
 			/* Take an FFT */ \
-			fftw ## F_OR_BLANK ## _execute(element->workspace.w ## S_OR_D ## pf.plan); \
+			if(element->use_fir_fft) { \
+				firfft = gstlal_rfft_ ## DTYPE(real_fft, (guint) element->fft_length, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, NULL, FALSE); \
  \
-			/* Copy FFT to the proper location */ \
-			first_index = j * fd_fft_length; \
-			for(k = 0; k < fd_fft_length; k++) \
-				element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
+				/* Copy FFT to the proper location */ \
+				first_index = j * fd_fft_length; \
+				for(k = 0; k < fd_fft_length; k++) \
+					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = firfft[k]; \
+ \
+				g_free(firfft); \
+ \
+			} else { \
+				fftw ## F_OR_BLANK ## _execute(element->workspace.w ## S_OR_D ## pf.plan); \
+ \
+				/* Copy FFT to the proper location */ \
+				first_index = j * fd_fft_length; \
+				for(k = 0; k < fd_fft_length; k++) \
+					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = element->workspace.w ## S_OR_D ## pf.fft[k]; \
+			} \
  \
 			/* Fill in any requested "notches" with straight lines */ \
 			int n; \
 			for(n = 0; n < element->num_notches; n++) { \
-				gint64 notch_start = element->notch_indices[2 * n]; \
-				gint64 notch_end = element->notch_indices[2 * n + 1]; \
-				complex DTYPE fft_start = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n]]; \
-				complex DTYPE fft_end = element->workspace.w ## S_OR_D ## pf.fft[element->notch_indices[2 * n + 1]]; \
+				notch_start = j * fd_fft_length + element->notch_indices[2 * n]; \
+				notch_end = j * fd_fft_length + element->notch_indices[2 * n + 1]; \
+				fft_start = element->workspace.w ## S_OR_D ## pf.ffts[notch_start]; \
+				fft_end = element->workspace.w ## S_OR_D ## pf.ffts[notch_end]; \
 				for(k = notch_start + 1; k < notch_end; k++) \
-					element->workspace.w ## S_OR_D ## pf.ffts[first_index + k] = fft_start * (k - notch_start) / (notch_end - notch_start) + fft_end * (notch_end - k) / (notch_end - notch_start); \
+					element->workspace.w ## S_OR_D ## pf.ffts[k] = fft_start * (k - notch_start) / (notch_end - notch_start) + fft_end * (notch_end - k) / (notch_end - notch_start); \
 			} \
 		} \
  \
@@ -914,7 +947,7 @@ static gboolean find_transfer_functions_ ## DTYPE(GSTLALTransferFunction *elemen
 		} \
 		/* Update FIR filters if we want */ \
 		if(success && element->make_fir_filters) { \
-			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fd_fir_window, element->workspace.w ## S_OR_D ## pf.fir_window, element->fir_filters); \
+			success &= update_fir_filters_ ## DTYPE(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.w ## S_OR_D ## pf.fir_filter, element->workspace.w ## S_OR_D ## pf.fir_plan, element->workspace.w ## S_OR_D ## pf.fd_fir_window, element->workspace.w ## S_OR_D ## pf.fir_window, element->fir_filters, element->use_fir_fft); \
 			if(success) { \
 				GST_LOG_OBJECT(element, "Just computed new FIR filters"); \
 				/* Let other elements know about the update */ \
@@ -1086,7 +1119,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
 				/* Update FIR filters if we want */
 				if(success && element->make_fir_filters) {
-					success &= update_fir_filters_float(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wspf.fir_filter, element->workspace.wspf.fir_plan, element->workspace.wspf.fd_fir_window, element->workspace.wspf.fir_window, element->fir_filters);
+					success &= update_fir_filters_float(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wspf.fir_filter, element->workspace.wspf.fir_plan, element->workspace.wspf.fd_fir_window, element->workspace.wspf.fir_window, element->fir_filters, element->use_fir_fft);
 					if(success) {
 						GST_LOG_OBJECT(element, "Just computed new FIR filters");
 						/* Let other elements know about the update */
@@ -1161,7 +1194,7 @@ static gboolean event(GstBaseSink *sink, GstEvent *event) {
 					GST_WARNING_OBJECT(element, "Transfer function(s) computation failed. No transfer functions will be produced.");
 				/* Update FIR filters if we want */
 				if(success && element->make_fir_filters) {
-					success &= update_fir_filters_double(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wdpf.fir_filter, element->workspace.wdpf.fir_plan, element->workspace.wdpf.fd_fir_window, element->workspace.wdpf.fir_window, element->fir_filters);
+					success &= update_fir_filters_double(element->transfer_functions, num_tfs, element->fir_length, element->rate, element->workspace.wdpf.fir_filter, element->workspace.wdpf.fir_plan, element->workspace.wdpf.fd_fir_window, element->workspace.wdpf.fir_window, element->fir_filters, element->use_fir_fft);
 					if(success) {
 						GST_LOG_OBJECT(element, "Just computed new FIR filters");
 						/* Let other elements know about the update */
@@ -2110,6 +2143,10 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->window = g_value_get_enum(value);
 		break;
 
+	case ARG_USE_FIR_FFT:
+		element->use_fir_fft = g_value_get_boolean(value);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -2267,6 +2304,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 
 	case ARG_WINDOW:
 		g_value_set_enum(value, element->window);
+		break;
+
+	case ARG_USE_FIR_FFT:
+		g_value_set_boolean(value, element->use_fir_fft);
 		break;
 
 	default:
@@ -2699,6 +2740,15 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		GSTLAL_TRANSFERFUNCTION_DPSS,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 	);
+	properties[ARG_USE_FIR_FFT] = g_param_spec_boolean(
+		"use-fir-fft",
+		"Use FIR FFT Algorithm",
+		"Set to True to use the long double precision fft algorithms provided in\n\t\t\t"
+		"gstlal_firtools.c.  This can be useful for data with a large dynamical\n\t\t\t"
+		"range.  Otherwise, fftw (a faster, cheaper algorithm) will be used.",
+		FALSE,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
 
 
 	g_object_class_install_property(
@@ -2815,6 +2865,11 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		gobject_class,
 		ARG_WINDOW,
 		properties[ARG_WINDOW]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_USE_FIR_FFT,
+		properties[ARG_USE_FIR_FFT]
 	);
 }
 

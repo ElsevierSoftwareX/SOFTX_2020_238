@@ -205,7 +205,7 @@ static void write_filter(double *filter, char *element_name, char *filter_type, 
 		g_print("================== %s FIR filter computed by %s ==================\n", filter_type, element_name);
 
 		for(i = 0; i < rows; i++)
-			g_print("%10e\n", filter[i]);
+			g_print("%1.15e\n", filter[i]);
 		g_print("\n\n");
 	}
 
@@ -215,7 +215,7 @@ static void write_filter(double *filter, char *element_name, char *filter_type, 
 		g_fprintf(fp, "================== %s FIR filter computed by %s ==================\n", filter_type, element_name);
 
 		for(i = 0; i < rows; i++)
-			g_fprintf(fp, "%10e\n", filter[i]);
+			g_fprintf(fp, "%1.15e\n", filter[i]);
 		g_fprintf(fp, "\n\n");
 		fclose(fp);
 	}
@@ -320,8 +320,9 @@ static gboolean update_padded_filter(complex double *padded_model, gint64 padded
 
 	if(static_model_length > 0) {
 		/* Multiply by the static model */
-		for(n = 0; n < padded_model_length; n++)
+		for(n = 0; n < padded_model_length; n++) {
 			padded_model[n] *= static_model[n];
+		}
 	}
 
 	/* Make sure the DC component is real */
@@ -583,7 +584,8 @@ static gboolean start(GstBaseSink *sink) {
 		}
 
 		/* We may need to upsample the static model or the adaptive model */
-		element->padded_model_length = element->adaptive_filter_length > element->static_filter_length ? element->adaptive_filter_length : element->static_filter_length;
+		element->padded_model_length = element->static_model_length > element->adaptive_filter_length / 2 + 1 ? element->static_model_length : element->adaptive_filter_length / 2 + 1;
+
 		element->padded_filter_length = 2 * (element->padded_model_length - 1) + element->adaptive_filter_length % 2;
 
 		element->padded_model = g_malloc(element->padded_model_length * sizeof(*element->padded_model));

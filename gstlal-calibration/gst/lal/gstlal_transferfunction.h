@@ -196,6 +196,7 @@ struct _GSTLALTransferFunction {
 	double *fir_filters;
 	guint64 fir_endtime;
 	enum gstlal_transferfunction_window_type window;
+	gboolean use_fir_fft;
 };
 
 

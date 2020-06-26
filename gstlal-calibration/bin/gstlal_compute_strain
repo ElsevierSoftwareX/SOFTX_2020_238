@@ -2188,7 +2188,7 @@ if test_filters:
 	tst_tf_dur = tst_tf_dur - (tst_tf_dur + 8) % 16
 	num_tst_ffts = int(tst_tf_dur / 8)
 	tst_tf = pipeparts.mkprogressreport(pipeline, tst_tf, "progress_tst_tf_%s" % instrument)
-	calibration_parts.mktransferfunction(pipeline, tst_tf, fft_length = 16 * tstchainsr, fft_overlap = 8 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf")
+	calibration_parts.mktransferfunction(pipeline, tst_tf, fft_length = 16 * tstchainsr, fft_overlap = 8 * tstchainsr, num_ffts = num_tst_ffts, use_median = True, update_samples = 1e15, update_delay_samples = tst_tf_delay * tstchainsr, filename = "%s_tst_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), tst_tf_start, tst_tf_dur), name = "tst_filters_tf", use_fir_fft = True)
 
 # resample the TST actuation chain if necessary
 if tstchainsr < actsr:
@@ -2246,7 +2246,7 @@ if pum_uim_separate:
 		pum_tf_dur = pum_tf_dur - (pum_tf_dur + 8) % 16
 		num_pum_ffts = int(pum_tf_dur / 8)
 		pum_tf = pipeparts.mkprogressreport(pipeline, pum_tf, "progress_pum_tf_%s" % instrument)
-		calibration_parts.mktransferfunction(pipeline, pum_tf, fft_length = 16 * pumchainsr, fft_overlap = 8 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf")
+		calibration_parts.mktransferfunction(pipeline, pum_tf, fft_length = 16 * pumchainsr, fft_overlap = 8 * pumchainsr, num_ffts = num_pum_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pum_tf_delay * pumchainsr, filename = "%s_pum_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pum_tf_start, pum_tf_dur), name = "pum_filters_tf", use_fir_fft = True)
 
 	if apply_complex_kappauim and filter_latency_factor == 0:
 		# Apply an adaptive filter to include the time-dependence in the gain and the time delay.  Apply updates as soon as possible with minimal latency.
@@ -2282,7 +2282,7 @@ if pum_uim_separate:
 		uim_tf_dur = uim_tf_dur - (uim_tf_dur + 8) % 16
 		num_uim_ffts = int(uim_tf_dur / 8)
 		uim_tf = pipeparts.mkprogressreport(pipeline, uim_tf, "progress_uim_tf_%s" % instrument)
-		calibration_parts.mktransferfunction(pipeline, uim_tf, fft_length = 16 * uimchainsr, fft_overlap = 8 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf")
+		calibration_parts.mktransferfunction(pipeline, uim_tf, fft_length = 16 * uimchainsr, fft_overlap = 8 * uimchainsr, num_ffts = num_uim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = uim_tf_delay * uimchainsr, filename = "%s_uim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), uim_tf_start, uim_tf_dur), name = "uim_filters_tf", use_fir_fft = True)
 
 	# resample the PUM actuation path if necessary
 	if pumchainsr < actsr:
@@ -2340,7 +2340,7 @@ else:
 		pumuim_tf_dur = pumuim_tf_dur - (pumuim_tf_dur + 8) % 16
 		num_pumuim_ffts = int(pumuim_tf_dur / 8)
 		pumuim_tf = pipeparts.mkprogressreport(pipeline, pumuim_tf, "progress_pumuim_tf_%s" % instrument)
-		calibration_parts.mktransferfunction(pipeline, pumuim_tf, fft_length = 16 * pumuimchainsr, fft_overlap = 8 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf")
+		calibration_parts.mktransferfunction(pipeline, pumuim_tf, fft_length = 16 * pumuimchainsr, fft_overlap = 8 * pumuimchainsr, num_ffts = num_pumuim_ffts, use_median = True, update_samples = 1e15, update_delay_samples = pumuim_tf_delay * pumuimchainsr, filename = "%s_pumuim_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), pumuim_tf_start, pumuim_tf_dur), name = "pumuim_filters_tf", use_fir_fft = True)
 
 	# resample the PUM/UIM actuation chain if necessary
 	if pumuimchainsr < actsr:
@@ -2441,7 +2441,7 @@ if test_filters:
 	res_tf_dur = res_tf_dur - (res_tf_dur + 8) % 16
 	num_res_ffts = int(res_tf_dur / 8)
 	res_tf = pipeparts.mkprogressreport(pipeline, res_tf, "progress_res_tf_%s" % instrument)
-	calibration_parts.mktransferfunction(pipeline, res_tf, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf")
+	calibration_parts.mktransferfunction(pipeline, res_tf, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf", use_fir_fft = True)
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
@@ -2479,7 +2479,7 @@ if test_filters:
 	response_dur = response_dur - (response_dur + 8) % 16
 	num_response_ffts = int(response_dur / 8)
 	response_function = pipeparts.mkprogressreport(pipeline, response_function, "progress_response_function_%s" % instrument)
-	calibration_parts.mktransferfunction(pipeline, response_function, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function")
+	calibration_parts.mktransferfunction(pipeline, response_function, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_response_ffts, use_median = True, update_samples = 1e15, update_delay_samples = response_delay * hoft_sr, filename = "%s_response_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), response_start, response_dur), name = "response_function", use_fir_fft = True)
 # Divide by L in a way that is compatitble with old and new filters files, since old filter files don't recored "arm length"
 try:
 	strain = pipeparts.mkaudioamplify(pipeline, strain, 1.0/float(filters["arm_length"]))
