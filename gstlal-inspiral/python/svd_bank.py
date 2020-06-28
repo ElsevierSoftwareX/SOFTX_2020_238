@@ -486,6 +486,9 @@ def svdbank_templates_mapping(filenames, contenthandler, verbose = False):
 		mapping[filename] = sum((bank.sngl_inspiral_table for bank in read_banks(filename, contenthandler, verbose = verbose)), [])
 	return mapping
 
+def preferred_horizon_distance_template(banks):
+	template_id, m1, m2, s1z, s2z = min((row.template_id, row.mass1, row.mass2, row.spin1z, row.spin2z) for bank in banks for row in bank.sngl_inspiral_table)
+	return template_id, m1, m2, s1z, s2z
 
 def horizon_distance_func(banks):
 	"""
@@ -503,6 +506,6 @@ def horizon_distance_func(banks):
 	# value.
 	deltaF = 1. / 4.
 	# use the minimum template id as the cannonical horizon function
-	template_id, m1, m2 = min((row.template_id, row.mass1, row.mass2) for bank in banks for row in bank.sngl_inspiral_table)
+	template_id, m1, m2, s1z, s2z = preferred_horizon_distance_template(banks)
 
-	return template_id, reference_psd.HorizonDistance(15.0, 0.85 * max(nyquists), deltaF, m1, m2)
+	return template_id, reference_psd.HorizonDistance(15.0, 0.85 * max(nyquists), deltaF, m1, m2, spin1 = (0., 0., s1z), spin2 = (0., 0., s2z))
