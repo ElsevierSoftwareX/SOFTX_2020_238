@@ -883,3 +883,12 @@ def fixed_duration_bandpass_kernel(rate, flow = 0, fhigh = float("inf"), duratio
 	out = numpy.roll(filt, nsamps / 2) * window
 	out /= (out**2).sum()**.5
 	return out
+
+def harmonic_mean(psddict):
+	refpsd = psddict.values()[0]
+	psd = lal.CreateREAL8FrequencySeries("psd", refpsd.epoch, 0., refpsd.deltaF, lal.Unit("strain^2 s"), refpsd.data.length)
+	psd.data.data[:] = 0.
+	for ifo in psddict:
+		psd.data.data[:] += 1. / psddict[ifo].data.data
+	psd.data.data[:] = len(psddict) / psd.data.data[:]
+	return psd
