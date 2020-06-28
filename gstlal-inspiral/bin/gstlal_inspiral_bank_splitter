@@ -33,6 +33,8 @@ from gstlal import templates
 from gstlal import inspiral_pipe
 from gstlal import dagparts
 from gstlal import chirptime
+from gstlal import reference_psd
+from gstlal import svd_bank
 import lal
 from lal.utils import CacheEntry
 import numpy, scipy.interpolate
@@ -98,18 +100,17 @@ def parse_command_line():
 	parser.add_option("--n", metavar = "count", type = "int", help = "Set the number of templates per output file (required). It will be rounded to make all sub banks approximately the same size.")
 	parser.add_option("--overlap", default = 0, metavar = "count", type = "int", help = "overlap the templates in each file by this amount, must be even")
 	parser.add_option("--sort-by", metavar = "column", default="mchirp", help = "Select the template sort column, default mchirp")
-	parser.add_option("--min-f-final", metavar = "float", type="float", help = "Min f_final to populate table with; if f_final under min, use min.")
-	parser.add_option("--max-f-final", metavar = "float", type="float", help = "Max f_final to populate table with; if f_final over max, use max.")
+	parser.add_option("--f-final", metavar = "float", type="float", help = "f_final to populate table with")
 	parser.add_option("--instrument", metavar = "ifo", type="string", help = "override the instrument, required")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
-	parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required if sort-by is bandwidth")
+	parser.add_option("--psd-xml", type = "string", help = "Specify a PSD to use for computing template bandwidth. Required.")
 	parser.add_option("--approximant", type = "string", action = "append", help = "Must specify an approximant given as mchirp_min:mchirp_max:string")
 	parser.add_option("--f-low", type = "float", metavar = "frequency", help = "Lower frequency cutoff. Required")
 	parser.add_option("--group-by-chi", type = "int", metavar = "N", default = 1, help = "group templates into N groups of chi - helps with SVD. Default 1")
 	parser.add_option("--num-banks", metavar = "str", help = "The number of parallel subbanks per SVD bank. can be given as a list like 1,2,3,4 then it will split up the bank into N groups with M banks each. (required)") # FIXME The second half of this help message is incomprehensible
 	options, filenames = parser.parse_args()
 
-	required_options = ("n", "instrument", "sort_by", "approximant", "f_low", "num_banks", "output_stats_file")
+	required_options = ("n", "instrument", "sort_by", "approximant", "f_low", "num_banks", "output_stats_file", "psd_xml")
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
 		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
@@ -132,16 +133,16 @@ def parse_command_line():
 	if options.num_banks:
 		options.num_banks = [int(v) for v in options.num_banks.split(",")]
 
-	# FIXME don't hard code L1
 	if options.psd_xml:
-		psd = series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler))["L1"]
+		psd = reference_psd.harmonic_mean(series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler)))
+		print psd.deltaF, psd.data.length
 		f = numpy.arange(len(psd.data.data)) * psd.deltaF
-		psd = scipy.interpolate.interp1d(f, psd.data.data)
+		psdinterp = scipy.interpolate.interp1d(f, psd.data.data)
 	else:
-		psd = None
-	return options, filenames[0], psd
+		psd = None; psdinterp = None
+	return options, filenames[0], psd, psdinterp
 
-options, filename, psd = parse_command_line()
+options, filename, psd, psdinterp = parse_command_line()
 
 def assign_approximant(mchirp, approximants = options.approximant):
 	for lo, hi, appx in approximants:
@@ -155,11 +156,12 @@ outputrows = []
 xmldoc = ligolw_utils.load_filename(filename, verbose = options.verbose, contenthandler = LIGOLWContentHandler)
 sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 # Add a fake bandwidth column
-if options.sort_by == "bandwidth":
-	for count, row in enumerate(sngl_inspiral_table):
-		# FIXME don't hard code
-		row.bandwidth = templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = 1024., delta_f = 0.25, psd = psd)
-		print count, len(sngl_inspiral_table), row.bandwidth
+for count, row in enumerate(sngl_inspiral_table):
+	# FIXME don't hard code
+	row.f_final = options.f_final
+	row.bandwidth = templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = options.f_low, f_max = row.f_final, delta_f = 0.25, psd = psdinterp)
+	row.horizon = reference_psd.HorizonDistance(options.f_low, row.f_final, row.mass1, row.mass2, 0.25, (0.,0.,row.spin1z), (0.,0.,row.spin2z))(psd)[0]
+
 # FIXME
 #process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Assign template IDs")
 if options.output_full_bank_file is not None:
@@ -207,30 +209,15 @@ for bank_count, (_, rows) in enumerate(outputrows):
 	process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_bank_splitter", paramdict = options.__dict__, comment = "Split bank into smaller banks for SVD")
 
 	for row in rows:
-		# Chirptime uses SI
-		m1_SI, m2_SI = lal.MSUN_SI * row.mass1, lal.MSUN_SI * row.mass2
-		# Find the total spin magnitudes
-		spin1, spin2 = (row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5
-
-		if approximant in templates.gstlal_IMR_approximants:
-			# make sure to go a factor of 2 above the ringdown frequency for safety
-			row.f_final = 2 * chirptime.ringf(m1_SI + m2_SI, chirptime.overestimate_j_from_chi(max(spin1, spin2)))
-		else:
-			# otherwise choose a suitable high frequency
-			# NOTE not SI
-			row.f_final = spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')
-
-		# Override the high frequency with the max if appropriate
-		if options.max_f_final and (row.f_final > options.max_f_final):
-			row.f_final = options.max_f_final
-		# Override the high frequency with the min if appropriate
-		if options.min_f_final and (row.f_final < options.min_f_final):
-			row.f_final = options.min_f_final
 		row.process_id = process.process_id
 
-
 		# Record the conservative template duration
-		row.template_duration = chirptime.imr_time(options.f_low, m1_SI, m2_SI, spin1, spin2, f_max = row.f_final)
+		row.template_duration = chirptime.imr_time(options.f_low,
+			lal.MSUN_SI * row.mass1,
+			lal.MSUN_SI * row.mass2,
+			(row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5,
+			(row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5,
+			f_max = min(row.f_final, 2 * chirptime.ringf(lal.MSUN_SI * row.mass1 + lal.MSUN_SI * row.mass2, chirptime.overestimate_j_from_chi(max((row.spin1x**2 + row.spin1y**2 + row.spin1z**2)**.5, (row.spin2x**2 + row.spin2y**2 + row.spin2z**2)**.5))) if approximant in templates.gstlal_IMR_approximants else spawaveform.ffinal(row.mass1, row.mass2, 'bkl_isco')))
 
 		# Make sure ifo and total mass is stored
 		row.ifo = options.instrument
@@ -238,7 +225,7 @@ for bank_count, (_, rows) in enumerate(outputrows):
 
 	sngl_inspiral_table[:] = rows
 	output = dagparts.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
-	metadata[output] = (numpy.array([r.mchirp for r in rows]), numpy.array([r.template_duration for r in rows]))
+	metadata[output] = rows
 	svd_dirs.append(output)
 	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
@@ -253,18 +240,26 @@ for n, svd in enumerate(svd_groups):
 		pass
 	svd_mchirps = []
 	svd_durs = []
+	svd_bw = []
 	for m, split_file in enumerate(svd):
 		clipleft = options.overlap // 2 
 		clipright = options.overlap // 2
-		svd_mchirps.extend(metadata[split_file][0])
-		svd_durs.extend(metadata[split_file][1])
+		svd_mchirps.extend([r.mchirp for r in metadata[split_file]])
+		svd_durs.extend([r.template_duration for r in metadata[split_file]])
+		svd_bw.extend([r.bandwidth for r in metadata[split_file]])
 		outfile = os.path.join(outdir, os.path.split(split_file)[1])
-		print (split_file, outfile)
 		shutil.move(split_file, outfile)
 		xmldoc = ligolw_utils.load_url(outfile, contenthandler = LIGOLWContentHandler, verbose = options.verbose)
 		process = ligolw_process.register_to_xmldoc(xmldoc, program = "gstlal_inspiral_bank_splitter", paramdict = {"clipleft": clipleft, "clipright": clipright, "bank-id": "%d_%d" % (n,m)}, comment = "Add some extra metadata for the SVD")
 		ligolw_utils.write_filename(xmldoc, outfile, gz = outfile.endswith('gz'), verbose = options.verbose)
 
+	# some gymnastics to get the fiducial horizon template in the LR calculation
+	class fakebank(object):
+		def __init__(self, sngl_inspiral_table = metadata[split_file]):
+			self.sngl_inspiral_table = sngl_inspiral_table
+	fb = fakebank()
+	tid,_,_,_,_ = svd_bank.preferred_horizon_distance_template([fb])
+	ref_hd = [r.horizon for r in metadata[split_file] if r.template_id == tid][0]
 	outjson["%04d" % n] = {
 		"mean_mchirp": numpy.mean(svd_mchirps),
 		"median_mchirp": numpy.median(svd_mchirps),
@@ -273,7 +268,10 @@ for n, svd in enumerate(svd_groups):
 		"mean_dur": numpy.mean(svd_durs),
 		"median_dur": numpy.median(svd_durs),
 		"min_dur": numpy.min(svd_durs),
-		"max_dur": numpy.max(svd_durs)
+		"max_dur": numpy.max(svd_durs),
+		"min_bw": numpy.min(svd_bw),
+		"max_bw": numpy.max(svd_bw),
+		"horizon_factors": dict((r.template_id, r.horizon/ref_hd) for r in metadata[split_file])
 		}
 
 #with open(dagparts.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_INSPIRAL_SVD_BANK_METADATA" % (0, n), (0, 0), ".json", path = options.output_path), "w") as jsf:
