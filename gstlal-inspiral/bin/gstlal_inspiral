@@ -625,7 +625,7 @@ if not (all_instruments >= set(detectors.channel_dict)):
 
 if options.reference_psd is not None:
 	psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose = options.verbose, contenthandler = lal.series.PSDContentHandler))
-	if set(psd) != set(detectors.channel_dict):
+	if set(detectors.channel_dict) - set(psd):
 		raise ValueError("missing PSD(s) for %s" % ", ".join(sorted(set(detectors.channel_dict) - set(psd))))
 else:
 	psd = dict.fromkeys(all_instruments, None)
