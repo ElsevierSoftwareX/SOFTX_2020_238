@@ -1,0 +1,359 @@
+SHELL := /bin/bash # Use bash syntax
+#
+# To run: make env.sh, then source the resulting environment file and run: make
+#
+# Example command:
+# make deps_env.sh -f Makefile.ligosoftware_gcc_deps
+# source deps_env.sh
+# time make gds -f Makefile.ligosoftware_gcc_deps 1> make.out 2> make.err
+#
+# If you would like to rebuild only part of the software stack, but it starts
+# from the beginning if using the above command, then use the touch (-t) option
+# on the previous package.
+#
+# Example: Rebuild gstreamer:
+# make gsl -f Makefile.ligosoftware_gcc_deps -t
+# make gstreamer -f Makefile.ligosoftware_gcc_deps
+
+# Determine cluster
+CLUSTER:=$(shell hostname -d | tr '[:upper:]' '[:lower:]')
+
+# Set directories and paths
+SRC_DIR:=${PWD}/src
+TAR_DIR:=tarball
+LOGS_DIR:=logs
+PATCH_DIR:=${PWD}/patches
+INSTALL_DIR:=${DEPS_PATH}
+ifeq ($(findstring debian,$(shell cat /etc/os-release | grep ID=)),debian)
+	PYTHON_LIB_DIR:=/usr/lib/python2.7/config-x86_64-linux-gnu
+	PYTHON_DIR:=${DEPS_PATH}/lib/python2.7/site-packages
+else
+	PYTHON_LIB_DIR:=/usr/lib64
+	PYTHON_DIR:=${DEPS_PATH}/lib64/python2.7/site-packages
+endif
+
+# Set package release versions
+SWIG=swig-3.0.12
+METAIO=metaio-8.5.1
+GSTPYTHON=gst-python-1.14.5
+GSTPLUGINSGOOD=gst-plugins-good-1.14.5
+GSTPLUGINSBASE=gst-plugins-base-1.14.5
+GSTREAMER=gstreamer-1.14.5
+GSL=gsl-1.16
+ORC=orc-0.4.26
+FFTW=fftw-3.3.8
+
+# Specify target/dependancy files
+SWIG_TARGET=$(INSTALL_DIR)/bin/swig
+METAIO_TARGET=$(INSTALL_DIR)/lib/libmetaio.so
+GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
+GSTGOOD_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpng.so
+GSTBASE_TARGET=$(INSTALL_DIR)/lib/libgstapp-1.0.so
+GSTREAMER_TARGET=$(INSTALL_DIR)/lib/libgstreamer-1.0.so
+GSL_2_TARGET=$(INSTALL_DIR)/lib/pkgconfig/gsl.pc.orig
+GSL_1_TARGET=$(INSTALL_DIR)/lib/libgsl.so
+ORC_TARGET=$(INSTALL_DIR)/lib/liborc-0.4.so
+FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.so
+
+# tarballs
+SWIG_TAR_TARGET=$(TAR_DIR)/$(SWIG).tar.gz
+METAIO_TAR_TARGET=$(TAR_DIR)/$(METAIO).tar.gz
+GSTPYTHON_TAR_TARGET=$(TAR_DIR)/$(GSTPYTHON).tar.xz
+GSTGOOD_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz
+GSTBASE_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz
+GSTREAMER_TAR_TARGET=$(TAR_DIR)/$(GSTREAMER).tar.xz
+GSL_TAR_TARGET=$(TAR_DIR)/$(GSL).tar.gz
+ORC_TAR_TARGET=$(TAR_DIR)/$(ORC).tar.xz
+FFTW_TAR_TARGET=$(TAR_DIR)/$(FFTW).tar.gz
+
+# Specify how many processors to run on
+#CORES:=$(shell echo `nproc --all`"-2" | bc -l)
+CORES:=8
+
+# Escape code
+esc=`echo -en "\033"`
+
+# Set colors
+RED="${esc}[0;31m"
+GREEN="${esc}[0;32m"
+YELLOW="${esc}[0;33m"
+BLUE="${esc}[0;34m"
+WHITE="${esc}[m"
+
+ICC_CIT:=/ldcg/intel/2018u3/bin/compilervars.sh
+ICC_LHO:=/ldcg/intel/2018u3/bin/compilervars.sh
+ICC_LLO:=/ldcg/intel/2018u3/bin/compilervars.sh
+ICC_UWM:=/opt/intel/2018u3/bin/compilervars.sh
+ICC_PSU:=/ligo/apps/intel/2017u4/bin/compilervars.sh
+
+all : logs/swig.txt src/kafka_2.11-2.0.0
+
+#####################
+# Environment setup #
+#####################
+
+deps_env.sh :
+	@echo 'unset GST_PLUGIN_PATH PYTHONPATH' > $@
+	@echo 'unset LD_LIBRARY_PATH LIBRARY_PATH LD_PRELOAD' >> $@
+	@echo 'DEPS_PATH=${PWD}/opt' >> $@
+	@echo 'export LDMKLFLAGS=" -L$${MKLROOT}/lib/intel64 -lmkl_rt -lpthread -limf -ldl"' >> $@
+	@echo 'export GCCLDMKLFLAGS=" -L$${MKLROOT}/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -limf -ldl"' >> $@
+	@echo 'export GCCFLAGS="-fPIC -O3 -march=native -I$${MKLROOT}/include -I$${DEPS_PATH}/include"' >> $@
+	@echo 'export CFLAGS=$${GCCFLAGS}' >> $@
+	@if [[ ${CLUSTER} == *"ligo.caltech.edu" ]] ; then \
+		echo "source ${ICC_CIT} intel64" >> $@ ; \
+		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
+	elif [[ ${CLUSTER} == *"ligo-wa.caltech.edu" ]] ; then \
+		echo "source ${ICC_LHO} intel64" >> $@ ; \
+		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
+	elif [[ ${CLUSTER} == *"ligo-la.caltech.edu" ]] ; then \
+		echo "source ${ICC_LLO} intel64" >> $@ ; \
+		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
+	elif [[ ${CLUSTER} == *"nemo.uwm.edu" ]] ; then \
+		echo "source ${ICC_UWM} intel64" >> $@ ; \
+		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
+    elif [[ ${CLUSTER} == *"psu.edu" ]] ; then \
+		echo "source /opt/rh/devtoolset-7/enable" >> $@ ; \
+		echo "source ${ICC_PSU} intel64" >> $@ ; \
+		echo 'export LIBRARY_PATH=$${LD_LIBRARY_PATH}' >> $@ ; \
+		echo 'LDFLAGS_INTEL="$${GCCLDMKLFLAGS}"' >> $@ ; \
+	fi
+	@echo 'export LD_LIBRARY_PATH=$${DEPS_PATH}/lib:$${LD_LIBRARY_PATH}' >> $@
+	@echo 'export LIBRARY_PATH=$${DEPS_PATH}/lib:$${LIBRARY_PATH}' >> $@
+	@echo 'export CC="gcc"' >> $@
+	@echo 'export CXX="g++"' >> $@
+	@echo 'export MKL_THREADING_LAYER=SEQUENTIAL' >> $@
+	@echo 'export MKL_INTERFACE_LAYER=LP64' >> $@
+	@echo '# Force explicit linking of optimized FFTW libraries:' >> $@
+	@echo 'LDFLAGS="-l:libfftw3.so -l:libfftw3f.so -l:libfftw3_threads.so -l:libfftw3f_threads.so $${LDFLAGS_INTEL} -L$${DEPS_PATH}/opt/lib "' >> $@
+	@echo '# These are environment variables that do get exported' >> $@
+	@echo 'PATH=$${DEPS_PATH}/bin:$${PATH}' >> $@
+	@echo 'PKG_CONFIG_PATH=$${DEPS_PATH}/lib/pkgconfig:$${DEPS_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
+	@echo 'PYTHONPATH=$${DEPS_PATH}/lib/python2.7/site-packages:$${DEPS_PATH}/lib64/python2.7/site-packages' >> $@
+	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
+	@echo 'GST_PLUGIN_PATH=$${DEPS_PATH}/lib/gstreamer-1.0' >> $@
+	@echo 'GST_REGISTRY_1_0=$${DEPS_PATH}/registry.bin' >> $@
+	@echo 'GI_TYPELIB_PATH=$${DEPS_PATH}/lib/girepository-1.0:$${GI_TYPELIB_PATH}' >> $@
+	@echo 'KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"' >> $@
+	@echo 'KAFKA_HEAP_OPTS="-Xms8G -Xmx8G"' >> $@
+	@echo 'export PATH PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH DEPS_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0 GI_TYPELIB_PATH KAFKA_JVM_PERFORMANCE_OPTS KAFKA_HEAP_OPTS' >> $@
+
+###########
+# Install #
+###########
+
+src:
+	mkdir -p $@
+
+opt/bin:
+	mkdir -p $@/bin
+
+opt/config:
+	mkdir -p $@/config
+
+opt/libs:
+	mkdir -p $@/libs
+
+tarball:
+	mkdir -p $@
+
+# KAFKA
+tarball/kafka_2.11-2.0.0.tgz: tarball
+	wget -nc -P tarball https://archive.apache.org/dist/kafka/2.0.0/kafka_2.11-2.0.0.tgz
+
+src/kafka_2.11-2.0.0: tarball/kafka_2.11-2.0.0.tgz src opt/bin opt/config opt/libs
+	cd src && tar -xzf ../tarball/kafka_2.11-2.0.0.tgz && cd .. && cp -r src/kafka_2.11-2.0.0/bin/* opt/bin/. && cp src/kafka_2.11-2.0.0/libs/* opt/libs/. && cp src/kafka_2.11-2.0.0/config/* opt/config/.
+
+#####################
+# Check time stamps #
+#####################
+
+check :
+	@if [ -f logs/all.txt ] ; then rm logs/all.txt ; fi ;
+	@cat logs/* | uniq > logs/all.txt
+	@if [ -f logs/swig.txt ] ; then ls logs/swig.txt >> logs/all.txt ; fi ;
+	@ls -ltrh $$(cat logs/all.txt)
+
+# swig
+swig : logs/swig.txt
+
+logs/swig.txt : $(LOGS_DIR)/metaio.txt $(SWIG_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(SWIG_TARGET) : $(METAIO_TARGET)
+	@echo $(GREEN)swig$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(SWIG).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(SWIG) && ./configure --prefix=$(INSTALL_DIR)
+	cd $(SRC_DIR)/$(SWIG) && make -j$(CORES) && make install -j$(CORES)
+
+# metaio
+metaio : logs/metaio.txt
+
+logs/metaio.txt : $(LOGS_DIR)/gstreamer.txt $(METAIO_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(METAIO_TARGET) : $(GSTPYTHON_TARGET)
+	@echo $(GREEN)metaio$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(METAIO).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(METAIO) && ./configure --prefix=$(INSTALL_DIR) --with-matlab=no
+	cd $(SRC_DIR)/$(METAIO) && make -j$(CORES) && make install -j$(CORES)
+	# Needed with-matlab option for intel_haswell test
+
+# gstreamer (all)
+gstreamer : logs/gstreamer.txt
+
+logs/gstreamer.txt : $(LOGS_DIR)/gsl.txt $(GSTREAMER_TARGET) $(GSTBASE_TARGET) $(GSTGOOD_TARGET) $(GSTPYTHON_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+# gstreamer plugin python
+$(GSTPYTHON_TARGET) : $(GSTGOOD_TARGET)
+	@echo $(GREEN)gst-python$(WHITE) 1>&2
+	#mkdir -p $(INSTALL_DIR)/lib64/python2.7/site-packages/gi/overrides
+	tar -xf $(TAR_DIR)/$(GSTPYTHON).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GSTPYTHON) && ./configure --prefix=$(INSTALL_DIR) --exec-prefix=$(INSTALL_DIR) --with-libpython-dir=$(PYTHON_LIB_DIR) --with-pygi-overrides-dir=$(INSTALL_DIR)/lib/python2.7/site-packages/gi/overrides
+	cd $(SRC_DIR)/$(GSTPYTHON) && make -j$(CORES) && make install -j$(CORES)
+
+# gstreamer plugin good
+$(GSTGOOD_TARGET) : $(GSTBASE_TARGET)
+	@echo $(GREEN)gst-good$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GSTPLUGINSGOOD) && ./configure --disable-gst_v4l2 --prefix=$(INSTALL_DIR)
+	cd $(SRC_DIR)/$(GSTPLUGINSGOOD) && make -j$(CORES) && make install -j$(CORES)
+
+# gstreamer plugin base
+$(GSTBASE_TARGET) : $(GSTREAMER_TARGET)
+	@echo $(GREEN)gst-base$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(GSTPLUGINSBASE).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GSTPLUGINSBASE) && ./configure --prefix=$(INSTALL_DIR)
+	cd $(SRC_DIR)/$(GSTPLUGINSBASE) && make -j$(CORES) && make install -j$(CORES)
+
+# gstreamer
+$(GSTREAMER_TARGET) : logs/gsl.txt
+	@echo $(GREEN)gstreamer$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(GSTREAMER).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GSTREAMER) && ./configure --prefix=$(INSTALL_DIR)
+	cd $(SRC_DIR)/$(GSTREAMER) && make -j$(CORES) && make install -j$(CORES)
+
+# GSL
+gsl : logs/gsl.txt
+
+logs/gsl.txt : $(LOGS_DIR)/orc.txt $(GSL_1_TARGET) $(GSL_2_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+## FIXME Hack to make gsl default to atlas for blas
+$(GSL_2_TARGET) : $(GSL_1_TARGET)
+	cp $(INSTALL_DIR)/lib/pkgconfig/gsl.pc $@
+	sed 's:-lgslcblas: $(LDMKLFLAGS):' $@ > $(INSTALL_DIR)/lib/pkgconfig/gsl.pc
+
+$(GSL_1_TARGET) : $(ORC_TARGET)
+	@echo $(GREEN)gsl$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(GSL).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(GSL) && ./configure --prefix=$(INSTALL_DIR)  GSL_CBLAS_LIB='$(LDMKLFLAGS)'
+	cd $(SRC_DIR)/$(GSL) && make -j$(CORES) && make install -j$(CORES)
+
+# ORC
+orc : logs/orc.txt
+
+logs/orc.txt : $(LOGS_DIR)/fftw.txt $(ORC_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(ORC_TARGET) : $(FFTW_TARGET)
+	@echo $(GREEN)orc$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(ORC).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(ORC) && ./configure --prefix=$(INSTALL_DIR)
+	cd $(SRC_DIR)/$(ORC) && make -j$(CORES) && make install -j$(CORES)
+
+
+# fftw
+fftw : logs/fftw.txt
+
+logs/fftw.txt : $(LOGS_DIR)/patch.txt $(FFTW_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+# ./configure, make, make install run thrice to install single and double precision, and long double libs 
+$(FFTW_TARGET) : $(LOGS_DIR)/patch.txt
+	@echo $(GREEN)fftw$(WHITE) 1>&2
+	tar -xzf $(TAR_DIR)/$(FFTW).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(FFTW) && \
+		./configure LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse --enable-sse2 --enable-avx --enable-float --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		make -j$(CORES) && make install -j$(CORES) && make clean && \
+		./configure LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-sse2 --enable-avx --enable-fma --enable-avx2 --enable-threads --prefix=$(INSTALL_DIR) && \
+		make -j$(CORES) && make install -j$(CORES) && make clean && \
+		./configure LDFLAGS="${LDFLAGS_INTEL}" --enable-shared --enable-fma --enable-threads --enable-long-double --prefix=$(INSTALL_DIR) && \
+		make -j$(CORES) && make install -j$(CORES)
+
+#########################
+# Download the software #
+#########################
+
+# patches
+patch : logs/patch.txt
+
+logs/patch.txt : $(LOGS_DIR)/tar.txt
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+#tarballs
+logs/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET)
+	echo $^ | sed -e "s@ @\n@g" > $@
+
+$(SWIG_TAR_TARGET) : $(METAIO_TAR_TARGET)
+	wget --no-check-certificate http://downloads.sourceforge.net/project/swig/swig/$(SWIG)/$(SWIG).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(METAIO_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSTPYTHON_TAR_TARGET) : $(GSTGOOD_TAR_TARGET)
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-python/$(GSTPYTHON).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSTGOOD_TAR_TARGET) : $(GSTBASE_TAR_TARGET)
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-good/$(GSTPLUGINSGOOD).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSTBASE_TAR_TARGET) : $(GSTREAMER_TAR_TARGET)
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-plugins-base/$(GSTPLUGINSBASE).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSTREAMER_TAR_TARGET) : $(GSL_TAR_TARGET)
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gstreamer/$(GSTREAMER).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(GSL_TAR_TARGET) : $(ORC_TAR_TARGET)
+	wget --no-check-certificate http://ftp.gnu.org/gnu/gsl/$(GSL).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(ORC_TAR_TARGET) : $(FFTW_TAR_TARGET)
+	wget --no-check-certificate http://gstreamer.freedesktop.org/src/orc/$(ORC).tar.xz --directory-prefix=$(TAR_DIR) -nc
+
+$(FFTW_TAR_TARGET) : $(LOGS_DIR)
+	wget --no-check-certificate http://www.fftw.org/$(FFTW).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+# git repos
+$(LOGS_DIR) :
+	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(PYTHON_DIR)
+	mkdir -p $(LOGS_DIR)
+
+############
+# Clean up #
+############
+
+clean-all :
+	rm -rf $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(LOGS_DIR) $(PYTHON_DIR)
+	rm -rf opt git
+	rm -rf *.txt
+
+clean-install :
+	rm -rf opt/* logs/* src/*
+
+clean-swig :
+	rm -rf logs/swig.txt $(SWIG_TARGET)
+
+clean-metaio :
+	rm -rf logs/metaio.txt $(METAIO_TARGET)
+
+clean-gstreamer :
+	rm -rf logs/gstreamer.txt $(GSTREAMER_TARGET) $(GSTBASE_TARGET) $(GSTGOOD_TARGET) $(GSTPYTHON_TARGET)
+
+clean-gsl :
+	rm -rf logs/gsl.txt $(GSL_1_TARGET) $(GSL_2_TARGET)
+
+clean-orc :
+	rm -rf logs/orc.txt $(ORC_TARGET)
+
+clean-fftw :
+	rm -rf logs/fftw.txt $(FFTW_TARGET)
