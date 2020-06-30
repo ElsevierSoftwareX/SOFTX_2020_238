@@ -73,8 +73,18 @@ class gYAML(object):
 			ifos = [ifostr[2*n:2*n+2] for n in range(len(ifostr) // 2)]
 			return " ".join(["--channel-name=%s=%s" % (x, self("stage.%s-channel-name" % x[0])) for x in ifos])
 
+		if arg == "stage.singularity-opt" or arg == "inspiral.singularity-opt":
+			stage = arg.split(".")[0]
+			image = self("{}.singularity-image".format(stage))
+			return "--singularity-image {}".format(image) if image else ""
+
+		if arg == "stage.condor-opt" or arg == "inspiral.condor-opt":
+			stage = arg.split(".")[0]
+			condor_opts = self("{}.condor".format(stage))
+			return " ".join(["--{} {}".format(k, v) for k, v in condor_opts.items()]) if condor_opts else ""
+
 		# default is an empty string which means not found
-		return ""			
+		return ""
 
 gy = gYAML(config_yaml)
 print(gy(args.entry))
