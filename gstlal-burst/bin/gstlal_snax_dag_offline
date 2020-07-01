@@ -100,7 +100,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 				continue
 
 			# set maximum number of jobs reading concurrently from the same frame file to prevent I/O locks
-			if ii / options.concurrency == 0:
+			if ii // options.concurrency == 0:
 				dep_nodes = parent_nodes
 			else:
 				dep_nodes = [feature_extractor_nodes[(ii - options.concurrency, seg)]]
