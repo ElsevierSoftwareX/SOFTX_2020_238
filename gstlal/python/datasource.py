@@ -352,7 +352,7 @@ def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.Se
 		elif hasattr(gps_time, 'ns'):
 			return (Gst.SeekType.SET, gps_time.ns())
 		else:
-			return (Gst.SeekType.SET, long(float(gps_time) * Gst.SECOND))
+			return (Gst.SeekType.SET, int(float(gps_time) * Gst.SECOND))
 
 	start_type, start_time = seek_args_for_gps(gps_start_time)
 	stop_type, stop_time   = seek_args_for_gps(gps_end_time)
