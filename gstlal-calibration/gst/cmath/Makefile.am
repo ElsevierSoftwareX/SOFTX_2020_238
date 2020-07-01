@@ -19,7 +19,7 @@ lib@GSTPLUGINPREFIX@cmath_la_SOURCES = \
 	cmath_catan.c
 lib@GSTPLUGINPREFIX@cmath_la_CPPFLAGS = $(AM_CPPFLAGS) $(PYTHON_CPPFLAGS)
 lib@GSTPLUGINPREFIX@cmath_la_CFLAGS = $(AM_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
-lib@GSTPLUGINPREFIX@cmath_la_LIBADD = $(top_builddir)/lib/lib@GSTPLUGINPREFIX@gstlalcalibration.la
+lib@GSTPLUGINPREFIX@cmath_la_LIBADD = $(top_builddir)/lib/libgstlalcalibration.la
 lib@GSTPLUGINPREFIX@cmath_la_LDFLAGS = $(AM_LDFLAGS) $(LAL_LIBS) $(GSTLAL_LIBS) $(PYTHON_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
 # headers we need but don't want installed
