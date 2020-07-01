@@ -46,6 +46,17 @@ class gYAML(object):
 			(x1,y1),(x2,y2) = [[float (y) for y in x.split(":")] for x in self("inspiral.ht-gate-threshold-linear").split("-")]
 			return (y2-y1) / (x2-x1) * (mc - x1) + y1
 
+		# inspiral.svdfilestr.<ifostr>.<dir>.<basename>
+		# e.g., inspiral.svdfilestr.H1L1.svd.0000_GSTLAL_INSPIRAL_SVD_BANK-1186264106-35659.xml.gz
+		if "inspiral.svdfilestr." in arg:
+			basename = ".".join(arg.split('.')[4:])
+			svddir = arg.split(".")[3]
+			ifostr = arg.split('.')[2]
+			import sys
+			print >> sys.stderr, ifostr
+			ifos = [ifostr[2*n:2*n+2] for n in range(len(ifostr) // 2)]
+			return ",".join(["%s:%s/%s-%s" % (x,svddir,x,basename) for x in ifos])
+
 		if "svd.autocorrelation-length." in arg:
 			ac1,mct,ac2 = self("svd.auto-chisq-len-range").split(":")
 			sbin = arg.split(".")[-1]
