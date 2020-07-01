@@ -379,7 +379,7 @@ class LinkedAppSync(pipeparts.AppSync):
 			self.sink_dict = sink_dict
 		else:
 			self.sink_dict = {}
-		super(LinkedAppSync, self).__init__(appsink_new_buffer, self.sink_dict.keys())
+		super(LinkedAppSync, self).__init__(appsink_new_buffer, list(self.sink_dict.keys()))
 	
 	def attach(self, appsink):
 		"""
@@ -411,7 +411,7 @@ class LinkedAppSync(pipeparts.AppSync):
 				# retrieve the timestamps of all elements that
 				# aren't at eos and all elements at eos that still
 				# have buffers in them
-				timestamps = [(t, e) for e, t in self.appsinks.iteritems() if e not in self.at_eos or t is not None]
+				timestamps = [(t, e) for e, t in self.appsinks.items() if e not in self.at_eos or t is not None]
 				# if all elements are at eos and none have buffers,
 				# then we're at eos
 				if not timestamps:
@@ -439,7 +439,7 @@ class LinkedAppSync(pipeparts.AppSync):
 				# that aren't at eos and all elements at eos that still
 				# have buffers in them
 				channel = self.sink_dict[elem][0]
-				timestamps = [(t, e) for e, t in self.appsinks.iteritems() if self.sink_dict[e][0] == channel and (e not in self.at_eos or t is not None)]
+				timestamps = [(t, e) for e, t in self.appsinks.items() if self.sink_dict[e][0] == channel and (e not in self.at_eos or t is not None)]
 				# if all elements are at eos and none have buffers,
 				# then we're at eos
 				if not timestamps:

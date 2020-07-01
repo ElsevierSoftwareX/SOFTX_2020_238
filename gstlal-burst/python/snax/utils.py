@@ -90,6 +90,8 @@ def create_new_dataset(path, base, data, name = 'data', group = None, tmp = Fals
 		# set global metadata if specified
 		if metadata and not hfile.attrs:
 			for key, value in metadata.items():
+				if isinstance(value, str):
+					value = numpy.string_(value)
 				hfile.attrs.create(key, value)
 
 		# create dataset
@@ -235,7 +237,7 @@ def group_indices(indices):
 	"""
 	#FIXME: confirm this lambda works
 	for k, group in itertools.groupby(enumerate(indices), lambda i :i[0]-i[1]):
-		yield map(operator.itemgetter(1), group)
+		yield list(map(operator.itemgetter(1), group))
 
 
 ####################
@@ -309,7 +311,7 @@ class HDF5TimeseriesFeatureData(FeatureData):
 		for key in features.keys():
 			for row_idx, row in enumerate(features[key]):
 				if row:
-					idx = time_idx + row_idx
+					idx = int(time_idx + row_idx)
 					self.feature_data[key][idx] = numpy.array(tuple(row[col] for col in self.columns), dtype=self.dtype)
 
 	def clear(self):
