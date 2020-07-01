@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (C) 2018 Patrick Godwin
 #
@@ -276,10 +276,10 @@ if __name__ == '__main__':
 	for this_template in all_templates:
 		overlaps.append(max([numpy.dot(this_template,template) for template in all_templates if not numpy.array_equal(template, this_template)]))
 
-	print >>sys.stderr, "total number of templates: %d" % len(all_templates)
-	print >>sys.stderr, "min overlap specified: %f" % (1 - options.mismatch)
-	print >>sys.stderr, "max template overlap: %f" % max(overlaps)
-	print >>sys.stderr, "min template overlap: %f" % min(overlaps)
+	print("total number of templates: %d" % len(all_templates), file=sys.stderr)
+	print("min overlap specified: %f" % (1 - options.mismatch), file=sys.stderr)
+	print("max template overlap: %f" % max(overlaps), file=sys.stderr)
+	print("min template overlap: %f" % min(overlaps), file=sys.stderr)
 
 	# generate template plots
 	plot_paths = []
@@ -293,7 +293,7 @@ if __name__ == '__main__':
 	num_samples = 3
 
 	if options.verbose:
-		print >>sys.stderr, "Creating waveform plots..."
+		print("Creating waveform plots...", file=sys.stderr)
 
 	for rate in rates:
 		#for template_id, template in enumerate(random.sample(templates[rate], num_samples)):
@@ -302,7 +302,7 @@ if __name__ == '__main__':
 			template = templates[rate][template_id]
 
 			if options.verbose:
-				print >>sys.stderr, "\tCreating waveform plot with parameters: %s" % repr(waveform_params)
+				print("\tCreating waveform plot with parameters: %s" % repr(waveform_params), file=sys.stderr)
 
 			series_fig = plot_waveform(waveforms.times[rate], template, waveform_type, waveform_params)
 			fname = 'plot_%s_%s-timeseries.png' % (str(rate).zfill(4), str(template_id).zfill(4))
@@ -315,7 +315,7 @@ if __name__ == '__main__':
 	Qs = [param[1] for param in all_params]
 
 	if options.verbose:
-		print >>sys.stderr, "Creating template overlap plot..."
+		print("Creating template overlap plot...", file=sys.stderr)
 
 	overlap_fig = plot_template_bank(freqs, Qs, overlaps, waveform_type, param_names[:2])
 	fname = 'plot-template_overlap.png'

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2011-2018 Chad Hanna, Duncan Meacher, Patrick Godwin
 #
@@ -82,7 +82,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 	# parallelize jobs by channel subsets
 	for ii, channel_subset in enumerate(data_source_info.channel_subsets):
 
-		print "Creating feature extractor jobs for channel subset %d" % ii
+		print("Creating feature extractor jobs for channel subset %d" % ii)
 
 		# parallelize jobs by segments
 		for seg in segsdict[ifo]:
@@ -96,7 +96,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 			# only produce jobs where the analysis runtime after applying segments is nonzero
 			if not data_source_info.frame_segments[ifo].intersects_segment(feature_seg):
 				if options.verbose:
-					print "    Skipping segment (%d, %d) for channel subset %d since there is no analyzable data here" % (int(feature_seg[0]), int(feature_seg[1]), ii)
+					print("    Skipping segment (%d, %d) for channel subset %d since there is no analyzable data here" % (int(feature_seg[0]), int(feature_seg[1]), ii))
 				continue
 
 			# set maximum number of jobs reading concurrently from the same frame file to prevent I/O locks
@@ -147,7 +147,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 					output_files = {"out-path": outpath}
 				)
 			if options.verbose:
-				print "    Creating node for channel subset %d, gps range %d - %d" % (ii, feature_start_time, feature_end_time)
+				print("    Creating node for channel subset %d, gps range %d - %d" % (ii, feature_start_time, feature_end_time))
 
 	return feature_extractor_nodes
 

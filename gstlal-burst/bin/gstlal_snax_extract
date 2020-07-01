@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (C) 2017-2018  Sydney J. Chamberlin, Patrick Godwin, Chad Hanna, Duncan Meacher
 #
@@ -197,9 +197,9 @@ if options.local_frame_caching:
 			int(cacheentry.segment[0]),
 			int(math.ceil(cacheentry.segment[1]))
 		)
-		print >>f, str(cacheentry)
-	f.close()
+		print(str(cacheentry), file=f)
 
+	f.close()
 	data_source_info.frame_cache = fname
 
 #

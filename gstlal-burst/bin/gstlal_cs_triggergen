@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import math
 import numpy
@@ -153,7 +153,7 @@ class PipelineHandler(simplehandler.Handler):
 				self.rankingstat.denominator.triggerrates[instrument].add_ratebin(buf_seg, len(events))
 			# put info of each event in the sngl burst table
 			if options.verbose:
-				print >> sys.stderr, "at", buf_timestamp, "got", len(events), "triggers in", instrument
+				print("at", buf_timestamp, "got", len(events), "triggers in", instrument, file=sys.stderr)
 			# push the single detector triggers into the StreamBurca instance
 			# the push method returns True if the coincidence engine has new results. in that case, call the pull() method to run the coincidence engine.
 			if events:
@@ -190,7 +190,7 @@ class PipelineHandler(simplehandler.Handler):
 			# whiten
 			if template_f.deltaF != psd.deltaF:
 				if options.verbose:
-					print >> sys.stderr, "interpolating psd..."
+					print("interpolating psd...", file=sys.stderr)
 				psd_interp = reference_psd.interpolate_psd(psd, template_f.deltaF)
 				template_f = lal.WhitenCOMPLEX16FrequencySeries(template_f,psd_interp)
 			else:
@@ -267,7 +267,7 @@ class PipelineHandler(simplehandler.Handler):
 				else:
 					# PSD counter reached zero
 					if options.verbose:
-						print >> sys.stderr, "setting whitened templates for", instrument
+						print("setting whitened templates for", instrument, file=sys.stderr)
 					# if you don't give the reference psd, how often psd is updated is decided by the integer given here. Larger number, less often.
 					# if you give the reference psd, you need to make the template banks only once, so make the counter negative
 					if self.reference_psd is None:
@@ -293,11 +293,11 @@ class PipelineHandler(simplehandler.Handler):
 				self.horizon_distance = self.sigma[instrument][max(self.sigma[instrument].keys())]/1.e19
 				assert not (math.isnan(self.horizon_distance) or math.isinf(self.horizon_distance))
 				if options.verbose:
-					print >> sys.stderr, "horizon distance for", instrument, ":", self.horizon_distance
+					print("horizon distance for", instrument, ":", self.horizon_distance, file=sys.stderr)
 			else:
 				# Burn-in period. Use templates with all zeros so that we won't get any triggers.
 				if options.verbose:
-					print >> sys.stderr, "At GPS time", timestamp, "burn in period"
+					print( "At GPS time", timestamp, "burn in period", file=sys.stderr)
 				template = [None] * len(self.template_bank[instrument])
 				autocorr = [None] * len(self.template_bank[instrument])
 				for i, row in enumerate(self.template_bank[instrument]):
@@ -567,7 +567,7 @@ datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_e
 if pipeline.set_state(Gst.State.PLAYING) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline did not enter playing state")
 if options.verbose:
-	print >>sys.stderr, "running pipeline ..."
+	print("running pipeline ...", file=sys.stderr)
 mainloop.run()
 
 handler.flush()
