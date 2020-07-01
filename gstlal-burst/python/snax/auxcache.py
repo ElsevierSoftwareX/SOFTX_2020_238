@@ -131,7 +131,7 @@ class Handler(simplehandler.Handler):
 
 def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir(), description = "TMPFILE_DELETE_ME", channel_comment = None, frame_duration = 1, frames_per_file = 64, verbose = False):
 
-	channels = data_source_info.channel_dict.keys()
+	channels = list(data_source_info.channel_dict.keys())
 
 	#
 	# retrieve auxiliary channels
