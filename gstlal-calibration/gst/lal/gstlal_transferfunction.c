@@ -80,7 +80,7 @@
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
-#include <gstlal-calibration/gstlal_firtools.h>
+#include <gstlal_firtools.h>
 #include <gstlal_transferfunction.h>
 
 
@@ -2633,7 +2633,7 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		"fir-length",
 		"FIR filter length",
 		"Length in samples of FIR filters produced. The length of the transfer\n\t\t\t"
-		"functions produced is also compute from this, as fir-length / 2 + 1. If\n\t\t\t"
+		"functions produced is also computed from this, as fir-length / 2 + 1. If\n\t\t\t"
 		"unset, the length of the transfer functions and FIR filters will be based on\n\t\t\t"
 		"fft-length. Must be an even number.",
 		0, G_MAXINT64, 0,

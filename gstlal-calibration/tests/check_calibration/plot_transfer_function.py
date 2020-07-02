@@ -33,13 +33,13 @@ import resource
 import datetime
 import time
 import matplotlib
+matplotlib.use('Agg')
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 22
 matplotlib.rcParams['legend.fontsize'] = 18
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
 

@@ -65,7 +65,7 @@
 #include <gstlal/gstlal.h>
 #include <gstlal/gstlal_audio_info.h>
 #include <gstlal/gstlal_debug.h>
-#include <gstlal-calibration/gstlal_firtools.h>
+#include <gstlal_firtools.h>
 #include <gstlal_adaptivefirfilt.h>
 
 

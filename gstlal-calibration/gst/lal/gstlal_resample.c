@@ -53,7 +53,7 @@
 
 
 #include <gstlal/gstlal.h>
-#include <gstlal-calibration/gstlal_firtools.h>
+#include <gstlal_firtools.h>
 #include <gstlal_resample.h>
 
 
