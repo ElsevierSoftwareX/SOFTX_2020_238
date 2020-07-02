@@ -1629,7 +1629,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 				/* Use the window to normalize the irfft. */
 				for(i = 0; i < element->fir_length; i++)
-					element->workspace.wspf.fir_window[i] /= element->fir_length;
+					element->workspace.wspf.fir_window[i] *= (double) element->make_fir_filters / element->fir_length;
 			}
 		}
 
@@ -1854,7 +1854,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 				/* Use the window to normalize the irfft. */
 				for(i = 0; i < element->fir_length; i++)
-					element->workspace.wdpf.fir_window[i] /= element->fir_length;
+					element->workspace.wdpf.fir_window[i] *= (double) element->make_fir_filters / element->fir_length;
 			}
 		}
 
