@@ -1854,14 +1854,23 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	g_free(new_dpss); \
  \
 	guint start = half_window ? N / 2 : 0; \
+	LONG DTYPE *dpss_out; \
+        if(half_window) { \
+                dpss_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
+                for(i = 0; i < N - start; i++) \
+                        dpss_out[i] = full_dpss[start + i]; \
+                g_free(full_dpss); \
+        } else \
+                dpss_out = full_dpss; \
+ \
 	if(data != NULL) { \
 		for(i = 0; i < N - start; i++) \
-			data[i] *= full_dpss[start + i]; \
-		g_free(full_dpss); \
+			data[i] *= dpss_out[i]; \
+		g_free(dpss_out); \
 		return data; \
  \
 	} else \
-		return full_dpss + start; \
+		return dpss_out; \
 }
 
 
@@ -1909,13 +1918,22 @@ LONG DTYPE *kaiser_ ## LONG ## DTYPE(guint N, double beta, LONG DTYPE *data, gbo
 		kwin = (LONG DTYPE *) win; \
  \
 	guint start = half_window ? N / 2 : 0; \
+	LONG DTYPE *kwin_out; \
+	if(half_window) { \
+		kwin_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
+		for(i = 0; i < N - start; i++) \
+			kwin_out[i] = kwin[start + i]; \
+		g_free(kwin); \
+	} else \
+		kwin_out = kwin; \
+ \
 	if(data != NULL) { \
 		for(i = 0; i < N - start; i++) \
-			data[i] *= kwin[start + i]; \
-		g_free(kwin); \
+			data[i] *= kwin_out[i]; \
+		g_free(kwin_out); \
 		return data; \
 	} else \
-		return kwin + start; \
+		return kwin_out; \
 }
 
 
