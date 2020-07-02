@@ -1815,14 +1815,7 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	 * that is larger in magnitude than all the other eigenvalues.
 	 */ \
  \
- \
-	/*
-	 * Compute an estimate of the error: how much the window changes during each iteration.
-	 * We will compare this to how much it changes in each iteration at the end as an
-	 * indicator of how much the window improved over the original Kaiser window.
-	 */ \
 	guint n = N / 2 + N % 2; \
-	dpss = mat_times_vec_double(sinc, N, dpss, n); \
  \
 	for(i = 0; i < double_iterations; i++) \
 		dpss = mat_times_vec_double(sinc, N, dpss, n); \
@@ -1844,8 +1837,6 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
  \
 	for(i = 0; i < longdouble_iterations; i++) \
 		long_dpss = mat_times_vec_longdouble(long_sinc, N, long_dpss, n); \
- \
-	long_dpss = mat_times_vec_longdouble(long_sinc, N, long_dpss, n); \
  \
 	g_free(long_sinc); \
  \
