@@ -38,6 +38,15 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-root
 This package contains the plugins and shared libraries required to run the gstlal calibration software.
 
 
+%package devel
+Summary: Files and documentation needed for compiling gstlal-calibration based plugins and programs.
+Group: LSC Software/Data Analysis
+Requires: %{name} = %{version} gstlal-devel >= @MIN_GSTLAL_VERSION@ python-devel >= @MIN_PYTHON_VERSION@ %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ lal-devel >= @MIN_LAL_VERSION@ lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ gsl-devel
+%description devel
+This package contains the files needed for building gstlal-calibration based
+plugins and programs.
+
+
 %prep
 %setup -q -n %{name}-%{version}
 
