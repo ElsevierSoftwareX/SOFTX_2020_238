@@ -114,9 +114,7 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 
 			outpath = os.path.join(options.out_path, "gstlal_snax_extract")
 
-			feature_extractor_nodes[(ii, seg)] = \
-				dagparts.DAGNode(feature_extractor_job, dag, parent_nodes = dep_nodes,
-					opts = {
+			feature_opts = {
 						"gps-start-time": gps_start_time,
 						"gps-end-time": feature_end_time,
 						"feature-start-time": feature_start_time,
@@ -132,12 +130,19 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 						"cadence": options.cadence,
 						"persist-cadence": options.persist_cadence,
 						"max-streams": options.max_serial_streams,
-						"disable-web-service": options.disable_web_service,
-						"local-frame-caching": options.local_frame_caching,
 						"frame-segments-name": options.frame_segments_name,
 						"save-format": options.save_format,
-						"verbose": options.verbose
-					},
+			}
+			if options.verbose:
+				feature_opts["verbose"] = ""
+			if options.disable_web_service:
+				feature_opts["disable-web-service"] = ""
+			if options.local_frame_caching:
+				feature_opts["local-frame-caching"] = ""
+
+			feature_extractor_nodes[(ii, seg)] = \
+				dagparts.DAGNode(feature_extractor_job, dag, parent_nodes = dep_nodes,
+					opts = feature_opts,
 					input_files = {
 						"frame-cache": options.frame_cache,
 						"frame-segments-file": options.frame_segments_file
@@ -173,6 +178,7 @@ def parse_command_line():
 	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory, default = 8GB")
 	parser.add_option("--request-disk", default = "50GB", metavar = "integer", help = "set the requested node local scratch space size needed, default = 50GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
+	parser.add_option("--singularity-image", metavar = "filename", help = "If set, uses the Singularity image provided as the build environment and sets Singularity-specific condor options.")
 
 	# Feature saving options
 	parser.add_option("--features-path", metavar = "path", help = "If set, chooses an alternate directory to save the features to. Default = --out-path")
@@ -227,12 +233,28 @@ aggregator.makedir("logs")
 
 dag = dagparts.DAG("feature_extractor_pipe")
 
-condor_options = {"request_memory": options.request_memory, "request_cpus": options.request_cpu, "want_graceful_removal": "True", "kill_sig": "15"}
-condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, condor_options)
-feature_extractor_job = dagparts.DAGJob("gstlal_snax_extract", condor_commands = condor_commands)
+common_condor_options = {
+	"want_graceful_removal": "True",
+	"kill_sig": "15",
+}
+if options.singularity_image:
+	common_condor_options["+SingularityImage"] = '"{}"'.format(options.singularity_image)
+
+extract_condor_options = {
+	"request_memory": options.request_memory,
+	"request_cpus": options.request_cpu,
+}
+extract_condor_options.update(common_condor_options)
+
+extract_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, extract_condor_options)
+feature_extractor_job = dagparts.DAGJob("gstlal_snax_extract", condor_commands = extract_condor_commands)
 segsdict = analysis_segments(ifo, data_source_info.frame_segments, data_source_info.seg, options.segment_length, options.psd_drop_time, max_template_length=max_template_length)
 
-combiner_condor_options = {"request_memory": "4GB", "request_cpus": 1, "want_graceful_removal": "True", "kill_sig": "15"}
+combiner_condor_options = {
+	"request_memory": "4GB",
+	"request_cpus": 1,
+}
+combiner_condor_options.update(common_condor_options)
 combiner_condor_commands = dagparts.condor_command_dict_from_opts(options.condor_command, combiner_condor_options)
 feature_combiner_job = dagparts.DAGJob("gstlal_snax_combine", condor_commands = combiner_condor_commands)
 
@@ -243,7 +265,6 @@ feature_combiner_job = dagparts.DAGJob("gstlal_snax_combine", condor_commands = 
 feature_extractor_nodes = feature_extractor_node_gen(feature_extractor_job, dag, [], segsdict, ifo, options, data_source_info, max_template_length=max_template_length)
 
 feature_combiner_options = {
-	"verbose": options.verbose,
 	"rootdir": os.path.join(options.out_path, "gstlal_snax_extract"),
 	"basename": options.description,
 	"instrument": ifo,
@@ -251,7 +272,10 @@ feature_combiner_options = {
 }
 
 if options.features_path:
-	feature_combiner_options.update({"outdir": options.features_path})
+	feature_combiner_options["outdir"] = options.features_path
+if options.verbose:
+	feature_combiner_options["verbose"] = ""
+
 
 for seg in seglist_range(data_source_info.seg[0], data_source_info.seg[1], 50000):
 	parent_nodes = [node for (i, job_seg), node in feature_extractor_nodes.items() if seg.intersects(job_seg)]
