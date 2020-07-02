@@ -300,7 +300,7 @@ $(SWIG_TAR_TARGET) : $(METAIO_TAR_TARGET)
 	wget --no-check-certificate http://downloads.sourceforge.net/project/swig/swig/$(SWIG)/$(SWIG).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(METAIO_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
-	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
+	wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(GSTPYTHON_TAR_TARGET) : $(GSTGOOD_TAR_TARGET)
 	wget --no-check-certificate http://gstreamer.freedesktop.org/src/gst-python/$(GSTPYTHON).tar.xz --directory-prefix=$(TAR_DIR) -nc
