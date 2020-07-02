@@ -454,7 +454,7 @@ $(LOGS_DIR) :
 			git clone -b $(LIGOSCALD_GIT_BRANCH) https://git.ligo.org/gstlal-visualisation/ligo-scald.git $(LIGOSCALD_REPO) ; \
 		fi ; \
 	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LIGOSCALD).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(LIGOSCALD).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
 	fi ;
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
@@ -464,15 +464,15 @@ $(LOGS_DIR) :
 			git clone -b $(LALSUITE_GIT_BRANCH) https://git.ligo.org/lscsoft/lalsuite.git $(LALSUITE_REPO) ; \
 		fi ; \
 	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALFRAME).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALMETAIO).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALSIMULATION).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALBURST).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALINSPIRAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALPULSAR).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALINFERENCE).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LALAPPS).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
 	fi ;
 	if [ "${GSTLAL_GIT}" = "1" ]; then \
 		if [ -f $@ ] ; then \
@@ -482,11 +482,11 @@ $(LOGS_DIR) :
 			git clone -b $(GSTLAL_GIT_BRANCH) https://git.ligo.org/lscsoft/gstlal.git $(GSTLAL_REPO) ; \
 		fi ; \
 	else \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALBURST).tar.gz --directory-prefix=$(TAR_DIR) -nc \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
-		wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(GSTLAL).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(GSTLALUGLY).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(GSTLALBURST).tar.gz --directory-prefix=$(TAR_DIR) -nc \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(GSTLALCALIBRATION).tar.gz --directory-prefix=$(TAR_DIR) -nc ; \
+		wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(GSTLALINSPIRAL).tar.gz --directory-prefix=$(TAR_DIR)  -nc ; \
 	fi ;
 	mkdir -p $(LOGS_DIR)
 
