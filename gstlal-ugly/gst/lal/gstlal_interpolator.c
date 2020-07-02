@@ -143,7 +143,7 @@ static gsl_vector_float** upkernel32(int half_length_at_original_rate, int f) {
 		}
 	}
 
-	free(out);
+	fftw_free(out);
 	return vecs;
 }
 
@@ -180,7 +180,7 @@ static gsl_vector** upkernel64(int half_length_at_original_rate, int f) {
 		}
 	}
 
-	free(out);
+	fftw_free(out);
 	return vecs;
 }
 
