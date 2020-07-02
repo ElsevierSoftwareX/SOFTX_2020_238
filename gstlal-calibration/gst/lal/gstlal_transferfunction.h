@@ -43,7 +43,9 @@ G_BEGIN_DECLS
 enum gstlal_transferfunction_window_type {
         GSTLAL_TRANSFERFUNCTION_DPSS = 0,
         GSTLAL_TRANSFERFUNCTION_KAISER,
-        GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV
+        GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV,
+	GSTLAL_TRANSFERFUNCTION_BLACKMAN,
+	GSTLAL_TRANSFERFUNCTION_HANN
 };
 
 
@@ -195,7 +197,8 @@ struct _GSTLALTransferFunction {
 	complex double *transfer_functions;
 	double *fir_filters;
 	guint64 fir_endtime;
-	enum gstlal_transferfunction_window_type window;
+	enum gstlal_transferfunction_window_type fft_window_type;
+	enum gstlal_transferfunction_window_type fir_window_type;
 	gboolean use_fir_fft;
 };
 

@@ -110,6 +110,8 @@ GType gstlal_transferfunction_window_get_type(void) {
 			{GSTLAL_TRANSFERFUNCTION_DPSS, "GSTLAL_TRANSFERFUNCTION_DPSS", "Maximize energy concentration in main lobe"},
 			{GSTLAL_TRANSFERFUNCTION_KAISER, "GSTLAL_TRANSFERFUNCTION_KAISER", "Simple approximtion to DPSS window"},
 			{GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV, "GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{GSTLAL_TRANSFERFUNCTION_BLACKMAN, "GSTLAL_TRANSFERFUNCTION_BLACKMAN", "Strongly attenuate distant side lobes"},
+			{GSTLAL_TRANSFERFUNCTION_HANN, "GSTLAL_TRANSFERFUNCTION_HANN", "Cosine squared window"},
 			{0, NULL, NULL}
 		};
 
@@ -164,7 +166,8 @@ enum property {
 	ARG_TRANSFER_FUNCTIONS,
 	ARG_FIR_FILTERS,
 	ARG_FIR_ENDTIME,
-	ARG_WINDOW,
+	ARG_FFT_WINDOW_TYPE,
+	ARG_FIR_WINDOW_TYPE,
 	ARG_USE_FIR_FFT,
 	ARG_FAKE
 };
@@ -1451,7 +1454,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		gint64 i, i_stop, i_start;
 		if(!element->workspace.wspf.fft_window) {
-			switch(element->window) {
+			switch(element->fft_window_type) {
 			case GSTLAL_TRANSFERFUNCTION_DPSS:
 				element->workspace.wspf.fft_window = dpss_float(element->fft_length, fft_alpha, 5.0, NULL, FALSE);
 				break;
@@ -1462,6 +1465,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 			case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
 				element->workspace.wspf.fft_window = DolphChebyshev_float(element->fft_length, fft_alpha, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_BLACKMAN:
+				element->workspace.wspf.fft_window = blackman_float(element->fft_length, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_HANN:
+				element->workspace.wspf.fft_window = hann_float(element->fft_length, NULL, FALSE);
 				break;
 
 			default:
@@ -1589,7 +1600,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 			if(!element->workspace.wspf.fir_window) {
 
-				switch(element->window) {
+				switch(element->fir_window_type) {
 				case GSTLAL_TRANSFERFUNCTION_DPSS:
 					element->workspace.wspf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE);
 					break;
@@ -1600,6 +1611,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 				case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
 					element->workspace.wspf.fir_window = DolphChebyshev_double(element->fir_length, fir_alpha, NULL, FALSE);
+					break;
+
+				case GSTLAL_TRANSFERFUNCTION_BLACKMAN:
+					element->workspace.wspf.fir_window = blackman_double(element->fir_length, NULL, FALSE);
+					break;
+
+				case GSTLAL_TRANSFERFUNCTION_HANN:
+					element->workspace.wspf.fir_window = hann_double(element->fir_length, NULL, FALSE);
 					break;
 
 				default:
@@ -1660,7 +1679,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 		gint64 i, i_stop, i_start;
 		if(!element->workspace.wdpf.fft_window) {
-			switch(element->window) {
+			switch(element->fft_window_type) {
 			case GSTLAL_TRANSFERFUNCTION_DPSS:
 				element->workspace.wdpf.fft_window = dpss_double(element->fft_length, fft_alpha, 5.0, NULL, FALSE);
 				break;
@@ -1671,6 +1690,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 			case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
 				element->workspace.wdpf.fft_window = DolphChebyshev_double(element->fft_length, fft_alpha, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_BLACKMAN:
+				element->workspace.wdpf.fft_window = blackman_double(element->fft_length, NULL, FALSE);
+				break;
+
+			case GSTLAL_TRANSFERFUNCTION_HANN:
+				element->workspace.wdpf.fft_window = hann_double(element->fft_length, NULL, FALSE);
 				break;
 
 			default:
@@ -1798,7 +1825,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 			if(!element->workspace.wdpf.fir_window) {
 
-				switch(element->window) {
+				switch(element->fir_window_type) {
 				case GSTLAL_TRANSFERFUNCTION_DPSS:
 					element->workspace.wdpf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE);
 					break;
@@ -1809,6 +1836,14 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 				case GSTLAL_TRANSFERFUNCTION_DOLPH_CHEBYSHEV:
 					element->workspace.wdpf.fir_window = DolphChebyshev_double(element->fir_length, fir_alpha, NULL, FALSE);
+					break;
+
+				case GSTLAL_TRANSFERFUNCTION_BLACKMAN:
+					element->workspace.wdpf.fir_window = blackman_double(element->fir_length, NULL, FALSE);
+					break;
+
+				case GSTLAL_TRANSFERFUNCTION_HANN:
+					element->workspace.wdpf.fir_window = hann_double(element->fir_length, NULL, FALSE);
 					break;
 
 				default:
@@ -2147,8 +2182,12 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->fir_timeshift = g_value_get_int64(value);
 		break;
 
-	case ARG_WINDOW:
-		element->window = g_value_get_enum(value);
+	case ARG_FFT_WINDOW_TYPE:
+		element->fft_window_type = g_value_get_enum(value);
+		break;
+
+	case ARG_FIR_WINDOW_TYPE:
+		element->fir_window_type = g_value_get_enum(value);
 		break;
 
 	case ARG_USE_FIR_FFT:
@@ -2310,8 +2349,12 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_uint64(value, element->fir_endtime);
 		break;
 
-	case ARG_WINDOW:
-		g_value_set_enum(value, element->window);
+	case ARG_FFT_WINDOW_TYPE:
+		g_value_set_enum(value, element->fft_window_type);
+		break;
+
+	case ARG_FIR_WINDOW_TYPE:
+		g_value_set_enum(value, element->fir_window_type);
 		break;
 
 	case ARG_USE_FIR_FFT:
@@ -2740,10 +2783,18 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 		0, G_MAXUINT64, G_MAXUINT64,
 		G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 	);
-	properties[ARG_WINDOW] = g_param_spec_enum(
-		"window",
-		"Window Function",
-		"What window function to apply to incoming data and to the FIR filters",
+	properties[ARG_FFT_WINDOW_TYPE] = g_param_spec_enum(
+		"fft-window-type",
+		"FFT Window Function",
+		"What window function to apply to incoming data before taking FFTs",
+		GSTLAL_TRANSFERFUNCTION_WINDOW_TYPE,
+		GSTLAL_TRANSFERFUNCTION_DPSS,
+		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+	);
+	properties[ARG_FIR_WINDOW_TYPE] = g_param_spec_enum(
+		"fir-window-type",
+		"FIR Window Function",
+		"What window function to apply to the FIR filters",
 		GSTLAL_TRANSFERFUNCTION_WINDOW_TYPE,
 		GSTLAL_TRANSFERFUNCTION_DPSS,
 		G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
@@ -2871,8 +2922,13 @@ static void gstlal_transferfunction_class_init(GSTLALTransferFunctionClass *klas
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_WINDOW,
-		properties[ARG_WINDOW]
+		ARG_FFT_WINDOW_TYPE,
+		properties[ARG_FFT_WINDOW_TYPE]
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FIR_WINDOW_TYPE,
+		properties[ARG_FIR_WINDOW_TYPE]
 	);
 	g_object_class_install_property(
 		gobject_class,

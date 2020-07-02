@@ -20,7 +20,7 @@
 /*
  * ============================================================================
  *
- *                                  Preamble
+ *				  Preamble
  *
  * ============================================================================
  */
@@ -291,6 +291,18 @@ float *DolphChebyshev_float(guint N, double alpha, float *data, gboolean half_wi
 double *DolphChebyshev_double(guint N, double alpha, double *data, gboolean half_window);
 
 long double *DolphChebyshev_longdouble(guint N, double alpha, long double *data, gboolean half_window);
+
+float *blackman_float(guint N, float *data, gboolean half_window);
+
+double *blackman_double(guint N, double *data, gboolean half_window);
+
+long double *blackman_longdouble(guint N, long double *data, gboolean half_window);
+
+float *hann_float(guint N, float *data, gboolean half_window);
+
+double *hann_double(guint N, double *data, gboolean half_window);
+
+long double *hann_longdouble(guint N, long double *data, gboolean half_window);
 
 float *fir_resample_float(float *data, guint N_in, guint N_out);
 

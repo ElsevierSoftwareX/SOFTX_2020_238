@@ -2006,6 +2006,67 @@ DOLPH_CHEBYSHEV(long, double)
 
 
 /*
+ * Blackman Window
+ */
+
+
+#define BLACKMAN(LONG, DTYPE, LLL, FF) \
+LONG DTYPE *blackman_ ## LONG ## DTYPE(guint N, LONG DTYPE *data, gboolean half_window) { \
+ \
+	guint i, N_half = half_window ? (N + 1) / 2 : N; \
+ \
+	LONG DTYPE *win = g_malloc(N_half * sizeof(LONG DTYPE)); \
+	for(i = 0; i < N_half; i++) \
+		win[i] = 0.42 - 0.5 * cos ## LLL ## FF((LONG DTYPE) ((2 * PI * (i - N_half + N)) / (N - 1))) + 0.08 * cos ## LLL ## FF((LONG DTYPE) ((4 * PI * (i - N_half + N)) / (N - 1))); \
+ \
+	if(data != NULL) { \
+		for(i = 0; i < N_half; i++) \
+			data[i] *= win[i]; \
+		g_free(win); \
+		return data; \
+	 } else \
+		return win; \
+}
+
+
+BLACKMAN(, float, , f);
+BLACKMAN(, double, , );
+BLACKMAN(long, double, l, );
+
+
+/*
+ * Hann Window
+ */
+
+
+#define HANN(LONG, DTYPE, LLL, FF) \
+LONG DTYPE *hann_ ## LONG ## DTYPE(guint N, LONG DTYPE *data, gboolean half_window) { \
+ \
+	guint i, N_half = half_window ? (N + 1) / 2 : N; \
+ \
+	LONG DTYPE a; \
+	LONG DTYPE *win = g_malloc(N_half * sizeof(LONG DTYPE)); \
+	for(i = 0; i < N_half; i++) { \
+		a = sin ## LLL ## FF((LONG DTYPE) ((PI * (i - N_half + N)) / (N - 1))); \
+		win[i] = a * a; \
+	} \
+ \
+	if(data != NULL) { \
+		for(i = 0; i < N_half; i++) \
+			data[i] *= win[i]; \
+		g_free(win); \
+		return data; \
+	 } else \
+		return win; \
+}
+
+
+HANN(, float, , f);
+HANN(, double, , );
+HANN(long, double, l, );
+
+
+/*
  * A resampler
  */
 
