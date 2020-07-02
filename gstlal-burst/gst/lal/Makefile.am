@@ -7,7 +7,7 @@ lib@GSTPLUGINPREFIX@gstlalburst_la_SOURCES = \
 	gstlal_trigger.h gstlal_trigger.c \
 	gstlal_string_triggergen.c gstlal_string_triggergen.h
 
-lib@GSTPLUGINPREFIX@gstlalburst_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS)
+lib@GSTPLUGINPREFIX@gstlalburst_la_CFLAGS = $(AM_CFLAGS) $(GSL_CFLAGS) $(LAL_CFLAGS) $(GSTLAL_CFLAGS) $(gstreamer_CFLAGS) $(gstreamer_audio_CFLAGS)
 lib@GSTPLUGINPREFIX@gstlalburst_la_LIBADD = $(top_builddir)/lib/gstlal-burst/libgstlalburst.la
-lib@GSTPLUGINPREFIX@gstlalburst_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
+lib@GSTPLUGINPREFIX@gstlalburst_la_LDFLAGS = $(AM_LDFLAGS) $(GSL_LIBS) $(LAL_LIBS) $(GSTLAL_LIBS) $(gstreamer_LIBS) $(gstreamer_audio_LIBS) $(GSTLAL_PLUGIN_LDFLAGS)
 
