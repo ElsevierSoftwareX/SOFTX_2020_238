@@ -718,6 +718,7 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 				} \
 			} \
 		} \
+		g_free(fd_data_copy); \
 	} \
  \
 	/* Done */ \
@@ -890,6 +891,9 @@ LONG complex DTYPE *gstlal_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 				} \
 			} \
 		} \
+ \
+		g_free(fd_data_copy); \
+ \
 		if(!(N % 2)) \
 			/* The Nyquist component is real */ \
 			fd_data[N_out - 1] = creall(fd_data[N_out - 1]); \
@@ -1060,6 +1064,9 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 					td_data[j] += creall(td_data_complex[complex_index]); \
 			} \
 		} \
+ \
+		g_free(td_data_complex); \
+ \
 		if(normalize) { \
 			for(i = 0; i < *N; i++) \
 				td_data[i] /= *N; \
