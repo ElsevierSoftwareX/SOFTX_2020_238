@@ -543,6 +543,11 @@ GSTLAL_RDFT(long, double);
 #define GSTLAL_IRDFT(LONG, DTYPE, LLL, FF) \
 LONG DTYPE *gstlal_irdft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_in, guint *N, long complex double *exp_array, gboolean normalize, long double *td_data) { \
  \
+	if(!N) { \
+		N = g_malloc(sizeof(guint)); \
+		*N = 0; \
+	} \
+ \
 	if(*N == 0) { \
 		/*
 		 * Find N, the original number of samples. If the imaginary part of the last
@@ -933,6 +938,9 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		return out; \
 	} \
  \
+	if(!N) \
+		N = g_malloc(sizeof(guint)); \
+ \
 	gboolean prime_factors_need_freed = FALSE; \
 	gboolean M_irfft_prime_factors_need_freed = FALSE; \
 	gboolean M_fft_prime_factors_need_freed = FALSE; \
@@ -1284,6 +1292,10 @@ GSTLAL_PRIME_RFFT(long, double);
 #define GSTLAL_PRIME_IRFFT(LONG, DTYPE, LLL, FF) \
 LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_in, guint *N, gboolean normalize, long complex double *exp_array2, guint M, guint *prime_factors, guint num_factors, long complex double *exp_array, long double *td_data) { \
  \
+	if(!N) { \
+		N = g_malloc(sizeof(guint)); \
+		*N = 0; \
+	} \
 	if(*N == 0) { \
 		/*
 		 * Find N, the original number of samples. If the imaginary part of the last
