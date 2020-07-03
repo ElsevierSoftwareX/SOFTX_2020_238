@@ -2027,14 +2027,22 @@ LONG DTYPE *DolphChebyshev_ ## LONG ## DTYPE(guint N, double alpha, LONG DTYPE *
 		dcwin = (LONG DTYPE *) win; \
  \
 	guint start = half_window ? N / 2 : 0; \
+	LONG DTYPE *dcwin_out; \
+	if(half_window) { \
+		dcwin_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
+		for(i = 0; i < N - start; i++) \
+			dcwin_out[i] = dcwin[start + i]; \
+		g_free(dcwin); \
+	} else \
+		dcwin_out = dcwin; \
+ \
 	if(data != NULL) { \
 		for(i = 0; i < N - start; i++) \
-			data[i] *= dcwin[start + i]; \
-		g_free(dcwin); \
+			data[i] *= dcwin_out[i]; \
+		g_free(dcwin_out); \
 		return data; \
- \
 	} else \
-		return dcwin + start; \
+		return dcwin_out; \
 }
 
 
