@@ -437,7 +437,6 @@ LONG complex DTYPE *gstlal_dft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 				fd_data[i] += td_data[j] * exp_array[i * j % N]; \
 		} \
 	} \
-	g_free(td_data); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
  \
@@ -514,7 +513,6 @@ LONG complex DTYPE *gstlal_rdft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 				fd_data[i] += td_data[j] * exp_array[i * j % N]; \
 		} \
 	} \
-	g_free(td_data); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
  \
@@ -543,9 +541,11 @@ GSTLAL_RDFT(long, double);
 #define GSTLAL_IRDFT(LONG, DTYPE, LLL, FF) \
 LONG DTYPE *gstlal_irdft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_in, guint *N, long complex double *exp_array, gboolean normalize, long double *td_data) { \
  \
+	gboolean N_need_freed = FALSE; \
 	if(!N) { \
 		N = g_malloc(sizeof(guint)); \
 		*N = 0; \
+		N_need_freed = TRUE; \
 	} \
  \
 	if(*N == 0) { \
@@ -596,9 +596,10 @@ LONG DTYPE *gstlal_irdft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		} \
 	} \
  \
-	g_free(fd_data); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
+	if(N_need_freed) \
+		g_free(N); \
  \
 	if(normalize) { \
 		guint i; \
@@ -685,8 +686,6 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 		long complex double *exp_array_subset = array_subset_longcomplexdouble(exp_array, N, num_ffts); \
 		for(i = 0; i < num_ffts; i++) \
 			gstlal_fft_longdouble(array_subset_ ## LONG ## complex ## DTYPE(td_data + i, N, num_ffts), N_mini, prime_factors + 1, num_factors - 1, exp_array_subset, inverse, M, M_prime_factors, M_num_factors, M_exp_array2, M_exp_array, fd_data + i * N_mini, TRUE); \
-		if(free_input) \
-			g_free(td_data); \
 		g_free(exp_array_subset); \
  \
 		/* Now we need to "mix" the output appropriately.  First, copy all but the first fft. */ \
@@ -722,6 +721,8 @@ LONG complex DTYPE *gstlal_fft_ ## LONG ## DTYPE(LONG complex DTYPE *td_data, gu
 	} \
  \
 	/* Done */ \
+	if(free_input) \
+		g_free(td_data); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
 	if(prime_factors_need_freed) \
@@ -842,8 +843,6 @@ LONG complex DTYPE *gstlal_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 		long complex double *exp_array_subset = array_subset_longcomplexdouble(exp_array, N, num_ffts); \
 		for(i = 0; i < num_ffts; i++) \
 			gstlal_rfft_longdouble(array_subset_ ## LONG ## DTYPE(td_data + i, N, num_ffts), N_mini, prime_factors + 1, num_factors - 1, exp_array_subset, TRUE, M, M_prime_factors, M_num_factors, M_exp_array2, M_exp_array, fd_data + i * N_mini, TRUE); \
-		if(free_input) \
-			g_free(td_data); \
 		g_free(exp_array_subset); \
  \
 		/* Now we need to "mix" the output appropriately.  First, copy all but the first fft. */ \
@@ -904,6 +903,8 @@ LONG complex DTYPE *gstlal_rfft_ ## LONG ## DTYPE(LONG DTYPE *td_data, guint N, 
 	} \
  \
 	/* Done */ \
+	if(free_input) \
+		g_free(td_data); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
 	if(prime_factors_need_freed) \
@@ -938,8 +939,11 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		return out; \
 	} \
  \
-	if(!N) \
+	gboolean N_need_freed = FALSE; \
+	if(!N) { \
 		N = g_malloc(sizeof(guint)); \
+		N_need_freed = TRUE; \
+	} \
  \
 	gboolean prime_factors_need_freed = FALSE; \
 	gboolean M_irfft_prime_factors_need_freed = FALSE; \
@@ -1037,8 +1041,6 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		for(i = 1; i < num_ffts; i++) \
 			gstlal_fft_longdouble(array_subset_conj_ ## LONG ## DTYPE(fd_data, i, N_in, *N, num_ffts), N_mini, prime_factors + 1, num_factors - 1, exp_array_subset, FALSE, M_fft, M_fft_prime_factors, M_fft_num_factors, M_fft_exp_array2, M_fft_exp_array, td_data_complex + (i - 1) * N_mini, TRUE); \
  \
-		if(free_input) \
-			g_free(fd_data); \
 		g_free(exp_array_subset); \
  \
 		/* Now we need to "mix" the output appropriately.  Start by adding the first ifft to the others. */ \
@@ -1064,6 +1066,10 @@ LONG DTYPE *gstlal_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_
 		} \
 	} \
 	/* Done */ \
+	if(free_input) \
+		g_free(fd_data); \
+	if(N_need_freed) \
+		g_free(N); \
 	if(exp_array_need_freed) \
 		g_free(exp_array); \
 	if(prime_factors_need_freed) \
@@ -1292,9 +1298,11 @@ GSTLAL_PRIME_RFFT(long, double);
 #define GSTLAL_PRIME_IRFFT(LONG, DTYPE, LLL, FF) \
 LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, guint N_in, guint *N, gboolean normalize, long complex double *exp_array2, guint M, guint *prime_factors, guint num_factors, long complex double *exp_array, long double *td_data) { \
  \
+	gboolean N_need_freed = FALSE; \
 	if(!N) { \
 		N = g_malloc(sizeof(guint)); \
 		*N = 0; \
+		N_need_freed = TRUE; \
 	} \
 	if(*N == 0) { \
 		/*
@@ -1369,6 +1377,8 @@ LONG DTYPE *gstlal_prime_irfft_ ## LONG ## DTYPE(LONG complex DTYPE *fd_data, gu
 	g_free(B_n_fft); \
 	g_free(A_n_conv_B_n); \
 	g_free(conj_exp_array); \
+	if(N_need_freed) \
+		g_free(N); \
 	if(exp_array2_need_freed) \
 		g_free(exp_array2); \
 	if(exp_array_need_freed) \
@@ -1867,13 +1877,13 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
  \
 	guint start = half_window ? N / 2 : 0; \
 	LONG DTYPE *dpss_out; \
-        if(half_window) { \
-                dpss_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
-                for(i = 0; i < N - start; i++) \
-                        dpss_out[i] = full_dpss[start + i]; \
-                g_free(full_dpss); \
-        } else \
-                dpss_out = full_dpss; \
+	if(half_window) { \
+		dpss_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
+		for(i = 0; i < N - start; i++) \
+			dpss_out[i] = full_dpss[start + i]; \
+		g_free(full_dpss); \
+	} else \
+		dpss_out = full_dpss; \
  \
 	if(data != NULL) { \
 		for(i = 0; i < N - start; i++) \
