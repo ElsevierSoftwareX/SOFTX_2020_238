@@ -1253,7 +1253,8 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			element->unit_size = 8 * element->channels;
 		} else
 			g_assert_not_reached();
-	}
+	} else
+		goto done;
 
 	/* Sanity check */
 	if(element->update_samples + element->fft_length < element->rate)
@@ -1279,127 +1280,149 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		g_free(element->fir_filters);
 		element->fir_filters = NULL;
 	}
-	if(element->workspace.wspf.fd_fir_window) {
-		g_free(element->workspace.wspf.fd_fir_window);
-		element->workspace.wspf.fd_fir_window = NULL;
-	}
-	if(element->workspace.wspf.sinc_table) {
-		g_free(element->workspace.wspf.sinc_table);
-		element->workspace.wspf.sinc_table = NULL;
-	}
-	if(element->workspace.wspf.leftover_data) {
-		g_free(element->workspace.wspf.leftover_data);
-		element->workspace.wspf.leftover_data = NULL;
-	}
-	element->workspace.wspf.num_leftover = 0;
-	if(element->workspace.wspf.ffts) {
-		g_free(element->workspace.wspf.ffts);
-		element->workspace.wspf.ffts = NULL;
-	}
-	element->workspace.wspf.num_ffts_in_avg = 0;
-	element->workspace.wspf.num_ffts_dropped = 0;
-	if(element->workspace.wspf.autocorrelation_matrix) {
-		g_free(element->workspace.wspf.autocorrelation_matrix);
-		element->workspace.wspf.autocorrelation_matrix = NULL;
-	}
-	if(element->workspace.wspf.autocorrelation_median_real) {
-		g_free(element->workspace.wspf.autocorrelation_median_real);
-		element->workspace.wspf.autocorrelation_median_real = NULL;
-	}
-	if(element->workspace.wspf.autocorrelation_median_imag) {
-		g_free(element->workspace.wspf.autocorrelation_median_imag);
-		element->workspace.wspf.autocorrelation_median_imag = NULL;
-	}
-	if(element->workspace.wspf.transfer_functions_at_f) {
-		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
-		element->workspace.wspf.transfer_functions_at_f = NULL;
-	}
-	if(element->workspace.wspf.transfer_functions_solved_at_f) {
-		gsl_vector_complex_free(element->workspace.wspf.transfer_functions_solved_at_f);
-		element->workspace.wspf.transfer_functions_solved_at_f = NULL;
-	}
-	if(element->workspace.wspf.autocorrelation_matrix_at_f) {
-		gsl_matrix_complex_free(element->workspace.wspf.autocorrelation_matrix_at_f);
-		element->workspace.wspf.autocorrelation_matrix_at_f = NULL;
-	}
-	if(element->workspace.wspf.permutation) {
-		gsl_permutation_free(element->workspace.wspf.permutation);
-		element->workspace.wspf.permutation = NULL;
-	}
-	if(element->workspace.wspf.fft) {
-		gstlal_fftw_lock();
-		fftwf_free(element->workspace.wspf.fft);
-		element->workspace.wspf.fft = NULL;
-		fftwf_destroy_plan(element->workspace.wspf.plan);
-		gstlal_fftw_unlock();
-	}
-	if(element->workspace.wspf.fir_filter) {
-		gstlal_fftw_lock();
-		fftwf_free(element->workspace.wspf.fir_filter);
-		element->workspace.wspf.fir_filter = NULL;
-		fftwf_destroy_plan(element->workspace.wspf.fir_plan);
-		gstlal_fftw_unlock();
-	}
-	if(element->workspace.wspf.fd_fir_window) {
-		g_free(element->workspace.wspf.fd_fir_window);
-		element->workspace.wspf.fd_fir_window = NULL;
-	}
-	if(element->workspace.wdpf.sinc_table) {
-		g_free(element->workspace.wdpf.sinc_table);
-		element->workspace.wdpf.sinc_table = NULL;
-	}
-	if(element->workspace.wdpf.leftover_data) {
-		g_free(element->workspace.wdpf.leftover_data);
-		element->workspace.wdpf.leftover_data = NULL;
-	}
-	element->workspace.wdpf.num_leftover = 0;
-	if(element->workspace.wdpf.ffts) {
-		g_free(element->workspace.wdpf.ffts);
-		element->workspace.wdpf.ffts = NULL;
-	}
-	element->workspace.wdpf.num_ffts_in_avg = 0;
-	element->workspace.wspf.num_ffts_dropped = 0;
-	if(element->workspace.wdpf.autocorrelation_matrix) {
-		g_free(element->workspace.wdpf.autocorrelation_matrix);
-		element->workspace.wdpf.autocorrelation_matrix = NULL;
-	}
-	if(element->workspace.wdpf.autocorrelation_median_real) {
-		g_free(element->workspace.wdpf.autocorrelation_median_real);
-		element->workspace.wdpf.autocorrelation_median_real = NULL;
-	}
-	if(element->workspace.wdpf.autocorrelation_median_imag) {
-		g_free(element->workspace.wdpf.autocorrelation_median_imag);
-		element->workspace.wdpf.autocorrelation_median_imag = NULL;
-	}
-	if(element->workspace.wdpf.transfer_functions_at_f) {
-		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
-		element->workspace.wdpf.transfer_functions_at_f = NULL;
-	}
-	if(element->workspace.wdpf.transfer_functions_solved_at_f) {
-		gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_solved_at_f);
-		element->workspace.wdpf.transfer_functions_solved_at_f = NULL;
-	}
-	if(element->workspace.wdpf.autocorrelation_matrix_at_f) {
-		gsl_matrix_complex_free(element->workspace.wdpf.autocorrelation_matrix_at_f);
-		element->workspace.wdpf.autocorrelation_matrix_at_f = NULL;
-	}
-	if(element->workspace.wdpf.permutation) {
-		gsl_permutation_free(element->workspace.wdpf.permutation);
-		element->workspace.wdpf.permutation = NULL;
-	}
-	if(element->workspace.wdpf.fft) {
-		gstlal_fftw_lock();
-		fftw_free(element->workspace.wdpf.fft);
-		element->workspace.wdpf.fft = NULL;
-		fftw_destroy_plan(element->workspace.wdpf.plan);
-		gstlal_fftw_unlock();
-	}
-	if(element->workspace.wdpf.fir_filter) {
-		gstlal_fftw_lock();
-		fftw_free(element->workspace.wdpf.fir_filter);
-		element->workspace.wdpf.fir_filter = NULL;
-		fftw_destroy_plan(element->workspace.wdpf.fir_plan);
-		gstlal_fftw_unlock();
+	if(element->data_type == GSTLAL_TRANSFERFUNCTION_F32) {
+		if(element->workspace.wspf.fft_window) {
+			g_free(element->workspace.wspf.fft_window);
+			element->workspace.wspf.fft_window = NULL;
+		}
+		if(element->workspace.wspf.fir_window) {
+			g_free(element->workspace.wspf.fir_window);
+			element->workspace.wspf.fir_window = NULL;
+		}
+		if(element->workspace.wspf.fd_fir_window) {
+			g_free(element->workspace.wspf.fd_fir_window);
+			element->workspace.wspf.fd_fir_window = NULL;
+		}
+		if(element->workspace.wspf.sinc_table) {
+			g_free(element->workspace.wspf.sinc_table);
+			element->workspace.wspf.sinc_table = NULL;
+		}
+		if(element->workspace.wspf.leftover_data) {
+			g_free(element->workspace.wspf.leftover_data);
+			element->workspace.wspf.leftover_data = NULL;
+		}
+		element->workspace.wspf.num_leftover = 0;
+		if(element->workspace.wspf.ffts) {
+			g_free(element->workspace.wspf.ffts);
+			element->workspace.wspf.ffts = NULL;
+		}
+		element->workspace.wspf.num_ffts_in_avg = 0;
+		element->workspace.wspf.num_ffts_dropped = 0;
+		if(element->workspace.wspf.autocorrelation_matrix) {
+			g_free(element->workspace.wspf.autocorrelation_matrix);
+			element->workspace.wspf.autocorrelation_matrix = NULL;
+		}
+		if(element->workspace.wspf.autocorrelation_median_real) {
+			g_free(element->workspace.wspf.autocorrelation_median_real);
+			element->workspace.wspf.autocorrelation_median_real = NULL;
+		}
+		if(element->workspace.wspf.autocorrelation_median_imag) {
+			g_free(element->workspace.wspf.autocorrelation_median_imag);
+			element->workspace.wspf.autocorrelation_median_imag = NULL;
+		}
+		if(element->workspace.wspf.transfer_functions_at_f) {
+			gsl_vector_complex_free(element->workspace.wspf.transfer_functions_at_f);
+			element->workspace.wspf.transfer_functions_at_f = NULL;
+		}
+		if(element->workspace.wspf.transfer_functions_solved_at_f) {
+			gsl_vector_complex_free(element->workspace.wspf.transfer_functions_solved_at_f);
+			element->workspace.wspf.transfer_functions_solved_at_f = NULL;
+		}
+		if(element->workspace.wspf.autocorrelation_matrix_at_f) {
+			gsl_matrix_complex_free(element->workspace.wspf.autocorrelation_matrix_at_f);
+			element->workspace.wspf.autocorrelation_matrix_at_f = NULL;
+		}
+		if(element->workspace.wspf.permutation) {
+			gsl_permutation_free(element->workspace.wspf.permutation);
+			element->workspace.wspf.permutation = NULL;
+		}
+		if(element->workspace.wspf.fft) {
+			gstlal_fftw_lock();
+			fftwf_free(element->workspace.wspf.fft);
+			element->workspace.wspf.fft = NULL;
+			fftwf_destroy_plan(element->workspace.wspf.plan);
+			gstlal_fftw_unlock();
+		}
+		if(element->workspace.wspf.fir_filter) {
+			gstlal_fftw_lock();
+			fftwf_free(element->workspace.wspf.fir_filter);
+			element->workspace.wspf.fir_filter = NULL;
+			fftwf_destroy_plan(element->workspace.wspf.fir_plan);
+			gstlal_fftw_unlock();
+		}
+	} else if (element->data_type == GSTLAL_TRANSFERFUNCTION_F64) {
+		if(element->workspace.wdpf.fft_window) {
+			g_free(element->workspace.wdpf.fft_window);
+			element->workspace.wdpf.fft_window = NULL;
+		}
+		if(element->workspace.wdpf.fir_window) {
+			g_free(element->workspace.wdpf.fir_window);
+			element->workspace.wdpf.fir_window = NULL;
+		}
+		if(element->workspace.wdpf.fd_fir_window) {
+			g_free(element->workspace.wdpf.fd_fir_window);
+			element->workspace.wdpf.fd_fir_window = NULL;
+		}
+		if(element->workspace.wdpf.sinc_table) {
+			g_free(element->workspace.wdpf.sinc_table);
+			element->workspace.wdpf.sinc_table = NULL;
+		}
+		if(element->workspace.wdpf.leftover_data) {
+			g_free(element->workspace.wdpf.leftover_data);
+			element->workspace.wdpf.leftover_data = NULL;
+		}
+		element->workspace.wdpf.num_leftover = 0;
+		if(element->workspace.wdpf.ffts) {
+			g_free(element->workspace.wdpf.ffts);
+			element->workspace.wdpf.ffts = NULL;
+		}
+		element->workspace.wdpf.num_ffts_in_avg = 0;
+		element->workspace.wdpf.num_ffts_dropped = 0;
+		if(element->workspace.wdpf.autocorrelation_matrix) {
+			g_free(element->workspace.wdpf.autocorrelation_matrix);
+			element->workspace.wdpf.autocorrelation_matrix = NULL;
+		}
+		if(element->workspace.wdpf.autocorrelation_median_real) {
+			g_free(element->workspace.wdpf.autocorrelation_median_real);
+			element->workspace.wdpf.autocorrelation_median_real = NULL;
+		}
+		if(element->workspace.wdpf.autocorrelation_median_imag) {
+			g_free(element->workspace.wdpf.autocorrelation_median_imag);
+			element->workspace.wdpf.autocorrelation_median_imag = NULL;
+		}
+		if(element->workspace.wdpf.transfer_functions_at_f) {
+			gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_at_f);
+			element->workspace.wdpf.transfer_functions_at_f = NULL;
+		}
+		if(element->workspace.wdpf.transfer_functions_solved_at_f) {
+			gsl_vector_complex_free(element->workspace.wdpf.transfer_functions_solved_at_f);
+			element->workspace.wdpf.transfer_functions_solved_at_f = NULL;
+		}
+		if(element->workspace.wdpf.autocorrelation_matrix_at_f) {
+			gsl_matrix_complex_free(element->workspace.wdpf.autocorrelation_matrix_at_f);
+			element->workspace.wdpf.autocorrelation_matrix_at_f = NULL;
+		}
+		if(element->workspace.wdpf.permutation) {
+			gsl_permutation_free(element->workspace.wdpf.permutation);
+			element->workspace.wdpf.permutation = NULL;
+		}
+		if(element->workspace.wdpf.fft) {
+			gstlal_fftw_lock();
+			fftw_free(element->workspace.wdpf.fft);
+			element->workspace.wdpf.fft = NULL;
+			fftw_destroy_plan(element->workspace.wdpf.plan);
+			gstlal_fftw_unlock();
+		}
+		if(element->workspace.wdpf.fir_filter) {
+			gstlal_fftw_lock();
+			fftw_free(element->workspace.wdpf.fir_filter);
+			element->workspace.wdpf.fir_filter = NULL;
+			fftw_destroy_plan(element->workspace.wdpf.fir_plan);
+			gstlal_fftw_unlock();
+		}
+	} else {
+		success = FALSE;
+		goto done;
 	}
 
 	/*
@@ -1717,10 +1740,10 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wdpf.sinc_length = 1;
 				element->workspace.wdpf.sinc_table = g_malloc(sizeof(*element->workspace.wdpf.sinc_table));
 				*element->workspace.wdpf.sinc_table = 1.0;
-				element->workspace.wspf.sinc_taps_per_df = 1;
+				element->workspace.wdpf.sinc_taps_per_df = 1;
 			} else {
 				/* 
-				 * element->workspace.wspf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
+				 * element->workspace.wdpf.sinc_taps_per_df is the number of taps per frequency bin (at the finer
 				 * frequency resolution). If fir_length is an integer multiple of divisor of fft_length, taps_per_df is 1.
 				 */
 				gint64 common_denominator, short_length, long_length;
@@ -1729,10 +1752,10 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				common_denominator = long_length;
 				while(common_denominator % short_length)
 					common_denominator += long_length;
-				element->workspace.wspf.sinc_taps_per_df = common_denominator / long_length;
+				element->workspace.wdpf.sinc_taps_per_df = common_denominator / long_length;
 				/* taps_per_osc is the number of taps per half-oscillation in the sinc table */
-				gint64 taps_per_osc = element->workspace.wspf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length / element->rate, element->frequency_resolution * element->fft_length / element->rate), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
-				element->workspace.wdpf.sinc_length = minimum64(element->workspace.wspf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
+				gint64 taps_per_osc = element->workspace.wdpf.sinc_taps_per_df * (gint64) (maximum(maximum(element->frequency_resolution * element->fir_length / element->rate, element->frequency_resolution * element->fft_length / element->rate), maximum((double) element->fft_length / element->fir_length, (double) element->fir_length / element->fft_length)) + 0.5);
+				element->workspace.wdpf.sinc_length = minimum64(element->workspace.wdpf.sinc_taps_per_df * maximum64(fd_fir_length / 2, fd_fft_length / 2) - 1, 1 + SINC_LENGTH * taps_per_osc);
 
 				/* To save memory, we use symmetry and record only half of the sinc table */
 				element->workspace.wdpf.sinc_table = g_malloc((1 + element->workspace.wdpf.sinc_length / 2) * sizeof(*element->workspace.wdpf.sinc_table));
@@ -1751,7 +1774,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				 * Normalize the sinc table to make the DC gain exactly 1. We need to account for the fact 
 				 * that the density of taps in the filter could be higher than the density of input samples.
 				 */
-				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denominator / short_length : element->workspace.wspf.sinc_taps_per_df;
+				gint64 taps_per_input = fd_fir_length > fd_fft_length ? common_denominator / short_length : element->workspace.wdpf.sinc_taps_per_df;
 				for(i = 0; i < (taps_per_input + 1) / 2; i++) {
 					normalization = 0.0;
 					for(j = i; j <= element->workspace.wdpf.sinc_length / 2; j += taps_per_input)
@@ -1899,6 +1922,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 	} else
 		success = FALSE;
 
+done:
 	return success;
 }
 
