@@ -1597,7 +1597,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wspf.fd_fir_window[i] = 0.0;
 
 			/* Apply half of a Hann window */
-			i_start = i_stop;
+			i_start = i_stop > 0 ? i_stop : 0;
 			i_stop += freq_res_samples;
 			for(i = i_start; i < i_stop; i++)
 				element->workspace.wspf.fd_fir_window[i] *= (float) pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
@@ -1611,7 +1611,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 					element->workspace.wspf.fd_fir_window[i] *= (float) pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
-				i_start = i_stop;
+				i_start = i_stop > 0 ? i_stop : 0;
 				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wspf.fd_fir_window[i] = 0.0;
@@ -1822,7 +1822,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 				element->workspace.wdpf.fd_fir_window[i] = 0.0;
 
 			/* Apply half of a Hann window */
-			i_start = i_stop;
+			i_start = i_stop > 0 ? i_stop : 0;
 			i_stop += freq_res_samples;
 			for(i = i_start; i < i_stop; i++)
 				element->workspace.wdpf.fd_fir_window[i] *= pow(sin((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
@@ -1836,7 +1836,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 					element->workspace.wdpf.fd_fir_window[i] *= pow(cos((M_PI / 2.0) * (i - i_start) / (i_stop - i_start)), 2.0);
 
 				/* Remove high frequencies */
-				i_start = i_stop;
+				i_start = i_stop > 0 ? i_stop : 0;
 				i_stop = fd_fir_length;
 				for(i = i_start; i < i_stop; i++)
 					element->workspace.wdpf.fd_fir_window[i] = 0.0;
