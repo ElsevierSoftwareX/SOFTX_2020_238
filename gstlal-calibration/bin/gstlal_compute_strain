@@ -282,10 +282,6 @@ demodulation_filter_time = int(TDCFConfigs["demodulationfiltertime"])
 coherence_unc_threshold = float(TDCFConfigs["coherenceuncthreshold"])
 actuation_filter_update_time = float(TDCFConfigs["actuationfilterupdatetime"])
 actuation_filter_averaging_time = float(TDCFConfigs["actuationfilteraveragingtime"])
-adaptive_tst_filter_samples = int(TDCFConfigs["adaptivetstfiltersamples"]) if "adaptivetstfiltersamples" in TDCFConfigs else 128
-adaptive_pum_filter_samples = int(TDCFConfigs["adaptivepumfiltersamples"]) if "adaptivepumfiltersamples" in TDCFConfigs else 128
-adaptive_uim_filter_samples = int(TDCFConfigs["adaptiveuimfiltersamples"]) if "adaptiveuimfiltersamples" in TDCFConfigs else 128
-adaptive_pumuim_filter_samples = int(TDCFConfigs["adaptivepumuimfiltersamples"]) if "adaptivepumuimfiltersamples" in TDCFConfigs else 128
 actuation_filter_taper_length = int(TDCFConfigs["actuationfiltertaperlength"])
 sensing_filter_update_time = float(TDCFConfigs["sensingfilterupdatetime"])
 sensing_filter_averaging_time = float(TDCFConfigs["sensingfilteraveragingtime"])
@@ -372,7 +368,7 @@ apply_kappac = Config.getboolean("TDCFConfigurations", "applykappac")
 apply_fcc = Config.getboolean("TDCFConfigurations", "applyfcc")
 apply_srcq = Config.getboolean("TDCFConfigurations", "applysrcq")
 apply_fs = Config.getboolean("TDCFConfigurations", "applyfs")
-minimize_adaptive_sensfilt = Config.getboolean("TDCFConfigurations", "minimizeadaptivesensfilt") if "minimizeadaptivesensfilt" in TDCFConfigs else False
+minimize_adaptive_sensfilt = Config.getboolean("TDCFConfigurations", "minimizeadaptivesensingfilter") if "minimizeadaptivesensingfilter" in TDCFConfigs else False
 use_coherence = Config.getboolean("TDCFConfigurations", "usecoherence")
 tdcf_default_to_median = Config.getboolean("TDCFConfigurations", "tdcfdefaulttomedian")
 compute_exact_kappas = Config.getboolean("TDCFConfigurations", "computeexactkappas") if "computeexactkappas" in TDCFConfigs else False
@@ -758,7 +754,12 @@ else:
 # If we're performing partial calibration, load the deltal filters
 if CalibrationConfigs["calibrationmode"] == "Partial":
 	reschaindelay = int(filters["res_corr_delay"])
-	reschainfilt = filters["res_corr_filter"]
+	if minimize_adaptive_sensfilt and apply_fcc and (apply_fs or apply_srcq):
+		reschainfilt = filters["res_corr_nopole_filter"]
+	elif apply_fcc:
+		reschainfilt = filters["res_corr_noccpole_filter"]
+	else:
+		reschainfilt = filters["res_corr_filter"]
 	tstdelay = pumdelay = uimdelay = pumuimdelay = int(filters["ctrl_corr_delay"])
 	tstfilt = filters["TST_corr_filter"] if "TST_corr_filter" in filters else filters["ctrl_corr_filter"]
 	pumfilt = filters["PUM_corr_filter"] if "PUM_corr_filter" in filters else filters["ctrl_corr_filter"]
@@ -815,7 +816,12 @@ if CalibrationConfigs["calibrationmode"] == "Full":
 		if not (apply_kappapum or apply_kappauim or apply_complex_kappapum or apply_complex_kappauim):
 			raise ValueError("PUM/UIM actuation filter is needed since the PUM and UIM stages are not being split")
 	reschaindelay = int(filters["inv_sens_delay"])
-	reschainfilt = filters["inv_sensing"]
+	if minimize_adaptive_sensfilt and apply_fcc and (apply_fs or apply_srcq):
+		reschainfilt = filters["inv_sensing_nopole"]
+	elif minimize_adaptive_sensfilt and apply_fcc:
+		reschainfilt = filters["inv_sensing_noccpole"]
+	else:
+		reschainfilt = filters["inv_sensing"]
 	reschainfilt_model = filters["invsensfilt_model"] if "invsensfilt_model" in filters else None
 	if dewhitening:
 		ctrldewhitendelay = int(filters["dewhiten_ctrl_delay"])
@@ -2051,7 +2057,10 @@ if apply_fcc or apply_fs or apply_srcq:
 
 	# Now interleave the correction channels in tdep_zpk and feed them into lal_adaptivefirfilt to update the inverse sensing filter
 	tdep_zpk = calibration_parts.mkinterleave(pipeline, tdep_zpk, complex_data = True)
-	adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, static_model = reschainfilt_model, static_filter = reschainfilt, static_poles = static_invsens_poles, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, adaptive_filter_length = len(reschainfilt), frequency_resolution = invsens_freq_res, window_type = invsens_window_type, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, name = "adaptive_invsens_filter")
+	if minimize_adaptive_sensfilt:
+		adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, window_type = None, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, minimize_filter_length = True, name = "adaptive_invsens_filter")
+	else:
+		adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, static_model = reschainfilt_model, static_filter = reschainfilt, static_poles = static_invsens_poles, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, adaptive_filter_length = len(reschainfilt), frequency_resolution = invsens_freq_res, window_type = invsens_window_type, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, minimize_filter_length = False, name = "adaptive_invsens_filter")
 
 #
 # CONTROL BRANCH
@@ -2402,7 +2411,7 @@ if any(invsens_highpass):
 	res_filter_settle_time += float(len(invsens_highpass)-invsens_highpass_delay) / invsens_highpass_sr
 	res_filter_latency += float(invsens_highpass_delay) / invsens_highpass_sr
 
-if apply_fcc or apply_fs or apply_srcq:
+if (apply_fcc or apply_fs or apply_srcq) and not minimize_adaptive_sensfilt:
 	if filter_latency_factor == 0:
 		# Apply an adaptive filter to include the time-dependence of any sensing function parameters
 		res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = reschainfilt[::-1], latency = reschaindelay, taper_length = sensing_filter_taper_length, name = "RES_filter")
@@ -2442,6 +2451,30 @@ if test_filters:
 	num_res_ffts = int(res_tf_dur / 8)
 	res_tf = pipeparts.mkprogressreport(pipeline, res_tf, "progress_res_tf_%s" % instrument)
 	calibration_parts.mktransferfunction(pipeline, res_tf, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf", use_fir_fft = True, fft_window_type = 3)
+
+# Apply a short adaptive filter to include the time-dependence of the sensing function
+if minimize_adaptive_sensfilt and (apply_fcc or apply_fs or apply_srcq):
+	# Compute the reference model filter
+	static_invsens_zero_filt = numpy.zeros(2)
+	static_invsens_zero_filt[0] = 0.5 + hoft_sr / (2.0 * numpy.pi * static_invsens_poles[0])
+	static_invsens_zero_filt[1] = 0.5 - hoft_sr / (2.0 * numpy.pi * static_invsens_poles[0])
+	for i in range(1, len(static_invsens_poles) / 2):
+		temp_filt = numpy.zeros(2)
+		temp_filt[0] = 0.5 + hoft_sr / (2.0 * numpy.pi * static_invsens_poles[2 * i])
+		temp_filt[1] = 0.5 - hoft_sr / (2.0 * numpy.pi * static_invsens_poles[2 * i])
+		static_invsens_zero_filt = numpy.convolve(static_invsens_zero_filt, temp_filt)
+
+	if filter_latency_factor == 0:
+		# Apply an adaptive filter and apply updates as soon as possible.
+		res = pipeparts.mkgeneric(pipeline, res, "lal_tdwhiten", kernel = static_invsens_zero_filt[::-1], latency = 0, taper_length = sensing_filter_taper_length, name = "RES_adaptive_filter")
+		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+		adaptive_invsens_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, res, "adaptive_filter", "kernel")
+	else:
+		# Apply an adaptive filter and apply updates at predetermined times.
+		res = pipeparts.mkgeneric(pipeline, calibration_parts.mkqueue(pipeline, res), "lal_tdwhiten", kernel = static_invsens_zero_filt[::-1], latency = 0, taper_length = sensing_filter_taper_length, kernel_endtime = 0, name = "RES_adaptive_filter")
+		# Hook up the adaptive filter from lal_adaptivefirfilt to lal_tdwhiten so that the filter gets updated
+		adaptive_invsens_filter.connect("notify::adaptive-filter", calibration_parts.update_filter, res, "adaptive_filter", "kernel")
+		adaptive_invsens_filter.connect("notify::filter-endtime", calibration_parts.update_property_simple, res, "filter_endtime", "kernel_endtime", 1)
 
 # Apply \kappa_c if we haven't already
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
