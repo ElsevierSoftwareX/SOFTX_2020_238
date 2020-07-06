@@ -2441,17 +2441,6 @@ else:
 res_filter_settle_time += float(len(reschainfilt)-reschaindelay)/hoft_sr
 res_filter_latency += float(reschaindelay)/hoft_sr
 
-if test_filters:
-	res = pipeparts.mktee(pipeline, res)
-	res_tf = calibration_parts.mkinterleave(pipeline, [res, derrtee])
-	res_tf_delay = res_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if (apply_fcc or apply_fs or apply_srcq) else 0)
-	res_tf_start = start + res_tf_delay
-	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
-	res_tf_dur = res_tf_dur - (res_tf_dur + 8) % 16
-	num_res_ffts = int(res_tf_dur / 8)
-	res_tf = pipeparts.mkprogressreport(pipeline, res_tf, "progress_res_tf_%s" % instrument)
-	calibration_parts.mktransferfunction(pipeline, res_tf, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf", use_fir_fft = True, fft_window_type = 3)
-
 # Apply a short adaptive filter to include the time-dependence of the sensing function
 if minimize_adaptive_sensfilt and (apply_fcc or apply_fs or apply_srcq):
 	# Compute the reference model filter
@@ -2480,6 +2469,17 @@ if minimize_adaptive_sensfilt and (apply_fcc or apply_fs or apply_srcq):
 if apply_kappac and not (apply_fcc or apply_fs or apply_srcq):
 	kc_modify_res = calibration_parts.mkresample(pipeline, smooth_kctee, 3, False, hoft_caps)
 	res = calibration_parts.mkmultiplier(pipeline, calibration_parts.list_srcs(pipeline, res, calibration_parts.mkpow(pipeline, kc_modify_res, exponent = -1.0)))
+
+if test_filters:
+	res = pipeparts.mktee(pipeline, res)
+	res_tf = calibration_parts.mkinterleave(pipeline, [res, derrtee])
+	res_tf_delay = res_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if (apply_fcc or apply_fs or apply_srcq) else 0)
+	res_tf_start = start + res_tf_delay
+	res_tf_dur = gps_end_time - res_tf_start - res_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
+	res_tf_dur = res_tf_dur - (res_tf_dur + 8) % 16
+	num_res_ffts = int(res_tf_dur / 8)
+	res_tf = pipeparts.mkprogressreport(pipeline, res_tf, "progress_res_tf_%s" % instrument)
+	calibration_parts.mktransferfunction(pipeline, res_tf, fft_length = 16 * hoft_sr, fft_overlap = 8 * hoft_sr, num_ffts = num_res_ffts, use_median = True, update_samples = 1e15, update_delay_samples = res_tf_delay * hoft_sr, filename = "%s_res_filters_transfer_function_%d-%d.txt" % (filters_name.split('/')[-1].replace('.', '_'), res_tf_start, res_tf_dur), name = "res_filters_tf", use_fir_fft = True, fft_window_type = 3)
 
 if dewhitening:
 	res = pipeparts.mkfirbank(pipeline, res, latency = int(resdewhitendelay), fir_matrix = [resdewhiten[::-1]], time_domain = td)
