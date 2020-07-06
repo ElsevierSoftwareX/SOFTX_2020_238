@@ -13,8 +13,8 @@ snax_PYTHON = \
 	utils.py \
 	waveforms.py \
 	feature_extractor.py \
-	multirate_datasource.py \
 	multichannel_datasource.py \
+	pipeparts.py \
 	sngltriggertable.py
 
 pkgpyexec_LTLIBRARIES = _sngltriggertable.la
