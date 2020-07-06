@@ -39,7 +39,6 @@ from gstlal import dagparts
 
 from gstlal.snax import feature_extractor
 from gstlal.snax import multichannel_datasource
-from gstlal.snax import multirate_datasource
 from gstlal.snax import utils
 
 PSD_DROP_FACTOR = 16

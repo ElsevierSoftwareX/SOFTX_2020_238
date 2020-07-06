@@ -50,6 +50,7 @@ from gstlal import pipeparts
 from gstlal import simplehandler
 
 from gstlal.snax import multichannel_datasource
+from gstlal.snax import pipeparts as snaxparts
 
 # global settings for whitening properties
 PSD_FFT_LENGTH = 32
@@ -110,7 +111,7 @@ handler = simplehandler.Handler(mainloop, pipeline)
 
 # generate multiple channel sources, and link up pipeline
 whiten = {}
-head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, data_source_info.channel_subsets[0], verbose = options.verbose)
+head = snaxparts.mkmultisrc(pipeline, data_source_info, data_source_info.channel_subsets[0], verbose=options.verbose)
 for channel in channels:
 
 	if options.verbose:
