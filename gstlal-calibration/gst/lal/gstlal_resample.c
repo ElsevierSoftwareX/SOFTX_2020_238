@@ -84,6 +84,8 @@ GType gstlal_resample_window_get_type(void) {
 			{GSTLAL_RESAMPLE_DPSS, "GSTLAL_RESAMPLE_DPSS", "Maximize energy concentration in main lobe"},
 			{GSTLAL_RESAMPLE_KAISER, "GSTLAL_RESAMPLE_KAISER", "Simple approximtion to DPSS window"},
 			{GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV, "GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{GSTLAL_RESAMPLE_BLACKMAN, "GSTLAL_RESAMPLE_BLACKMAN", "Strongly attenuate distant side lobes"},
+			{GSTLAL_RESAMPLE_HANN, "GSTLAL_RESAMPLE_HANN", "Cosine squared window"},
 			{0, NULL, NULL}
 		};
 
@@ -1084,8 +1086,7 @@ static void prepare_element(GSTLALResample *element) {
 		 * In this case, we are filtering inputs with a sinc table and then downsampling.
 		 * max_end_samples is the maximum number of samples that could need to be stored
 		 * between buffers. It is one less than the length of the sinc table in samples.
-		 * The sinc table is tapered at the ends using a DPSS window, a Kaiser window, or
-		 * a Dolph-Chebyshev window, depending on the choice of the user. The cutoff
+		 * The sinc table is tapered at the ends using a user-chosen window. The cutoff
 		 * frequency is below the Nyquist frequency by half the width of the main lobe of
 		 * the window function, in order to minimize aliasing.
 		 */
@@ -1123,6 +1124,12 @@ static void prepare_element(GSTLALResample *element) {
 		case GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV:
 			DolphChebyshev_double(element->sinc_length, alpha, element->sinc_table, TRUE);
 			break;
+		case GSTLAL_RESAMPLE_BLACKMAN:
+			blackman_double(element->sinc_length, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_HANN:
+			hann_double(element->sinc_length, element->sinc_table, TRUE);
+			break;
 		default:
 			GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
 			g_assert_not_reached();
@@ -1145,8 +1152,7 @@ static void prepare_element(GSTLALResample *element) {
 		 * In this case, we are filtering inputs with a sinc table and upsampling.
 		 * max_end_samples is the maximum number of samples that could need to be stored
 		 * between buffers. It is slightly shorter than the length of the sinc table in time.
-		 * The sinc table is tapered at the ends using a DPSS window, a Kaiser window, or
-		 * a Dolph-Chebyshev window, depending on the choice of the user. The cutoff
+		 * The sinc table is tapered at the ends using a user-chosen window.  The cutoff
 		 * frequency is below the Nyquist frequency by half the width of the main lobe of the
 		 * window function. To upsample, the inputs are shifted relative to the sinc filter
 		 * by one sample period of the upsampled rate for each consecutive output sample.
@@ -1189,6 +1195,12 @@ static void prepare_element(GSTLALResample *element) {
 			break;
 		case GSTLAL_RESAMPLE_DOLPH_CHEBYSHEV:
 			DolphChebyshev_double(element->sinc_length, alpha, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_BLACKMAN:
+			blackman_double(element->sinc_length, element->sinc_table, TRUE);
+			break;
+		case GSTLAL_RESAMPLE_HANN:
+			hann_double(element->sinc_length, element->sinc_table, TRUE);
 			break;
 		default:
 			GST_ERROR_OBJECT(element, "Invalid window type.  See properties for appropriate window types.");
