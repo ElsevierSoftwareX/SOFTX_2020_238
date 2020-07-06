@@ -92,6 +92,8 @@ GType gstlal_adaptivefirfilt_window_get_type(void) {
 			{GSTLAL_ADAPTIVEFIRFILT_DPSS, "GSTLAL_ADAPTIVEFIRFILT_DPSS", "Maximize energy concentration in main lobe"},
 			{GSTLAL_ADAPTIVEFIRFILT_KAISER, "GSTLAL_ADAPTIVEFIRFILT_KAISER", "Simple approximtion to DPSS window"},
 			{GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV, "GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV", "Attenuate all side lobes equally"},
+			{GSTLAL_ADAPTIVEFIRFILT_BLACKMAN, "GSTLAL_ADAPTIVEFIRFILT_BLACKMAN", "Strongly attenuate distant side lobes"},
+			{GSTLAL_ADAPTIVEFIRFILT_HANN, "GSTLAL_ADAPTIVEFIRFILT_HANN", "Cosine squared window"},
 			{GSTLAL_ADAPTIVEFIRFILT_NONE, "GSTLAL_ADAPTIVEFIRFILT_NONE", "Do not apply a window function"},
 			{0, NULL, NULL}
 		};
@@ -563,6 +565,14 @@ static gboolean start(GstBaseSink *sink) {
 
 	case GSTLAL_ADAPTIVEFIRFILT_DOLPH_CHEBYSHEV:
 		element->window = DolphChebyshev_double(element->adaptive_filter_length, alpha, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_BLACKMAN:
+		element->window = blackman_double(element->adaptive_filter_length, NULL, FALSE);
+		break;
+
+	case GSTLAL_ADAPTIVEFIRFILT_HANN:
+		element->window = hann_double(element->adaptive_filter_length, NULL, FALSE);
 		break;
 
 	case GSTLAL_ADAPTIVEFIRFILT_NONE:
