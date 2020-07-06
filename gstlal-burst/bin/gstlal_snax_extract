@@ -21,111 +21,10 @@ A program to extract features from auxiliary channel data in real time or in off
 """
 
 # =============================
-# 
+#
 #           preamble
 #
 # =============================
-
-### .. graphviz::
-###
-###    digraph llpipe {
-###    	labeljust = "r";
-###    	label="gstlal_snax_extract"
-###    	rankdir=LR;
-###    	graph [fontname="Roman", fontsize=24];
-###    	edge [ fontname="Roman", fontsize=10 ];
-###    	node [fontname="Roman", shape=box, fontsize=11];
-###
-###
-###    	subgraph clusterNodeN {
-###
-###    		style=rounded;
-###    		label="gstreamer pipeline";
-###    		labeljust = "r";
-###    		fontsize = 14;
-###
-###    		H1L1src [label="H1(L1) data source:\n mkbasicmultisrc()", color=red4];
-###
-###    		Aux1 [label="Auxiliary channel 1", color=red4];
-###    		Aux2 [label="Auxiliary channel 2", color=green4];
-###    		AuxN [label="Auxiliary channel N", color=magenta4];
-###
-###    		Multirate1 [label="Auxiliary channel 1 whitening and downsampling:\nmkwhitened_multirate_src()", color=red4];
-###    		Multirate2 [label="Auxiliary channel 2 whitening and downsampling:\nmkwhitened_multirate_src()", color=green4];
-###    		MultirateN [label="Auxiliary channel N whitening and downsampling:\nmkwhitened_multirate_src()", color=magenta4];
-###
-###    		FilterBankAux1Rate1 [label="Auxiliary Channel 1:\nGlitch Filter Bank", color=red4];
-###    		FilterBankAux1Rate2 [label="Auxiliary Channel 1:\nGlitch Filter Bank", color=red4];
-###    		FilterBankAux1RateN [label="Auxiliary Channel 1:\nGlitch Filter Bank", color=red4];
-###    		FilterBankAux2Rate1 [label="Auxiliary Channel 2:\nGlitch Filter Bank", color=green4];
-###    		FilterBankAux2Rate2 [label="Auxiliary Channel 2:\nGlitch Filter Bank", color=green4];
-###    		FilterBankAux2RateN [label="Auxiliary Channel 2:\nGlitch Filter Bank", color=green4];
-###    		FilterBankAuxNRate1 [label="Auxiliary Channel N:\nGlitch Filter Bank", color=magenta4];
-###    		FilterBankAuxNRate2 [label="Auxiliary Channel N:\nGlitch Filter Bank", color=magenta4];
-###    		FilterBankAuxNRateN [label="Auxiliary Channel N:\nGlitch Filter Bank", color=magenta4];
-###
-###    		TriggerAux1Rate1 [label="Auxiliary Channel 1:\nTrigger Max (1 sec)", color=red4];
-###    		TriggerAux1Rate2 [label="Auxiliary Channel 1:\nTrigger Max (1 sec)", color=red4];
-###    		TriggerAux1RateN [label="Auxiliary Channel 1:\nTrigger Max (1 sec)", color=red4];
-###    		TriggerAux2Rate1 [label="Auxiliary Channel 2:\nTrigger Max (1 sec)", color=green4];
-###    		TriggerAux2Rate2 [label="Auxiliary Channel 2:\nTrigger Max (1 sec)", color=green4];
-###    		TriggerAux2RateN [label="Auxiliary Channel 2:\nTrigger Max (1 sec)", color=green4];
-###    		TriggerAuxNRate1 [label="Auxiliary Channel N:\nTrigger Max (1 sec)", color=magenta4];
-###    		TriggerAuxNRate2 [label="Auxiliary Channel N:\nTrigger Max (1 sec)", color=magenta4];
-###    		TriggerAuxNRateN [label="Auxiliary Channel N:\nTrigger Max (1 sec)", color=magenta4];
-###
-###    		H1L1src -> Aux1;
-###    		H1L1src -> Aux2;
-###    		H1L1src -> AuxN;
-###
-###    		Aux1 -> Multirate1;
-###    		Aux2 -> Multirate2;
-###    		AuxN -> MultirateN;
-###
-###    		Multirate1 -> FilterBankAux1Rate1 [label="Aux 1 4096Hz"];
-###    		Multirate2 -> FilterBankAux2Rate1 [label="Aux 2 4096Hz"];
-###    		MultirateN -> FilterBankAuxNRate1 [label="Aux N 4096Hz"];
-###    		Multirate1 -> FilterBankAux1Rate2 [label="Aux 1 2048Hz"];
-###    		Multirate2 -> FilterBankAux2Rate2 [label="Aux 2 2048Hz"];
-###    		MultirateN -> FilterBankAuxNRate2 [label="Aux N 2048Hz"];
-###    		Multirate1 -> FilterBankAux1RateN [label="Aux 1 Nth-pow-of-2 Hz"];
-###    		Multirate2 -> FilterBankAux2RateN [label="Aux 2 Nth-pow-of-2 Hz"];
-###    		MultirateN -> FilterBankAuxNRateN [label="Aux N Nth-pow-of-2 Hz"];
-###
-###    		FilterBankAux1Rate1 -> TriggerAux1Rate1;
-###    		FilterBankAux1Rate2 -> TriggerAux1Rate2;
-###    		FilterBankAux1RateN -> TriggerAux1RateN;
-###    		FilterBankAux2Rate1 -> TriggerAux2Rate1;
-###    		FilterBankAux2Rate2 -> TriggerAux2Rate2;
-###    		FilterBankAux2RateN -> TriggerAux2RateN;
-###    		FilterBankAuxNRate1 -> TriggerAuxNRate1;
-###    		FilterBankAuxNRate2 -> TriggerAuxNRate2;
-###    		FilterBankAuxNRateN -> TriggerAuxNRateN;
-###    	}
-###
-###
-###    	Synchronize [label="Synchronize buffers by timestamp"];
-###    	Extract [label="Extract features from buffer"];
-###    	Save [label="Save triggers to disk"];
-###    	Kafka [label="Push features to queue"];
-###
-###    	TriggerAux1Rate1 -> Synchronize;
-###    	TriggerAux1Rate2 -> Synchronize;
-###    	TriggerAux1RateN -> Synchronize;
-###    	TriggerAux2Rate1 -> Synchronize;
-###    	TriggerAux2Rate2 -> Synchronize;
-###    	TriggerAux2RateN -> Synchronize;
-###    	TriggerAuxNRate1 -> Synchronize;
-###    	TriggerAuxNRate2 -> Synchronize;
-###    	TriggerAuxNRateN -> Synchronize;
-###
-###    	Synchronize -> Extract;
-###
-###    	Extract -> Save [label="Option 1"];
-###    	Extract -> Kafka [label="Option 2"];
-###
-###    }
-###
 
 import math
 import optparse
@@ -159,10 +58,10 @@ from gstlal import simplehandler
 from gstlal.snax import auxcache
 from gstlal.snax import feature_extractor
 from gstlal.snax import multichannel_datasource
-from gstlal.snax import multirate_datasource
-from gstlal.snax import sngltriggertable
+from gstlal.snax import pipeparts as snaxparts
 from gstlal.snax import utils
 from gstlal.snax import waveforms as fxwaveforms
+
 
 #
 # Make sure we have sufficient resources
@@ -173,6 +72,7 @@ def setrlimit(res, lim):
 	hard_lim = resource.getrlimit(res)[1]
 	resource.setrlimit(res, (lim if lim is not None else hard_lim, hard_lim))
 
+
 # set the number of processes and total set size up to hard limit and
 # shrink the per-thread stack size (default is 10 MiB)
 setrlimit(resource.RLIMIT_NPROC, None)
@@ -182,18 +82,18 @@ setrlimit(resource.RLIMIT_RSS, None)
 # FIXME:  tests at CIT show that this next tweak has no effect.  it's
 # possible that SL7 has lowered the default stack size from SL6 and we
 # don't need to do this anymore.  remove?
-setrlimit(resource.RLIMIT_STACK, 1024 * 1024) # 1 MiB per thread
+setrlimit(resource.RLIMIT_STACK, 1024 * 1024)  # 1 MiB per thread
 
 
 # =============================
-# 
+#
 #     command line parser
 #
 # =============================
 
 def parse_command_line():
 
-	parser = optparse.OptionParser(usage = '%prog [options]', description = __doc__)
+	parser = optparse.OptionParser(usage='%prog [options]', description=__doc__)
 
 	# First append datasource and feature extraction common options
 	multichannel_datasource.append_options(parser)
@@ -210,9 +110,12 @@ def parse_command_line():
 		if options.data_source in ("framexmit", "lvshm"):
 			options.gps_start_time = int(aggregator.now())
 		else:
-			options.gps_start_time = 0 # NOTE: set start time for 'fake' live sources to zero, since seeking doesn't work with 'is_live' option
+			# NOTE: set start time for 'fake' live sources to zero,
+			#       since seeking doesn't work with 'is_live' option
+			options.gps_start_time = 0
 
-		options.gps_end_time = 2000000000 # NOTE: set the gps end time to be "infinite"
+		# set the gps end time to be "infinite"
+		options.gps_end_time = 2000000000
 
 	if options.feature_start_time is None:
 		options.feature_start_time = int(options.gps_start_time)
@@ -229,18 +132,21 @@ def parse_command_line():
 
 	# check if there are any segments to dump to disk
 	if options.nxydump_segment:
-		options.nxydump_segment, = segmentsUtils.from_range_strings([options.nxydump_segment], boundtype = LIGOTimeGPS)
+		options.nxydump_segment, = segmentsUtils.from_range_strings(
+			[options.nxydump_segment],
+			boundtype=LIGOTimeGPS
+		)
 
 	return options, filenames
 
 
 # =============================
-# 
+#
 #             main
 #
 # =============================
 
-#  
+#
 # parsing and setting up some core structures
 #
 
@@ -278,10 +184,19 @@ if options.local_frame_caching:
 	f, fname = tempfile.mkstemp(".cache")
 	f = open(fname, "w")
 
-	data_source_info.local_cache_list = auxcache.cache_aux(data_source_info, logger, output_path = local_path, verbose = options.verbose)
+	data_source_info.local_cache_list = auxcache.cache_aux(
+		data_source_info,
+		logger,
+		output_path=local_path,
+		verbose=options.verbose
+	)
 	for cacheentry in data_source_info.local_cache_list:
-		# guarantee a lal cache compliant file with only integer starts and durations
-		cacheentry.segment = segments.segment( int(cacheentry.segment[0]), int(math.ceil(cacheentry.segment[1])) )
+		# guarantee a lal cache compliant file with
+		# only integer starts and durations
+		cacheentry.segment = segments.segment(
+			int(cacheentry.segment[0]),
+			int(math.ceil(cacheentry.segment[1]))
+		)
 		print >>f, str(cacheentry)
 	f.close()
 
@@ -302,7 +217,13 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			# get path where triggers are located
 			duration = options.feature_end_time - options.feature_start_time
 			fname = utils.to_trigger_filename(basename, options.feature_start_time, duration, 'h5')
-			fpath = utils.to_trigger_path(os.path.abspath(options.out_path), basename, options.feature_start_time, options.job_id, str(subset_id).zfill(4))
+			fpath = utils.to_trigger_path(
+				os.path.abspath(options.out_path),
+				basename,
+				options.feature_start_time,
+				options.job_id,
+				str(subset_id).zfill(4)
+			)
 			trg_file = os.path.join(fpath, fname)
 
 			# visit groups within a given hdf5 file
@@ -313,12 +234,20 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			continue
 
 		except IOError:
-			# file does not exist or is corrupted, need to
-			# reprocess
-			logger.info("checkpoint: {0} of {1} files completed and continuing with channel subset {2}".format((subset_id - 1), len(data_source_info.channel_subsets), subset_id))
-			pass
+			# file does not exist or is corrupted, need to reprocess
+			logger.info(
+				"checkpoint: {0} of {1} files completed "
+				"and continuing with channel subset {2}".format(
+					(subset_id - 1),
+					len(data_source_info.channel_subsets),
+					subset_id,
+				),
+			)
 
-		logger.info("processing channel subset %d of %d" % (subset_id, len(data_source_info.channel_subsets)))
+		logger.info("processing channel subset {:d} of {:d}".format(
+			subset_id,
+			len(data_source_info.channel_subsets))
+		)
 
 	#
 	# if web services serving up bottle routes are enabled,
@@ -330,29 +259,28 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		bottle.default_app.push()
 		# uncomment the next line to show tracebacks when something fails
 		# in the web server
-		#bottle.app().catchall = False
-		import base64, uuid	# FIXME:  don't import when the uniquification scheme is fixed
+		import base64, uuid  # FIXME:  don't import when the uniquification scheme is fixed
 		httpservers = httpinterface.HTTPServers(
 			# FIXME:  either switch to using avahi's native name
 			# uniquification system or adopt a naturally unique naming
 			# scheme (e.g., include a search identifier and job
 			# number).
-			service_name = "gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
-			service_properties = {},
-			verbose = options.verbose
+			service_name="gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
+			service_properties={},
+			verbose=options.verbose
 		)
 
 		# Set up a registry of the resources that this job provides
 		@bottle.route("/")
 		@bottle.route("/index.html")
-		def index(channel_list = channel_subset):
+		def index(channel_list=channel_subset):
 			# get the host and port to report in the links from the
 			# request we've received so that the URLs contain the IP
 			# address by which client has contacted us
 			netloc = bottle.request.urlparts[1]
 			server_address = "http://%s" % netloc
 			yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
-			for route in sorted(bottle.default_app().routes, key = lambda route: route.rule):
+			for route in sorted(bottle.default_app().routes, key=lambda route: route.rule):
 				# don't create links back to this page
 				if route.rule in ("/", "/index.html"):
 					continue
@@ -362,7 +290,8 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
 			yield "</p>\n</body></html>"
 		# FIXME:  get service-discovery working, then don't do this
-		open("registry.txt", "w").write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
+		with open("registry.txt", "w") as f:
+			f.write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
 
 	#
 	# building the event loop and pipeline
@@ -374,7 +303,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	pipeline = Gst.Pipeline(sys.argv[0])
 
 	# generate multiple channel sources, and link up pipeline
-	head = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, channel_subset, verbose = options.verbose)
+	head = snaxparts.mkmultisrc(pipeline, data_source_info, channel_subset, verbose=options.verbose)
 	src = {}
 
 	for channel in channel_subset:
@@ -382,94 +311,143 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
 		max_rate = min(data_source_info.max_sample_rate, samp_rate)
 		min_rate = min(data_source_info.min_sample_rate, max_rate)
-		n_rates = int(numpy.log2(max_rate/min_rate) + 1)
-		rates = [min_rate*2**i for i in range(n_rates)]
+		n_rates = int(numpy.log2(max_rate / min_rate) + 1)
+		rates = [min_rate * 2**i for i in range(n_rates)]
 
 		# choose range of basis parameters
 		# NOTE: scale down frequency range by downsample_factor to deal with rolloff from downsampler
 		downsample_factor = 0.8
 		qlow = 3.3166
 		if data_source_info.extension == 'ini':
-			flow = max(data_source_info.channel_dict[channel]['flow'], min_rate/4.)
-			fhigh = min(data_source_info.channel_dict[channel]['fhigh'], max_rate/2.)
+			flow = max(data_source_info.channel_dict[channel]['flow'], min_rate / 4.)
+			fhigh = min(data_source_info.channel_dict[channel]['fhigh'], max_rate / 2.)
 			qhigh = min(data_source_info.channel_dict[channel]['qhigh'], options.qhigh)
 		else:
-			flow = min_rate/4.
-			fhigh = max_rate/2.
+			flow = min_rate / 4.
+			fhigh = max_rate / 2.
 			qhigh = options.qhigh
 
 		# generate templates
 		if 'sine_gaussian' in options.waveform:
 			parameter_range = {'frequency': (flow, fhigh), 'q': (qlow, qhigh)}
 			if options.waveform == 'half_sine_gaussian':
-				waveforms[channel] = fxwaveforms.HalfSineGaussianGenerator(parameter_range, rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
+				waveforms[channel] = fxwaveforms.HalfSineGaussianGenerator(
+					parameter_range,
+					rates,
+					mismatch=options.mismatch,
+					downsample_factor=downsample_factor
+				)
 			elif options.waveform == 'sine_gaussian':
-				waveforms[channel] = fxwaveforms.SineGaussianGenerator(parameter_range, rates, mismatch=options.mismatch, downsample_factor=downsample_factor)
+				waveforms[channel] = fxwaveforms.SineGaussianGenerator(
+					parameter_range,
+					rates,
+					mismatch=options.mismatch,
+					downsample_factor=downsample_factor
+				)
 			elif options.waveform == 'tapered_sine_gaussian':
-				waveforms[channel] = fxwaveforms.TaperedSineGaussianGenerator(parameter_range, rates, mismatch=options.mismatch, downsample_factor=downsample_factor, max_latency=options.max_latency)
+				waveforms[channel] = fxwaveforms.TaperedSineGaussianGenerator(
+					parameter_range,
+					rates,
+					mismatch=options.mismatch,
+					downsample_factor=downsample_factor,
+					max_latency=options.max_latency
+				)
 		else:
 			raise NotImplementedError
 
 		if options.latency_output:
-			head[channel] = pipeparts.mklatency(pipeline, head[channel], name=utils.latency_name('beforewhitening', 2, channel))
+			head[channel] = pipeparts.mklatency(
+				pipeline,
+				head[channel],
+				name=utils.latency_name('beforewhitening', 2, channel)
+			)
 
 		# whiten auxiliary channel data
-		for rate, thishead in multirate_datasource.mkwhitened_multirate_src(pipeline, head[channel], rates, samp_rate, instrument, channel_name = channel, width=32, nxydump_segment=options.nxydump_segment, psd_fft_length=options.psd_fft_length, min_rate=options.min_downsample_rate).items():
-			thisrate = max(options.min_downsample_rate, rate)
+		head[channel] = snaxparts.mkcondition(
+			pipeline,
+			head[channel],
+			rates,
+			samp_rate,
+			instrument,
+			channel_name=channel,
+			width=32,
+			nxydump_segment=options.nxydump_segment,
+			psd_fft_length=options.psd_fft_length,
+		)
+
+		# split whitened data into multiple frequency bands
+		multiband = snaxparts.mkmultiband(
+			pipeline,
+			head[channel],
+			rates,
+			samp_rate,
+			instrument,
+			min_rate=options.min_downsample_rate
+		)
+
+		for rate, thishead in multiband.items():
 			if options.latency_output:
-				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterwhitening', 3, channel, rate))
+				thishead = pipeparts.mklatency(
+					pipeline,
+					thishead,
+					name=utils.latency_name('afterwhitening', 3, channel, rate)
+				)
 
-			# determine whether to do time-domain or frequency-domain convolution
-			time_domain = (waveforms[channel].sample_pts(thisrate)*thisrate) < (5*waveforms[channel].sample_pts(thisrate)*numpy.log2(thisrate))
-
-			# create FIR bank of half sine-gaussian templates
-			fir_matrix = numpy.array([waveform for waveform in waveforms[channel].generate_templates(rate, sampling_rate=thisrate)])
-			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 0, max_size_bytes = 0, max_size_time = Gst.SECOND * 30)
-			thishead = pipeparts.mkfirbank(pipeline, thishead, fir_matrix = fir_matrix, time_domain = time_domain, block_stride = int(thisrate), latency = waveforms[channel].latency(thisrate))
-
-			# add queues, change stream format, add tags
-			if options.latency_output:
-				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('afterFIRbank', 4, channel, rate))
-			thishead = pipeparts.mkqueue(pipeline, thishead, max_size_buffers = 1, max_size_bytes = 0, max_size_time = 0)
-			thishead = pipeparts.mktogglecomplex(pipeline, thishead)
-			thishead = pipeparts.mkcapsfilter(pipeline, thishead, caps = "audio/x-raw, format=Z64LE, rate=%i" % thisrate)
-			thishead = pipeparts.mktaginject(pipeline, thishead, "instrument=%s,channel-name=%s" %( instrument, channel))
-
-			# dump segments to disk if specified
-			tee = pipeparts.mktee(pipeline, thishead)
-			if options.nxydump_segment:
-				pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, tee), "snrtimeseries_%s_%s.txt" % (channel, repr(rate)), segment = options.nxydump_segment)
-
-			# extract features from time series
-			if options.feature_mode == 'timeseries':
-				thishead = pipeparts.mktrigger(pipeline, tee, int(thisrate // options.sample_rate), max_snr = True)
-			elif options.feature_mode == 'etg':
-				thishead = pipeparts.mktrigger(pipeline, tee, thisrate, snr_thresh = options.snr_threshold)
+			# extract features
+			thishead = snaxparts.mkextract(
+				pipeline,
+				thishead,
+				instrument,
+				channel,
+				rate,
+				waveforms,
+				snr_threshold=options.snr_threshold,
+				sample_rate=options.sample_rate,
+				nxydump_segment=options.nxydump_segment
+			)
 
 			if options.latency_output:
-				thishead = pipeparts.mklatency(pipeline, thishead, name=utils.latency_name('aftertrigger', 5, channel, rate))
+				thishead = pipeparts.mklatency(
+					pipeline,
+					thishead,
+					name=utils.latency_name('aftertrigger', 5, channel, rate)
+				)
 
 			# link to src for processing by appsync
 			src[(channel, rate)] = thishead
 
 	# define structures to synchronize output streams and extract triggers from buffer
 	logger.info("setting up pipeline handler...")
-	handler = feature_extractor.MultiChannelHandler(mainloop, pipeline, logger, data_source_info, options, keys = src.keys(), waveforms = waveforms, basename = basename, subset_id = subset_id)
+	handler = feature_extractor.MultiChannelHandler(
+		mainloop,
+		pipeline,
+		logger,
+		data_source_info,
+		options,
+		keys=src.keys(),
+		waveforms=waveforms,
+		basename=basename,
+		subset_id=subset_id
+	)
 
 	logger.info("attaching appsinks to pipeline...")
-	appsync = feature_extractor.LinkedAppSync(appsink_new_buffer = handler.bufhandler)
-	appsinks = set(appsync.add_sink(pipeline, src[(channel, rate)], name = "sink_%s_%s" % (rate, channel)) for channel, rate in src.keys())
-	logger.info("attached %d appsinks to pipeline." % len(appsinks))
+
+	appsync = feature_extractor.LinkedAppSync(appsink_new_buffer=handler.bufhandler)
+	for channel, rate in src.keys():
+		appsync.add_sink(pipeline, src[(channel, rate)], name="sink_%s_%s" % (rate, channel))
+
+	logger.info("attached %d appsinks to pipeline." % len(src.keys()))
 
 	# Allow Ctrl+C or sig term to gracefully shut down the program for online
 	# sources, otherwise it will just kill it
-	if data_source_info.data_source in data_source_info.live_sources:# what about nds online?
+	if data_source_info.data_source in data_source_info.live_sources:  # what about nds online?
 		simplehandler.OneTimeSignalHandler(pipeline)
 
 	# Seek
 	if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
 		raise RuntimeError("pipeline failed to enter READY state")
-	if data_source_info.data_source not in data_source_info.live_sources:# what about nds online?
+
+	if data_source_info.data_source not in data_source_info.live_sources:  # what about nds online?
 		datasource.pipeline_seek_for_gps(pipeline, options.gps_start_time, options.gps_end_time)
 
 	#
