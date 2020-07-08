@@ -33,6 +33,7 @@ else
 endif
 
 # Set package release versions
+GRACEDBCLIENT=requests-client
 SWIG=swig-3.0.12
 METAIO=metaio-8.5.1
 GSTPYTHON=gst-python-1.14.5
@@ -44,6 +45,7 @@ ORC=orc-0.4.26
 FFTW=fftw-3.3.8
 
 # Specify target/dependancy files
+GRACEDBCLIENT_TARGET=$(INSTALL_DIR)/bin/gracedb
 SWIG_TARGET=$(INSTALL_DIR)/bin/swig
 METAIO_TARGET=$(INSTALL_DIR)/lib/libmetaio.so
 GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.so
@@ -86,7 +88,7 @@ ICC_LLO:=/ldcg/intel/2018u3/bin/compilervars.sh
 ICC_UWM:=/opt/intel/2018u3/bin/compilervars.sh
 ICC_PSU:=/ligo/apps/intel/2017u4/bin/compilervars.sh
 
-all : logs/swig.txt src/kafka_2.11-2.0.0
+all : logs/gracedb-client.txt src/kafka_2.11-2.0.0
 
 #####################
 # Environment setup #
@@ -173,6 +175,17 @@ check :
 	@cat logs/* | uniq > logs/all.txt
 	@if [ -f logs/swig.txt ] ; then ls logs/swig.txt >> logs/all.txt ; fi ;
 	@ls -ltrh $$(cat logs/all.txt)
+
+# gracedb-client
+gracedb-client : logs/gracedb-client.txt
+
+logs/gracedb-client.txt : $(LOGS_DIR)/swig.txt  $(GRACEDBCLIENT_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(GRACEDBCLIENT_TARGET) : $(SWIG_TARGET)
+	@echo $(GREEN)gracedb$(WHITE) 1>&2
+	git clone -b $(GRACEDBCLIENT) https://git.ligo.org/lscsoft/gracedb-client.git $(SRC_DIR)/gracedb-client
+	cd $(SRC_DIR)/gracedb-client && pip install --target=$(PYTHON_DIR) --upgrade . && python setup.py install --prefix=$(INSTALL_DIR)
 
 # swig
 swig : logs/swig.txt
