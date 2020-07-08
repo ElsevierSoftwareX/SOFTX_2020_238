@@ -175,7 +175,7 @@ def parse_command_line():
 	# Condor commands
 	parser.add_option("--request-cpu", default = "2", metavar = "integer", help = "set the requested node CPU count, default = 2")
 	parser.add_option("--request-memory", default = "8GB", metavar = "integer", help = "set the requested node memory, default = 8GB")
-	parser.add_option("--request-disk", default = "50GB", metavar = "integer", help = "set the requested node local scratch space size needed, default = 50GB")
+	parser.add_option("--request-disk", default = "30GB", metavar = "integer", help = "set the requested node local scratch space size needed, default = 50GB")
 	parser.add_option("--condor-command", action = "append", default = [], metavar = "command=value", help = "set condor commands of the form command=value; can be given multiple times")
 	parser.add_option("--singularity-image", metavar = "filename", help = "If set, uses the Singularity image provided as the build environment and sets Singularity-specific condor options.")
 
@@ -242,6 +242,7 @@ if options.singularity_image:
 extract_condor_options = {
 	"request_memory": options.request_memory,
 	"request_cpus": options.request_cpu,
+	"request_disk": options.request_disk,
 }
 extract_condor_options.update(common_condor_options)
 
