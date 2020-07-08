@@ -32,12 +32,15 @@ import numpy as np
 import itertools
 from optparse import OptionParser
 
+import lal.series
+
 from gstlal import svd_bank
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
 from ligo.lw import array as ligolw_array
 from ligo.lw import param as ligolw_param
+from ligo.lw import utils as ligolw_utils
 
 @ligolw_array.use_in
 @ligolw_param.use_in
@@ -57,6 +60,7 @@ class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 parser = OptionParser(description = __doc__)
 parser.add_option("--svd-files", metavar = "filename", action = "append", help = "A LIGO light-weight xml / xml.gz file containing svd bank information (require). Can be passed multiple times." )
 parser.add_option("--outdir", metavar = "directory", type = "str", default = ".", help = "Output directory for modified SVD files.")
+parser.add_option("--reference-psd", metavar = "filename", help = "Load the spectrum from this LIGO light-weight XML file (required).")
 parser.add_option("--even", action = "store_true", help = "Output even rows of reconstruction matrix. Default is odd.")
 parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -73,6 +77,9 @@ if options.svd_files is None:
 #
 # =============================================================================
 #
+
+# Read in reference PSD
+psd = lal.series.read_psd_xmldoc(ligolw_utils.load_filename(options.reference_psd, verbose=options.verbose, contenthandler=lal.series.PSDContentHandler))
 
 # Loop over all SVD files given in command line
 for bank_file in options.svd_files:
@@ -114,4 +121,4 @@ for bank_file in options.svd_files:
 		os.mkdir(out_path)
 
 	# Write out checkerboard SVD bank
-	svd_bank.write_bank(out_path+bank_file.split('/')[-1], banks, cliplefts = [0]*len(banks), cliprights = [0]*len(banks), verbose = options.verbose)
+	svd_bank.write_bank(out_path+bank_file.split('/')[-1], banks, psd, cliplefts = [0]*len(banks), cliprights = [0]*len(banks), verbose = options.verbose)
