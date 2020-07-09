@@ -58,8 +58,7 @@ from gstlal import svd_bank
 from gstlal import dagparts
 from gstlal.plotutil import golden_ratio
 
-import decimal
-from matplotlib.ticker import MultipleLocator, LogLocator, NullLocator, ScalarFormatter,FixedLocator
+from matplotlib.ticker import MultipleLocator, NullLocator, ScalarFormatter,FixedLocator
 import math
 #
 # =============================================================================
@@ -156,7 +155,7 @@ def set_logy_ticks(axis,ax_min,ax_max):
 		axis.yaxis.set_minor_locator(x_minor)
 	axis.yaxis.set_major_locator(NullLocator())
 	axis.yaxis.set_minor_formatter(ScalarFormatter(useMathText=True))	
-	print('I have set the y ticks')
+
 def plot_template_bank(filename_template, sngl_inspiral_table):
 
 	# Loglog plots
@@ -165,7 +164,6 @@ def plot_template_bank(filename_template, sngl_inspiral_table):
 
 		fig, axes = create_plot(ax1, ax2, aspect = aspect)
 		mrkr, markersize = marker_and_size(len(col1))
-		print(mrkr, markersize)
 		axes.loglog(col1,col2, mrkr, markersize = markersize)
 		axes.set_xlim(min(col1), max(col1))
 		axes.set_ylim(min(col2), max(col2))
