@@ -218,7 +218,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		with self.lock:
 			buf = elem.emit("pull-sample").get_buffer()
 			buftime = float(buf.pts / 1e9)
-			channel, rate  = sink_dict[elem]
+			channel, rate, bin_idx = sink_dict[elem]
 
 			# push new stream event to queue if done processing current timestamp
 			if len(self.feature_queue):
@@ -282,13 +282,13 @@ class MultiChannelHandler(simplehandler.Handler):
 				if mapinfo.data:
 					if (buftime >= self.feature_start_time and buftime <= self.feature_end_time):
 						for row in sngltriggertable.GSTLALSnglTrigger.from_buffer(mapinfo.data):
-							self.process_row(channel, rate, buftime, row)
+							self.process_row(channel, rate, bin_idx, buftime, row)
 				memory.unmap(mapinfo)
 
 			del buf
 			return Gst.FlowReturn.OK
 
-	def process_row(self, channel, rate, buftime, row):
+	def process_row(self, channel, rate, bin_idx, buftime, row):
 		"""
 		Given a channel, rate, and the current buffer
 		time, will process a row from a gstreamer buffer.
@@ -298,7 +298,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_seg = segments.segment(LIGOTimeGPS(row.end_time, row.end_time_ns), LIGOTimeGPS(row.end_time, row.end_time_ns))
 
 		if not self.frame_segments[self.instrument] or self.frame_segments[self.instrument].intersects_segment(trigger_seg):
-			waveform = self.waveforms[channel].parameter_grid[rate][row.channel_index]
+			waveform = self.waveforms[channel].index_to_waveform(rate, bin_idx, row.channel_index)
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
@@ -418,8 +418,8 @@ class LinkedAppSync(pipeparts.AppSync):
 		handler_id = appsink.connect("eos", self.eos_handler)
 		assert handler_id > 0
 		self.appsinks[appsink] = None
-		_, rate, channel = appsink.name.split("_", 2)
-		self.sink_dict.setdefault(appsink, (channel, int(rate)))
+		_, rate, bin_idx, channel = appsink.name.split("_", 3)
+		self.sink_dict.setdefault(appsink, (channel, int(rate), int(bin_idx)))
 		return appsink
 	
 	def pull_buffers(self, elem):
@@ -539,6 +539,7 @@ def append_options(parser):
 	group.add_option("--snr-threshold", type = "float", default = 5.5, help = "Specifies the SNR threshold for features written to disk, required if 'feature-mode' option is set. Default = 5.5")
 	group.add_option("--feature-start-time", type = "int", metavar = "seconds", help = "Set the start time of the segment to output features in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--feature-end-time", type = "int", metavar = "seconds", help = "Set the end time of the segment to output features in GPS seconds.  Required unless --data-source=lvshm")
+	group.add_option("--frequency-bin", type = "float", default=[], action = "append", help = "Set frequency breakpoints for binning generated features by frequency. Default is one bin spanning 0-inf. Adding in breakpoints will create bins between these breakpoints, such as passing --frequency-bin 1024 will create two bins, [0, 1024.) and [1024., inf).")
 	parser.add_option_group(group)
 
 def check_kafka():

@@ -48,6 +48,7 @@ class TemplateGenerator(object):
 		self,
 		parameters,
 		rates,
+		bins,
 		mismatch=0.2,
 		tolerance=5e-3,
 		downsample_factor=0.8
@@ -70,8 +71,9 @@ class TemplateGenerator(object):
 		# in frequency band to deal with low pass rolloff
 		self.downsample_factor = downsample_factor
 
-		# determine frequency bands considered
+		# determine frequency bands and bins considered
 		self.rates = sorted(set(rates))
+		self.bins = bins
 
 		# determine lower frequency limits for rate
 		# conversion based on downsampling factor
@@ -92,6 +94,16 @@ class TemplateGenerator(object):
 		self._latency = {}
 		self._sample_pts = {}
 		self._filter_duration = {}
+
+		# generate binning indices for each sampling rate
+		# store both the mapping and inverse mapping
+		self._index_by_bin = {rate: [[] for bin_ in range(len(self.bins))] for rate in self.rates}
+		self._idx_to_waveform = {rate: [[] for bin_ in range(len(self.bins))] for rate in self.rates}
+		for rate in self.rates:
+			for idx, waveform in enumerate(self.parameter_grid[rate]):
+				freq_idx = self.bins[waveform['frequency']]
+				self._index_by_bin[rate][freq_idx].append(idx)
+				self._idx_to_waveform[rate][freq_idx].append(waveform)
 
 	def duration(self, *params):
 		"""
@@ -157,6 +169,34 @@ class TemplateGenerator(object):
 		"""
 		idx = bisect.bisect(self._breakpoints, frequency)
 		return self.rates[idx]
+
+	def index_by_bin(self, rate):
+		"""
+		Given a sampling rate, returns the indices of waveforms
+		whose central frequencies fall within each frequency bin.
+		"""
+		return self._index_by_bin[rate]
+
+	def bin_mixer_coeffs(self, rate, bin_idx):
+		"""
+		Gives matrix mixing coefficients to split up streams based
+		on a frequency binning and sampling rate.
+		"""
+		waveform_indices = self._index_by_bin[rate][bin_idx]
+		num_cols = len(waveform_indices)
+		num_rows = len(self.parameter_grid[rate])
+		mixer_coeffs = numpy.zeros((num_rows, num_cols))
+		for col_idx, row_idx in enumerate(waveform_indices):
+			mixer_coeffs[row_idx, col_idx] = 1
+		return mixer_coeffs
+
+	def index_to_waveform(self, rate, bin_idx, row_idx):
+		"""
+		Maps a sampling rate and bin/row indices to a particular waveform.
+		This is useful in conjunction with index_by_bin() to provide
+		an inverse mapping to the index_by_bin() operation.
+		"""
+		return self._idx_to_waveform[rate][bin_idx][row_idx]
 
 	def _round_to_next_odd(self, n):
 		return int(numpy.ceil(n) // 2 * 2 + 1)
@@ -314,6 +354,7 @@ class TaperedSineGaussianGenerator(HalfSineGaussianGenerator):
 		self,
 		parameters,
 		rates,
+		bins,
 		mismatch=0.2,
 		tolerance=5e-3,
 		downsample_factor=0.8,
@@ -323,6 +364,7 @@ class TaperedSineGaussianGenerator(HalfSineGaussianGenerator):
 		super(TaperedSineGaussianGenerator, self).__init__(
 			parameters,
 			rates,
+			bins,
 			mismatch=mismatch,
 			tolerance=tolerance,
 			downsample_factor=downsample_factor
