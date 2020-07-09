@@ -5,22 +5,21 @@ try:
 except ImportError:
 	# not all machines have fpconst installed
 	NegInf = float("-inf")
-import sys
-from optparse import OptionParser
 import itertools
-
 import numpy as np
+from optparse import OptionParser
+import pickle
+import scipy
 from scipy.spatial import Delaunay, Voronoi, ConvexHull
+import sys
 import time
 np.random.seed(int(time.time()))
 
-from ligo.lw import lsctables
-from ligo.lw import ligolw
-from ligo.lw import utils as ligolw_utils
-from gstlal import far
-from gstlal import spawaveform
 import lal
 from lalburst.snglcoinc import light_travel_time
+from ligo.lw import lsctables, ligolw
+from ligo.lw import utils as ligolw_utils
+from gstlal import far, spawaveform
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
