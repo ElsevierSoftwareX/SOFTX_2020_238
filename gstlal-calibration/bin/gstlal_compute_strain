@@ -2447,7 +2447,7 @@ if minimize_adaptive_sensfilt and (apply_fcc or apply_fs or apply_srcq):
 	static_invsens_zero_filt = numpy.zeros(2)
 	static_invsens_zero_filt[0] = 0.5 + hoft_sr / (2.0 * numpy.pi * static_invsens_poles[0])
 	static_invsens_zero_filt[1] = 0.5 - hoft_sr / (2.0 * numpy.pi * static_invsens_poles[0])
-	for i in range(1, len(static_invsens_poles) / 2):
+	for i in range(1, len(static_invsens_poles) // 2):
 		temp_filt = numpy.zeros(2)
 		temp_filt[0] = 0.5 + hoft_sr / (2.0 * numpy.pi * static_invsens_poles[2 * i])
 		temp_filt[1] = 0.5 - hoft_sr / (2.0 * numpy.pi * static_invsens_poles[2 * i])

@@ -377,7 +377,7 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 			# Length of low-pass filter
 			filter_length = filter_param / (max(freq_vars[m], 0.003) * freqs[m][n] / freqs[m][0])
 			filter_samples = int(filter_length * compute_rate) + (1 - int(filter_length * compute_rate) % 2)
-			sample_shift = filter_samples / 2 - int((filter_samples - 1) * filter_latency + 0.5)
+			sample_shift = filter_samples // 2 - int((filter_samples - 1) * filter_latency + 0.5)
 			# shift of timestamp relative to data
 			time_shift = float(sample_shift) / compute_rate + zero_latency * resample_shift / compute_rate
 			two_n_pi_delta_t = 2 * freqs[m][n] / freqs[m][0] * numpy.pi * time_shift
@@ -497,7 +497,6 @@ def lowpass(pipeline, head, rate, length = 1.0, fcut = 500, filter_latency = 0.5
 
 	# Compute a low-pass filter.
 	lowpass = numpy.sinc(2 * numpy.float128(fcut) / rate * (numpy.arange(numpy.float128(length)) - (length - 1) // 2))
-	alpha = freq_res * length / rate if freq_res > 0.0 else 3.0
 	lowpass *= fir.kaiser(length, numpy.pi * alpha) # fir.DPSS(length, alpha, max_time = 10)
 	lowpass /= numpy.sum(lowpass)
 	lowpass = numpy.float64(lowpass)
@@ -662,7 +661,7 @@ def linear_phase_filter(pipeline, head, shift_samples, num_samples = 256, gain =
 def whiten(pipeline, head, num_samples = 512, nyq_magnitude = 1e15, scale = 'log', td = True):
 	# Number of filter samples should be even, since numpy's inverse real fft returns an even length array
 	num_samples += num_samples % 2
-	fd_num_samples = num_samples / 2 + 1
+	fd_num_samples = num_samples // 2 + 1
 	fd_filter = numpy.ones(fd_num_samples)
 	fd_filter[-1] = nyq_magnitude
 	if scale == 'log':
@@ -679,12 +678,12 @@ def whiten(pipeline, head, num_samples = 512, nyq_magnitude = 1e15, scale = 'log
 	# Take an inverse fft to get a time-domain filter
 	whiten_filter = numpy.fft.irfft(fd_filter)
 	# Add delay of half the filter length
-	whiten_filter = numpy.roll(whiten_filter, num_samples / 2)
+	whiten_filter = numpy.roll(whiten_filter, num_samples // 2)
 	# Window the filter
 	whiten_filter *= numpy.blackman(num_samples)
 
 	# Apply the filter
-	return mkcomplexfirbank(pipeline, head, latency = num_samples / 2, fir_matrix = [whiten_filter[::-1]], time_domain = td)
+	return mkcomplexfirbank(pipeline, head, latency = num_samples // 2, fir_matrix = [whiten_filter[::-1]], time_domain = td)
 
 def compute_rms(pipeline, head, rate, average_time, f_min = None, f_max = None, filter_latency = 0.5, rate_out = 16, td = True):
 	# Find the root mean square amplitude of a signal between two frequencies
@@ -1135,7 +1134,7 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 		MV_matrix[(1 + num_stages + j) * 2 * num_stages + num_stages + j] = Mjplus3jplus3
 
 		# Constant matrix elements
-		knotequalj = range(num_stages)
+		knotequalj = list(numpy.arange(num_stages))
 		knotequalj.remove(j)
 		for k in knotequalj:
 			factor = (pow(freqs[0], -2) - pow(freqs[2 + j], -2)) * EPICS[2 * ((1 + num_stages) + 1 + k)] + (pow(freqs[2 + j], -2) - pow(freqs[1], -2)) * EPICS[2 * (1 + k)] - (pow(freqs[0], -2) - pow(freqs[1], -2)) * EPICS[2 * ((2 + j) * (1 + num_stages) + 1 + k)]
@@ -1159,8 +1158,8 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 	kappas = list(mkdeinterleave(pipeline, pipeparts.mkcapsfilter(pipeline, kappas, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=%d" % (rate, 2 * num_stages)), 2 * num_stages))
 	for i in range(len(kappas)):
 		kappas[i] = pipeparts.mkcapsfilter(pipeline, kappas[i], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)
-		if i >= len(kappas) / 2:
-			kappas[i] = mkmultiplier(pipeline, [kappas[i], mkpow(pipeline, kappas[i - len(kappas) / 2], exponent = -1.0)])
+		if i >= len(kappas) // 2:
+			kappas[i] = mkmultiplier(pipeline, [kappas[i], mkpow(pipeline, kappas[i - len(kappas) // 2], exponent = -1.0)])
 		kappas[i] = pipeparts.mktee(pipeline, kappas[i])
 
 	# Next, compute kappa_C.  This is going to take some work...
@@ -1410,11 +1409,11 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		if parallel_mode:
-			minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass, freq_res = high_pass / 3.0)), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length, kernel_endtime = 0)
+			minus_noise = pipeparts.mkgeneric(pipeline, mkqueue(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass, freq_res = high_pass / 3.0)), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length // 2, taper_length = filter_taper_length, kernel_endtime = 0)
 			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 			transfer_functions.connect("notify::fir-endtime", update_property_simple, minus_noise, "fir_endtime", "kernel_endtime", 1)
 		else:
-			minus_noise = pipeparts.mkgeneric(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass, freq_res = high_pass / 3.0), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length / 2, taper_length = filter_taper_length)
+			minus_noise = pipeparts.mkgeneric(pipeline, highpass(pipeline, witness_tees[i], witness_rate, fcut = high_pass, freq_res = high_pass / 3.0), "lal_tdwhiten", kernel = numpy.zeros(fir_length), latency = fir_length // 2, taper_length = filter_taper_length)
 			transfer_functions.connect("notify::fir-filters", update_filters, minus_noise, "fir_filters", "kernel", i)
 		signal_minus_noise.append(mkresample(pipeline, minus_noise, 4, False, signal_rate))
 
