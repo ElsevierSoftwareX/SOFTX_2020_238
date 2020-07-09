@@ -33,8 +33,6 @@ def extended_templates(m, frac=0.01):
 	inner_boundary = inner_hull.points[inner_hull.vertices]
 	v = inner_boundary-np.mean(inner_boundary, axis=0) # create vector from arithmetic centroid to convex hull point
 	outer_boundary = inner_boundary + v*( (1./(1-frac)) - 1.0 ) # define outer boundary points by expanding inner boundary points outwards
-	print "Buffered convex hull created."
-	print "Number of outer boundary points:", len(outer_boundary)
 	extended_m = np.concatenate((outer_boundary, m))
 	test_hull = ConvexHull(extended_m) # create convex hull for assert test
 	assert (test_hull.points[test_hull.vertices]==outer_boundary).all(), "Buffered hull points mismatch."
@@ -137,7 +135,6 @@ def parse_command_line():
 	parser.add_option("--max-far", metavar = "Hertz", default = 12.0/lal.YRJUL_SI, type = "float", help = "Specify the maximum false-alarm rate in Hertz.  Default is 1 per month.") # one per month is possibly EM-followup worthy
 
 	# Basic option
-	parser.add_option("--bank-dim", metavar = "number", default = 3, type = "int", help = "The dimension of template bank.	Note the dimension of O2 templatebank is 3")
 	parser.add_option("--f-low", metavar = "Hertz", default = 15., type = "float", help = "Low frequency cutoff.  Default is 15 Hz")
 	parser.add_option("--source-tag", metavar = "name", help = "Source type (required).  bns, nsbh, bbh or imbh.")
 	parser.add_option("--trials-per-injection", metavar = "count", default = 100000, type = "int", help = "Set the number of trials to run per injection.  Default is 100000.")
@@ -173,7 +170,6 @@ def parse_command_line():
 
 source_types = ["bns", "nsbh", "bbh", "imbh"]
 mbins = [0.5, 2.0, 4.5, 45., 450]
-snr_params = {u"H1":"alpha4", u"L1":"alpha5", u"V1":"alpha6"}
 
 ##############
 #MAIN PROGRAM#
@@ -186,7 +182,7 @@ options = parse_command_line()
 #
 
 if options.verbose:
-	print "calculating lnL"
+	print("calculating lnL")
 
 rankingstatpdf = far.marginalize_pdf_urls(options.ranking_stat_pdf, "RankingStatPDF", verbose = options.verbose)
 fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
@@ -204,8 +200,7 @@ lnlrcdfsignals = []
 # read injection
 #
 
-xmldoc = ligolw_utils.load_filename(options.injection_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)
-injs = lsctables.SimInspiralTable.get_table(xmldoc)
+injs = lsctables.SimInspiralTable.get_table(ligolw_utils.load_filename(options.injection_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose))
 injs = [inj for inj in injs if filter_injections(inj, options.source_tag, source_types, mbins)]
 if len(injs)==0:
 	with open(options.output_file, "w") as f:
@@ -258,7 +253,7 @@ rankingstat.finish()
 #
 for n, inj in enumerate(injs):
 	if options.verbose:
-		print "calculating lnL ccdf... %d/%d" %(n+1,len(injs))
+		print("calculating lnL ccdf... %d/%d" %(n+1,len(injs)))
 
 	#
 	# draw ln L's for this injection
