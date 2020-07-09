@@ -81,7 +81,7 @@ observers, observer = observer.split("-")
 # Search live time
 #
 if options.verbose:
-	print "Searching livetime"
+	print("Searching livetime")
 
 normal_segments = segments.segmentlistdict()
 for f in options.zero_lag_database:
@@ -94,14 +94,13 @@ livetime = float(abs(zero_lag_segments))/lal.YRJUL_SI
 # Search injection data
 #
 if options.verbose:
-	print "Searching injection data"
+	print("Searching injection data")
 connection = {}
 found_injections = []
 total_injections = []
-for inj_file_suffix in options.injection_database:
-	inj_file = inj_file_suffix.split("-")[1]
-	inj_file = inj_file.replace("ALL_LLOID_","")
-	connection[inj_file] = sqlite3.connect(inj_file_suffix)
+for f in options.injection_database:
+	inj_file = f.split("-")[1].replace("ALL_LLOID_","")
+	connection[inj_file] = sqlite3.connect(f)
 	#found, total, missed = imr_utils.get_min_far_inspiral_injections(connection[inj_file], segments = zero_lag_segments, table_name="coinc_inspiral")
 	found, total, missed = imr_utils.get_min_far_inspiral_injections(connection[inj_file], table_name="coinc_inspiral")
 	found_injections += found
@@ -113,8 +112,8 @@ distances = [tup[0] for tup in map(imr_utils.sim_to_distance_chirp_mass_bins_fun
 bins = rate.NDBins([rate.LinearBins(min(distances), max(distances), 200), rate.IrregularBins(mbins)])
 
 vols_lo_far, vols_far, vols_hi_far = [], [], []
-for k, far in zip(range(options.xaxis_points), fars):
-	found_by_far = [s for f, s in found_injections_fars if f < far]
+for far in fars:
+	found_by_far = [s for f, s in found_injections if f < far]
 	eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_by_far, total_injections, bins, imr_utils.sim_to_distance_chirp_mass_bins_function)
 	vol_lo = imr_utils.compute_search_volume(eff_lo)
 	vol_lo.array *= livetime
@@ -132,21 +131,21 @@ for k, far in zip(range(options.xaxis_points), fars):
 # Ready for plotting
 #
 
+fig_far = pyplot.figure()
+fig_far.set_size_inches((8., 8./plotutil.golden_ratio))
+ax_far = fig_far.gca()
+colors = {"bns":"b", "nsbh":"g", "bbh":"r", "imbh":"c"}
+another_colors = {"bns":"darkblue", "nsbh":"darkgreen", "bbh":"darkred", "imbh":"darkcyan"}
 
 #
 # Read caluculation data
 #
 if options.verbose:
-	print "reading calculation data"
+	print("reading calculation data")
 injs = []
 for conn in connection.values():
 	injs += lsctables.SimInspiralTable.get_table(dbtables.get_xml(conn))
 
-fig_far = pyplot.figure()
-fig_far.set_size_inches((8., 8./plotutil.golden_ratio))
-ax_far = fig_far.gca()
-colors = {"bns":"b", "nsbh":"g", "bbh":"r", "imbh":"c"}
-acolors = {"bns":"darkblue", "nsbh":"darkgreen", "bbh":"darkred", "imbh":"darkcyan"}
 total_injections = [tuple(((inj.distance, inj.mchirp),)) for inj in injs]
 found_injections = []
 for inj_file, num_split, source_type in itertools.product(connection.keys(), range(num_split_inj), source_types):
@@ -159,6 +158,12 @@ for k, far in enumerate(fars):
 	vol = imr_utils.compute_search_volume(eff)
 	vol.array *= livetime
 	vols_calc.append(vol)
+
+#
+# plot injection and calculation result
+#
+if options.verbose:
+	print("plotting calculation and injection results")
 
 for source_type in source_types:
 	#injection
@@ -181,7 +186,7 @@ ax_far.set_xlabel("Combined FAR (Hz)")
 ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
 ax_far.set_xscale("log")
 ax_far.set_yscale("log")
-ax_far.set_xlim(fars[0], fars[-1])
+ax_far.set_xlim(fars[[0, -1]])
 ax_far.invert_xaxis()
 ax_far.legend(loc='upper left', fontsize=8)
 ax_far.grid()
