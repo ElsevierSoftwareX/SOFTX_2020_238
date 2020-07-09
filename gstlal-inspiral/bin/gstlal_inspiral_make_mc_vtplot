@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-from optparse import OptionParser
-
+import itertools
 import matplotlib
 matplotlib.use("Agg")
 matplotlib.rcParams.update({"text.usetex": True})
@@ -9,14 +8,15 @@ from matplotlib import pyplot
 pyplot.rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
+from optparse import OptionParser
+import pickle
 import sqlite3
 
-from ligo.lw import ligolw, lsctables, dbtables
-from ligo import segments
-from gstlal import plotutil
-from gstlal import imr_utils
 import lal
 from lal import rate
+from ligo import segments
+from ligo.lw import ligolw, lsctables, dbtables
+from gstlal import plotutil, imr_utils
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
