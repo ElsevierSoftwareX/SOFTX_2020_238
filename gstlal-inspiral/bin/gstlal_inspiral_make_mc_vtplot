@@ -95,17 +95,16 @@ livetime = float(abs(zero_lag_segments))/lal.YRJUL_SI
 #
 if options.verbose:
 	print "Searching injection data"
-
-found_injections_fars = []
-total_injections = []
 connection = {}
+found_injections = []
+total_injections = []
 for inj_file_suffix in options.injection_database:
 	inj_file = inj_file_suffix.split("-")[1]
 	inj_file = inj_file.replace("ALL_LLOID_","")
 	connection[inj_file] = sqlite3.connect(inj_file_suffix)
 	#found, total, missed = imr_utils.get_min_far_inspiral_injections(connection[inj_file], segments = zero_lag_segments, table_name="coinc_inspiral")
 	found, total, missed = imr_utils.get_min_far_inspiral_injections(connection[inj_file], table_name="coinc_inspiral")
-	found_injections_fars += found
+	found_injections += found
 	total_injections += total
 
 total_injections = imr_utils.symmetrize_sims(total_injections, "mass1", "mass2")
@@ -130,68 +129,43 @@ for k, far in zip(range(options.xaxis_points), fars):
 	vols_hi_far.append(vol_hi)
 
 #
-# Calc injection rate
+# Ready for plotting
 #
 
-num_inj = {}
-maxdist = {}
-mindist = {}
-for inj_file in connection:
-	xmldoc = dbtables.get_xml(connection[inj_file])
-	injs = lsctables.SimInspiralTable.get_table(xmldoc)
-	num_inj[inj_file] = dict((source_type, sum(np.pi*4*inj.distance**2 for inj in injs if filter_injections(inj, source_type))) for source_type in source_types)
-	params = lsctables.ProcessParamsTable.get_table(xmldoc)
-	try:
-		max_dist = np.array([param.value for param in params if param.param=="--max-distance"])[0]
-		min_dist = np.array([param.value for param in params if param.param=="--min-distance"])[0]
-	except IndexError:
-		dist = [inj.distance for inj in injs]
-		max_dist = max(dist)
-		min_dist = min(dist)
-
-	max_dist = float(max_dist)/10**3
-	min_dist = float(min_dist)/10**3
-	maxdist[inj_file] = max_dist
-	mindist[inj_file] = min_dist
-
-volume = dict((inj_file, (4*np.pi/3.)*(maxdist[inj_file]**3 - mindist[inj_file]**3)) for inj_file in connection)
-inj_per_VT = dict((source_type, sum(num_inj[inj_file][source_type]/volume[inj_file]/livetime for inj_file in connection)) for source_type in source_types)
 
 #
 # Read caluculation data
 #
 if options.verbose:
 	print "reading calculation data"
+injs = []
+for conn in connection.values():
+	injs += lsctables.SimInspiralTable.get_table(dbtables.get_xml(conn))
 
 fig_far = pyplot.figure()
 fig_far.set_size_inches((8., 8./plotutil.golden_ratio))
 ax_far = fig_far.gca()
 colors = {"bns":"b", "nsbh":"g", "bbh":"r", "imbh":"c"}
 acolors = {"bns":"darkblue", "nsbh":"darkgreen", "bbh":"darkred", "imbh":"darkcyan"}
+total_injections = [tuple(((inj.distance, inj.mchirp),)) for inj in injs]
+found_injections = []
+for inj_file, num_split, source_type in itertools.product(connection.keys(), range(num_split_inj), source_types):
+		with open("%s/%s_%04d_%s.pkl" %(options.input_dir, inj_file, num_split, source_type), "r") as f:
+			found_injections.extend(pickle.load(f))
+
+vols_calc = []
+for k, far in enumerate(fars):
+	eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_injections, total_injections, bins, sim_to_bins_function = lambda sim: sim[0], sim_to_found_weight_function = lambda sim: sim[1][k])
+	vol = imr_utils.compute_search_volume(eff)
+	vol.array *= livetime
+	vols_calc.append(vol)
+
 for source_type in source_types:
-	inj_files = connection.keys()
-	SS_lo, SS_mi, SS_hi = 0., 0., 0.
-	if inj_per_VT[source_type] == 0.:
-		continue
-	for inj_file in inj_files:
-		SS = sum(np.loadtxt("%s/%s_%04d_%s.txt" %(options.input_dir, inj_file, num, source_type)) for num in range(num_split_inj))
-		SS_lo += SS[0]
-		SS_mi += SS[1]
-		SS_hi += SS[2]
-	SS_lo /= inj_per_VT[source_type]
-	SS_mi /= inj_per_VT[source_type]
-	SS_hi /= inj_per_VT[source_type]
-	inj_file = inj_files[0] if len(inj_files) == 1 else "COMBINED"
-
-	#
-	# plot injection and calculation result
-	#
-	if options.verbose:
-		print "plotting calculation and injection results"
-
 	#injection
 	label = "Injection Result : $M_{\mathrm{chirp}} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % tuple(mbins[source_types.index(source_type):source_types.index(source_type)+2])
 	center = np.array([v.array[source_types.index(source_type)] for v in vols_far])
+	if (center == 0).all():
+		continue
 	lo = np.array([v.array[source_types.index(source_type)] for v in vols_lo_far])
 	hi = np.array([v.array[source_types.index(source_type)] for v in vols_hi_far])
 	line, = ax_far.plot(fars, center, label=label, linewidth=2, color=colors[source_type])
@@ -199,8 +173,10 @@ for source_type in source_types:
 
 	#calculation
 	label = "Our Result : $M_{\mathrm{chirp}} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % tuple(mbins[source_types.index(source_type):source_types.index(source_type)+2])
-	line, = ax_far.plot(fars, SS_mi, label=label, linewidth=2, color=acolors[source_type])
-	ax_far.fill_between(fars, SS_lo, SS_hi, alpha=0.5, color=line.get_color())
+	center = np.array([v.array[source_types.index(source_type)] for v in vols_calc])
+	line, = ax_far.plot(fars, center, label=label, linewidth=2, color=another_colors[source_type])
+if len(connection.keys()) > 1:
+	inj_file = "COMBINED"
 ax_far.set_xlabel("Combined FAR (Hz)")
 ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
 ax_far.set_xscale("log")

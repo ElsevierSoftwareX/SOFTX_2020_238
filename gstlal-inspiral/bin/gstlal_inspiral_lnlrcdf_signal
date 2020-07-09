@@ -124,15 +124,6 @@ def lnL_wrapper(rankingstat, params):
 
 	return NegInf
 
-def factored(tag, sim):
-	if tag == u"uniform" or u"distancesquared" or u"log10":
-		return 4*np.pi*inj.distance**2
-	elif tag == u"volume" or u"source" or u"sfr":
-		return 1.
-	else:
-		#impossible
-		raise KeyError("internal error")
-
 def filter_injections(inj, source_type, source_types, mbins):
 	min_mchirp, max_mchirp = mbins[source_types.index(source_type):source_types.index(source_type)+2]
 	return inj.mchirp >= min_mchirp and inj.mchirp < max_mchirp
@@ -158,7 +149,6 @@ def parse_command_line():
 	parser.add_option("--ranking-stat-pdf", metavar = "filename", action = "append", help = "Load ranking statistic PDFs for the signal and noise models from this file (required).  The file must include the zero-lag count data.  This is typically in a file named \"post_marginalized_likelihood.xml.gz\".  Can be given multiple times.")
 
 	# Output data options
-	parser.add_option("--lnlrcdfsignals", metavar = "URL", help = "Text file of lnlrcdf_signal")
 	parser.add_option("--output-file", metavar = "URL", help = "Text file of factored lnlrcdf_signal")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
@@ -209,7 +199,6 @@ lnL_th = np.array([fapfar.rank_from_far(val) for val in far_th])
 #
 
 lnlrcdfsignals = []
-factored_lnlrcdfsignals = np.zeros((3,len(lnL_th)))
 
 #
 # read injection
@@ -219,17 +208,9 @@ xmldoc = ligolw_utils.load_filename(options.injection_file, contenthandler = LIG
 injs = lsctables.SimInspiralTable.get_table(xmldoc)
 injs = [inj for inj in injs if filter_injections(inj, options.source_tag, source_types, mbins)]
 if len(injs)==0:
-	if options.lnlrcdfsignals:
-		lnlrcdfsignals = np.array(lnlrcdfsignals)
-		np.savetxt(options.lnlrcdfsignals, lnlrcdfsignals)
-	np.savetxt(options.output_file, factored_lnlrcdfsignals)
+	with open(options.output_file, "w") as f:
+		pickle.dump(lnlrcdfsignals, f)
 	sys.exit()
-
-#
-# search factor about source distribution
-#
-
-d_dist = [prc.value for prc in lsctables.ProcessParamsTable.get_table(xmldoc) if prc.param == "--d-distr"][0]
 
 #
 # read template bank
@@ -289,15 +270,8 @@ for n, inj in enumerate(injs):
 	# calc P(lnL >= threshold | candidate) and estimate its uncertainty
 	#
 
-	P_th_given_cand = np.array([sum(x >= threshold for x in lnL) for threshold in lnL_th]) / float(options.trials_per_injection)
-	dP_th_given_cand = np.sqrt(P_th_given_cand * (1.- P_th_given_cand) / float(options.trials_per_injection))
-	lnlrcdf = np.array([P_th_given_cand - dP_th_given_cand, P_th_given_cand, P_th_given_cand + dP_th_given_cand])
-	lnlrcdfsignals.append(P_th_given_cand)
+	lnlrcdf = np.array([sum(x >= threshold for x in lnL) for threshold in lnL_th]) / float(options.trials_per_injection)
+	lnlrcdfsignals.append(tuple(((inj.distance, inj.mchirp), lnlrcdf)))
 
-	factored_lnlrcdfsignals += factored(d_dist, inj)*lnlrcdf
-
-if options.lnlrcdfsignals:
-	lnlrcdfsignals = np.array(lnlrcdfsignals)
-	np.savetxt(options.lnlrcdfsignals, lnlrcdfsignals)
-
-np.savetxt(options.output_file, factored_lnlrcdfsignals)
+with open(options.output_file, "w") as f:
+	pickle.dump(lnlrcdfsignals, f)
