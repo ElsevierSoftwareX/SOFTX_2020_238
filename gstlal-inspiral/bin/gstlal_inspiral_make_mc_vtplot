@@ -86,7 +86,7 @@ if options.verbose:
 normal_segments = segments.segmentlistdict()
 for f in options.zero_lag_database:
 	connection = sqlite3.connect(f)
-	normal_segments += imr_utils.get_segments(connection, dbtables.get_xml(connection), "coinc_inspiral", "gstlal_inspiral", "vetoes", "whitehtsegments")
+	normal_segments += imr_utils.get_segments(connection, dbtables.get_xml(connection), "coinc_inspiral", "gstlal_inspiral", "vetoes", "datasegments")
 zero_lag_segments = normal_segments.union(normal_segments.keys())
 livetime = float(abs(zero_lag_segments))/lal.YRJUL_SI
 
