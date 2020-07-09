@@ -153,7 +153,7 @@ def parse_command_line():
 
 	# Input data options
 	parser.add_option("--injection-file", metavar = "filename", help = "XML file containing injection list (required).")
-	parser.add_option("--bank-file", metavar = "filename", help = "XML file containing template bank (required).")
+	parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers (required).")
 	parser.add_option("--likelihood-dir", metavar = "directory", default = "gstlal_inspiral_marginalize_likelihood", help = "Set the name of directory containing the ranking statistic data file to use (required).")
 	parser.add_option("--ranking-stat-pdf", metavar = "filename", action = "append", help = "Load ranking statistic PDFs for the signal and noise models from this file (required).  The file must include the zero-lag count data.  This is typically in a file named \"post_marginalized_likelihood.xml.gz\".  Can be given multiple times.")
 
@@ -164,13 +164,16 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	required_options = ("source_tag", "injection_file", "output_file", "bank_file", "likelihood_dir", "ranking_stat_pdf")
+	options.injection_database.extend(filenames)
+	required_options = ("source_tag", "injection_file", "output_file", "injection_database", "likelihood_dir", "ranking_stat_pdf")
 	missing_options = [option for option in required_options if not getattr(options, option)]
 	if missing_options:
 		raise ValueError("%s must be set" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options))
 	allowed_source_tag = ("bns", "nsbh", "bbh", "imbh")
 	if options.source_tag not in allowed_source_tag:
 		raise ValueError("--source-tag must be one of %s" % ", ".join(allowed_source_tag))
+	if len(options.injection_database) != 1:
+		raise ValueError("--injection-database must be only one file")
 
 	return options
 
@@ -232,68 +235,55 @@ d_dist = [prc.value for prc in lsctables.ProcessParamsTable.get_table(xmldoc) if
 # read template bank
 #
 
-sngls = lsctables.SnglInspiralTable.get_table(ligolw_utils.load_filename(options.bank_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose))
-bank = np.array([np.array([sngl.mchirp, sngl.chi]) for sngl in sngls])
-if bank[:,1].any():
-	boundary, vor = extended_templates(bank)
+#FIXME Should be done without injection sqlite file
+import sqlite3
+from ligo.lw import dbtables
+def mchirp(m1,m2):
+	return (m1*m2)**0.6/(m1+m2)**0.2
+
+connection = sqlite3.connect(options.injection_database[0])
+bank = dict((Gamma0, np.array([mchirp(mass1, mass2), spawaveform.computechi(mass1, mass2, np.sqrt(s1x**2 + s1y**2 + s1z**2), np.sqrt(s2x**2 + s2y**2 + s2z**2))])) for mass1, mass2, s1x, s1y, s1z, s2x, s2y, s2z, Gamma0 in connection.cursor().execute("""SELECT mass1, mass2, spin1x, spin1y, spin1z, spin2x, spin2y, spin1z, Gamma0 FROM sngl_inspiral"""))
+multi_dim_bank = False
+if np.array(bank.values())[:,1].any():
+	boundary, vor = extended_templates(np.array(bank.values()))
+	multi_dim_bank = True
 
 #
-# load rankingstat
+# search almost proper rankingstat file
 #
+instruments = options.injection_database[0].split("-")[0]
+time = options.injection_database[0].replace("%s-ALL_LLOID_" %(instruments), "").replace(".sqlite","").split("-")
+time = "-".join(time[-2:])
+inj = injs[0]
+inj_point = np.array([inj.mchirp, spawaveform.computechi(inj.mass1, inj.mass2, np.sqrt(np.dot(inj.spin1, inj.spin1)), np.sqrt(np.dot(inj.spin2, inj.spin2)))])
+if multi_dim_bank:
+	for i in range(len(vor.points)):
+		if vor.points[i] not in boundary: # Do not include boundary point regions, which have infinite volume
+			region = vor.vertices[vor.regions[vor.point_region[i]]]
+			if in_hull(inj_point, region):
+				best_tmplt = vor.points[i]
+	tmplt_id = bank.keys()[np.where(np.sum(np.array(bank.values())==best_tmplt,axis=1)==2)[0][0]]
+else:
+	tmplt_id = bank.keys()[np.argmin(abs(np.array(bank.values())[:,0]-inj_point[0]))]
 
-filenames = os.listdir(options.likelihood_dir)
-rankingstat = dict((num_bank, far.RankingStat.from_xml(far.ligolw_utils.load_filename("/".join([options.likelihood_dir, filename]), verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler), u"gstlal_inspiral_likelihood")) for num_bank, filename in enumerate(filenames) if "DIST_STATS" in filename)
-ufrankingstat = dict((num_bank, far.RankingStat.from_xml(far.ligolw_utils.load_filename("/".join([options.likelihood_dir, filename]), verbose = options.verbose, contenthandler = far.RankingStat.LIGOLWContentHandler), u"gstlal_inspiral_likelihood")) for num_bank, filename in enumerate(filenames) if "DIST_STATS" in filename)
-
-
-#
-# instruments
-#
-
-instruments = list(rankingstat.values()[0].instruments)
-instruments.sort()
+del bank
+num_bank, = connection.cursor().execute("select Gamma1 from sngl_inspiral where Gamma0={}".format(tmplt_id)).next()
+ufrankingstat = far.marginalize_pdf_urls(["%s/%s-%04d_MARG_DIST_STATS-%s.xml.gz"%(options.likelihood_dir, instruments, num_bank, time)], "RankingStat", verbose = options.verbose)
+rankingstat = far.marginalize_pdf_urls(["%s/%s-%04d_MARG_DIST_STATS-%s.xml.gz"%(options.likelihood_dir, instruments, num_bank, time)], "RankingStat", verbose = options.verbose)
+rankingstat.finish()
 
 #
 # read lnL_th
 #
-
-cache = []
 for n, inj in enumerate(injs):
 	if options.verbose:
 		print "calculating lnL ccdf... %d/%d" %(n+1,len(injs))
-	#
-	# search a tmplate that best matches a injection
-	#
-	inj_point = np.array([inj.mchirp, spawaveform.computechi(inj.mass1, inj.mass2, np.sqrt(np.dot(inj.spin1, inj.spin1)), np.sqrt(np.dot(inj.spin2, inj.spin2)))])
-	if bank[:,1].any():
-		for i in range(len(vor.points)):
-			if vor.points[i] not in boundary: # Do not include boundary point regions, which have infinite volume
-				region = vor.vertices[vor.regions[vor.point_region[i]]]
-				if in_hull(inj_point, region):
-					best_tmplt = vor.points[i]
-	else:
-		best_tmplt = np.array([bank[np.argmin(abs(bank[:,0]-inj_point[0])),0], 0.0])
-	tmplt_id = [sngl.Gamma0 for sngl in sngls if abs(sngl.mchirp - best_tmplt[0]) < 1e-8 and abs(sngl.chi - best_tmplt[1]) < 1e-8][0]
-
-	#
-	# load rankingstat
-	#
-
-	for num_bank, values in rankingstat.items():
-		if tmplt_id in values.template_ids:
-			break
-	if num_bank not in cache:
-		rankingstat[num_bank].finish()
-		cache.append(num_bank)
-
-	assert tmplt_id in rankingstat[num_bank].template_ids, "internal error. num_bank=%d, num_inj=%d" %(num_bank, n)
 
 	#
 	# draw ln L's for this injection
 	#
 
-	#lnL = [lnL_wrapper(rankingstat[num_bank], params) for params in itertools.islice(rankingstat[num_bank].numerator.random_sim_params(inj, tmplt_id, options.f_low), options.trials_per_injection)]
-	lnL = [lnL_wrapper(rankingstat[num_bank], params) for params in itertools.islice(ufrankingstat[num_bank].numerator.random_sim_params(inj, f_low = options.f_low), options.trials_per_injection)]
+	lnL = [lnL_wrapper(rankingstat, params) for params in itertools.islice(ufrankingstat.numerator.random_sim_params(inj, f_low = options.f_low), options.trials_per_injection)]
 
 	#
 	# calc P(lnL >= threshold | candidate) and estimate its uncertainty
