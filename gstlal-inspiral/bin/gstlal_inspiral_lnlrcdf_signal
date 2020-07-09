@@ -99,10 +99,12 @@ def lnL_wrapper(rankingstat, params):
 	for n in range(len(params["snrs"]), rankingstat.min_instruments - 1, -1):
 		lnL = []
 		for selected_instruments in itertools.combinations(params["snrs"], n):
-			if max(abs(params["dt"][insta] - params["dt"][instb]) for insta, instb in itertools.combinations(selected_instruments, 2)) > rankingstat.delta_t + light_travel_time(insta, instb):
-				# this combo is not mutually coincident
-				continue
-
+			if len(selected_instruments) > 1:
+				if max(abs(params["dt"][insta] - params["dt"][instb]) - light_travel_time(insta, instb) for insta, instb in itertools.combinations(selected_instruments, 2)) > rankingstat.delta_t:
+					# this combo is not mutually coincident
+					continue
+			else:
+				pass
 			# make a new params object for just these
 			# instruments
 			selected_params = params.copy()
