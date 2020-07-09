@@ -428,7 +428,8 @@ def mkextract(
 	rate,
 	waveforms,
 	snr_threshold=5.5,
-	sample_rate=1,
+	feature_sample_rate=1,
+	min_downsample_rate=128,
 	nxydump_segment=None,
 	feature_mode="timeseries",
 	latency_output=False,
@@ -436,20 +437,23 @@ def mkextract(
 	"""
 	Extract features from whitened timeseries.
 	"""
+	# determine sampling rate
+	sample_rate = max(min_downsample_rate, rate)
+
 	# determine whether to do time-domain or frequency-domain convolution
-	n_samples = waveforms[channel].sample_pts(rate)
-	time_domain = (n_samples * rate) < (5 * n_samples * numpy.log2(rate))
+	n_samples = waveforms[channel].sample_pts(sample_rate)
+	time_domain = (n_samples * sample_rate) < (5 * n_samples * numpy.log2(sample_rate))
 
 	# create fir bank from waveforms
-	fir_matrix = numpy.array(list(waveforms[channel].generate_templates(rate, sampling_rate=rate)))
+	fir_matrix = numpy.array(list(waveforms[channel].generate_templates(rate, sampling_rate=sample_rate)))
 	head = mktimequeue(pipeline, src, max_time=30)
 	head = pipeparts.mkfirbank(
 		pipeline,
 		head,
 		fir_matrix=fir_matrix,
 		time_domain=time_domain,
-		block_stride=int(rate),
-		latency=waveforms[channel].latency(rate)
+		block_stride=int(sample_rate),
+		latency=waveforms[channel].latency(sample_rate)
 	)
 
 	# add queues, change stream format, add tags
@@ -462,7 +466,7 @@ def mkextract(
 
 	head = pipeparts.mkqueue(pipeline, head, max_size_buffers=1, max_size_bytes=0, max_size_time=0)
 	head = pipeparts.mktogglecomplex(pipeline, head)
-	head = pipeparts.mkcapsfilter(pipeline, head, caps="audio/x-raw, format=Z64LE, rate=%i" % rate)
+	head = pipeparts.mkcapsfilter(pipeline, head, caps="audio/x-raw, format=Z64LE, rate=%i" % sample_rate)
 	head = pipeparts.mktaginject(
 		pipeline,
 		head,
@@ -482,8 +486,8 @@ def mkextract(
 
 	# extract features from time series
 	if feature_mode == 'timeseries':
-		head = pipeparts.mktrigger(pipeline, tee, int(rate // sample_rate), max_snr=True)
+		head = pipeparts.mktrigger(pipeline, tee, int(sample_rate // feature_sample_rate), max_snr=True)
 	elif feature_mode == 'etg':
-		head = pipeparts.mktrigger(pipeline, tee, rate, snr_thresh=snr_threshold)
+		head = pipeparts.mktrigger(pipeline, tee, sample_rate, snr_thresh=snr_threshold)
 
 	return head
