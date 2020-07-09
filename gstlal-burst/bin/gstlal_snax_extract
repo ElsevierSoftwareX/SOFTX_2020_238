@@ -43,8 +43,8 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-from lal import rate
 from lal import LIGOTimeGPS
+from lal.rate import IrregularBins
 
 from ligo import segments
 from ligo.segments import utils as segmentsUtils
@@ -157,9 +157,7 @@ data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
 basename = '%s-%s' % (instrument[:1], options.description)
 waveforms = {}
-
-frequency_breakpoints = [0.] + options.frequency_bin + [numpy.inf]
-frequency_bins = rate.IrregularBins(frequency_breakpoints)
+bins = {}
 
 #
 # set up logging
@@ -331,6 +329,11 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			fhigh = max_rate / 2.
 			qhigh = options.qhigh
 
+		# generate frequency bins
+		frequency_breakpoints = [0] + options.frequency_bin + [fhigh]
+		frequency_bins = IrregularBins(frequency_breakpoints)
+		bins[channel] = frequency_bins
+
 		# generate templates
 		if 'sine_gaussian' in options.waveform:
 			parameter_range = {'frequency': (flow, fhigh), 'q': (qlow, qhigh)}
@@ -437,8 +440,9 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		logger,
 		data_source_info,
 		options,
-		keys=src.keys(),
+		channels=channel_subset,
 		waveforms=waveforms,
+		bins=bins,
 		basename=basename,
 		subset_id=subset_id
 	)
