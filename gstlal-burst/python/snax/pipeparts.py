@@ -427,6 +427,7 @@ def mkextract(
 	channel,
 	rate,
 	waveforms,
+	frequency_bins,
 	snr_threshold=5.5,
 	feature_sample_rate=1,
 	min_downsample_rate=128,
@@ -441,11 +442,11 @@ def mkextract(
 	sample_rate = max(min_downsample_rate, rate)
 
 	# determine whether to do time-domain or frequency-domain convolution
-	n_samples = waveforms[channel].sample_pts(sample_rate)
+	n_samples = waveforms.sample_pts(sample_rate)
 	time_domain = (n_samples * sample_rate) < (5 * n_samples * numpy.log2(sample_rate))
 
 	# create fir bank from waveforms
-	fir_matrix = numpy.array(list(waveforms[channel].generate_templates(rate, sampling_rate=sample_rate)))
+	fir_matrix = numpy.array(list(waveforms.generate_templates(rate, sampling_rate=sample_rate)))
 	head = mktimequeue(pipeline, src, max_time=30)
 	head = pipeparts.mkfirbank(
 		pipeline,
@@ -453,7 +454,7 @@ def mkextract(
 		fir_matrix=fir_matrix,
 		time_domain=time_domain,
 		block_stride=int(sample_rate),
-		latency=waveforms[channel].latency(sample_rate)
+		latency=waveforms.latency(sample_rate)
 	)
 
 	# add queues, change stream format, add tags
@@ -484,10 +485,19 @@ def mkextract(
 			segment=nxydump_segment
 		)
 
-	# extract features from time series
-	if feature_mode == 'timeseries':
-		head = pipeparts.mktrigger(pipeline, tee, int(sample_rate // feature_sample_rate), max_snr=True)
-	elif feature_mode == 'etg':
-		head = pipeparts.mktrigger(pipeline, tee, sample_rate, snr_thresh=snr_threshold)
+	# split into distinct frequency bins
+	out = {idx: tee for idx, wfs in enumerate(waveforms.index_by_bin(rate)) if len(wfs) > 0}
+	for idx, snrhead in out.items():
+		if len(out) == 1:  # don't unnecessarily use a matrixmixer if we don't need to split up the stream
+			out[idx] = snrhead
+		else:
+			snrhead = pipeparts.mkqueue(pipeline, snrhead, max_size_buffers=1, max_size_bytes=0, max_size_time=0)
+			out[idx] = pipeparts.mkmatrixmixer(pipeline, snrhead, matrix=waveforms.bin_mixer_coeffs(rate, idx))
 
-	return head
+		# extract features from time series
+		if feature_mode == 'timeseries':
+			out[idx] = pipeparts.mktrigger(pipeline, out[idx], int(sample_rate // feature_sample_rate), max_snr=True)
+		elif feature_mode == 'etg':
+			out[idx] = pipeparts.mktrigger(pipeline, out[idx], sample_rate, snr_thresh=snr_threshold)
+
+	return out

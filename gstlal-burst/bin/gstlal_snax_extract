@@ -43,6 +43,7 @@ from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
+from lal import rate
 from lal import LIGOTimeGPS
 
 from ligo import segments
@@ -156,6 +157,9 @@ data_source_info = multichannel_datasource.DataSourceInfo(options)
 instrument = data_source_info.instrument
 basename = '%s-%s' % (instrument[:1], options.description)
 waveforms = {}
+
+frequency_breakpoints = [0.] + options.frequency_bin + [numpy.inf]
+frequency_bins = rate.IrregularBins(frequency_breakpoints)
 
 #
 # set up logging
@@ -334,6 +338,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				waveforms[channel] = fxwaveforms.HalfSineGaussianGenerator(
 					parameter_range,
 					rates,
+					frequency_bins,
 					mismatch=options.mismatch,
 					downsample_factor=downsample_factor
 				)
@@ -341,6 +346,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				waveforms[channel] = fxwaveforms.SineGaussianGenerator(
 					parameter_range,
 					rates,
+					frequency_bins,
 					mismatch=options.mismatch,
 					downsample_factor=downsample_factor
 				)
@@ -348,6 +354,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				waveforms[channel] = fxwaveforms.TaperedSineGaussianGenerator(
 					parameter_range,
 					rates,
+					frequency_bins,
 					mismatch=options.mismatch,
 					downsample_factor=downsample_factor,
 					max_latency=options.max_latency
@@ -385,22 +392,23 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 			min_rate=options.min_downsample_rate
 		)
 
-		for rate, thishead in multiband.items():
+		for rate, band in multiband.items():
 			if options.latency_output:
 				thishead = pipeparts.mklatency(
 					pipeline,
-					thishead,
+					band,
 					name=utils.latency_name('afterwhitening', 3, channel, rate)
 				)
 
 			# extract features
-			thishead = snaxparts.mkextract(
+			features = snaxparts.mkextract(
 				pipeline,
-				thishead,
+				band,
 				instrument,
 				channel,
 				rate,
-				waveforms,
+				waveforms[channel],
+				frequency_bins,
 				snr_threshold=options.snr_threshold,
 				feature_sample_rate=options.sample_rate,
 				min_downsample_rate=options.min_downsample_rate,
@@ -409,15 +417,17 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				latency_output=options.latency_output
 			)
 
-			if options.latency_output:
-				thishead = pipeparts.mklatency(
-					pipeline,
-					thishead,
-					name=utils.latency_name('aftertrigger', 5, channel, rate)
-				)
+			for bin_idx, trg_head in features.items():
 
-			# link to src for processing by appsync
-			src[(channel, rate)] = thishead
+				if options.latency_output:
+					thishead = pipeparts.mklatency(
+						pipeline,
+						trg_head,
+						name=utils.latency_name('aftertrigger', 5, '%s_%s'%(channel, bin_idx), rate)
+					)
+
+				# link to src for processing by appsync
+				src[(channel, rate, bin_idx)] = trg_head
 
 	# define structures to synchronize output streams and extract triggers from buffer
 	logger.info("setting up pipeline handler...")
@@ -436,8 +446,8 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	logger.info("attaching appsinks to pipeline...")
 
 	appsync = feature_extractor.LinkedAppSync(appsink_new_buffer=handler.bufhandler)
-	for channel, rate in src.keys():
-		appsync.add_sink(pipeline, src[(channel, rate)], name="sink_%s_%s" % (rate, channel))
+	for channel, rate, bin_idx in src.keys():
+		appsync.add_sink(pipeline, src[(channel, rate, bin_idx)], name="sink_%s_%s_%s" % (rate, bin_idx, channel))
 
 	logger.info("attached %d appsinks to pipeline." % len(src.keys()))
 
