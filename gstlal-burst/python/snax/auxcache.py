@@ -42,7 +42,7 @@ Gst.init(None)
 from gstlal import datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
-from gstlal.snax import multichannel_datasource
+from gstlal.snax import pipeparts as snaxparts
 
 #
 # =============================================================================
@@ -139,7 +139,7 @@ def build_pipeline(pipeline, data_source_info, output_path = tempfile.gettempdir
 
 	# FIXME: turning off verbosity since this causes naming conflict with multiple progressreport elements, since they don't have unique identifiers.
 	#        should really be using URI handling for this, but that's a separate issue altogether
-	src = multichannel_datasource.mkbasicmultisrc(pipeline, data_source_info, channels, verbose = False)
+	src = snaxparts.mkmultisrc(pipeline, data_source_info, channels, verbose = False)
 
 	#
 	# pack into frame files for output

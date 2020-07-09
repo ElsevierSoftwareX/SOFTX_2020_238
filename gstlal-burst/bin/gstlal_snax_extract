@@ -402,8 +402,11 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 				rate,
 				waveforms,
 				snr_threshold=options.snr_threshold,
-				sample_rate=options.sample_rate,
-				nxydump_segment=options.nxydump_segment
+				feature_sample_rate=options.sample_rate,
+				min_downsample_rate=options.min_downsample_rate,
+				nxydump_segment=options.nxydump_segment,
+				feature_mode=options.feature_mode,
+				latency_output=options.latency_output
 			)
 
 			if options.latency_output:
