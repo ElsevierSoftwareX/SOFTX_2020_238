@@ -76,31 +76,42 @@ class MultiChannelHandler(simplehandler.Handler):
 	multiple channels.
 
 	Implements additional message handling for dealing with spectrum
-	messages and creates trigger files containing features for use in iDQ.
+	messages and handles processing of features.
 	"""
-	def __init__(self, mainloop, pipeline, logger, data_source_info, options, **kwargs):
+	def __init__(
+		self,
+		mainloop,
+		pipeline,
+		logger,
+		data_source_info,
+		options,
+		channels,
+		waveforms,
+		bins,
+		basename,
+		subset_id,
+		**kwargs
+	):
 		self.lock = threading.Lock()
 		self.logger = logger
 		self.out_path = options.out_path
 		self.instrument = data_source_info.instrument
 		self.frame_segments = data_source_info.frame_segments
-		self.keys = kwargs.pop("keys")
-		self.num_samples = len(self.keys)
 		self.sample_rate = options.sample_rate
-		self.waveforms = kwargs.pop("waveforms")
-		self.basename = kwargs.pop("basename")
+		self.waveforms = waveforms
+		self.bins = bins
+		self.basename = basename
 		self.waveform_type = options.waveform
 
-		# format keys used for saving, etc.
-		self.aggregate_rate = True # NOTE: hard-coded for now
-		if self.aggregate_rate:
-			self.keys = list(set([key[0] for key in self.keys]))
-		else:
-			self.keys = [os.path.join(key[0], str(key[1]).zfill(4)) for key in self.keys]
+		# format channel names for features
+		self.channels = []
+		for channel in channels:
+			for flow, fhigh in zip(bins[channel].lower(), bins[channel].upper()):
+				self.channels.append("{}_{}_{}".format(channel, int(flow), int(fhigh)))
 
 		# format id for aesthetics
 		self.job_id = str(options.job_id).zfill(4)
-		self.subset_id = str(kwargs.pop("subset_id")).zfill(4)
+		self.subset_id = str(subset_id).zfill(4)
 
 		### iDQ saving properties
 		self.timestamp = None
@@ -134,20 +145,20 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.feature_mode = options.feature_mode
 		if self.feature_mode == 'timeseries':
 			self.feature_queue = utils.TimeseriesFeatureQueue(
-				self.keys,
+				self.channels,
 				self.columns,
 				sample_rate = self.sample_rate,
 				buffer_size = self.buffer_size
 			)
 		elif self.feature_mode == 'etg':
-			self.feature_queue = utils.ETGFeatureQueue(self.keys, self.columns)
+			self.feature_queue = utils.ETGFeatureQueue(self.channels, self.columns)
 
 		# set up structure to store feature data
 		if self.save_format == 'hdf5':
 			if self.feature_mode == 'timeseries':
 				self.fdata = utils.HDF5TimeseriesFeatureData(
 					self.columns,
-					keys = self.keys,
+					keys = self.channels,
 					cadence = self.cadence,
 					sample_rate = self.sample_rate,
 					waveform = self.waveform_type
@@ -155,7 +166,7 @@ class MultiChannelHandler(simplehandler.Handler):
 			elif self.feature_mode == 'etg':
 				self.fdata = utils.HDF5ETGFeatureData(
 					self.columns,
-					keys = self.keys,
+					keys = self.channels,
 					cadence = self.cadence,
 					waveform = self.waveform_type
 				)
@@ -302,9 +313,10 @@ class MultiChannelHandler(simplehandler.Handler):
 			trigger_time = row.end_time + row.end_time_ns * 1e-9
 
 			# append row for data transfer/saving
+			channel_name = self.bin_to_channel(channel, bin_idx)
 			feature_row = {
 				'timestamp': utils.floor_div(buftime, 1. / self.sample_rate),
-				'channel': channel,
+				'channel': channel_name,
 				'snr': row.snr,
 				'phase': row.phase,
 				'time': trigger_time,
@@ -313,7 +325,16 @@ class MultiChannelHandler(simplehandler.Handler):
 				'duration': waveform['duration'],
 			}
 			timestamp = utils.floor_div(buftime, self.buffer_size)
-			self.feature_queue.append(timestamp, channel, feature_row)
+			self.feature_queue.append(timestamp, channel_name, feature_row)
+
+	def bin_to_channel(self, channel, bin_idx):
+		"""
+		Given a frequency bin index and a channel name,
+		return the canonical channel name.
+		"""
+		flow = int(self.bins[channel].lower()[bin_idx])
+		fhigh = int(self.bins[channel].upper()[bin_idx])
+		return "{}_{}_{}".format(channel, flow, fhigh)
 
 	def save_features(self):
 		"""
