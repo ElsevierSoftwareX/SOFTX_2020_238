@@ -471,7 +471,7 @@ class LinkedAppSync(pipeparts.AppSync):
 				# exception gets raised
 				self.appsinks[elem_with_oldest] = None
 				self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
-	
+
 			elif self.time_ordering == 'partial':
 				# retrieve the timestamps of elements of a given channel
 				# that aren't at eos and all elements at eos that still
@@ -499,7 +499,7 @@ class LinkedAppSync(pipeparts.AppSync):
 				# exception gets raised
 				self.appsinks[elem_with_oldest] = None
 				self.appsink_new_buffer(elem_with_oldest, self.sink_dict)
-			
+
 			elif self.time_ordering == 'none':
 				if not elem in self.appsinks:
 					return Gst.FlowReturn.EOS
@@ -507,6 +507,8 @@ class LinkedAppSync(pipeparts.AppSync):
 					return Gst.FlowReturn.OK
 				self.appsinks[elem] = None
 				self.appsink_new_buffer(elem, self.sink_dict)
+
+			return Gst.FlowReturn.OK
 
 
 # =============================
