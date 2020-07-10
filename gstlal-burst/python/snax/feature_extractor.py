@@ -88,6 +88,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		channels,
 		waveforms,
 		bins,
+		num_streams,
 		basename,
 		subset_id,
 		**kwargs
@@ -98,8 +99,10 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.instrument = data_source_info.instrument
 		self.frame_segments = data_source_info.frame_segments
 		self.sample_rate = options.sample_rate
+		self.buffer_size = 1. / self.sample_rate
 		self.waveforms = waveforms
 		self.bins = bins
+		self.num_streams = num_streams
 		self.basename = basename
 		self.waveform_type = options.waveform
 
@@ -113,7 +116,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.job_id = str(options.job_id).zfill(4)
 		self.subset_id = str(subset_id).zfill(4)
 
-		### iDQ saving properties
+		### feature saving properties
 		self.timestamp = None
 		self.last_save_time = None
 		self.last_persist_time = None
@@ -122,6 +125,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.feature_start_time = options.feature_start_time
 		self.feature_end_time = options.feature_end_time
 		self.columns = ['timestamp', 'time', 'snr', 'phase', 'frequency', 'q', 'duration']
+		self.save_format = options.save_format
 
 		# set whether data source is live
 		self.is_live = data_source_info.data_source in data_source_info.live_sources
@@ -132,15 +136,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		else:
 			self.tmp_dir = os.environ['TMPDIR']
 
-		### feature saving properties
-		self.save_format = options.save_format
-
-		# set queue buffer size based on file format
-		if self.save_format == 'hdf5':
-			self.buffer_size = 1. ### 1 second buffers for file-based formats
-		else:
-			self.buffer_size = 1. / self.sample_rate
-
 		# set up queue to cache features depending on pipeline mode
 		self.feature_mode = options.feature_mode
 		if self.feature_mode == 'timeseries':
@@ -148,7 +143,8 @@ class MultiChannelHandler(simplehandler.Handler):
 				self.channels,
 				self.columns,
 				sample_rate = self.sample_rate,
-				buffer_size = self.buffer_size
+				buffer_size = self.buffer_size,
+				num_streams = self.num_streams,
 			)
 		elif self.feature_mode == 'etg':
 			self.feature_queue = utils.ETGFeatureQueue(self.channels, self.columns)
@@ -389,7 +385,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 	def gen_psd_xmldoc(self):
 		xmldoc = lal.series.make_psd_xmldoc(self.psds)
-		process = ligolw_process.register_to_xmldoc(xmldoc, "gstlal_idq", {})
+		process = ligolw_process.register_to_xmldoc(xmldoc, "snax", {})
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
