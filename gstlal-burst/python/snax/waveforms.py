@@ -99,11 +99,26 @@ class TemplateGenerator(object):
 		# store both the mapping and inverse mapping
 		self._index_by_bin = {rate: [[] for bin_ in range(len(self.bins))] for rate in self.rates}
 		self._idx_to_waveform = {rate: [[] for bin_ in range(len(self.bins))] for rate in self.rates}
+		self._bin_mixer_coeffs = {rate: {bin_: {} for bin_ in range(len(self.bins))} for rate in self.rates}
+
 		for rate in self.rates:
 			for idx, waveform in enumerate(self.parameter_grid[rate]):
 				freq_idx = self.bins[waveform['frequency']]
 				self._index_by_bin[rate][freq_idx].append(idx)
 				self._idx_to_waveform[rate][freq_idx].append(waveform)
+
+		# set up mixing coefficients
+		for rate in self.rates:
+			for bin_idx in range(len(self.bins)):
+				waveform_indices = self._index_by_bin[rate][bin_idx]
+				num_cols = len(waveform_indices)
+				num_rows = len(self.parameter_grid[rate])
+				mixer_coeffs = numpy.zeros((num_rows, num_cols))
+				for col_idx, row_idx in enumerate(waveform_indices):
+					mixer_coeffs[row_idx, col_idx] = 1
+					#self._idx_to_waveform[rate][freq_idx].append(waveform)
+
+				self._bin_mixer_coeffs[rate][bin_idx] = mixer_coeffs
 
 	def duration(self, *params):
 		"""
@@ -182,13 +197,7 @@ class TemplateGenerator(object):
 		Gives matrix mixing coefficients to split up streams based
 		on a frequency binning and sampling rate.
 		"""
-		waveform_indices = self._index_by_bin[rate][bin_idx]
-		num_cols = len(waveform_indices)
-		num_rows = len(self.parameter_grid[rate])
-		mixer_coeffs = numpy.zeros((num_rows, num_cols))
-		for col_idx, row_idx in enumerate(waveform_indices):
-			mixer_coeffs[row_idx, col_idx] = 1
-		return mixer_coeffs
+		return self._bin_mixer_coeffs[rate][bin_idx]
 
 	def index_to_waveform(self, rate, bin_idx, row_idx):
 		"""
