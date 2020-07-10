@@ -443,6 +443,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		channels=channel_subset,
 		waveforms=waveforms,
 		bins=bins,
+		num_streams=len(src.keys()),
 		basename=basename,
 		subset_id=subset_id
 	)

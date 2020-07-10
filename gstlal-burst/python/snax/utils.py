@@ -31,7 +31,6 @@ import itertools
 import logging
 import operator
 import os
-import sys
 import timeit
 
 import h5py
@@ -379,14 +378,18 @@ class TimeseriesFeatureQueue(object):
 		self.columns = columns
 		self.sample_rate = kwargs.pop('sample_rate')
 		self.buffer_size = kwargs.pop('buffer_size')
+		self.num_streams = kwargs.pop('num_streams')
 		self.out_queue = deque(maxlen = 5)
 		self.in_queue = {}
 		self.counter = Counter()
-		self.last_timestamp = 0
+		self.last_timestamp = None
 		self.effective_latency = 2 # NOTE: set so that late features are not dropped
 
 	def append(self, timestamp, channel, row):
-		if timestamp > self.last_timestamp:
+		if not self.last_timestamp:
+			self.last_timestamp = timestamp
+
+		if timestamp >= self.last_timestamp:
 			### create new buffer if one isn't available for new timestamp
 			if timestamp not in self.in_queue:
 				self.in_queue[timestamp] = self._create_buffer()
@@ -398,11 +401,14 @@ class TimeseriesFeatureQueue(object):
 				self.in_queue[timestamp][channel][idx] = row
 
 			### check if there's enough new samples that the oldest sample needs to be pushed
-			if len(self.counter) > self.effective_latency:
-				oldest_timestamp = min(self.counter.keys())
-				self.last_timestamp = oldest_timestamp
-				self.out_queue.append({'timestamp': oldest_timestamp, 'features': self.in_queue.pop(oldest_timestamp)})
-				del self.counter[oldest_timestamp]
+			if self.counter[self.last_timestamp] == self.num_streams or len(self.counter) >= self.effective_latency:
+				self.out_queue.append({'timestamp': self.last_timestamp, 'features': self.in_queue.pop(self.last_timestamp)})
+				del self.counter[self.last_timestamp]
+				try:
+					self.last_timestamp = min(self.counter.keys())
+				except ValueError:
+					self.last_timestamp = None
+
 
 	def pop(self):
 		if len(self):
