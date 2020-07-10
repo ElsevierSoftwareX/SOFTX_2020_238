@@ -129,7 +129,7 @@ def gapped_complex_test_src(pipeline, buffer_length = 1.0, rate = 2048, width = 
 
 
 def build_and_run(pipelinefunc, name, segment = None, **pipelinefunc_kwargs):
-	print >>sys.stderr, "=== Running Test %s ===" % name
+	print("=== Running Test %s ===" % name)
 	mainloop = GObject.MainLoop()
 	pipeline = pipelinefunc(Gst.Pipeline(name = name), name, **pipelinefunc_kwargs)
 	handler = simplehandler.Handler(mainloop, pipeline)
@@ -159,7 +159,7 @@ def transform_arrays(input_arrays, elemfunc, name, rate = 1, **elemfunc_kwargs):
 	pipeline = Gst.Pipeline(name = name)
 
 	head = pipeparts.mkgeneric(pipeline, None, "appsrc", caps = pipeio.caps_from_array(input_arrays[0], rate = rate))
-	def need_data(elem, arg, (input_arrays, rate)):
+	def need_data(elem, arg, input_arrays, rate):
 		if input_arrays:
 			arr = input_arrays.pop(0)
 			elem.set_property("caps", pipeio.caps_from_array(arr, rate))
@@ -169,7 +169,7 @@ def transform_arrays(input_arrays, elemfunc, name, rate = 1, **elemfunc_kwargs):
 		else:
 			elem.emit("end-of-stream")
 			return Gst.FlowReturn.EOS
-	head.connect("need-data", need_data, (input_arrays, rate))
+	head.connect("need-data", need_data, input_arrays, rate)
 
 	head = elemfunc(pipeline, head, **elemfunc_kwargs)
 

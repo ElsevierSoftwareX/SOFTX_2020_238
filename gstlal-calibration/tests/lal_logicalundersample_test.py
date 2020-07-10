@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (C) 2016 Aaron Viets <aaron.viets@ligo.org>
 #
 # This program is free software; you can redistribute it and/or modify it
