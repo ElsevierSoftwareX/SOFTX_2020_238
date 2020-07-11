@@ -278,7 +278,7 @@ def mkmultisrc(pipeline, data_source_info, channels, verbose=False):
 def mkcondition(
 	pipeline,
 	src,
-	rates,
+	sample_rate,
 	native_rate,
 	instrument,
 	psd=None,
@@ -286,6 +286,8 @@ def mkcondition(
 	veto_segments=None,
 	nxydump_segment=None,
 	track_psd=True,
+	high_pass=True,
+	high_pass_cutoff=12,
 	block_duration=0.25 * Gst.SECOND,
 	width=64,
 	channel_name="hoft",
@@ -315,9 +317,8 @@ def mkcondition(
 		raise ValueError("psd_fft_length must be an integer")
 	psd_fft_length = int(psd_fft_length)
 
-	# down-sample to highest of target sample rates.
-	max_rate = max(rates)
-	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % max_rate)
+	# down-sample to target sampling rate if needed
+	head = pipeparts.mkcapsfilter(pipeline, src, "audio/x-raw, rate=[%d,MAX]" % sample_rate)
 	head = pipeparts.mkinterpolator(pipeline, head)
 	head = pipeparts.mkaudioconvert(pipeline, head)
 
@@ -337,9 +338,9 @@ def mkcondition(
 	pipeparts.mkfakesink(pipeline, whiten)
 
 	# high pass filter
-	block_stride = int(block_duration * max_rate // Gst.SECOND)
-	if native_rate >= NATIVE_RATE_CUTOFF:
-		kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff=12)
+	block_stride = int(block_duration * sample_rate // Gst.SECOND)
+	if high_pass and native_rate >= NATIVE_RATE_CUTOFF:
+		kernel = reference_psd.one_second_highpass_kernel(sample_rate, cutoff=high_pass_cutoff)
 		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
 		head = pipeparts.mkfirbank(
 			pipeline,
@@ -354,7 +355,7 @@ def mkcondition(
 	head = pipeparts.mkfirbank(
 		pipeline,
 		head,
-		fir_matrix=numpy.zeros((1, 1 + max_rate * psd_fft_length), dtype=numpy.float64),
+		fir_matrix=numpy.zeros((1, 1 + sample_rate * psd_fft_length), dtype=numpy.float64),
 		block_stride=block_stride,
 		time_domain=False,
 		latency=0,
@@ -365,7 +366,8 @@ def mkcondition(
 	head = mktimequeue(pipeline, head, max_time=(psd_fft_length + 2))
 
 	# Drop initial data to let the PSD settle
-	head = pipeparts.mkdrop(pipeline, head, drop_samples=16 * psd_fft_length * max_rate)
+	num_drop_samples = 16 * psd_fft_length * sample_rate
+	head = pipeparts.mkdrop(pipeline, head, drop_samples=num_drop_samples)
 
 	# enable/disable PSD tracking
 	whiten.set_property("psd-mode", 0 if track_psd else 1)
@@ -387,7 +389,7 @@ def mkcondition(
 	else:
 		raise ValueError("invalid width: %d" % width)
 
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (max_rate, format_str))
+	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d, format=%s" % (sample_rate, format_str))
 
 	# optionally add vetoes
 	if veto_segments is not None:
