@@ -378,7 +378,7 @@ class TimeseriesFeatureQueue(object):
 		self.columns = columns
 		self.sample_rate = kwargs.pop('sample_rate')
 		self.buffer_size = kwargs.pop('buffer_size')
-		self.num_streams = kwargs.pop('num_streams')
+		self.num_streams = kwargs.pop('num_streams', len(channels))
 		self.out_queue = deque(maxlen = 5)
 		self.in_queue = {}
 		self.counter = Counter()
