@@ -88,8 +88,6 @@ def generate_options(options):
 
 	# program behavior options
 	program_options = {"psd-fft-length": options.psd_fft_length}
-	if options.disable_web_service:
-		program_options.update({"disable-web-service": options.disable_web_service})
 	if options.verbose:
 		program_options.update({"verbose": options.verbose})
 

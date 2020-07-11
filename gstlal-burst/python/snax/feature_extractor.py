@@ -49,7 +49,6 @@ from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
 
 from gstlal import aggregator
-from gstlal import bottle
 from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
@@ -105,6 +104,7 @@ class MultiChannelHandler(simplehandler.Handler):
 		self.num_streams = num_streams
 		self.basename = basename
 		self.waveform_type = options.waveform
+		self.psds = {}
 
 		# format channel names for features
 		self.channels = []
@@ -176,16 +176,6 @@ class MultiChannelHandler(simplehandler.Handler):
 			self.kafka_topic = '_'.join([options.kafka_topic, self.job_id])
 			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
 			self.producer = kafka.Producer(self.kafka_conf)
-
-		elif self.save_format == 'bottle':
-			assert not options.disable_web_service, 'web service is not available to use bottle to transfer features'
-			self.feature_data = deque(maxlen = 2000)
-			bottle.route("/feature_subset")(self.web_get_feature_data)
-
-		# set up bottle routes for PSDs
-		self.psds = {}
-		if not options.disable_web_service:
-			bottle.route("/psds.xml")(self.web_get_psd_xml)
 
 		super(MultiChannelHandler, self).__init__(mainloop, pipeline, **kwargs)
 
@@ -266,8 +256,6 @@ class MultiChannelHandler(simplehandler.Handler):
 
 					self.logger.info("pushing features to disk at timestamp = %.3f, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
 					self.producer.poll(0) ### flush out queue of sent packets
-				elif self.save_format == 'bottle':
-					self.feature_data.append(feature_subset)
 				elif self.save_format == 'hdf5':
 					self.fdata.append(self.timestamp, feature_subset['features'])
 
@@ -389,26 +377,6 @@ class MultiChannelHandler(simplehandler.Handler):
 		ligolw_process.set_process_end_time(process)
 		return xmldoc
 
-	def web_get_psd_xml(self):
-		with self.lock:
-			output = StringIO.StringIO()
-			ligolw_utils.write_fileobj(self.gen_psd_xmldoc(), output)
-			outstr = output.getvalue()
-			output.close()
-		return outstr
-
-	def web_get_feature_data(self):
-		header = {'Content-type': 'application/json'}
-		# if queue is empty, send appropriate response
-		if not self.feature_data:
-			status = 204
-			body = json.dumps({'error': "No Content"})
-		# else, get feature data and send as JSON
-		else:
-			status = 200
-			with self.lock:
-				body = json.dumps(self.feature_data.popleft())
-		return bottle.HTTPResponse(status = status, headers = header, body = body)
 
 class LinkedAppSync(pipeparts.AppSync):
 	def __init__(self, appsink_new_buffer, sink_dict = None):
@@ -533,7 +501,7 @@ def append_options(parser):
 	group = optparse.OptionGroup(parser, "Data Saving Options", "Adjust parameters used for saving/persisting features to disk as well as directories specified")
 	group.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	group.add_option("--description", metavar = "string", default = "SNAX_FEATURES", help = "Set the filename description in which to save the output.")
-	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (hdf5/kafka/bottle) of features written to disk. Default = hdf5")
+	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (hdf5/kafka) of features written to disk. Default = hdf5")
 	group.add_option("--feature-mode", metavar = "string", default = "timeseries", help = "Specifies the mode for which features are generated (timeseries/etg). Default = timeseries")
 	group.add_option("--data-transfer", metavar = "string", default = "table", help = "Specifies the format of features transferred over-the-wire (table/row). Default = table")
 	group.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
@@ -552,7 +520,6 @@ def append_options(parser):
 	group.add_option("--psd-fft-length", metavar = "seconds", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default is 32 s).")
 	group.add_option("--min-downsample-rate", metavar = "Hz", default = 128, type = "int", help = "The minimum sampling rate in which to downsample streams. Default = 128 Hz.")
 	group.add_option("--local-frame-caching", action = "store_true", help = "Pre-reads frame data and stores to local filespace.")
-	group.add_option("--disable-web-service", action = "store_true", help = "If set, disables web service that allows monitoring of PSDS of aux channels.")
 	group.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	group.add_option("--nxydump-segment", metavar = "start:stop", help = "Set the time interval to dump from nxydump elements (optional).")
 	group.add_option("--snr-threshold", type = "float", default = 5.5, help = "Specifies the SNR threshold for features written to disk, required if 'feature-mode' option is set. Default = 5.5")
