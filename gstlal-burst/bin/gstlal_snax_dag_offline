@@ -134,8 +134,6 @@ def feature_extractor_node_gen(feature_extractor_job, dag, parent_nodes, segsdic
 			}
 			if options.verbose:
 				feature_opts["verbose"] = ""
-			if options.disable_web_service:
-				feature_opts["disable-web-service"] = ""
 			if options.local_frame_caching:
 				feature_opts["local-frame-caching"] = ""
 

@@ -50,9 +50,7 @@ from ligo import segments
 from ligo.segments import utils as segmentsUtils
 
 from gstlal import aggregator
-from gstlal import bottle
 from gstlal import datasource
-from gstlal import httpinterface
 from gstlal import pipeparts
 from gstlal import simplehandler
 
@@ -252,50 +250,6 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		)
 
 	#
-	# if web services serving up bottle routes are enabled,
-	# create a new, empty, Bottle application and make it the
-	# current default, then start http server to serve it up
-	#
-
-	if not options.disable_web_service:
-		bottle.default_app.push()
-		# uncomment the next line to show tracebacks when something fails
-		# in the web server
-		import base64, uuid  # FIXME:  don't import when the uniquification scheme is fixed
-		httpservers = httpinterface.HTTPServers(
-			# FIXME:  either switch to using avahi's native name
-			# uniquification system or adopt a naturally unique naming
-			# scheme (e.g., include a search identifier and job
-			# number).
-			service_name="gstlal_idq (%s)" % base64.urlsafe_b64encode(uuid.uuid4().bytes),
-			service_properties={},
-			verbose=options.verbose
-		)
-
-		# Set up a registry of the resources that this job provides
-		@bottle.route("/")
-		@bottle.route("/index.html")
-		def index(channel_list=channel_subset):
-			# get the host and port to report in the links from the
-			# request we've received so that the URLs contain the IP
-			# address by which client has contacted us
-			netloc = bottle.request.urlparts[1]
-			server_address = "http://%s" % netloc
-			yield "<html><body>\n<h3>%s %s</h3>\n<p>\n" % (netloc, " ".join(sorted(channel_list)))
-			for route in sorted(bottle.default_app().routes, key=lambda route: route.rule):
-				# don't create links back to this page
-				if route.rule in ("/", "/index.html"):
-					continue
-				# only create links for GET methods
-				if route.method != "GET":
-					continue
-				yield "<a href=\"%s%s\">%s</a><br>\n" % (server_address, route.rule, route.rule)
-			yield "</p>\n</body></html>"
-		# FIXME:  get service-discovery working, then don't do this
-		with open("registry.txt", "w") as f:
-			f.write("http://%s:%s/\n" % (socket.gethostname(), httpservers[0][0].port))
-
-	#
 	# building the event loop and pipeline
 	#
 
@@ -488,16 +442,6 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 	#
 
 	logger.info("shutting down pipeline...")
-
-	#
-	# Shutdown the web interface servers and garbage collect the Bottle
-	# app.  This should release the references the Bottle app's routes
-	# hold to the pipeline's data (like template banks and so on).
-	#
-
-	if not options.disable_web_service:
-		del httpservers
-		bottle.default_app.pop()
 
 	#
 	# Set pipeline state to NULL and garbage collect the handler
