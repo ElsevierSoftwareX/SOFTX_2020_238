@@ -52,6 +52,10 @@ def parse_command_line():
 	parser.add_option("--high-pass", action = "store_true", default = False, help = "Add a high-pass filter to the pipeline")
 	parser.add_option("--high-pass-cutoff", type = int, default = 12, help = "Set the high-pass filter cutoff, default = 12 Hz.")
 	parser.add_option("--psd-fft-length", metavar = "seconds", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default is 32 s).")
+	parser.add_option("--save-format", metavar = "format", default = "gwf", help = "Set the save format for whitened timeseries (gwf/txt). Default = gwf.")
+	parser.add_option("--out-frame-type", metavar = "name", default = "WHITEN", help = "Set the frame type. Default = WHITEN.")
+	parser.add_option("--frame-duration", metavar = "s", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
+	parser.add_option("--frames-per-file", metavar = "n", default = 4, type = "int", help = "Set the number of frames per file.  Default: 4")
 
 	# parse the arguments and sanity check
 	options, filenames = parser.parse_args()
@@ -113,8 +117,47 @@ for channel in channels:
 		high_pass_cutoff=options.high_pass_cutoff,
 	)
 
-    # dump timeseries to disk
-	pipeparts.mknxydumpsink(pipeline, head[channel], filename=os.path.join(options.out_path, "whitenedtimeseries_%d_%s.txt" % (samp_rate,channel)))
+# dump timeseries to disk
+if options.save_format == "gwf":
+
+	# set tags for output frames
+	for channel in channels:
+		ifo, channel_name = channel.split(":")
+		tagstr = "units=none,channel-name=%s,instrument=%s" % (channel_name, ifo)
+		head[channel] = pipeparts.mktaginject(pipeline, head[channel], tagstr)
+		head[channel] = snaxparts.mktimequeue(pipeline, head[channel], max_time=0)
+
+	# create frames
+	head = pipeparts.mkframecppchannelmux(
+		pipeline,
+		head,
+		frame_duration=options.frame_duration,
+		frames_per_file=options.frames_per_file
+	)
+
+	# write the frames to disk
+	head = pipeparts.mkframecppfilesink(
+		pipeline,
+		head,
+		frame_type=options.out_frame_type,
+		path=options.out_path
+	)
+
+	# Put O(100000 s) frames in each directory
+	frame_dir_prefix = (options.out_path, 5)
+	head.connect(
+		"notify::timestamp",
+		pipeparts.framecpp_filesink_ldas_path_handler,
+		frame_dir_prefix
+	)
+
+elif options.save_format == "txt":
+	for channel in channels:
+		pipeparts.mknxydumpsink(
+			pipeline,
+			head[channel],
+			filename=os.path.join(options.out_path, "whitenedtimeseries_%d_%s.txt" % (samp_rate, channel))
+		)
 
 
 # Allow Ctrl+C or sig term to gracefully shut down the program for online
