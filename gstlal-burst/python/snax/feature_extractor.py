@@ -27,7 +27,6 @@
 
 
 from collections import deque
-import itertools
 import json
 import optparse
 import os
@@ -171,7 +170,6 @@ class MultiChannelHandler(simplehandler.Handler):
 
 		elif self.save_format == 'kafka':
 			check_kafka()
-			self.data_transfer = options.data_transfer
 			self.kafka_partition = options.kafka_partition
 			self.kafka_topic = '_'.join([options.kafka_topic, self.job_id])
 			self.kafka_conf = {'bootstrap.servers': options.kafka_server}
@@ -247,12 +245,7 @@ class MultiChannelHandler(simplehandler.Handler):
 
 				# add features to respective format specified
 				if self.save_format == 'kafka':
-					if self.data_transfer == 'table':
-						self.producer.produce(timestamp = self.timestamp, topic = self.kafka_topic, value = json.dumps(feature_subset))
-					elif self.data_transfer == 'row':
-						for row in itertools.chain(*feature_subset['features'].values()):
-							if row:
-								self.producer.produce(timestamp = self.timestamp, topic = self.kafka_topic, value = json.dumps(row))
+					self.producer.produce(timestamp = self.timestamp, topic = self.kafka_topic, value = json.dumps(feature_subset))
 
 					self.logger.info("pushing features to disk at timestamp = %.3f, latency = %.3f" % (self.timestamp, utils.gps2latency(self.timestamp)))
 					self.producer.poll(0) ### flush out queue of sent packets
@@ -503,7 +496,6 @@ def append_options(parser):
 	group.add_option("--description", metavar = "string", default = "SNAX_FEATURES", help = "Set the filename description in which to save the output.")
 	group.add_option("--save-format", metavar = "string", default = "hdf5", help = "Specifies the save format (hdf5/kafka) of features written to disk. Default = hdf5")
 	group.add_option("--feature-mode", metavar = "string", default = "timeseries", help = "Specifies the mode for which features are generated (timeseries/etg). Default = timeseries")
-	group.add_option("--data-transfer", metavar = "string", default = "table", help = "Specifies the format of features transferred over-the-wire (table/row). Default = table")
 	group.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
 	group.add_option("--cadence", type = "int", default = 20, help = "Rate at which to write trigger files to disk. Default = 20 seconds.")
 	group.add_option("--persist-cadence", type = "int", default = 2000, help = "Rate at which to persist trigger files to disk, used with hdf5 files. Needs to be a multiple of save cadence. Default = 2000 seconds.")

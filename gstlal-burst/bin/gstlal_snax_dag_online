@@ -69,7 +69,6 @@ def generate_options(options):
 	if options.save_format == 'kafka':
 		save_options = {
 			"save-format": options.save_format,
-			"data-transfer": options.data_transfer,
 			"sample-rate": options.sample_rate,
 			"kafka-partition": options.kafka_partition,
 			"kafka-topic": options.kafka_topic,
