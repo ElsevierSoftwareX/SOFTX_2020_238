@@ -21,46 +21,25 @@ A program that whitens timeseries
 """
 
 
-####################
-# 
-#     preamble
-#
-####################   
-
-
 from optparse import OptionParser
 import os
 import sys
 
-import numpy
-
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst, GstAudio
+from gi.repository import GObject, Gst
 GObject.threads_init()
 Gst.init(None)
 
-import lal
-
 from gstlal import aggregator
-from gstlal import pipeio
 from gstlal import datasource
-from gstlal import reference_psd
 from gstlal import pipeparts
 from gstlal import simplehandler
 
 from gstlal.snax import multichannel_datasource
 from gstlal.snax import pipeparts as snaxparts
+from gstlal.snax import utils
 
-# global settings for whitening properties
-PSD_FFT_LENGTH = 32
-PSD_DROP_TIME = 16 * PSD_FFT_LENGTH
-
-###############################
-# 
-#       command line parser
-#
-###############################
 
 def parse_command_line():
 
@@ -72,6 +51,7 @@ def parse_command_line():
 	parser.add_option("--out-path", metavar = "path", default = ".", help = "Write to this path. Default = .")
 	parser.add_option("--high-pass", action = "store_true", default = False, help = "Add a high-pass filter to the pipeline")
 	parser.add_option("--high-pass-cutoff", type = int, default = 12, help = "Set the high-pass filter cutoff, default = 12 Hz.")
+	parser.add_option("--psd-fft-length", metavar = "seconds", default = 32, type = "int", help = "The length of the FFT used to used to whiten the data (default is 32 s).")
 
 	# parse the arguments and sanity check
 	options, filenames = parser.parse_args()
@@ -98,97 +78,40 @@ channels = data_source_info.channel_dict.keys()
 # create output directory if it doesn't already exists
 aggregator.makedir(options.out_path)
 
+# set up logging
+logger = utils.get_logger('snax_whiten', verbose=options.verbose)
+
 #
 # building the event loop and pipeline
 #
 
-if options.verbose:
-	print >>sys.stderr, "assembling pipeline..."
+logger.info("assembling pipeline...")
 
 mainloop = GObject.MainLoop()
 pipeline = Gst.Pipeline(sys.argv[0])
 handler = simplehandler.Handler(mainloop, pipeline)
 
 # generate multiple channel sources, and link up pipeline
-whiten = {}
-head = snaxparts.mkmultisrc(pipeline, data_source_info, data_source_info.channel_subsets[0], verbose=options.verbose)
+head = snaxparts.mkmultisrc(pipeline, data_source_info, channels, verbose=options.verbose)
 for channel in channels:
-
-	if options.verbose:
-		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_multisrc" % channel)
 
 	# define whitening params
 	samp_rate = int(data_source_info.channel_dict[channel]['fsamp'])
 	max_rate = min(2048, samp_rate)
-	block_duration = int(1 * Gst.SECOND)
-	block_stride = block_duration * max_rate // Gst.SECOND
-	psd_fft_length = PSD_FFT_LENGTH
-	zero_pad = 0
-	width = 32
 
-    #
-	# whiten auxiliary channel data
-    #
-
-	# downsample to max sampling rate if necessary
-	if samp_rate > max_rate:
-		head[channel] = pipeparts.mkaudiocheblimit(pipeline, head[channel], cutoff = 0.9 * (max_rate/2), type = 2, ripple = 0.1)
-		head[channel] = pipeparts.mkaudioundersample(pipeline, head[channel])
-		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], caps = "audio/x-raw, rate=%d" % max_rate)
-
-	if options.verbose:
-		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_downsample" % channel)
-
-	# construct whitener
-	head[channel] = pipeparts.mktee(pipeline, head[channel])
-	whiten[channel] = pipeparts.mkwhiten(pipeline, head[channel], fft_length = psd_fft_length, zero_pad = 0, average_samples = 64, median_samples = 7, expand_gaps = True, name = "%s_lalwhiten" % channel)
-	pipeparts.mkfakesink(pipeline, whiten[channel])
-
-	# high pass filter
-	if options.high_pass:
-		# FIXME: don't hardcode native rate cutoff for high-pass filtering
-		kernel = reference_psd.one_second_highpass_kernel(max_rate, cutoff = options.high_pass_cutoff)
-		assert len(kernel) % 2 == 1, "high-pass filter length is not odd"
-		head[channel] = pipeparts.mkfirbank(pipeline, head[channel], fir_matrix = numpy.array(kernel, ndmin = 2), block_stride = block_stride, time_domain = False, latency = (len(kernel) - 1) // 2)
-
-	# FIR filter for whitening kernel
-	head[channel] = pipeparts.mkfirbank(pipeline, head[channel], fir_matrix = numpy.zeros((1, 1 + max_rate * psd_fft_length), dtype=numpy.float64), block_stride = block_stride, time_domain = False, latency = 0)
-
-	def set_fir_psd(whiten, pspec, firbank, psd_fir_kernel):
-		psd_data = numpy.array(whiten.get_property("mean-psd"))
-		psd = lal.CreateREAL8FrequencySeries(
-			name = "psd",
-			epoch = lal.LIGOTimeGPS(0),
-			f0 = 0.0,
-			deltaF = whiten.get_property("delta-f"),
-			sampleUnits = lal.Unit(whiten.get_property("psd-units")),
-			length = len(psd_data)
-		)
-		psd.data.data = psd_data
-		kernel, latency, sample_rate = psd_fir_kernel.psd_to_linear_phase_whitening_fir_kernel(psd)
-		kernel, theta = psd_fir_kernel.linear_phase_fir_kernel_to_minimum_phase_whitening_fir_kernel(kernel, sample_rate)
-		kernel -= numpy.mean(kernel) # subtract DC offset from signal
-		firbank.set_property("fir-matrix", numpy.array(kernel, ndmin = 2))
-	whiten[channel].connect_after("notify::mean-psd", set_fir_psd, head[channel], reference_psd.PSDFirKernel())
-
-	# Drop initial data to let the PSD settle
-	head[channel] = pipeparts.mkdrop(pipeline, head[channel], drop_samples = PSD_DROP_TIME * max_rate)
-	
-	if options.verbose:
-		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_after_drop" % channel)
-
-	# use running average PSD
-	whiten[channel].set_property("psd-mode", 0)
-
-	# convert to desired precision
-	head[channel] = pipeparts.mkaudioconvert(pipeline, head[channel])
-	if width == 64:
-		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F64)))
-	else:
-		head[channel] = pipeparts.mkcapsfilter(pipeline, head[channel], "audio/x-raw, rate=%d, format=%s" % (max_rate, GstAudio.AudioFormat.to_string(GstAudio.AudioFormat.F32)))
-
-	if options.verbose:
-		head[channel] = pipeparts.mkprogressreport(pipeline, head[channel], "%s_progress_before sink" % channel)
+	# whiten data
+	head[channel] = snaxparts.mkcondition(
+		pipeline,
+		head[channel],
+		max_rate,
+		samp_rate,
+		instrument,
+		channel_name=channel,
+		width=32,
+		psd_fft_length=options.psd_fft_length,
+		high_pass=options.high_pass,
+		high_pass_cutoff=options.high_pass_cutoff,
+	)
 
     # dump timeseries to disk
 	pipeparts.mknxydumpsink(pipeline, head[channel], filename=os.path.join(options.out_path, "whitenedtimeseries_%d_%s.txt" % (samp_rate,channel)))
@@ -212,8 +135,7 @@ if data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds o
 if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
 	raise RuntimeError("pipeline failed to enter PLAYING state")
 
-if options.verbose:
-	print >>sys.stderr, "running pipeline..."
+logger.info("running pipeline...")
 
 mainloop.run()
 
@@ -221,8 +143,7 @@ mainloop.run()
 # Shut down pipeline
 #
 
-if options.verbose:
-	print >>sys.stderr, "shutting down pipeline..."
+logger.info("shutting down pipeline...")
 
 if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 	raise RuntimeError("pipeline could not be set to NULL")
@@ -231,5 +152,5 @@ if pipeline.set_state(Gst.State.NULL) != Gst.StateChangeReturn.SUCCESS:
 # close program manually if data source is live
 #
 
-if options.data_source in ("lvshm", "framexmit"):
+if options.data_source in data_source_info.live_sources:
 	sys.exit(0)

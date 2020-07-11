@@ -330,7 +330,7 @@ for subset_id, channel_subset in enumerate(data_source_info.channel_subsets, 1):
 		head[channel] = snaxparts.mkcondition(
 			pipeline,
 			head[channel],
-			rates,
+			max(rates),
 			samp_rate,
 			instrument,
 			channel_name=channel,
