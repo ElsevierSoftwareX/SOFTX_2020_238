@@ -5,7 +5,6 @@ plugin_LTLIBRARIES = lib@GSTPLUGINPREFIX@gstlalcalibration.la
 lib@GSTPLUGINPREFIX@gstlalcalibration_la_SOURCES = \
 	gstlalcalibration.c \
 	gstlal_add_constant.c gstlal_add_constant.h \
-	gstlal_pyfuncsrc.c gstlal_pyfuncsrc.h \
 	gstlal_wings.c gstlal_wings.h \
 	gstlal_complexfirbank.c gstlal_complexfirbank.h \
 	gstlal_smoothcalibfactors.c gstlal_smoothcalibfactors.h \

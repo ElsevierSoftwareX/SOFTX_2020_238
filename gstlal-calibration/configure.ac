@@ -108,13 +108,13 @@ PKG_PROG_PKG_CONFIG("$MIN_PKG_CONFIG_VERSION")
 #
 
 
-MIN_PYTHON_VERSION="3.6"
+AC_SUBST([MIN_PYTHON_VERSION], ["3.6"])
 AM_PATH_PYTHON(["$MIN_PYTHON_VERSION"],,)
 AX_PYTHON_DEVEL()
 # hack to remove default lib dirs from PYTHON_LIBS.  only tested on Debian
 # and SL6.  FIXME:  find a way to do this properly
 PYTHON_LIBS=[`echo "$PYTHON_LIBS" | sed -e "s?-L/usr/lib[^[:space:]]*??g"`]
-AC_SUBST([MIN_PYTHON_VERSION])
+PYTHON_LIBS="-module -avoid-version $PYTHON_LIBS"
 # force python modules into same directory as gstlal
 AC_SUBST([pkgpythondir], ["\${pythondir}/gstlal"])
 AC_SUBST([pkgpyexecdir], ["\${pyexecdir}/gstlal"])
