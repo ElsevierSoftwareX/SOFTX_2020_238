@@ -43,7 +43,6 @@ import glob
 import matplotlib.pyplot as plt
 
 from optparse import OptionParser, Option
-import ConfigParser
 
 import gi
 gi.require_version('Gst', '1.0')

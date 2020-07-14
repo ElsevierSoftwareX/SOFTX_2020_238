@@ -44,7 +44,7 @@ import glob
 import matplotlib.pyplot as plt
 
 from optparse import OptionParser, Option
-import ConfigParser
+import configparser
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -98,7 +98,7 @@ def ConfigSectionMap(section):
 			dict[option] = None
 	return dict1
 
-Config = ConfigParser.ConfigParser()
+Config = configparser.ConfigParser()
 Config.read(options.config_file)
 
 InputConfigs = ConfigSectionMap("InputConfigurations")
@@ -211,7 +211,7 @@ def pcal2darm(pipeline, name):
 
 	# Get pcal from the raw frames
 	raw_data = pipeparts.mklalcachesrc(pipeline, location = options.raw_frame_cache, cache_dsc_regex = ifo)
-	raw_data = pipeparts.mkframecppchanneldemux(pipeline, raw_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	raw_data = pipeparts.mkframecppchanneldemux(pipeline, raw_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 	pcal = calibration_parts.hook_up(pipeline, raw_data, options.pcal_channel_name, ifo, 1.0)
 	pcal = calibration_parts.caps_and_progress(pipeline, pcal, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", "pcal")
 	pcal = pipeparts.mktee(pipeline, pcal)
@@ -242,7 +242,7 @@ def pcal2darm(pipeline, name):
 		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(channel_list)]):
 			# Get gstlal channels from the gstlal frames
 			hoft_data = pipeparts.mklalcachesrc(pipeline, location = cache, cache_dsc_regex = ifo)
-			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 			hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0, element_name_suffix = "_%d" % cache_num)
 			cache_num = cache_num + 1
 			hoft = calibration_parts.caps_and_progress(pipeline, hoft, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", label)

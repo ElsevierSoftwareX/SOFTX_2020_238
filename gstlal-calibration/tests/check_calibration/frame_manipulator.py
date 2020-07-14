@@ -327,7 +327,7 @@ def frame_manipulator(pipeline, name):
 	# Get the data from the raw frames and pick out the channels we want
 	src = pipeparts.mklalcachesrc(pipeline, location = frame_cache, cache_dsc_regex = ifo)
 	src = pipeparts.mkprogressreport(pipeline, src, "start")
-	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, ifo_channel_list))
+	demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, ifo_channel_list)))
 
 	# Make a muxer to collect the channels we need
 	channelmux_input_dict = {}

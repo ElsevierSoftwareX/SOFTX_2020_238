@@ -44,7 +44,6 @@ import glob
 import matplotlib.pyplot as plt
 
 from optparse import OptionParser, Option
-import ConfigParser
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -119,7 +118,7 @@ def demod_ratio(pipeline, name):
 
 	# Get denominator data from the raw frames
 	denominator_data = pipeparts.mklalcachesrc(pipeline, location = options.denominator_frame_cache, cache_dsc_regex = ifo)
-	denominator_data = pipeparts.mkframecppchanneldemux(pipeline, denominator_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	denominator_data = pipeparts.mkframecppchanneldemux(pipeline, denominator_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 	denominator = calibration_parts.hook_up(pipeline, denominator_data, options.denominator_channel_name, ifo, 1.0)
 	denominator = calibration_parts.caps_and_progress(pipeline, denominator, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", "denominator")
 	denominator = pipeparts.mktee(pipeline, denominator)
@@ -127,7 +126,7 @@ def demod_ratio(pipeline, name):
 	# Get numerator data from the raw frames
 	if not options.denominator_frame_cache == options.numerator_frame_cache:
 		numerator_data = pipeparts.mklalcachesrc(pipeline, location = options.numerator_frame_cache, cache_dsc_regex = ifo)
-		numerator_data = pipeparts.mkframecppchanneldemux(pipeline, numerator_data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+		numerator_data = pipeparts.mkframecppchanneldemux(pipeline, numerator_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 		numerator = calibration_parts.hook_up(pipeline, numerator_data, options.numerator_channel_name, ifo, 1.0)
 	else:
 		numerator = calibration_parts.hook_up(pipeline, denominator_data, options.numerator_channel_name, ifo, 1.0)

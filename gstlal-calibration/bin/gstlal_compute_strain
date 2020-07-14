@@ -58,7 +58,7 @@ import time
 import resource
 
 from optparse import OptionParser, Option
-import ConfigParser
+import configparser
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -162,7 +162,7 @@ def ConfigSectionMap(section):
 			dict[option] = None
 	return dict1
 
-Config = ConfigParser.ConfigParser()
+Config = configparser.ConfigParser()
 Config.read(options.config_file)
 
 InputConfigs = ConfigSectionMap("InputConfigurations")
@@ -1184,7 +1184,7 @@ if (test_latency or InputConfigs["datasource"] == "lvshm"):
 # Hook up the relevant channels to the demuxer
 #
 
-demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = file_check_sum, skip_bad_files = skip_bad_files, channel_list = map("%s:%s".__mod__, channel_list))
+demux = pipeparts.mkframecppchanneldemux(pipeline, src, do_file_checksum = file_check_sum, skip_bad_files = skip_bad_files, channel_list = list(map("%s:%s".__mod__, channel_list)))
 
 # Write the pipeline graph after pads have been hooked up to the demuxer
 if DebuggingConfigs["pipelinegraphfilename"] != "None":
@@ -3372,7 +3372,7 @@ if compute_srcq:
 mux = pipeparts.mkframecppchannelmux(pipeline, channelmux_input_dict, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file, compression_scheme = int(OutputConfigs["compressionscheme"]), compression_level = int(OutputConfigs["compressionlevel"]))
 
 # Check that all frames are long enough, that they have all of the channels by requiring a certain amount of time from start-up, and that frames aren't written for times requested by the wings option
-def check_complete_frames(pad, info, (output_start, frame_duration, wings_start, wings_end)):
+def check_complete_frames(pad, info, output_start, frame_duration, wings_start, wings_end):
 	if verbose:
 		print("Checking if frames are complete")
 	buf = info.get_buffer()
@@ -3408,9 +3408,9 @@ wings = int(options.wings)
 if wings != 0:
 	wings_start = gps_start_time + wings
 	wings_end = gps_end_time - wings
-	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), lal.LIGOTimeGPS(wings_start, 0), lal.LIGOTimeGPS(wings_end, 0)))
+	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), lal.LIGOTimeGPS(wings_start, 0), lal.LIGOTimeGPS(wings_end, 0))
 else:
-	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, (lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), None, None))
+	mux.get_static_pad("src").add_probe(Gst.PadProbeType.BUFFER, check_complete_frames, lal.LIGOTimeGPS(output_start,0), lal.LIGOTimeGPS(options.frame_duration*options.frames_per_file,0), None, None)
 
 mux = pipeparts.mkprogressreport(pipeline, mux, "progress_sink_%s" % instrument)
 

@@ -25,7 +25,7 @@
 #
 
 import numpy
-import StringIO
+from io import StringIO
 import threading
 import json
 

@@ -44,7 +44,7 @@ import glob
 import matplotlib.pyplot as plt
 
 from optparse import OptionParser, Option
-import ConfigParser
+import configparser
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -143,7 +143,7 @@ if options.filters_file is not None:
 
 elif options.config_file is not None:
 	# Read the config file
-	Config = ConfigParser.ConfigParser()
+	Config = configparser.ConfigParser()
 	Config.read(options.config_file)
 
 	InputConfigs = ConfigSectionMap("InputConfigurations")
@@ -267,7 +267,7 @@ if denominator_correction is not None:
 def plot_transfer_function(pipeline, name):
 	# Get the data from the denominator frames
 	denominator = pipeparts.mklalcachesrc(pipeline, location = options.denominator_frame_cache, cache_dsc_regex = ifo)
-	denominator = pipeparts.mkframecppchanneldemux(pipeline, denominator, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	denominator = pipeparts.mkframecppchanneldemux(pipeline, denominator, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 	denominator = calibration_parts.hook_up(pipeline, denominator, options.denominator_channel_name, ifo, 1.0)
 	denominator = calibration_parts.caps_and_progress(pipeline, denominator, "audio/x-raw,format=F64LE", "denominator")
 	denominator = calibration_parts.mkresample(pipeline, denominator, 5, False, int(sample_rate))
@@ -279,7 +279,7 @@ def plot_transfer_function(pipeline, name):
 	# Get the data from the numerator frames
 	for i in range(0, len(labels)):
 		numerator = pipeparts.mklalcachesrc(pipeline, location = numerator_frame_cache_list[i], cache_dsc_regex = ifo)
-		numerator = pipeparts.mkframecppchanneldemux(pipeline, numerator, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+		numerator = pipeparts.mkframecppchanneldemux(pipeline, numerator, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 		numerator = calibration_parts.hook_up(pipeline, numerator, numerator_channel_list[i], ifo, 1.0, element_name_suffix = "%d" % i)
 		numerator = calibration_parts.caps_and_progress(pipeline, numerator, "audio/x-raw,format=F64LE", labels[i])
 		numerator = calibration_parts.mkresample(pipeline, numerator, 5, False, int(sample_rate))

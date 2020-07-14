@@ -51,11 +51,11 @@ if options.front_end_channel_list is not None:
 else:
 	plot_front_end = False
 
-data = TimeSeriesDict.read(options.frame_cache, map("%s:%s".__mod__, channel_list), start = start, end = end)
+data = TimeSeriesDict.read(options.frame_cache, list(map("%s:%s".__mod__, channel_list), start = start, end = end))
 if plot_front_end:
-	front_end_data = TimeSeriesDict.fetch(map("%s:%s".__mod__, front_end_channel_list), start = start, end = end)
+	front_end_data = TimeSeriesDict.fetch(list(map("%s:%s".__mod__, front_end_channel_list), start = start, end = end))
 if plot_additional_hoft:
-	additional_hoft_data = TimeSeriesDict.read(options.additional_hoft_frames_cache, map("%s:%s".__mod__, additional_channel_list), start = start, end = end)
+	additional_hoft_data = TimeSeriesDict.read(options.additional_hoft_frames_cache, list(map("%s:%s".__mod__, additional_channel_list)), start = start, end = end)
 
 print(map("%s:%s".__mod__, front_end_channel_list))
 

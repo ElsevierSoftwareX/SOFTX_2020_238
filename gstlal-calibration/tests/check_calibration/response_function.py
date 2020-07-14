@@ -9,7 +9,6 @@ from gwpy.timeseries import TimeSeriesDict
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import numpy
-import ConfigParser
 import sys
 from optparse import OptionParser, Option
 

@@ -129,7 +129,7 @@ def compute_RMS_timeseries(pipeline, name):
 	# Get the data from the frames
 	for i in range(len(channel_list)):
 		data = pipeparts.mklalcachesrc(pipeline, location = frame_cache_list[i], cache_dsc_regex = ifo)
-		data = pipeparts.mkframecppchanneldemux(pipeline, data, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+		data = pipeparts.mkframecppchanneldemux(pipeline, data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 		data = calibration_parts.hook_up(pipeline, data, channel_list[i][1], ifo, 1.0)
 		data = calibration_parts.caps_and_progress(pipeline, data, "audio/x-raw,format=F64LE", labels[i])
 		RMS = calibration_parts.compute_rms(pipeline, data, rates[i], average_time, filter_length = 10.0, f_min = fmin, f_max = fmax, rate_out = 1)

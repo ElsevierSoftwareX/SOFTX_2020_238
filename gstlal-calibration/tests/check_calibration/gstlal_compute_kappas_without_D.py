@@ -53,7 +53,6 @@ from gstlal import test_common # More pipeline-building and testing tools in thi
 from gi.repository import Gst # gstreamer stuff
 
 from optparse import OptionParser, Option # Allows us to take in command line options
-import ConfigParser
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -122,7 +121,7 @@ def gstlal_compute_kappas_without_D(pipeline, name):
 	source = pipeparts.mklalcachesrc(pipeline, location = frame_cache, cache_dsc_regex = ifo)
 
 	# Next, the demuxer splits it into separate channels
-	demux = pipeparts.mkframecppchanneldemux(pipeline, source, do_file_checksum = False, skip_bad_files = True, channel_list = map("%s:%s".__mod__, channel_list))
+	demux = pipeparts.mkframecppchanneldemux(pipeline, source, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
 
 	# Next, we use a function from calibration_parts.py that hooks up to the demuxer 
 	# and does a few sanity checks on the data.  This uses multiple elements.
