@@ -196,7 +196,9 @@ test:offline:
     - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
+    - GLOBIGNORE="*calibration*"
     - if [ -d rpmbuild ]; then yum -y install rpmbuild/RPMS/x86_64/*.rpm; fi
+    - unset GLOBIGNORE
 
     # Set up directory structure and copy over built-dependencies from container:
     - mkdir public
