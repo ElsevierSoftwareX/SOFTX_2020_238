@@ -556,7 +556,7 @@ static gboolean start(GstBaseSink *sink) {
 	double alpha = element->frequency_resolution * element->adaptive_filter_length / element->filter_sample_rate;
 	switch(element->window_type) {
 	case GSTLAL_ADAPTIVEFIRFILT_DPSS:
-		element->window = dpss_double(element->adaptive_filter_length, alpha, 5.0, NULL, FALSE);
+		element->window = dpss_double(element->adaptive_filter_length, alpha, 5.0, NULL, FALSE, FALSE);
 		break;
 
 	case GSTLAL_ADAPTIVEFIRFILT_KAISER:
@@ -750,6 +750,8 @@ static GstFlowReturn render(GstBaseSink *sink, GstBuffer *buffer) {
 static gboolean stop(GstBaseSink *sink) {
 
 	GSTLALAdaptiveFIRFilt *element = GSTLAL_ADAPTIVEFIRFILT(sink);
+
+	dpss_double(0, 0.0, 0.0, NULL, FALSE, TRUE);
 
 	if(element->padded_filter) {
 		g_free(element->padded_filter);

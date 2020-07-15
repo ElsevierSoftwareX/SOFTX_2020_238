@@ -268,11 +268,11 @@ complex double *mat_times_vec_complexdouble(complex double *mat, guint N, comple
 
 long complex double *mat_times_vec_longcomplexdouble(long complex double *mat, guint N, long complex double *vec, guint n);
 
-float *dpss_float(guint N, double alpha, double max_time, float *data, gboolean half_window);
+float *dpss_float(guint N, double alpha, double compute_time, float *data, gboolean half_window, gboolean free_warehouse);
 
-double *dpss_double(guint N, double alpha, double max_time, double *data, gboolean half_window);
+double *dpss_double(guint N, double alpha, double compute_time, double *data, gboolean half_window, gboolean free_warehouse);
 
-long double *dpss_longdouble(guint N, double alpha, double max_time, long double *data, gboolean half_window);
+long double *dpss_longdouble(guint N, double alpha, double compute_time, long double *data, gboolean half_window, gboolean free_warehouse);
 
 long double I0(long double x, long double *factorials_inv2);
 

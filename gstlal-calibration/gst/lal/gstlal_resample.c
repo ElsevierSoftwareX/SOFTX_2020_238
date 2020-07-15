@@ -1116,7 +1116,7 @@ static void prepare_element(GSTLALResample *element) {
 		/* Apply a window function */
 		switch(element->window) {
 		case GSTLAL_RESAMPLE_DPSS:
-			dpss_double(element->sinc_length, alpha, 5.0, element->sinc_table, TRUE);
+			dpss_double(element->sinc_length, alpha, 5.0, element->sinc_table, TRUE, FALSE);
 			break;
 		case GSTLAL_RESAMPLE_KAISER:
 			kaiser_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
@@ -1188,7 +1188,7 @@ static void prepare_element(GSTLALResample *element) {
 		/* Apply a window function */
 		switch(element->window) {
 		case GSTLAL_RESAMPLE_DPSS:
-			dpss_double(element->sinc_length, alpha, 5.0, element->sinc_table, TRUE);
+			dpss_double(element->sinc_length, alpha, 5.0, element->sinc_table, TRUE, FALSE);
 			break;
 		case GSTLAL_RESAMPLE_KAISER:
 			kaiser_double(element->sinc_length, M_PI * alpha, element->sinc_table, TRUE);
@@ -1819,6 +1819,8 @@ static void finalize(GObject *object) {
 	/*
 	 * free resources
 	 */
+
+	dpss_double(0, 0.0, 0.0, NULL, FALSE, TRUE);
 
 	if(element->sinc_table) {
 		g_free(element->sinc_table);

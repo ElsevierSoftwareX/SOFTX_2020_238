@@ -1801,7 +1801,81 @@ MAT_TIMES_VEC(long, complex, double);
 
 
 #define DPSS(LONG, DTYPE) \
-LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG DTYPE *data, gboolean half_window) { \
+LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double compute_time, LONG DTYPE *data, gboolean half_window, gboolean free_warehouse) { \
+ \
+	static GMutex mutex; \
+	guint i, j, start; \
+	static gpointer *warehouse = NULL; \
+	static guint * warehouse_N = NULL; \
+	static double *warehouse_alpha = NULL; \
+	static double *warehouse_compute_time = NULL; \
+	gboolean add_to_warehouse = FALSE; \
+	LONG DTYPE *dpss_out, *warehouse_dpss; \
+ \
+	/*
+	 * First, check if we are freeing memory in the "warehouse"
+	 */ \
+	g_mutex_lock(&mutex); \
+	if(free_warehouse) { \
+		if(warehouse) { \
+			for(i = 0; i < 10; i++) { \
+				if(warehouse[i]) { \
+					g_free(warehouse[i]); \
+					warehouse[i] = NULL; \
+				} \
+			} \
+			g_free(warehouse); \
+			warehouse = NULL; \
+			g_free(warehouse_N); \
+			warehouse_N = NULL; \
+			g_free(warehouse_alpha); \
+			warehouse_alpha = NULL; \
+			g_free(warehouse_compute_time); \
+			warehouse_compute_time = NULL; \
+		} \
+		g_mutex_unlock(&mutex); \
+		return NULL; \
+	} \
+ \
+	/*
+	 * If we're not freeing warehouse memory, make sure we have allocated it.
+	 */ \
+	if(!warehouse) { \
+		warehouse = g_malloc(10 * sizeof(gpointer)); \
+		for(i = 0; i < 10; i++) \
+			warehouse[i] = NULL; \
+		warehouse_N = g_malloc(10 * sizeof(guint)); \
+		warehouse_alpha = g_malloc(10 * sizeof(double)); \
+		warehouse_compute_time = g_malloc(10 * sizeof(double)); \
+	} \
+ \
+	/*
+	 * Check if this window is available in the warehouse
+	 */ \
+	for(i = 0; i < 10; i++) { \
+		if(warehouse[i]) { \
+			if(warehouse_N[i] == N && warehouse_alpha[i] == alpha && warehouse_compute_time[i] == compute_time) { \
+				start = half_window ? N / 2 : 0; \
+				dpss_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
+				warehouse_dpss = warehouse[i]; \
+				for(j = 0; j < N - start; j++) \
+					dpss_out[j] = warehouse_dpss[start + j]; \
+ \
+				g_mutex_unlock(&mutex); \
+				if(data) { \
+					for(j = 0; j < N - start; j++) \
+						data[j] *= dpss_out[j]; \
+					g_free(dpss_out); \
+					return data; \
+ \
+				} else \
+					return dpss_out; \
+			} \
+		} else { \
+			add_to_warehouse = TRUE; \
+			break; \
+		} \
+	} \
  \
 	/*
 	 * Estimate how long each process should take.  This is based on data taken from
@@ -1810,8 +1884,8 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	double seconds_per_iteration_double = 2.861e-10 * N * N - 9.134e-9 * N; \
 	double seconds_per_iteration_longdouble = 9.422e-10 * N * N + 2.403e-9 * N; \
  \
-	guint double_iterations = (guint) (max_time / 2.0 / seconds_per_iteration_double); \
-	guint longdouble_iterations = (guint) (max_time / 2.0 / seconds_per_iteration_longdouble); \
+	guint double_iterations = (guint) (compute_time / 2.0 / seconds_per_iteration_double); \
+	guint longdouble_iterations = (guint) (compute_time / 2.0 / seconds_per_iteration_longdouble); \
  \
 	/*
 	 * Start with ordinary double precision to make it run faster.
@@ -1826,7 +1900,6 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
 	 */ \
 	double *sinc = g_malloc(N * sizeof(double)); \
 	sinc[0] = omega_c_Ts; \
-	guint i; \
 	for(i = 1; i < N; i++) \
 		sinc[i] = sin(omega_c_Ts * i) / i; \
  \
@@ -1882,8 +1955,39 @@ LONG DTYPE *dpss_ ## LONG ## DTYPE(guint N, double alpha, double max_time, LONG 
  \
 	g_free(new_dpss); \
  \
-	guint start = half_window ? N / 2 : 0; \
-	LONG DTYPE *dpss_out; \
+	/*
+	 * Add this to the warehouse if it is not already there
+	 */ \
+	if(add_to_warehouse) { \
+		for(i = 0; i < 10; i ++) { \
+			if(!warehouse[i]) { \
+				warehouse[i] = g_malloc(N * sizeof(LONG DTYPE)); \
+				warehouse_dpss = warehouse[i]; \
+				memcpy(warehouse_dpss, full_dpss, N * sizeof(LONG DTYPE)); \
+				warehouse_N[i] = N; \
+				warehouse_alpha[i] = alpha; \
+				warehouse_compute_time[i] = compute_time; \
+				add_to_warehouse = FALSE; \
+			} \
+		} \
+		if(add_to_warehouse) { \
+			/* Then replace a random window in the warehouse */ \
+			time_t t; \
+			srand((unsigned) time(&t)); \
+			i = rand() % 10; \
+			g_free(warehouse[i]); \
+			warehouse[i] = g_malloc(N * sizeof(LONG DTYPE)); \
+			warehouse_dpss = warehouse[i]; \
+			memcpy(warehouse_dpss, full_dpss, N * sizeof(LONG DTYPE)); \
+			warehouse_N[i] = N; \
+			warehouse_alpha[i] = alpha; \
+			warehouse_compute_time[i] = compute_time; \
+			add_to_warehouse = FALSE; \
+		} \
+	} \
+	g_mutex_unlock(&mutex); \
+ \
+	start = half_window ? N / 2 : 0; \
 	if(half_window) { \
 		dpss_out = g_malloc((N - start) * sizeof(LONG DTYPE)); \
 		for(i = 0; i < N - start; i++) \

@@ -1479,7 +1479,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		if(!element->workspace.wspf.fft_window) {
 			switch(element->fft_window_type) {
 			case GSTLAL_TRANSFERFUNCTION_DPSS:
-				element->workspace.wspf.fft_window = dpss_float(element->fft_length, fft_alpha, 5.0, NULL, FALSE);
+				element->workspace.wspf.fft_window = dpss_float(element->fft_length, fft_alpha, 5.0, NULL, FALSE, FALSE);
 				break;
 
 			case GSTLAL_TRANSFERFUNCTION_KAISER:
@@ -1625,7 +1625,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 				switch(element->fir_window_type) {
 				case GSTLAL_TRANSFERFUNCTION_DPSS:
-					element->workspace.wspf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE);
+					element->workspace.wspf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE, FALSE);
 					break;
 
 				case GSTLAL_TRANSFERFUNCTION_KAISER:
@@ -1704,7 +1704,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 		if(!element->workspace.wdpf.fft_window) {
 			switch(element->fft_window_type) {
 			case GSTLAL_TRANSFERFUNCTION_DPSS:
-				element->workspace.wdpf.fft_window = dpss_double(element->fft_length, fft_alpha, 5.0, NULL, FALSE);
+				element->workspace.wdpf.fft_window = dpss_double(element->fft_length, fft_alpha, 5.0, NULL, FALSE, FALSE);
 				break;
 
 			case GSTLAL_TRANSFERFUNCTION_KAISER:
@@ -1850,7 +1850,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 
 				switch(element->fir_window_type) {
 				case GSTLAL_TRANSFERFUNCTION_DPSS:
-					element->workspace.wdpf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE);
+					element->workspace.wdpf.fir_window = dpss_double(element->fir_length, fir_alpha, 5.0, NULL, FALSE, FALSE);
 					break;
 
 				case GSTLAL_TRANSFERFUNCTION_KAISER:
@@ -2402,6 +2402,9 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 static void finalize(GObject *object) {
 
 	GSTLALTransferFunction *element = GSTLAL_TRANSFERFUNCTION(object);
+
+	dpss_float(0, 0.0, 0.0, NULL, FALSE, TRUE);
+	dpss_double(0, 0.0, 0.0, NULL, FALSE, TRUE);
 
 	if(element->post_gap_transfer_functions) {
 		g_free(element->post_gap_transfer_functions);
