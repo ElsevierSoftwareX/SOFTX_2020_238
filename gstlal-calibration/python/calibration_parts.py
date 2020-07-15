@@ -30,7 +30,7 @@ from gi.repository import GstController
 GObject.threads_init()
 Gst.init(None)
 
-import FIRtools as fir
+from gstlal import FIRtools as fir
 
 #
 # Shortcut functions for common element combos/properties
