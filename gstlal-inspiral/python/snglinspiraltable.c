@@ -242,22 +242,22 @@ static PyObject *G1_snr_component_get(PyObject *obj, void *data)
 		return NULL;
 	}
 	if(!strcmp(name, "_G1_snr_name")) {
-		return PyString_FromString(G1_snr->name);
+		return PyUnicode_FromString(G1_snr->name);
 	} else if(!strcmp(name, "_G1_snr_epoch_gpsSeconds")) {
-		return PyInt_FromLong(G1_snr->epoch.gpsSeconds);
+		return PyLong_FromLong(G1_snr->epoch.gpsSeconds);
 	} else if(!strcmp(name, "_G1_snr_epoch_gpsNanoSeconds")) {
-		return PyInt_FromLong(G1_snr->epoch.gpsNanoSeconds);
+		return PyLong_FromLong(G1_snr->epoch.gpsNanoSeconds);
 	} else if(!strcmp(name, "_G1_snr_f0")) {
 		return PyFloat_FromDouble(G1_snr->f0);
 	} else if(!strcmp(name, "_G1_snr_deltaT")) {
 		return PyFloat_FromDouble(G1_snr->deltaT);
 	} else if(!strcmp(name, "_G1_snr_sampleUnits")) {
 		char *s = XLALUnitToString(&G1_snr->sampleUnits);
-		PyObject *result = PyString_FromString(s);
+		PyObject *result = PyUnicode_FromString(s);
 		XLALFree(s);
 		return result;
 	} else if(!strcmp(name, "_G1_snr_data_length")) {
-		return PyInt_FromLong(G1_snr->data->length);
+		return PyLong_FromLong(G1_snr->data->length);
 	} else if(!strcmp(name, "_G1_snr_data")) {
 		npy_intp dims[] = {G1_snr->data->length};
 		PyObject *array = PyArray_SimpleNewFromData(1, dims, NPY_CFLOAT, G1_snr->data->data);
