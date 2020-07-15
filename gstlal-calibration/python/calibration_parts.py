@@ -167,7 +167,11 @@ def mkadaptivefirfilt(pipeline, src, **properties):
 			properties["static_poles"] = static_poles
 	if "window_type" in properties:
 		win = properties.pop("window_type")
-		if win in [None, 3]:
+		if win in [None, 5]:
+			win = 5
+		elif win in ['hann', 'Hann', 'HANN', 'hanning', 'Hanning', 'HANNING', 4]:
+			win = 4
+		elif win in ['blackman', 'Blackman', 'BLACKMAN', 3]:
 			win = 3
 		elif win in ['DC', 'dolph_chebyshev', 'DolphChebyshev', 'DOLPH_CHEBYSHEV', 2]:
 			win = 2
