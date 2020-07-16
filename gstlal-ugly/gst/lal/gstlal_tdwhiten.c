@@ -700,7 +700,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		GstClockTime endtime = kernelinfo->endtime;
 		/* Wait until an appropriate filter arrives before continuing */
 		while(element->next_pts >= endtime) {
-			/* First check if we changed our mind about the expiration date fo the current kernel */
+			/* First check if we changed our mind about the expiration date for the current kernel */
 			kernelinfo = g_queue_peek_tail(element->kernels);
 			if(kernelinfo->endtime > element->next_pts)
 				goto setoffsets;
@@ -965,7 +965,7 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 					kernelinfo = g_queue_peek_tail(element->kernels);
 					kernelinfo->endtime = kernel_endtime;
 					element->kernel_endtime = kernel_endtime;
-				} else
+				} else if(g_queue_get_length(element->kernels) > 1)
 					kernelinfo_free(g_queue_pop_tail(element->kernels));
 			}
 			g_mutex_unlock(&element->kernel_lock);
