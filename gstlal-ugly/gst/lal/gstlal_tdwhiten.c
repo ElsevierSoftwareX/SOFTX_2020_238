@@ -890,6 +890,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 
 	case PROP_KERNEL: {
+
+		g_mutex_lock(&element->kernel_lock);
+
 		GValueArray *va = g_value_get_boxed(value);
 		struct kernelinfo_t *kernelinfo, *old_kernelinfo;
 		/* dump any kernels that haven't yet been used */
@@ -909,6 +912,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		else
 			/* this kernel should wait until the end time of the previous one */
 			g_queue_push_tail(element->waiting_kernels, kernelinfo);
+
+		g_mutex_unlock(&element->kernel_lock);
+
 		break;
 	}
 
