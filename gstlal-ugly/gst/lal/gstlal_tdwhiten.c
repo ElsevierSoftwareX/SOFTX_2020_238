@@ -961,11 +961,11 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 					kernelinfo_free(g_queue_pop_tail(element->waiting_kernels));
 			} else if(!g_queue_is_empty(element->kernels)) {
 				/* If there are no waiting kernels, apply this to the most recent kernel being used */
-				if(kernel_endtime > min_endtime) {
+				if(kernel_endtime > min_endtime || g_queue_get_length(element->kernels) == 1) {
 					kernelinfo = g_queue_peek_tail(element->kernels);
 					kernelinfo->endtime = kernel_endtime;
 					element->kernel_endtime = kernel_endtime;
-				} else if(g_queue_get_length(element->kernels) > 1)
+				} else
 					kernelinfo_free(g_queue_pop_tail(element->kernels));
 			}
 			g_mutex_unlock(&element->kernel_lock);

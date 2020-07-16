@@ -63,7 +63,7 @@ def lal_property_test_01(pipeline, name):
 	lal_prop_exponent = pipeparts.mkgeneric(pipeline, head, "lal_property", update_when_change = True)
 	head = calibration_parts.mkpow(pipeline, head, exponent = 0.0)
 
-	lal_prop_exponent.connect("notify::current-average", calibration_parts.update_property_simple, head, "current_average", "exponent")
+	lal_prop_exponent.connect("notify::current-average", calibration_parts.update_property_simple, head, "current_average", "exponent", 1)
 
 	pipeparts.mknxydumpsink(pipeline, head, "%s_out.dump" % name)
 
