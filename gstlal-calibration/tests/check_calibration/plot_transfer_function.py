@@ -24,6 +24,7 @@
 #
 
 
+import matplotlib; matplotlib.use('Agg')
 import sys
 import os
 import numpy
@@ -32,8 +33,6 @@ from math import pi
 import resource
 import datetime
 import time
-import matplotlib
-matplotlib.use('Agg')
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'

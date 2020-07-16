@@ -16,11 +16,11 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
+import matplotlib as mpl; mpl.use('Agg')
+
 import numpy as np
 
-import matplotlib as mpl
 from matplotlib import rc
-mpl.use('Agg')
 import matplotlib.pyplot as plt
 
 def find_minor_ticks(major_ticks, scale = 'linear'):

@@ -24,6 +24,7 @@
 #
 
 
+import matplotlib; matplotlib.use('Agg')
 import sys
 import os
 import numpy
@@ -35,12 +36,10 @@ import time
 from gwpy.timeseries import TimeSeries
 from gwpy.astro import inspiral_range
 
-import matplotlib
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 22
 matplotlib.rcParams['legend.fontsize'] = 18
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
 

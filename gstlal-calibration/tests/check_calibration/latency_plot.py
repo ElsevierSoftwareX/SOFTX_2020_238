@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 
+import matplotlib; matplotlib.use('Agg')
 import numpy
 from math import pi
 import datetime
 import time
-import matplotlib
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 16
 matplotlib.rcParams['legend.fontsize'] = 12
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import glob
 from optparse import OptionParser, Option

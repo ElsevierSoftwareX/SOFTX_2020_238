@@ -24,6 +24,7 @@
 #
 
 
+import matplotlib; matplotlib.use('Agg')
 import sys
 import os
 import numpy
@@ -32,14 +33,12 @@ from math import pi
 import resource
 import datetime
 import time
-import matplotlib
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 22
 matplotlib.rcParams['legend.fontsize'] = 18
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
 
