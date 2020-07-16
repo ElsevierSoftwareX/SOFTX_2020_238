@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (C) 2018  Aaron Viets
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -121,7 +121,7 @@ tf_length = int(1 + sample_rate / (2 * options.df))
 if not tf_length % 2:
 	tf_length = tf_length + 1
 td_tf_length = 2 * (tf_length - 1)
-fft_overlap = fft_length / 2
+fft_overlap = fft_length // 2
 num_ffts = int((tf_samples - fft_overlap) / (fft_length - fft_overlap))
 
 def ConfigSectionMap(section):
@@ -208,8 +208,8 @@ if numerator_correction is not None:
 			index = 0
 			# This is a linear resampler (it just connects the dots with straight lines)
 			while index < tf_length - 1:
-				before_idx = numpy.floor(cadence * index)
-				after_idx = numpy.ceil(cadence * index + 1e-10)
+				before_idx = int(numpy.floor(cadence * index))
+				after_idx = int(numpy.ceil(cadence * index + 1e-10))
 				before = corr[1][before_idx] + 1j * corr[2][before_idx]
 				after = corr[1][after_idx] + 1j * corr[2][after_idx]
 				before_weight = after_idx - cadence * index
@@ -217,7 +217,7 @@ if numerator_correction is not None:
 				num_corr[i].append(before_weight * before + after_weight * after)
 				index += 1
 			# Check if we can add the last value
-			before_idx = numpy.floor(cadence * index)
+			before_idx = int(numpy.floor(cadence * index))
 			if numpy.floor(cadence * index) == cadence * index:
 				num_corr[i].append(corr[1][before_idx] + 1j * corr[2][before_idx])
 
@@ -230,8 +230,8 @@ if denominator_correction is not None:
 		index = 0
 		# This is a linear resampler (it just connects the dots with straight lines)
 		while index < tf_length - 1:
-			before_idx = numpy.floor(cadence * index)
-			after_idx = numpy.ceil(cadence * index + 1e-10)
+			before_idx = int(numpy.floor(cadence * index))
+			after_idx = int(numpy.ceil(cadence * index + 1e-10))
 			before = corr[1][before_idx] + 1j * corr[2][before_idx]
 			after = corr[1][after_idx] + 1j * corr[2][after_idx]
 			before_weight = after_idx - cadence * index
@@ -242,7 +242,7 @@ if denominator_correction is not None:
 				denom_corr.append(before_weight * before + after_weight * after)
 			index += 1
 		# Check if we can add the last value
-		before_idx = numpy.floor(cadence * index)
+		before_idx = int(numpy.floor(cadence * index))
 		if numpy.floor(cadence * index) == cadence * index:
 			if("PCALX" in options.denominator_channel_name):
 				denom_corr.append(-1.0 * (corr[1][before_idx] + 1j * corr[2][before_idx]))
@@ -321,7 +321,7 @@ if options.zeros is not None:
 	for i in range(len(real_zeros)):
 		real_zeros[i] = real_zeros[i].split(',')
 		zeros.append([])
-		for j in range(0, len(real_zeros[i]) / 2):
+		for j in range(0, len(real_zeros[i]) // 2):
 			zeros[i].append(float(real_zeros[i][2 * j]) + 1j * float(real_zeros[i][2 * j + 1]))
 
 poles = []
@@ -334,7 +334,7 @@ if options.poles is not None:
 	for i in range(len(real_poles)):
 		real_poles[i] = real_poles[i].split(',')
 		poles.append([])
-		for j in range(0, len(real_poles[i]) / 2):
+		for j in range(0, len(real_poles[i]) // 2):
 			poles[i].append(float(real_poles[i][2 * j]) + 1j * float(real_poles[i][2 * j + 1]))
 
 # Decide a color scheme.

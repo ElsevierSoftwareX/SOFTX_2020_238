@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (C) 2018  Aaron Viets
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -270,8 +270,8 @@ for tf_file in tf_files:
 		index = 0
 		# This is a linear resampler (it just connects the dots with straight lines)
 		while index < tf_length:
-			before_idx = numpy.floor(cadence * index)
-			after_idx = numpy.ceil(cadence * index + 1e-10)
+			before_idx = int(numpy.floor(cadence * index))
+			after_idx = int(numpy.ceil(cadence * index + 1e-10))
 			# Check if we've hit the end of the model transfer function
 			if after_idx >= len(model[0]):
 				if before_idx == cadence * index:

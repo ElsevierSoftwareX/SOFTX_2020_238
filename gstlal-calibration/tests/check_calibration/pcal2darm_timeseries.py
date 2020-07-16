@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (C) 2018  Aaron Viets
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -24,6 +24,8 @@
 #
 
 
+import matplotlib
+matplotlib.use('Agg')
 import sys
 import os
 import numpy
@@ -32,14 +34,12 @@ from math import pi
 import resource
 import datetime
 import time
-import matplotlib
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
 matplotlib.rcParams['font.size'] = 32
 matplotlib.rcParams['legend.fontsize'] = 20
 matplotlib.rcParams['mathtext.default'] = 'regular'
-matplotlib.use('Agg')
 import glob
 import matplotlib.pyplot as plt
 
@@ -175,7 +175,7 @@ for name in options.pcal_line_names.split(','):
 	pcal_corrections.append(float(filters["%s_corr_re" % name]))
 	pcal_corrections.append(float(filters["%s_corr_im" % name]))
 if(options.pcal_time_advance):
-	for i in range(0, len(pcal_corrections) / 2):
+	for i in range(0, len(pcal_corrections) // 2):
 		corr = pcal_corrections[2 * i] + 1j * pcal_corrections[2 * i + 1]
 		corr *= numpy.exp(2.0 * numpy.pi * 1j * frequencies[i] * options.pcal_time_advance)
 		pcal_corrections[2 * i] = numpy.real(corr)
