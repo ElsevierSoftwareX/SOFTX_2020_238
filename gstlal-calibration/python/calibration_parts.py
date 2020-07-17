@@ -133,6 +133,36 @@ def mktransferfunction(pipeline, src, **properties):
 			for i in range(0, len(freqs)):
 				notch_frequencies.append(float(freqs[i]))
 			properties["notch_frequencies"] = notch_frequencies
+	if "fft_window_type" in properties:
+		win = properties.pop("fft_window_type")
+		if win in ['hann', 'Hann', 'HANN', 'hanning', 'Hanning', 'HANNING', 4]:
+			win = 4
+		elif win in ['blackman', 'Blackman', 'BLACKMAN', 3]:
+			win = 3
+		elif win in ['DC', 'dolph_chebyshev', 'DolphChebyshev', 'DOLPH_CHEBYSHEV', 2]:
+			win = 2
+		elif win in ['kaiser', 'Kaiser', 'KAISER', 1]:
+			win = 1
+		elif win in ['dpss', 'DPSS', 'Slepian', 'slepian', 'SLEPIAN', 0]:
+			win = 0
+		else:
+			raise ValueError("Unknown window function %s" % win)
+		properties["fft_window_type"] = win
+	if "fir_window_type" in properties:
+		win = properties.pop("fir_window_type")
+		if win in ['hann', 'Hann', 'HANN', 'hanning', 'Hanning', 'HANNING', 4]:
+			win = 4
+		elif win in ['blackman', 'Blackman', 'BLACKMAN', 3]:
+			win = 3
+		elif win in ['DC', 'dolph_chebyshev', 'DolphChebyshev', 'DOLPH_CHEBYSHEV', 2]:
+			win = 2
+		elif win in ['kaiser', 'Kaiser', 'KAISER', 1]:
+			win = 1
+		elif win in ['dpss', 'DPSS', 'Slepian', 'slepian', 'SLEPIAN', 0]:
+			win = 0
+		else:
+			raise ValueError("Unknown window function %s" % win)
+		properties["fir_window_type"] = win
 	return pipeparts.mkgeneric(pipeline, src, "lal_transferfunction", **properties)
 
 def mkadaptivefirfilt(pipeline, src, **properties):
@@ -1390,7 +1420,7 @@ def update_filters(filter_maker, arg, filter_taker, maker_prop_name, taker_prop_
 	firfilter = filter_maker.get_property(maker_prop_name)[filter_number][::-1]
 	filter_taker.set_property(taker_prop_name, firfilter)
 
-def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, parallel_mode = False, notch_frequencies = [], high_pass = 15.0, noisesub_gate_bit = None, delay_time = 0.0, critical_lock_loss_time = 0, filename = None):
+def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_length, fft_overlap, num_ffts, min_ffts, update_samples, fir_length, frequency_resolution, filter_taper_length, use_median = False, parallel_mode = False, notch_frequencies = [], high_pass = 15.0, noisesub_gate_bit = None, delay_time = 0.0, critical_lock_loss_time = 0, fft_window_type = 'dpss', fir_window_type = 'dpss', filename = None):
 
 	#
 	# Use witness channels that monitor the environment to remove environmental noise
@@ -1409,7 +1439,7 @@ def clean_data(pipeline, signal, signal_rate, witnesses, witness_rate, fft_lengt
 	transfer_functions = mkinterleave(pipeline, numpy.insert(witness_tees, 0, resampled_signal, axis = 0))
 	if noisesub_gate_bit is not None:
 		transfer_functions = mkgate(pipeline, transfer_functions, noisesub_gate_bit, 1)
-	transfer_functions = mktransferfunction(pipeline, transfer_functions, fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = high_pass / 2.0, update_after_gap = True, use_median = use_median, parallel_mode = parallel_mode, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = int(delay_time * witness_rate), fir_timeshift = 0, filename = filename)
+	transfer_functions = mktransferfunction(pipeline, transfer_functions, fft_length = fft_length, fft_overlap = fft_overlap, num_ffts = num_ffts, min_ffts = min_ffts, update_samples = update_samples, make_fir_filters = -1, fir_length = fir_length, frequency_resolution = frequency_resolution, high_pass = high_pass / 2.0, update_after_gap = True, use_median = use_median, parallel_mode = parallel_mode, notch_frequencies = notch_frequencies, use_first_after_gap = critical_lock_loss_time * witness_rate, update_delay_samples = int(delay_time * witness_rate), fir_timeshift = 0, fft_window_type = fft_window_type, fir_window_type = fir_window_type, filename = filename)
 	signal_minus_noise = [signal_tee]
 	for i in range(0, len(witnesses)):
 		if parallel_mode:

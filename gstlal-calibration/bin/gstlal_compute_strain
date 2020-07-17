@@ -1117,9 +1117,21 @@ if ChannelNames["witnesschannellist"] != "None":
 	witness_channel_list = ChannelNames["witnesschannellist"].split(';')
 	witness_notch_frequencies = DataCleaningConfigs["witnessnotchfrequencies"].split(';')
 	witness_rates = SampleRates["witnesschannelsr"].split(';')
+	if 'noisesubfftwindowtypes' in DataCleaningConfigs:
+		noisesub_fft_window_types = DataCleaningConfigs['noisesubfftwindowtypes'].split(';')
+	else:
+		noisesub_fft_window_types = []
+		for i in range(len(witness_channel_list)):
+			noisesub_fft_window_types.append('dpss')
+	if 'noisesubfirwindowtypes' in DataCleaningConfigs:
+		noisesub_fir_window_types = DataCleaningConfigs['noisesubfirwindowtypes'].split(';')
+	else:
+		noisesub_fir_window_types = []
+		for i in range(len(witness_channel_list)):
+			noisesub_fir_window_types.append('dpss')
 	witness_highpasses = DataCleaningConfigs['witnesshighpasses'].split(';') if "witnesshighpasses" in DataCleaningConfigs else list(15 * numpy.ones(len(witness_channel_list)))
-	if len(witness_channel_list) != len(witness_notch_frequencies) or len(witness_channel_list) != len(witness_rates):
-		raise ValueError("WitnessChannelList, WitnessChannelSR, and WitnessNotchFrequencies must all be the same length, i.e., they must all have the same number of semicolons (;)")
+	if len(witness_channel_list) != len(witness_notch_frequencies) or len(witness_channel_list) != len(witness_rates) or len(witness_channel_list) != len(noisesub_fft_window_types) or len(witness_channel_list) != len(noisesub_fir_window_types):
+		raise ValueError("WitnessChannelList, WitnessChannelSR, WitnessNotchFrequencies, NoiseSubFFTWindowTypes, and NoiseSubFIRWindowTypes must all be the same length, i.e., they must all have the same number of semicolons (;)")
 	for i in range(0, len(witness_channel_list)):
 		witness_channel_list[i] = witness_channel_list[i].split(',')
 		for j in range(0, len(witness_channel_list[i])):
@@ -3061,7 +3073,7 @@ if any(witness_channel_list):
 				witnesses.append(calibration_parts.caps_and_progress(pipeline, head_dict[key], "audio/x-raw, format=F64LE, channels=1, channel-mask=(bitmask)0x0", key))
 		if len(witnesses) != len(witness_channel_list[i]):
 			print("WARNING: Not all requested witness channels are being used")
-		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], high_pass = witness_highpasses[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i))
+		clean_strain = calibration_parts.clean_data(pipeline, clean_strain, hoft_sr, witnesses, witness_rates[i], witness_fft_samples, witness_fft_overlap, num_witness_ffts, min_witness_ffts, witness_tf_update_samples, witness_fir_samples, witness_frequency_resolution, witness_filter_taper_length, use_median = witness_tf_use_median, parallel_mode = witness_tf_parallel_mode, notch_frequencies = witness_notch_frequencies[i], high_pass = witness_highpasses[i], noisesub_gate_bit = noisesubgatetee, delay_time = witness_delay_time, critical_lock_loss_time = critical_lock_loss_time, filename = None if witness_tf_filename is None else "%s_%d.txt" % (witness_tf_filename, i), fft_window_type = noisesub_fft_window_types[i], fir_window_type = noisesub_fir_window_types[i])
 		witness_delay_time += witness_delay_increment
 
 if remove_cal_lines or any(line_witness_channel_list) or any(witness_channel_list):
