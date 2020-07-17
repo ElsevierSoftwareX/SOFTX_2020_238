@@ -44,6 +44,13 @@
 #include <gsl/gsl_vector.h>
 #include <gsl/gsl_matrix.h>
 
+/*
+ * Our own stuff
+ */
+
+
+#include <gstlal/gstlal_peakfinder.h>
+
 
 /*
  * ============================================================================
@@ -59,3 +66,11 @@ unsigned gstlal_autocorrelation_chi2_autocorrelation_length(const gsl_matrix_com
 gsl_vector *gstlal_autocorrelation_chi2_compute_norms(const gsl_matrix_complex *, const gsl_matrix_int *);
 unsigned gstlal_autocorrelation_chi2(double *, const complex double *, unsigned, int, double, const gsl_matrix_complex *, const gsl_matrix_int *, const gsl_vector *);
 unsigned gstlal_autocorrelation_chi2_float(float *, const float complex *, unsigned, int, double, const gsl_matrix_complex *, const gsl_matrix_int *, const gsl_vector *);
+
+/*
+ * Bank veto functions
+ */
+
+gsl_vector *gstlal_bankcorrelation_chi2_compute_norms(const gsl_matrix_complex *bankcorrelation_matrix);
+unsigned gstlal_bankcorrelation_chi2_from_peak(double *, struct gstlal_peak_state *, const gsl_matrix_complex *, const gsl_vector *, const complex double *, guint);
+unsigned gstlal_bankcorrelation_chi2_from_peak_float(float *, struct gstlal_peak_state *, const gsl_matrix_complex *, const gsl_vector *, const complex float *, guint);

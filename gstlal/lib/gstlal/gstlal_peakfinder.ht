@@ -14,6 +14,9 @@ int NAME(gstlal,series_around_peak)(struct gstlal_peak_state *state, TYPE *data,
 /* fill the output */
 int NAME(gstlal,fill_output_with_peak)(struct gstlal_peak_state *state, TYPE *data, guint64 length);
 
+/* apply an additional threshold to an existing peak state */
+int NAME(gstlal,apply_threshold_to_peak)(struct gstlal_peak_state *state, double thresh);
+
 #undef PASTER
 #undef EVALUATOR
 #undef NAME

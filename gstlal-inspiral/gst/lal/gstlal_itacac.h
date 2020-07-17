@@ -88,6 +88,8 @@ typedef struct {
 	struct data_container *data;
 	void *chi2;
 	void *tmp_chi2;
+	void *bankchi2;
+	void *tmp_bankchi2;
 	char *bank_filename;
 	char *instrument;
 	char *channel_name;
@@ -99,6 +101,8 @@ typedef struct {
 	gsl_matrix_complex *autocorrelation_matrix;
 	gsl_matrix_int *autocorrelation_mask;
 	gsl_vector *autocorrelation_norm;
+	gsl_matrix_complex *bankcorrelation_matrix;
+	gsl_vector *bankcorrelation_norm;
 	void *snr_mat;
 	void *tmp_snr_mat;
 	gsl_matrix_complex_float_view snr_matrix_view;

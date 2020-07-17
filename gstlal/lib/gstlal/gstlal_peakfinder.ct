@@ -141,6 +141,25 @@ int NAME(gstlal,series_around_peak)(struct gstlal_peak_state *state, TYPE *data,
 	return 0;
 }
 
+int NAME(gstlal,apply_threshold_to_peak)(struct gstlal_peak_state *state, double thresh)
+{
+	guint channel;
+	TYPE *maxdata = MEMBER(state->values.as);
+	TYPE *interpmaxdata = MEMBER(state->interpvalues.as);
+	state->num_events = 0;
+	/* Decide if there are any events to keep */
+	for(channel = 0; channel < state->channels; channel++) {
+		if ( ABSFUNC(maxdata[channel]) <= thresh ) {
+			maxdata[channel] = 0;
+			interpmaxdata[channel] = 0;
+			state->samples[channel] = 0;
+			state->interpsamples[channel] = 0;
+		}
+		else state->num_events += 1;
+	}
+	return 0;
+}
+
 #undef PASTER3
 #undef EVALUATOR3
 #undef NAME

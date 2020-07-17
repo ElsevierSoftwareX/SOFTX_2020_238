@@ -184,7 +184,7 @@ CREATE TEMPORARY TABLE _cluster_info_ AS
 		(coinc_inspiral.end_time - (SELECT MIN(end_time) FROM coinc_inspiral)) + 1e-9 * coinc_inspiral.end_time_ns AS end_time,
 		coinc_inspiral.snr AS snr,
 		-- NOTE FIXME we are using bank_chisq to hold a chisq weighted snr value
-		(SELECT SUM(sngl.bank_chisq * sngl.bank_chisq) FROM sngl_inspiral as sngl WHERE sngl.event_id IN (SELECT event_id FROM coinc_event_map WHERE coinc_event_map.coinc_event_id == coinc_event.coinc_event_id)) AS ranking_stat
+		(SELECT SUM(sngl.Gamma2 * sngl.Gamma2) FROM sngl_inspiral as sngl WHERE sngl.event_id IN (SELECT event_id FROM coinc_event_map WHERE coinc_event_map.coinc_event_id == coinc_event.coinc_event_id)) AS ranking_stat
 	FROM
 		coinc_event
 		JOIN coinc_inspiral ON (

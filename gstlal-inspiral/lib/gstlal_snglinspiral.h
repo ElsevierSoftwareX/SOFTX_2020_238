@@ -55,8 +55,8 @@ void gstlal_snglinspiral_array_free(SnglInspiralTable *bankarray);
 /*
  * FIXME: only support single precision SNR snippets at the moment
  */
-GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *G1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view, GstClockTimeDiff);
-int gstlal_snglinspiral_append_peak_to_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, gsl_matrix_complex_float_view *G1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view);
+GstBuffer *gstlal_snglinspiral_new_buffer_from_peak(struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, void *bankchi2, gsl_matrix_complex_float_view *G1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view, GstClockTimeDiff);
+int gstlal_snglinspiral_append_peak_to_buffer(GstBuffer *srcbuf, struct gstlal_peak_state *input, SnglInspiralTable *bankarray, GstPad *pad, guint64 offset, guint64 length, GstClockTime time, guint rate, void *chi2, void *bankchi2, gsl_matrix_complex_float_view *G1_snr_matrix_view, gsl_matrix_complex_float_view *H1_snr_matrix_view, gsl_matrix_complex_float_view *K1_snr_matrix_view, gsl_matrix_complex_float_view *L1_snr_matrix_view, gsl_matrix_complex_float_view *V1_snr_matrix_view);
 
 
 G_END_DECLS

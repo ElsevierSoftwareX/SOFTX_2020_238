@@ -702,10 +702,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 			head = itacac_dict[bank.bank_id]
 			pad = head.get_request_pad("sink%d" % len(head.sinkpads))
 			if instrument == 'H1' or instrument == 'L1':
-				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask), ("bankcorrelation_matrix", pipeio.repack_complex_array_to_real(bank.bank_correlation_matrix))]:
 					pad.set_property(prop, val)
 			else:
-				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask)]:
+				for prop, val in [("n", nsamps_window), ("snr-thresh", LnLRDensity.snr_min), ("bank_filename", bank.template_bank_filename), ("sigmasq", bank.sigmasq), ("autocorrelation_matrix", pipeio.repack_complex_array_to_real(bank.autocorrelation_bank)), ("autocorrelation_mask", bank.autocorrelation_mask), ("bankcorrelation_matrix", pipeio.repack_complex_array_to_real(bank.bank_correlation_matrix))]:
 					pad.set_property(prop, val)
 		else:
 			raise NotImplementedError("Currently only 'autochisq' is supported")

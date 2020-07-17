@@ -278,6 +278,9 @@ back += report.Description("The chi-squared test checks that the snr accumulated
 imgfooter = "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
 back += report.ImageGrid("Chi-squared Distributions", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'))
 
+imgfooter = "Bank chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
+back += report.ImageGrid("Bank chi-squared Distributions", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_bankchi2_vs_rho_*closedbox*.png'))
+
 imgfooter = "Comparison of SNR in pairs of detectors."
 back += report.ImageGrid("Signal-to-Noise Ratio", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*closedbox*.png'))
 
@@ -289,6 +292,9 @@ if opts.open_box:
 
 	imgfooter = "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
 	back += report.ImageGrid("Chi-squared Distributions: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'))
+
+	imgfooter = "Bank chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
+	back += report.ImageGrid("Bank chi-squared Distributions: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_bankchi2_vs_rho_*openbox*.png'))
 
 	imgfooter = "Comparison of SNR in pairs of detectors."
 	back += report.ImageGrid("Signal-to-Noise Ratio: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*4_rho_*_vs_*openbox*.png'))
@@ -396,8 +402,12 @@ summary += report.Description("The chi-squared test checks that the snr accumula
 
 imgfooter = "Chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
 summary += report.ImageGrid("Chi-squared Distributions", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*closedbox*.png'))
+
+imgfooter = "Bank chi-squared vs snr for single detectors after coincidence.  Blue points are full data zero lag, red are software injections and black are time slides."
+summary += report.ImageGrid("Bank chi-squared Distributions", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_bankchi2_vs_rho_*closedbox*.png'))
 if opts.open_box:
 	summary += report.ImageGrid("Chi-squared Distributions: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_chi2_vs_rho_*openbox*.png'))
+	summary += report.ImageGrid("Bank chi-squared Distributions: Zero lag", grid_size=3, footer=imgfooter).glob(os.path.join(opts.glob_path, '*3_bankchi2_vs_rho_*openbox*.png'))
 
 ## Include IFAR, lnL plots + summary table
 summary += report.Header('Money Plots')

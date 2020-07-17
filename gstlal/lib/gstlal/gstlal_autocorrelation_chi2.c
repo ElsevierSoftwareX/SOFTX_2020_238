@@ -47,6 +47,7 @@
 
 #include <complex.h>
 #include <math.h>
+#include <string.h>
 
 
 /*
@@ -75,7 +76,7 @@
 
 
 #include <gstlal_autocorrelation_chi2.h>
-
+#include <gstlal_peakfinder.h>
 
 /*
  * ============================================================================
@@ -476,3 +477,63 @@ unsigned gstlal_autocorrelation_chi2_float(
 	return output_length;
 }
 
+gsl_vector *gstlal_bankcorrelation_chi2_compute_norms(const gsl_matrix_complex *bankcorrelation_matrix)
+{
+	gsl_vector *norm;
+	unsigned i;
+	unsigned channel;
+	unsigned channels = bankcorrelation_matrix->size1;
+	float complex cij;
+	float norms;
+
+	norm = gsl_vector_alloc(channels);
+
+	for(channel = 0; channel < channels; channel++) {
+		norms = 2*channels;
+		for(i = 0; i < channels; i++) {
+			cij = ((float) GSL_REAL(gsl_matrix_complex_get(bankcorrelation_matrix, i, channel)) + (float) GSL_IMAG(gsl_matrix_complex_get(bankcorrelation_matrix, i, channel)) * I);
+			norms -= 0.5*conjf(cij)*cij;
+		}
+		gsl_vector_set(norm, channel, norms);
+	}
+
+	return norm;
+}
+//FIXME make this like the float version
+unsigned gstlal_bankcorrelation_chi2_from_peak(double *out, struct gstlal_peak_state *state, const gsl_matrix_complex *bcmat, const gsl_vector *bcnorm, const complex double *data, guint pad)
+{
+	// FIXME add something
+	return 0;
+}
+
+unsigned gstlal_bankcorrelation_chi2_from_peak_float(float *out, struct gstlal_peak_state *state, const gsl_matrix_complex *bcmat, const gsl_vector *bcnorm, const complex float *data, guint pad)
+{
+	unsigned i,j;
+	float complex *snr = state->values.as_float_complex;
+	float complex cij;
+	float complex xij;
+	float complex snrj;
+	int index;
+
+	for (i = 0; i < state->channels; i++)
+	{
+		out[i] = 0.0;
+		/*
+		 * Don't bother computing if the event is below threshold, i.e.
+		 * set to 0
+		 */
+		if (snr[i] == 0) continue;
+		for (j = 0; j < state->channels; j++)
+		{
+			index = (state->samples[i]) * state->channels + j;
+			snrj = *(data + index);
+			// Normalization of cij is in svd_bank.py. Phase must be (+).
+			cij = ((float) GSL_REAL(gsl_matrix_complex_get(bcmat, i, j)) + (float) GSL_IMAG(gsl_matrix_complex_get(bcmat, i, j)) * I);
+			// 0.5 is necessary due to the template normalization gstlal uses.
+			xij = 0.5 * snr[i] * cij - snrj;
+			out[i] += conjf(xij) * xij;
+		}
+		out[i] /= (float) gsl_vector_get(bcnorm, i);
+	}
+	return 0;
+}

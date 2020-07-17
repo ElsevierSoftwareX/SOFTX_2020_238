@@ -184,10 +184,19 @@ class Bank(object):
 
 		# Assign template banks to fragments
 		self.bank_fragments = [BankFragment(rate,begin,end) for rate,begin,end in time_slices]
+		# Setup bank correlation matrix
+		self.bank_correlation_matrix = None
+
 		for i, bank_fragment in enumerate(self.bank_fragments):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
 			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity_transform = identity_transform, verbose = verbose)
+			cmix = bank_fragment.mix_matrix[:,::2] + 1.j * bank_fragment.mix_matrix[:,1::2]
+
+			if self.bank_correlation_matrix is None:
+				self.bank_correlation_matrix = numpy.dot(numpy.conj(cmix.T), cmix)
+			else:
+				self.bank_correlation_matrix += numpy.dot(numpy.conj(cmix.T), cmix)
 
 		if bank_fragment.sum_of_squares_weights is not None:
 			self.gate_threshold = sum_of_squares_threshold_from_fap(gate_fap, numpy.array([weight**2 for bank_fragment in self.bank_fragments for weight in bank_fragment.sum_of_squares_weights], dtype = "double"))
@@ -317,6 +326,7 @@ def write_bank(filename, banks, psd_input, cliplefts = None, cliprights = None, 
 		bank.autocorrelation_bank = bank.autocorrelation_bank[clipleft:clipright,:]
 		bank.autocorrelation_mask = bank.autocorrelation_mask[clipleft:clipright,:]
 		bank.sigmasq = bank.sigmasq[clipleft:clipright]
+		bank.bank_correlation_matrix = bank.bank_correlation_matrix[clipleft:clipright,clipleft:clipright]
 
 		# Add root-level arrays
 		# FIXME:  ligolw format now supports complex-valued data
@@ -324,6 +334,8 @@ def write_bank(filename, banks, psd_input, cliplefts = None, cliprights = None, 
 		root.appendChild(ligolw_array.Array.build('autocorrelation_bank_imag', bank.autocorrelation_bank.imag))
 		root.appendChild(ligolw_array.Array.build('autocorrelation_mask', bank.autocorrelation_mask))
 		root.appendChild(ligolw_array.Array.build('sigmasq', numpy.array(bank.sigmasq)))
+		root.appendChild(ligolw_array.Array.build('bank_correlation_matrix_real', bank.bank_correlation_matrix.real))
+		root.appendChild(ligolw_array.Array.build('bank_correlation_matrix_imag', bank.bank_correlation_matrix.imag))
 
 		# Write bank fragments
 		for i, frag in enumerate(bank.bank_fragments):
@@ -407,6 +419,9 @@ def read_banks(filename, contenthandler, verbose = False):
 		bank.autocorrelation_bank = ligolw_array.get_array(root, 'autocorrelation_bank_real').array + 1j * ligolw_array.get_array(root, 'autocorrelation_bank_imag').array
 		bank.autocorrelation_mask = ligolw_array.get_array(root, 'autocorrelation_mask').array
 		bank.sigmasq = ligolw_array.get_array(root, 'sigmasq').array
+		bank_correlation_real = ligolw_array.get_array(root, 'bank_correlation_matrix_real').array
+		bank_correlation_imag = ligolw_array.get_array(root, 'bank_correlation_matrix_imag').array
+		bank.bank_correlation_matrix = bank_correlation_real + 1j * bank_correlation_imag
 
 		# prepare the horizon distance factors
 		bank.horizon_factors = dict((row.template_id, sigmasq**.5) for row, sigmasq in zip(bank.sngl_inspiral_table, bank.sigmasq))
