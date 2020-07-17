@@ -56,7 +56,12 @@ def init_plot(figsize):
 	return fig, axes
 
 
-def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, event_chisq = None, sngls = None):
+def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, bankchisq = False, event_snr = None, event_chisq = None, sngls = None):
+	if bankchisq:
+		base = "snr_bankchi"
+	else:
+		base = "snr_chi"
+
 	# also checks that which is an allowed value
 	tag = {
 		"background_pdf": "Noise",
@@ -76,17 +81,17 @@ def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, 
 
 	if which == "background_pdf":
 		# a ln PDF object
-		binnedarray = rankingstat.denominator.densities["%s_snr_chi" % instrument]
+		binnedarray = rankingstat.denominator.densities["%s_%s" % (instrument, base)]
 	elif which == "injection_pdf":
 		# a ln PDF object.  numerator has only one, same for all
 		# instruments
-		binnedarray = rankingstat.numerator.densities["snr_chi"]
+		binnedarray = rankingstat.numerator.densities["%s" % base]
 	elif which == "zero_lag_pdf":
 		# a ln PDF object
-		binnedarray = rankingstat.zerolag.densities["%s_snr_chi" % instrument]
+		binnedarray = rankingstat.zerolag.densities["%s_%s" % (instrument, base)]
 	elif which == "LR":
-		num = rankingstat.numerator.densities["snr_chi"]
-		den = rankingstat.denominator.densities["%s_snr_chi" % instrument]
+		num = rankingstat.numerator.densities["%s" % base]
+		den = rankingstat.denominator.densities["%s_%s" % (instrument, base)]
 		assert num.bins == den.bins
 		binnedarray = num.count.copy()
 		with numpy.errstate(invalid = "ignore"):
@@ -147,24 +152,31 @@ def plot_snr_chi_pdf(rankingstat, instrument, which, snr_max, event_snr = None, 
 	#axes.set_ylim((ylo, yhi))
 	fig.colorbar(mesh, ax = axes)
 	axes.set_xlabel(r"$\mathrm{SNR}$")
-	axes.set_ylabel(r"$\chi^{2} / \mathrm{SNR}^{2}$")
+	if bankchisq:
+		label = "_{\mathrm{bank}}"
+	else:
+		label = ""
 	if tag.lower() in ("signal",):
-		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{%s})$ in %s" % (tag.lower(), instrument))
+		axes.set_title(r"$\ln P(\chi%s^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{%s})$ in %s" % (label, tag.lower(), instrument))
 	elif tag.lower() in ("noise", "candidates"):
-		axes.set_title(r"$\ln P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{%s})$ in %s" % (tag.lower(), instrument))
+		axes.set_title(r"$\ln P(\mathrm{SNR}, \chi%s^{2} / \mathrm{SNR}^{2} | \mathrm{%s})$ in %s" % (label, tag.lower(), instrument))
 	elif tag.lower() in ("lr",):
-		axes.set_title(r"$\ln P(\chi^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi^{2} / \mathrm{SNR}^{2} | \mathrm{noise})$ in %s" % instrument)
+		axes.set_title(r"$\ln P(\chi%s^{2} / \mathrm{SNR}^{2} | \mathrm{SNR}, \mathrm{signal} ) / P(\mathrm{SNR}, \chi%s^{2} / \mathrm{SNR}^{2} | \mathrm{noise})$ in %s" % (label, label, instrument))
 	else:
 		raise ValueError(tag)
 	try:
 		fig.tight_layout(pad = .8)
 	except RuntimeError:
+		if bankchisq:
+			label = "bank"
+		else:
+			label = ""
 		if tag.lower() in ("signal",):
-			axes.set_title("ln P(chi^2 / SNR^2 | SNR, %s) in %s" % (tag.lower(), instrument))
+			axes.set_title("ln P(chi%s^2 / SNR^2 | SNR, %s) in %s" % (label, tag.lower(), instrument))
 		elif tag.lower() in ("noise", "candidates"):
-			axes.set_title("ln P(SNR, chi^2 / SNR^2 | %s) in %s" % (tag.lower(), instrument))
+			axes.set_title("ln P(SNR, chi%s^2 / SNR^2 | %s) in %s" % (label, tag.lower(), instrument))
 		elif tag.lower() in ("lr",):
-			axes.set_title("ln P(chi^2 / SNR^2 | SNR, signal) / P(SNR, chi^2 / SNR^2 | noise) in %s" % instrument)
+			axes.set_title("ln P(chi%s^2 / SNR^2 | SNR, signal) / P(SNR, chi%s^2 / SNR^2 | noise) in %s" % (label, label, instrument))
 		fig.tight_layout(pad = .8)
 	return fig
 

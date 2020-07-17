@@ -114,9 +114,14 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 	snr_min = 4.0
 	chi2_over_snr2_min = 1e-5
 	chi2_over_snr2_max = 1e20
+	bankchi2_over_snr2_min = 1e-5
+	bankchi2_over_snr2_max = 1e20
 
 	# SNR, \chi^2 binning definition
 	snr_chi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
+	snr_bankchi_binning = rate.NDBins((rate.ATanLogarithmicBins(2.6, 26., 300), rate.ATanLogarithmicBins(.001, 0.2, 280)))
+	chi_bankchi_binning = rate.NDBins((rate.ATanLogarithmicBins(.001, 0.2, 280), rate.ATanLogarithmicBins(.001, 0.2, 280)))
+	chi_ratio_binning = rate.NDBins((rate.ATanLogarithmicBins(.001, 0.2, 280), rate.ATanLogarithmicBins(0.1, 10, 280)))
 
 	def __init__(self, template_ids, instruments, delta_t, min_instruments = 2):
 		#
@@ -144,6 +149,11 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		self.densities = {}
 		for instrument in instruments:
 			self.densities["%s_snr_chi" % instrument] = rate.BinnedLnPDF(self.snr_chi_binning)
+			self.densities["%s_snr_bankchi" % instrument] = rate.BinnedLnPDF(self.snr_bankchi_binning)
+			self.densities["%s_chi_bankchi" % instrument] = rate.BinnedLnPDF(self.chi_bankchi_binning)
+			self.densities["%s_chi_ratio" % instrument] = rate.BinnedLnPDF(self.chi_ratio_binning)
+			#FIXME finish method is broken and won't make correct kernel for chi/bankchi or
+			# chi/ratio histograms. This should be fine until we incorporate in LR.
 
 	def __iadd__(self, other):
 		if type(other) != type(self):
@@ -201,6 +211,9 @@ class LnLRDensity(snglcoinc.LnLRDensity):
 		if event.snr < self.snr_min:
 			return
 		self.densities["%s_snr_chi" % event.ifo].count[event.snr, event.chisq / event.snr**2.] += 1.0
+		self.densities["%s_snr_bankchi" % event.ifo].count[event.snr, event.bank_chisq / event.snr**2.] += 1.0
+		self.densities["%s_chi_bankchi" % event.ifo].count[event.chisq / event.snr**2., event.bank_chisq / event.snr**2.] += 1.0
+		self.densities["%s_chi_ratio" % event.ifo].count[event.chisq / event.snr**2., event.bank_chisq / event.chisq] += 1.0
 
 	def copy(self):
 		new = type(self)(self.template_ids, self.instruments, self.delta_t, self.min_instruments)
@@ -921,11 +934,13 @@ class LnNoiseDensity(LnLRDensity):
 		# requested events to this portion of the model
 		arr *= number_of_events / arr.sum()
 
-		for lnpdf in self.densities.values():
-			# add in the noise model
-			lnpdf.array += arr
-			# re-normalize
-			lnpdf.normalize()
+		# FIXME Handle this properly.
+		for key, lnpdf in self.densities.items():
+			if "chi_bankchi" not in key and "chi_ratio" not in key:
+				# add in the noise model
+				lnpdf.array += arr
+				# re-normalize
+				lnpdf.normalize()
 
 	def candidate_count_model(self):
 		"""

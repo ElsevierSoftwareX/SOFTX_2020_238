@@ -60,6 +60,15 @@ for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentH
 	tmps = bank.bank_fragments[0].mix_matrix.shape[1] / 2
 	row = bank.sngl_inspiral_table
 
+	#bc = bank.bank_correlation_matrix
+	#
+	#sngl_inspiral = bank.sngl_inspiral_table
+	#
+	#print "<div>"
+	#pyplot.pcolormesh(abs(bc))
+	#pyplot.savefig(sys.stdout, format="svg")
+	#print "</div>"
+
 	for n in range(tmps):
 		mc, s1z, s2z = row[n].mchirp, row[n].spin1z, row[n].spin2z
 
@@ -79,6 +88,7 @@ for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentH
 			maxrate = max(maxrate, frag.rate)
 			mint = min(t[0], mint)
 		pyplot.xlabel('time (s) mc:%.2f s1z:%.2f s2z:%.2f' % (mc, s1z, s2z))
+		#pyplot.xlabel('time (s) mchirp = %f, number %d' % (sngl_inspiral[n].mchirp, n))
 		#pyplot.xlim([-.25, 0])
 
 		pyplot.subplot(212)
@@ -86,8 +96,10 @@ for bank in svd_bank.read_banks(form.getlist("url")[0], svd_bank.DefaultContentH
 		l = len(bank.autocorrelation_bank[n,:])
 		ts = l / float(maxrate)
 		t = numpy.linspace(-ts, 0, l)
-		pyplot.plot(numpy.real(bank.autocorrelation_bank[n,:]))
-		pyplot.plot(numpy.imag(bank.autocorrelation_bank[n,:]))
+		#pyplot.plot(numpy.real(bank.autocorrelation_bank[n,:]))
+		#pyplot.plot(numpy.imag(bank.autocorrelation_bank[n,:]))
+		pyplot.plot(numpy.real(bank.bank_correlation_matrix[n,:]))
+                pyplot.plot(numpy.imag(bank.bank_correlation_matrix[n,:]))
 		pyplot.savefig(sys.stdout, format="svg")
 		print "</div>"
 

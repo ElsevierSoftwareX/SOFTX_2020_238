@@ -138,6 +138,7 @@ def parse_command_line():
 	parser.add_option("--plot-snr-snr-pdfs", action = "store_true", help = "Plot the full cache of snr-snr-pdfs.")
 	parser.add_option("--event-snr", metavar = "ifo:snr", action = "append", help = "SNR to plot on snr chisq plots. Pass as ifo:snr, e.g. H1:3.2. Can be passed multiple times, though only once for each ifo. Must also pass --event-chisq for ifo.")
 	parser.add_option("--event-chisq", metavar = "ifo:chisq", action = "append", help = "chisq to plot on snr chisq plots. Pass as ifo:chisq, e.g. H1:1.1. Can be passed multiple times, though only once for each ifo. Must also pass --event-snr for ifo.")
+	parser.add_option("--bank-chisq", action = "store_true", help = "If provided, plots bank chisq background instead of chisq.")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose.")
 	options, filenames = parser.parse_args()
 
@@ -350,9 +351,9 @@ for bin_index, rankingstat in enumerate(sorted(rankingstats.values(), key = lamb
 	for instrument in rankingstat.instruments:
 		for snr_chi_type in ("background_pdf", "injection_pdf", "zero_lag_pdf", "LR"):
 			if instrument in options.event_snr_dict.keys():
-				fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, sngls = sngls, event_snr = options.event_snr_dict[instrument], event_chisq = options.event_chisq_dict[instrument])
+				fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, bankchisq = options.bank_chisq, sngls = sngls, event_snr = options.event_snr_dict[instrument], event_chisq = options.event_chisq_dict[instrument])
 			else:
-				fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, sngls = sngls)
+				fig = plotfar.plot_snr_chi_pdf(rankingstat, instrument, snr_chi_type, options.max_snr, bankchisq = options.bank_chisq, sngls = sngls)
 			if fig is None:
 				continue
 			plotname = dagparts.T050017_filename(instrument, "GSTLAL_INSPIRAL_PLOT_BACKGROUND_%s_%04d_%s_SNRCHI2" % (options.user_tag, bin_index, snr_chi_type.upper()), seg, options.output_format, path = options.output_dir)

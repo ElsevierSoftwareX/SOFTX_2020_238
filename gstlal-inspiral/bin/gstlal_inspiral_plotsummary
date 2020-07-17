@@ -509,7 +509,7 @@ SELECT
 	coinc_inspiral.ifos,
 	coinc_event.instruments,
 	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
+		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.bank_chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
 	FROM
 		sngl_inspiral
 		JOIN coinc_event_map ON (
@@ -550,7 +550,7 @@ SELECT
 	coinc_inspiral.ifos,
 	coinc_event.instruments,
 	(SELECT
-		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
+		group_concat(sngl_inspiral.ifo || ":" || sngl_inspiral.snr || ":" || sngl_inspiral.chisq || ":" || sngl_inspiral.bank_chisq || ":" || sngl_inspiral.mass1 || ":" || sngl_inspiral.mass2 || ":" || sngl_inspiral.spin1z || ":" || sngl_inspiral.spin2z, " ")
 	FROM
 		sngl_inspiral
 		JOIN coinc_event_map ON (
@@ -616,10 +616,13 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 			"S_2z",
 			"H1 SNR",
 			"H1 chisq",
+			"H1 bankchisq",
 			"L1 SNR",
 			"L1 chisq",
+			"L1 bankchisq",
 			"V1 SNR",
-			"V1 chisq"
+			"V1 chisq",
+			"V1 bankchisq",
 		]
 		for rank, values in enumerate(candidates, 1):
 			if values[0] is None:
@@ -648,12 +651,12 @@ SELECT distinct_ifos.ifos, count(*) FROM coinc_inspiral JOIN distinct_ifos ON (d
 			row.extend([truncate(float(v), 3) for v in values[5:7]] + list(values[7:9]))
 
 			# populate row with trigger data
-			ifodict = {"H1": ['-', '-'], "L1": ['-', '-'], "V1": ['-', '-']}
+			ifodict = {"H1": ['-', '-', '-'], "L1": ['-', '-', '-'], "V1": ['-', '-', '-']}
 			template_params = ['-'] * 4
 			for ifo_row in values[9].split():
 				ifodata = ifo_row.split(":")
-				ifodict[ifodata[0]] = [truncate(float(v), 3) for v in ifodata[1:3]]
-				template_params = [truncate(float(v), 3) for v in ifodata[3:]]
+				ifodict[ifodata[0]] = [truncate(float(v), 3) for v in ifodata[1:4]]
+				template_params = [truncate(float(v), 3) for v in ifodata[4:]]
 
 			# add template params + SNR/chi^2 for all ifos
 			row.extend(template_params)
@@ -1187,6 +1190,26 @@ WHERE
 			axes.set_xlim((self.snr_min, None))
 			yield fig, "chi2_vs_rho_%s" % instrument, True
 
+			fig, axes = create_plot(r"$\rho$", r"$\chi_\mathrm{bank}^{2}$")
+			axes.set_title(r"$\chi_\mathrm{bank}^{2}$ vs.\ $\rho$ in %s (Closed Box)" % instrument)
+
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].bankveto, 'r.', label = "Inj")
+			axes.loglog(self.background[instrument].snr, self.background[instrument].bankveto, "kx", label = "Background")
+			axes.legend(loc = "upper left")
+			axes.set_xlim((self.snr_min, None))
+			yield fig, "bankchi2_vs_rho_%s" % instrument, False
+
+			fig, axes = create_plot(r"$\rho$", r"$\chi_\mathrm{bank}^{2}$")
+			axes.set_title(r"$\chi_\mathrm{bank}^{2}$ vs.\ $\rho$ in %s" % instrument)
+			axes.loglog(self.injections[instrument].snr, self.injections[instrument].bankveto, 'r.', label = "Inj")
+			axes.loglog(self.background[instrument].snr, self.background[instrument].bankveto, "kx", label = "Background")
+			axes.loglog(self.zerolag[instrument].snr, self.zerolag[instrument].bankveto, "bx", label = "Zero-lag")
+			axes.legend(loc = "upper left")
+			axes.set_xlim((self.snr_min, None))
+			yield fig, "bankchi2_vs_rho_%s" % instrument, True
+
+
+
 			# the following plots require background and injections
 			if self.background[instrument] and self.injections[instrument]:
 				# for the following plots, sort injections by SNR -- descending
@@ -1195,6 +1218,7 @@ WHERE
 				inj_etas = numpy.array(self.injections[instrument].eta)[sortable]
 				inj_snrs = numpy.array(self.injections[instrument].snr)[sortable]
 				inj_chisq = numpy.array(self.injections[instrument].chi2)[sortable]
+				inj_bankchisq = numpy.array(self.injections[instrument].bankveto)[sortable]
 
 				# sort background triggers by SNR -- ascending
 				sortable = numpy.array(self.background[instrument].snr).argsort()
@@ -1202,6 +1226,7 @@ WHERE
 				bg_etas = numpy.array(self.background[instrument].eta)[sortable]
 				bg_snrs = numpy.array(self.background[instrument].snr)[sortable]
 				bg_chisq = numpy.array(self.background[instrument].chi2)[sortable]
+				bg_bankchisq = numpy.array(self.background[instrument].bankveto)[sortable]
 				bg_chieffs = numpy.array(self.background[instrument].chieff)[sortable]
 
 				# mass dependence of chisq
@@ -1212,6 +1237,15 @@ WHERE
 				axes.legend(loc = "upper left")
 				axes.semilogy()
 				yield fig, "chi2_vs_mc_vs_rho_%s" % instrument, False
+
+				# mass dependence of bankchisq
+				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\chi_\mathrm{bank}^{2}/\rho^2$")
+				coll = axes.scatter(inj_mcs, inj_bankchisq / inj_snrs**2, c = inj_snrs, label = "Injections", vmax = 20, linewidth = 0.2, alpha = 0.8)
+				fig.colorbar(coll, ax = axes).set_label("SNR in %s" % instrument)
+				axes.scatter(bg_mcs, bg_bankchisq / bg_snrs**2, edgecolor = 'k', c = bg_snrs, marker = 'x', label = "Background")
+				axes.legend(loc = "upper left")
+				axes.semilogy()
+				yield fig, "bankchi2_vs_mc_vs_rho_%s" % instrument, False
 
 				# background parameter distributions
 				fig, axes = create_plot(r"$M_\mathrm{chirp}$", r"$\eta$")
