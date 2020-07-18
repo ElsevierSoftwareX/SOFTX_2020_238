@@ -76,7 +76,6 @@
 
 
 #include <gstlal_autocorrelation_chi2.h>
-#include <gstlal_peakfinder.h>
 
 /*
  * ============================================================================
