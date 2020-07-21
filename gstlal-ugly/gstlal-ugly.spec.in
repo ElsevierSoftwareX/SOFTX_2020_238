@@ -52,8 +52,10 @@ BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: gtk-doc >= @MIN_GTK_DOC_VERSION@
 BuildRequires: ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@
-BuildRequires: gds-devel >= @MIN_GDS_VERSION@
-BuildRequires: gds-lowlatency >= @MIN_GDS_VERSION@
+BuildRequires: gds-base-devel >= @MIN_GDS_VERSION@
+BuildRequires: gds-lowlatency-devel >= @MIN_GDS_VERSION@
+BuildRequires: gds-crtools >= @MIN_GDS_VERSION@
+BuildRequires: gds-dtt-crtools >= @MIN_GDS_VERSION@
 BuildRequires: nds2-client-devel >= @MIN_NDS_VERSION@
 BuildRequires: nds2-client-headers >= @MIN_NDS_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
