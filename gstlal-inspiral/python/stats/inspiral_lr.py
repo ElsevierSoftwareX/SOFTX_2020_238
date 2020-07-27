@@ -480,6 +480,8 @@ class LnSignalDensity(LnLRDensity):
 		# density estimation code choose a suitable kernel size
 		inspiral_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["snr_chi"], 1e12, prefactors_range, df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
 		self.densities["snr_chi"].normalize()
+		inspiral_extrinsics.NumeratorSNRCHIPDF.add_signal_model(self.densities["snr_bankchi"], 1e12, prefactors_range, df, inv_snr_pow = inv_snr_pow, snr_min = self.snr_min)
+		self.densities["snr_bankchi"].normalize()
 
 	def candidate_count_model(self, rate = 1000.):
 		"""
