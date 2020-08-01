@@ -104,7 +104,7 @@ class Connections:
 		self.verbose = options.verbose
 		for n, database in enumerate(databases):
 			working_filename = dbtables.get_connection_filename(database, tmp_path = options.tmp_space, verbose = self.verbose)
-			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, '%s' % working_filename, sqlite3.connect(str(working_filename)), '%d' % lal.UTCToGPS(gmtime()))
+			self.connection_id_map['connection_id:%d' % n] = namedtuple('ConnectionNamedTuple', 'database, working_filename, connection, process_start_time')('%s' % database, working_filename, sqlite3.connect(str(working_filename)), '%d' % lal.UTCToGPS(gmtime()))
 
 		#
 		# Create dictionaries keyed by the connection_id value set
