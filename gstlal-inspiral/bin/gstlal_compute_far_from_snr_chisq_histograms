@@ -128,7 +128,7 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	if options.verbose:
 		print("%d/%d: %s" % (n, len(options.non_injection_db), filename), file=sys.stderr)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
+	connection = sqlite3.connect(str(working_filename))
 
 	#
 	# update counts
@@ -184,7 +184,7 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 			print("already processed, skipping", file=sys.stderr)
 		continue
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
+	connection = sqlite3.connect(str(working_filename))
 
 	#
 	# record our passage

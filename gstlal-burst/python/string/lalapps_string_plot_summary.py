@@ -497,7 +497,7 @@ if options.detection_threshold is None:
 		if options.verbose:
 			print("%d/%d: %s" % (n + 1, len(filenames), filename), file=sys.stderr)
 		working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-		connection = sqlite3.connect(working_filename)
+		connection = sqlite3.connect(str(working_filename))
 		contents = SnglBurstUtils.CoincDatabase(connection, live_time_program = "StringSearch", search = "StringCusp", veto_segments_name = options.vetoes_name)
 		if options.verbose:
 			SnglBurstUtils.summarize_coinc_database(contents)
@@ -530,7 +530,7 @@ for n, filename in enumerate(injection_filenames):
 	if options.verbose:
 		print("%d/%d: %s" % (n + 1, len(filenames), filename), file=sys.stderr)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
+	connection = sqlite3.connect(str(working_filename))
 	contents = SnglBurstUtils.CoincDatabase(connection, live_time_program = "StringSearch", search = "StringCusp", veto_segments_name = options.vetoes_name)
 	if options.verbose:
 		SnglBurstUtils.summarize_coinc_database(contents)

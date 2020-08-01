@@ -76,7 +76,7 @@ for filename in options.non_injection_db:
 	#
 
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
+	connection = sqlite3.connect(str(working_filename))
 
 	#
 	# assign FAPs and FARs

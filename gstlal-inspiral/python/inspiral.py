@@ -382,7 +382,7 @@ class CoincsDocument(object):
 
 		if url is not None and url.endswith('.sqlite'):
 			self.working_filename = dbtables.get_connection_filename(ligolw_utils.local_path_from_url(url), tmp_path = tmp_path, replace_file = replace_file, verbose = verbose)
-			self.connection = sqlite3.connect(self.working_filename, check_same_thread = False)
+			self.connection = sqlite3.connect(str(self.working_filename), check_same_thread = False)
 			ligolw_sqlite.insert_from_xmldoc(self.connection, self.xmldoc, preserve_ids = False, verbose = verbose)
 
 			#

@@ -115,7 +115,7 @@ class upper_limit(object):
             if opts.verbose:
                 print >> sys.stdout, "\nGathering search data from zero-lag database: %s...." % (f,)
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
-            connection = sqlite3.connect(working_filename)
+            connection = sqlite3.connect(str(working_filename))
 
             # find out which instruments were on and when
             self.get_segments(connection)                   #get single ifo segments with vetoes applied
@@ -138,7 +138,7 @@ class upper_limit(object):
             if opts.verbose:
                 print("Reading results of injection analysis from %s ..."%f)
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
-            connection = sqlite3.connect(working_filename)
+            connection = sqlite3.connect(str(working_filename))
             for inst in self.instrument_combos:
                 self.found_injections_fars.setdefault(inst,[])
                 self.found_injections_snrs.setdefault(inst,[])

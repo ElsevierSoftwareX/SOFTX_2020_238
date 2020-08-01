@@ -239,7 +239,7 @@ def load_search_results(filenames, tmp_path = None, verbose = False):
 		if verbose:
 			print("%d/%d: %s" % (n, len(filenames), filename), file=sys.stderr)
 		working_filename = dbtables.get_connection_filename(filename, tmp_path = tmp_path, verbose = verbose)
-		connection = sqlite3.connect(working_filename)
+		connection = sqlite3.connect(str(working_filename))
 
 		xmldoc = dbtables.get_xml(connection)
 		definer_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(thinca.InspiralCoincDef.search, thinca.InspiralCoincDef.search_coinc_type, create_new = False)

@@ -1813,7 +1813,7 @@ for n, filename in enumerate(filenames):
 	if options.verbose:
 		print >>sys.stderr, "%d/%d: %s" % (n + 1, len(filenames), filename)
 	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(working_filename)
+	connection = sqlite3.connect(str(working_filename))
 	contents = CoincDatabase(connection, options.segments_name, veto_segments_name = options.vetoes_name, verbose = options.verbose, plotsummary_json = os.path.split(filename)[-1].replace(".sqlite","").replace(".tmp",""), base = os.path.join(options.output_dir, options.user_tag), extend_veto_segments = options.extend_veto_segments, shrink_data_segments = options.shrink_data_segments)
 	if contents.sim_inspiral_table is not None:
 		create_sim_coinc_view(connection)

@@ -96,7 +96,7 @@ options, db = parse_command_line()
 
 split_db_name = path.basename(db).split('-')
 working_filename = dbtables.get_connection_filename(db, tmp_path = options.tmp_space, verbose = options.verbose)
-connection = sqlite3.connect(working_filename)
+connection = sqlite3.connect(str(working_filename))
 cursor = connection.cursor()
 original_number_coinc_events = int(cursor.execute('SELECT count(*) FROM coinc_event').fetchone()[0])
 new_number_coinc_events = 0
@@ -106,7 +106,7 @@ sim_id_dict, exact_inj_coinc_def_id, nearby_inj_coinc_def_id, inj_trigger_coinc_
 for i, sim_key in enumerate(sim_id_dict.keys()):
 	if i != 0:
 		working_filename = dbtables.get_connection_filename(db, tmp_path = options.tmp_space, verbose = True)
-		connection = sqlite3.connect(working_filename)
+		connection = sqlite3.connect(str(working_filename))
 		cursor = connection.cursor()
 
 	# register program in process table

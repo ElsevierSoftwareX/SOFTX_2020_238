@@ -141,7 +141,7 @@ class ContentHandler(ligolw.LIGOLWContentHandler):
 
 
 target = dbtables.get_connection_filename(options.database, tmp_path = options.tmp_space if will_use_tmp_space else None, replace_file = will_replace_file, verbose = options.verbose)
-ContentHandler.connection = sqlite3.connect(target)
+ContentHandler.connection = sqlite3.connect(str(target))
 cursor = ContentHandler.connection.cursor()
 
 
@@ -157,7 +157,7 @@ for n, url in enumerate(urls, 1):
 		source_filename = dbtables.get_connection_filename(local_path_from_url(url), tmp_path = options.tmp_space, verbose = options.verbose)
 		if options.verbose:
 			print("reading '%s' ..." % source_filename, file=sys.stderr)
-		xmldoc = dbtables.get_xml(sqlite3.connect(source_filename))
+		xmldoc = dbtables.get_xml(sqlite3.connect(str(source_filename)))
 		ligolw_sqlite.insert_from_xmldoc(ContentHandler.connection, xmldoc, preserve_ids = options.preserve_ids, verbose = options.verbose)
 		xmldoc.unlink()
 		dbtables.discard_connection_filename(local_path_from_url(url), source_filename, verbose = options.verbose)

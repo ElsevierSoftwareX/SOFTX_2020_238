@@ -561,7 +561,7 @@ class DataBaseSummary(object):
 			if verbose:
 				print >> sys.stderr, "Gathering stats from: %s...." % (f,)
 			working_filename = dbtables.get_connection_filename(f, tmp_path = tmp_path, verbose = verbose)
-			connection = sqlite3.connect(working_filename)
+			connection = sqlite3.connect(str(working_filename))
 			xmldoc = dbtables.get_xml(connection)
 
 			sim = False
