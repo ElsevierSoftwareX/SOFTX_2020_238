@@ -99,6 +99,13 @@ except KeyError:
 # =============================================================================
 #
 
+def compute_correlation(htilde1, htilde2, deltaF):
+	"""
+	Find the real component of correlation between htilde1 and htilde2.
+	"""
+	# vdot is dot with complex conjugation
+	return float(numpy.vdot(htilde1,htilde2).real * 4 * deltaF)
+
 def create_FIR_whitener_kernel(length, duration, sample_rate, psd):
 	assert psd
 	#
@@ -231,15 +238,23 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 	parameters['S2y'] = template_bank_row.spin2y
 	parameters['S2z'] = template_bank_row.spin2z
 	parameters['distance'] = 1.e6 * lal.PC_SI
-	parameters['inclination'] = 0.
-	parameters['phiRef'] = 0.
-	parameters['longAscNodes'] = 0.
+	parameters['inclination'] = template_bank_row.alpha3
+	parameters['phiRef'] = template_bank_row.alpha5
+	parameters['longAscNodes'] = template_bank_row.alpha4
 	parameters['eccentricity'] = 0.
 	parameters['meanPerAno'] = 0.
 	parameters['deltaF'] = 1.0 / duration
-	parameters['f_min'] = f_low
+	if approximant in templates.gstlal_prec_approximants:
+		#FIXME The template bank sets flow in the process_params table.
+		# Here we read it from the setting in the Makefile.
+		# For precessing injections, we need to use the same f_low and
+		# f_ref as was used to generate the bank.
+		parameters['f_min'] = f_low
+		parameters['f_ref'] = f_low
+	else:
+		parameters['f_min'] = f_low
+		parameters['f_ref'] = 0.
 	parameters['f_max'] = f_high
-	parameters['f_ref'] = 0.
 	parameters['LALparams'] = None
 	parameters['approximant'] = lalsim.GetApproximantFromString(str(approximant))
 
@@ -259,7 +274,18 @@ def generate_template(template_bank_row, approximant, sample_rate, duration, f_l
 		fseries.data.data = numpy.zeros(fseries.data.length)
 		fseries.data.data[:hplus.data.length] = hplus.data.data[:]
 		hplus = fseries
-	return hplus
+		fseries = lal.CreateCOMPLEX16FrequencySeries(
+			name = hcross.name,
+			epoch = hcross.epoch,
+			f0 = hcross.f0,
+			deltaF = hcross.deltaF,
+			length = int(round(sample_rate * duration))//2 +1,
+			sampleUnits = hcross.sampleUnits
+		)
+		fseries.data.data = numpy.zeros(fseries.data.length)
+		fseries.data.data[:hcross.data.length] = hcross.data.data[:]
+		hcross = fseries
+	return hplus, hcross
 
 
 def condition_imr_template(approximant, data, epoch_time, sample_rate_max, max_ringtime):
@@ -501,9 +527,9 @@ class templates_workspace(object):
 		#assert template_table_row in self.template_table, "The input Sngl_Inspiral:Table is not found in the workspace."
 
 		# Create template
-		fseries = generate_template(template_table_row, self.approximant, self.sample_rate_max, self.working_duration, self.f_low, self.fhigh, fwdplan = self.fwdplan, fworkspace = self.fworkspace)
+		plus, cross = generate_template(template_table_row, self.approximant, self.sample_rate_max, self.working_duration, self.f_low, self.fhigh, fwdplan = self.fwdplan, fworkspace = self.fworkspace)
 
-		if FIR_WHITENER:
+		if FIR_WHITENER: #FIXME This needs to be changed to be applicable to precessing systems
 			#
 			# Compute a product of freq series of the whitening kernel and the template (convolution in time domain) then add quadrature phase
 			#
@@ -516,8 +542,38 @@ class templates_workspace(object):
 			#
 
 			if self.psd is not None:
-				lal.WhitenCOMPLEX16FrequencySeries(fseries, self.psd)
-				fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, self.working_length)
+				#lal.WhitenCOMPLEX16FrequencySeries(fseries, self.psd)
+				#fseries = templates.QuadraturePhase.add_quadrature_phase(fseries, self.working_length)
+				lal.WhitenCOMPLEX16FrequencySeries(plus, self.psd)
+				lal.WhitenCOMPLEX16FrequencySeries(cross, self.psd)
+
+				assert len(plus.data.data) == len(cross.data.data) # hp and hc have same length
+
+				# positive frequencies include Nyquist if n is even
+				have_nyquist = not (self.working_length % 2)
+
+				pos_freqs_p = numpy.array(plus.data.data) # work with copy
+				pos_freqs_c = numpy.array(cross.data.data) # work with copy
+				pos_freqs_p[0] = 0 # set DC to zero
+				pos_freqs_c[0] = 0 # set DC to zero
+
+				zeros = numpy.zeros((len(pos_freqs_p),), dtype = "cdouble")
+
+				if have_nyquist:
+					# complex transform never includes positive Nyquist
+					pos_freqs_p = pos_freqs_p[:-1]
+					pos_freqs_c = pos_freqs_c[:-1]
+
+				# prepare output frequency series
+				fseries = lal.CreateCOMPLEX16FrequencySeries(
+					name = plus.name,
+					epoch = plus.epoch,
+					f0 = plus.f0,        # caution: only 0 is supported
+					deltaF = plus.deltaF,
+					sampleUnits = plus.sampleUnits,
+					length = len(zeros) + len(pos_freqs_p) - 1
+					)
+				fseries.data.data = numpy.concatenate((zeros, pos_freqs_p[1:]-1.j*pos_freqs_c[1:]))
 
 		#
 		# compute time-domain autocorrelation function
@@ -604,6 +660,7 @@ class templates_workspace(object):
 
 def generate_templates(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = None, fhigh = None, verbose = False):
 	# Create workspace for making template bank
+	#duration = max(time_slices["end"])
 	workspace = templates_workspace(template_table, approximant, psd, f_low, time_slices, autocorrelation_length = autocorrelation_length, fhigh = fhigh)
 
 	# Check parity of autocorrelation length
@@ -665,8 +722,9 @@ def generate_templates(template_table, approximant, psd, f_low, time_slices, aut
 			# normalization of the basis vectors used for
 			# filtering but it ensures that the chifacs values
 			# have the correct relative normalization.
-			template_bank[j][(2*i+0),:] = template.real[end_index:begin_index:stride] * math.sqrt(stride)
-			template_bank[j][(2*i+1),:] = template.imag[end_index:begin_index:stride] * math.sqrt(stride)
+			hphccorr = compute_correlation(template.real[end_index:begin_index:stride], template.imag[end_index:begin_index:stride], 1.0/row.template_duration)
+			template_bank[j][(2*i+0),:] = template.real[end_index:begin_index:stride]  * math.sqrt(stride)
+			template_bank[j][(2*i+1),:] = (template.imag[end_index:begin_index:stride] - hphccorr * template.real[end_index:begin_index:stride]) * math.sqrt(stride)/(math.sqrt(1-hphccorr**2))
 
 	return template_bank, autocorrelation_bank, autocorrelation_mask, sigmasq, workspace
 

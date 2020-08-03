@@ -51,7 +51,6 @@ def parse_command_line():
 	parser = OptionParser(description = __doc__)
 	parser.add_option("--reference-psd-cache", metavar = "filename", help = "Set the reference psd cache file.")
 	parser.add_option("--injection-file", metavar = "filename", help = "Set the injection xml file.")
-	parser.add_option("--flow", metavar = "value", type = "float", help = "Set the low frequency for waveform generation and SNR integral.")
         parser.add_option("--fmax", metavar = "value", type = "float",default=1600, help = "Set the max frequency for waveform generation and SNR integral.Default 1600Hz")
 	parser.add_option("--npool", metavar = "value", type = "int", default = 2, help = "Set value for pool. Number of parallel sub-processes")
 
@@ -62,9 +61,6 @@ def parse_command_line():
 
 	if options.injection_file is None:
 		raise ValueError("Must specify --injection-file")
-
-	if options.flow is None:
-		raise ValueError("Must specify --flow")
 
 	return options, filenames
 
@@ -99,10 +95,8 @@ def calc_expected_snr(inj):
         if approximant == lalsimulation.NR_hdf5:
                 LALparams = lal.CreateDict()
                 lalsimulation.SimInspiralWaveformParamsInsertNumRelData(LALparams, str(inj.numrel_data))
-                f_min = inj.f_lower
         else:
                 LALparams = None
-                f_min = options.flow
         
 	h_plus, h_cross = lalsimulation.SimInspiralTD(
 		m1 = inj.mass1*lal.MSUN_SI,
@@ -120,7 +114,7 @@ def calc_expected_snr(inj):
 		eccentricity = 0.0,
 		meanPerAno = 0.0,
 		deltaT = 1.0 / sample_rate,
-		f_min = f_min,
+		f_min = inj.f_lower,
 		f_ref = 0.0,
 		LALparams = LALparams,
 		approximant = approximant
@@ -129,12 +123,15 @@ def calc_expected_snr(inj):
 	h_plus.epoch += injtime
 	h_cross.epoch += injtime
 
+	h_plus.sampleUnits = lal.StrainUnit # hack since not all wf give correct time series units
+	h_cross.sampleUnits = lal.StrainUnit # hack since not all wf give correct time series units
+
 	# Compute strain in each detector. If one detector wasn't on, snr will be set to zero.
 	for instrument in snr:
 		if instrument not in chosenPSD:
 			continue
 		h = lalsimulation.SimDetectorStrainREAL8TimeSeries(h_plus, h_cross, inj.longitude, inj.latitude, inj.polarization, lalsimulation.DetectorPrefixToLALDetector(instrument))
-		snr[instrument] = lalsimulation.MeasureSNR(h, chosenPSD[instrument], options.flow, options.fmax)
+		snr[instrument] = lalsimulation.MeasureSNR(h, chosenPSD[instrument], inj.f_lower, options.fmax)
 
 	return snr
 

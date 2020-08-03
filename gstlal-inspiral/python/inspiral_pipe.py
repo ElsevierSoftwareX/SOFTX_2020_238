@@ -759,10 +759,9 @@ def expected_snr_layer(dag, jobs, ref_psd_parent_nodes, options, num_split_inj_s
 		for injection_file in injection_files:
 			injSNRnode = dagparts.DAGNode(jobs['gstlalInjSnr'], dag, parent_nodes=ref_psd_parent_nodes + [inj_splitter_node],
 				# FIXME somehow choose the actual flow based on mass?
-				# max(flow) is chosen for performance not
-				# correctness hopefully though it will be good
-				# enough
-				opts = {"flow":max(options.flow),"fmax":options.fmax},
+				# flow is now chosen from the f_lower column
+				# in the injection xml and may not match the search flow
+				opts = {"fmax":options.fmax},
 				input_files = {
 					"injection-file": injection_file,
 					"reference-psd-cache": "reference_psd.cache"
