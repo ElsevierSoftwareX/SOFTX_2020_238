@@ -1393,7 +1393,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		act_line_removal_dict["tstexc_linefreq"][0] = tstexc_at_esd_act_freq
 		act_line_removal_dict["tstexc_linefreq"][4] = True
 
-	# Take the ratio X_T = Pcal(f_T) / DARM_ERR(f_T)
+	# Take the ratio X_T = TST_exc(f_T) / DARM_ERR(f_T)
 	X_T = calibration_parts.complex_division(pipeline, tstexc_at_esd_act_freq, derr_at_esd_act_freq)
 
 	# Now the gating and smoothing
@@ -1413,7 +1413,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		act_line_removal_dict["pumexc_linefreq"][0] = pumexc_at_pum_act_freq
 		act_line_removal_dict["pumexc_linefreq"][4] = True
 
-	# Take the ratio X_P = Pcal(f_P) / DARM_ERR(f_P)
+	# Take the ratio X_P = PUM_exc(f_P) / DARM_ERR(f_P)
 	X_P = calibration_parts.complex_division(pipeline, pumexc_at_pum_act_freq, derr_at_pum_act_freq)
 
 	# Now the gating and smoothing
@@ -1433,7 +1433,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		act_line_removal_dict["uimexc_linefreq"][0] = uimexc_at_uim_act_freq
 		act_line_removal_dict["uimexc_linefreq"][4] = True
 
-	# Take the ratio X_U = Pcal(f_U) / DARM_ERR(f_U)
+	# Take the ratio X_U = UIM_exc(f_U) / DARM_ERR(f_U)
 	X_U = calibration_parts.complex_division(pipeline, uimexc_at_uim_act_freq, derr_at_uim_act_freq)
 
 	# Now the gating and smoothing
@@ -1450,7 +1450,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		freq_list = [act_pcal_line_freq, opt_gain_fcc_line_freq, esd_act_line_freq, pum_act_line_freq, uim_act_line_freq]
 		EPICS_list = [EP11_real, EP11_imag, EP25_real, EP25_imag, EP26_real, EP26_imag, EP27_real, EP27_imag, EP6_real, EP6_imag, EP28_real, EP28_imag, EP29_real, EP29_imag, EP30_real, EP30_imag, EP31_real, EP31_imag, EP32_real, EP32_imag, EP33_real, EP33_imag, EP34_real, EP34_imag, EP35_real, EP35_imag, EP36_real, EP36_imag, EP37_real, EP37_imag, EP38_real, EP38_imag, EP39_real, EP39_imag, EP40_real, EP40_imag, EP41_real, EP41_imag, EP42_real, EP42_imag]
 
-		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list, compute_factors_sr)
+		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list, compute_factors_sr, default_fcc = fcc_default, default_fs_squared = fs_squared_default, default_fs_over_Q = numpy.real(pow(fs_squared_default, 0.5) / srcQ_default))
 
 	#else: use non-existent channels in the raw frames
 

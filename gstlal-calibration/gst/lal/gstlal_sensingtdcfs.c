@@ -144,10 +144,10 @@ static void set_metadata(GSTLALSensingTDCFs *element, GstBuffer *buf, guint64 ou
 
 
 #define DEFINE_KAPPA_C_0(DTYPE, F_OR_NOT) \
-DTYPE kappa_C_0_ ## DTYPE(DTYPE Gres1_real, DTYPE Gres1_imag, DTYPE Gres2_real, DTYPE Gres2_imag, DTYPE Y1_real, DTYPE Y1_imag, DTYPE Y2_real, DTYPE Y2_imag, DTYPE f1, DTYPE f2) { \
+void kappa_C_0_ ## DTYPE(DTYPE Gres1_real, DTYPE Gres1_imag, DTYPE Gres2_real, DTYPE Gres2_imag, DTYPE Y1_real, DTYPE Y1_imag, DTYPE Y2_real, DTYPE Y2_imag, DTYPE f1, DTYPE f2, DTYPE *kc1, DTYPE *kc2, DTYPE *kc3, DTYPE *kc4) { \
  \
-	DTYPE H1, H2, I1, I2, Xi, Zeta, a, b, c, d, e, Delta0, Delta1, p, q, R0; \
-	complex DTYPE Q0, S0; \
+	DTYPE H1, H2, I1, I2, Xi, Zeta, a, b, c, d, e, Delta0, Delta1, p, q; \
+	complex DTYPE Q0, S0, complex_kc1, complex_kc2, complex_kc3, complex_kc4; \
 	H1 = f1 * f1 * (Gres1_real - Y1_real); \
 	H2 = f2 * f2 * (Gres2_real - Y2_real); \
 	I1 = f1 * f1 * (Gres1_imag - Y1_imag); \
@@ -165,11 +165,24 @@ DTYPE kappa_C_0_ ## DTYPE(DTYPE Gres1_real, DTYPE Gres1_imag, DTYPE Gres2_real, 
 	q = (pow ## F_OR_NOT(b, 3) - 4 * a * b * c + 8 * a * a * d) / (8 * pow ## F_OR_NOT(a, 3)); \
 	Q0 = cpow ## F_OR_NOT(0.5 * ((complex DTYPE) Delta1 + cpow ## F_OR_NOT((complex DTYPE) (Delta1 * Delta1 - 4 * pow ## F_OR_NOT(Delta0, 3)), 0.5)), 1.0 / 3.0); \
 	S0 = 0.5 * cpow ## F_OR_NOT((-2 * p) / 3.0 + (Q0 + Delta0 / Q0) / (3 * a), 0.5); \
-	R0 = pow ## F_OR_NOT(b, 3) + 8 * d * a * a - 4 * a * b * c; \
-	if(R0 <= 0.0) \
-		return creal ## F_OR_NOT(-b / (4 * a) - S0 + 0.5 * cpow ## F_OR_NOT(-4 * S0 * S0 - 2 * p + q / S0, 0.5)); \
-	else \
-		return creal ## F_OR_NOT(-b / (4 * a) + S0 + 0.5 * cpow ## F_OR_NOT(-4 * S0 * S0 - 2 * p - q / S0, 0.5)); \
+ \
+	complex_kc1 = -b / (4 * a) + S0 + 0.5 * cpow ## F_OR_NOT(-4 * S0 * S0 - 2 * p - q / S0, 0.5); \
+	complex_kc2 = -b / (4 * a) + S0 - 0.5 * cpow ## F_OR_NOT(-4 * S0 * S0 - 2 * p - q / S0, 0.5); \
+	complex_kc3 = -b / (4 * a) - S0 + 0.5 * cpow ## F_OR_NOT(-4 * S0 * S0 - 2 * p + q / S0, 0.5); \
+	complex_kc4 = -b / (4 * a) - S0 - 0.5 * cpow ## F_OR_NOT(-4 * S0 * S0 - 2 * p + q / S0, 0.5); \
+ \
+	/* Any solution that is clearly complex or negative is not the solution we want */ \
+	if(creal ## F_OR_NOT(complex_kc1) > 0.0 && fabs ## F_OR_NOT(cimag ## F_OR_NOT(complex_kc1) / creal ## F_OR_NOT(complex_kc1)) < 1e-3) \
+		*kc1 = creal ## F_OR_NOT(complex_kc1); \
+ \
+	if(creal ## F_OR_NOT(complex_kc2) > 0.0 && fabs ## F_OR_NOT(cimag ## F_OR_NOT(complex_kc2) / creal ## F_OR_NOT(complex_kc2)) < 1e-3) \
+		*kc2 = creal ## F_OR_NOT(complex_kc2); \
+	if(creal ## F_OR_NOT(complex_kc3) > 0.0 && fabs ## F_OR_NOT(cimag ## F_OR_NOT(complex_kc3) / creal ## F_OR_NOT(complex_kc3)) < 1e-3) \
+		*kc3 = creal ## F_OR_NOT(complex_kc3); \
+	if(creal ## F_OR_NOT(complex_kc4) > 0.0 && fabs ## F_OR_NOT(cimag ## F_OR_NOT(complex_kc4) / creal ## F_OR_NOT(complex_kc4)) < 1e-3) \
+		*kc4 = creal ## F_OR_NOT(complex_kc4); \
+ \
+	return; \
 }
 
 
@@ -223,6 +236,84 @@ DTYPE f_s_over_Q_0_ ## DTYPE(DTYPE Gres1_real, DTYPE Y1_real, DTYPE f1, DTYPE ka
 
 DEFINE_FS_OVER_Q_0(float);
 DEFINE_FS_OVER_Q_0(double);
+
+
+#define DEFINE_FIND_BEST_SOLUTION(DTYPE, F_OR_NOT) \
+guint find_best_solution_ ## DTYPE(DTYPE kc1, DTYPE kc2, DTYPE kc3, DTYPE kc4, DTYPE fcc1, DTYPE fcc2, DTYPE fcc3, DTYPE fcc4, DTYPE fs_squared1, DTYPE fs_squared2, DTYPE fs_squared3, DTYPE fs_squared4, DTYPE fs_over_Q1, DTYPE fs_over_Q2, DTYPE fs_over_Q3, DTYPE fs_over_Q4, DTYPE f1, DTYPE f2, DTYPE complex tdep_sensing_at_f1, complex DTYPE tdep_sensing_at_f2, DTYPE default_fcc) { \
+ \
+	/*
+	 * In general, more than one of the four solutions can be correct.  This is because
+	 * the variable gain of the sensing function is kappa_C / f_s^2, and there are 3
+	 * time-dependent poles, which depend on f_cc, f_s, and Q.  The algorithm does not
+	 * care which variable name is assigned to which pole or how the gain is
+	 * distributed, but we need to care because there is a physical meaning to each
+	 * variable.  We require that:
+	 * 1. kappa_C > 0
+	 * 2. f_cc is the highest-frequency pole of the sensing function.
+	 * Of the remaining solutions, we choose the one with the smallest RMS error at
+	 * the two Pcal line frequencies.  Errors can be caused by numerical instabilities
+	 * or by the fact that some solutions may not be physically correct.
+	 */ \
+	DTYPE error1, error2, error3, error4, lowest_error = 2.0; \
+	complex DTYPE fs1, fs2, fs3, fs4, Qinv1, Qinv2, Qinv3, Qinv4; \
+	guint best_solution = 0; \
+	/* Condition 1 */ \
+	if(kc1 > 0) { \
+		fs1 = cpow ## F_OR_NOT((complex DTYPE) fs_squared1, 0.5); \
+		Qinv1 = fs_over_Q1 / fs1; \
+		/* Condition 2 */ \
+		if(fcc1 > cabs ## F_OR_NOT(fs1 / 2 * (Qinv1 + cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv1, 2) + 4, 0.5))) && fcc1 > cabs ## F_OR_NOT(fs1 / 2 * (Qinv1 - cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv1, 2) + 4, 0.5)))) { \
+			error1 = cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f1 / fcc1) / kc1) * ((f1 * f1 + fs_squared1 - I * f1 * fs_over_Q1) / (f1 * f1)) / tdep_sensing_at_f1 - 1), 2); \
+			error1 += cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f2 / fcc1) / kc1) * ((f2 * f2 + fs_squared1 - I * f2 * fs_over_Q1) / (f2 * f2)) / tdep_sensing_at_f2 - 1), 2); \
+			if(error1 < lowest_error) { \
+				lowest_error = error1; \
+				best_solution = 1; \
+			} \
+		} \
+	} \
+	if(kc2 > 0) { \
+		fs2 = cpow ## F_OR_NOT((complex DTYPE) fs_squared2, 0.5); \
+		Qinv2 = fs_over_Q2 / fs2; \
+		if(fcc2 > cabs ## F_OR_NOT(fs2 / 2 * (Qinv2 + cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv2, 2) + 4, 0.5))) && fcc2 > cabs ## F_OR_NOT(fs2 / 2 * (Qinv2 - cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv2, 2) + 4, 0.5)))) { \
+			error2 = cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f1 / fcc2) / kc2) * ((f1 * f1 + fs_squared2 - I * f1 * fs_over_Q2) / (f1 * f1)) / tdep_sensing_at_f1 - 1), 2); \
+			error2 += cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f2 / fcc2) / kc2) * ((f2 * f2 + fs_squared2 - I * f2 * fs_over_Q2) / (f2 * f2)) / tdep_sensing_at_f2 - 1), 2); \
+			if(error2 < lowest_error) { \
+				lowest_error = error2; \
+				best_solution = 2; \
+			} \
+		} \
+	} \
+	if(kc3 > 0) { \
+		fs3 = cpow ## F_OR_NOT((complex DTYPE) fs_squared3, 0.5); \
+		Qinv3 = fs_over_Q3 / fs3; \
+		if(fcc3 > cabs ## F_OR_NOT(fs3 / 2 * (Qinv3 + cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv3, 2) + 4, 0.5))) && fcc3 > cabs ## F_OR_NOT(fs3 / 2 * (Qinv3 - cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv3, 2) + 4, 0.5)))) { \
+			error3 = cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f1 / fcc3) / kc3) * ((f1 * f1 + fs_squared3 - I * f1 * fs_over_Q3) / (f1 * f1)) / tdep_sensing_at_f1 - 1), 2); \
+			error3 += cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f2 / fcc3) / kc3) * ((f2 * f2 + fs_squared3 - I * f2 * fs_over_Q3) / (f2 * f2)) / tdep_sensing_at_f2 - 1), 2); \
+			if(error3 < lowest_error) { \
+				lowest_error = error3; \
+				best_solution = 3; \
+			} \
+		} \
+	} \
+	if(kc4 > 0) { \
+		fs4 = cpow ## F_OR_NOT((complex DTYPE) fs_squared4, 0.5); \
+		Qinv4 = fs_over_Q4 / fs4; \
+		if(fcc4 > cabs ## F_OR_NOT(fs4 / 2 * (Qinv4 + cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv4, 2) + 4, 0.5))) && fcc4 > cabs ## F_OR_NOT(fs4 / 2 * (Qinv4 - cpow ## F_OR_NOT(cpow ## F_OR_NOT(Qinv4, 2) + 4, 0.5)))) { \
+			error4 = cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f1 / fcc4) / kc4) * ((f1 * f1 + fs_squared4 - I * f1 * fs_over_Q4) / (f1 * f1)) / tdep_sensing_at_f1 - 1), 2); \
+			error4 += cpow ## F_OR_NOT(cabs ## F_OR_NOT(((1 + I * f2 / fcc4) / kc4) * ((f2 * f2 + fs_squared4 - I * f2 * fs_over_Q4) / (f2 * f2)) / tdep_sensing_at_f2 - 1), 2); \
+			if(error4 < lowest_error) { \
+				lowest_error = error4; \
+				best_solution = 4; \
+			} \
+		} \
+	} \
+ \
+	return best_solution; \
+}
+
+
+DEFINE_FIND_BEST_SOLUTION(float, f);
+DEFINE_FIND_BEST_SOLUTION(double, );
 
 
 /*
@@ -286,7 +377,7 @@ static GstCaps *transform_caps(GstBaseTransform *trans, GstPadDirection directio
 				if(channels_out_min >= 5)
 					/* Then we know there must be 5 on the sink pad */
 					gst_structure_set(str, "channels", G_TYPE_INT, 5, NULL);
-				else if(channels_out_max <=5)
+				else if(channels_out_max <= 4)
 					/* Then we know there must be 4 on the sink pad */
 					gst_structure_set(str, "channels", G_TYPE_INT, 4, NULL);
 				else
@@ -495,7 +586,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	case GST_PAD_SRC:
 		/*
 		 * We know the size of the output buffer and want to compute the size of the input buffer.
-		 * The size of the output buffer should be a multiple of the unit_size.
+		 * The size of the output buffer should be a multiple of unit_size_out.
 		 */
 
 		if(G_UNLIKELY(size % element->unit_size_out)) {
@@ -510,7 +601,7 @@ static gboolean transform_size(GstBaseTransform *trans, GstPadDirection directio
 	case GST_PAD_SINK:
 		/*
 		 * We know the size of the input buffer and want to compute the size of the output buffer.
-		 * The size of the output buffer should be a multiple of unit_size * (N+1).
+		 * The size of the input buffer should be a multiple of unit_size_in.
 		 */
 
 		if(G_UNLIKELY(size % element->unit_size_in)) {
@@ -599,19 +690,83 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			guint64 i, samples = outmap.size / element->unit_size_out;
 			float f1 = (float) element->freq1;
 			float f2 = (float) element->freq2;
-			float kappa_C, f_cc;
+			float kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4;
+			guint best_solution;
+
+			/*
+			 * kappa_C is the solution of a quartic equation, so there are 4 solutions
+			 * for kappa_C, but only one is correct.  For each solution, a different
+			 * value for fcc, fs, and Q will be computed, and the correct solution
+			 * will be determined at the end.
+			 */
+			kappa_C1 = kappa_C2 = kappa_C3 = kappa_C4 = f_cc1 = f_cc2 = f_cc3 = f_cc4 = 0.0;
 			switch(element->sensing_model) {
 			case 0: ;
-				float f_s_squared, f_s_over_Q;
+				f_s_squared1 = f_s_squared2 = f_s_squared3 = f_s_squared4 = f_s_over_Q1 = f_s_over_Q2 = f_s_over_Q3 = f_s_over_Q4 = 0.0;
 				for(i = 0; i < samples; i++) {
-					kappa_C = kappa_C_0_float(crealf(indata[4 * i]), cimagf(indata[4 * i]), crealf(indata[4 * i + 1]), cimagf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), cimagf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), cimagf(indata[4 * i + 3]), f1, f2);
-					f_cc = f_cc_0_float(cimagf(indata[4 * i]), cimagf(indata[4 * i + 1]), cimagf(indata[4 * i + 2]), cimagf(indata[4 * i + 3]), f1, f2, kappa_C);
-					f_s_squared = f_s_squared_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), f1, f2, kappa_C);
-					f_s_over_Q = f_s_over_Q_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 2]), f1, kappa_C, f_cc, f_s_squared);
-					outdata[4 * i] = kappa_C;
-					outdata[4 * i + 1] = f_cc;
-					outdata[4 * i + 2] = f_s_squared;
-					outdata[4 * i + 3] = f_s_over_Q;
+					kappa_C_0_float(crealf(indata[4 * i]), cimagf(indata[4 * i]), crealf(indata[4 * i + 1]), cimagf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), cimagf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), cimagf(indata[4 * i + 3]), f1, f2, &kappa_C1, &kappa_C2, &kappa_C3, &kappa_C4);
+
+					/* Only compute f_cc, f_s, and Q if we have to. */
+					if(kappa_C1 != 0.0) {
+						f_cc1 = f_cc_0_float(cimagf(indata[4 * i]), cimagf(indata[4 * i + 1]), cimagf(indata[4 * i + 2]), cimagf(indata[4 * i + 3]), f1, f2, kappa_C1);
+						f_s_squared1 = f_s_squared_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), f1, f2, kappa_C1);
+						f_s_over_Q1 = f_s_over_Q_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 2]), f1, kappa_C1, f_cc1, f_s_squared1);
+					}
+
+					if(kappa_C2 != 0.0) {
+						f_cc2 = f_cc_0_float(cimagf(indata[4 * i]), cimagf(indata[4 * i + 1]), cimagf(indata[4 * i + 2]), cimagf(indata[4 * i + 3]), f1, f2, kappa_C2);
+						f_s_squared2 = f_s_squared_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), f1, f2, kappa_C2);
+						f_s_over_Q2 = f_s_over_Q_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 2]), f1, kappa_C2, f_cc2, f_s_squared2);
+					}
+
+					if(kappa_C3 != 0.0) {
+						f_cc3 = f_cc_0_float(cimagf(indata[4 * i]), cimagf(indata[4 * i + 1]), cimagf(indata[4 * i + 2]), cimagf(indata[4 * i + 3]), f1, f2, kappa_C3);
+						f_s_squared3 = f_s_squared_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), f1, f2, kappa_C3);
+						f_s_over_Q3 = f_s_over_Q_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 2]), f1, kappa_C3, f_cc3, f_s_squared3);
+					}
+
+					if(kappa_C4 != 0.0) {
+						f_cc4 = f_cc_0_float(cimagf(indata[4 * i]), cimagf(indata[4 * i + 1]), cimagf(indata[4 * i + 2]), cimagf(indata[4 * i + 3]), f1, f2, kappa_C4);
+						f_s_squared4 = f_s_squared_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), f1, f2, kappa_C4);
+						f_s_over_Q4 = f_s_over_Q_0_float(crealf(indata[4 * i]), crealf(indata[4 * i + 2]), f1, kappa_C4, f_cc4, f_s_squared4);
+					}
+
+					/* Determine which solution is correct. */
+					best_solution = find_best_solution_float(kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4, f1, f2, indata[4 * i + 2] - indata[4 * i], indata[4 * i + 3] - indata[4 * i + 1], (float) element->default_fcc);
+
+					switch(best_solution) {
+					case 1:
+						outdata[4 * i] = kappa_C1;
+						outdata[4 * i + 1] = f_cc1;
+						outdata[4 * i + 2] = f_s_squared1;
+						outdata[4 * i + 3] = f_s_over_Q1;
+						break;
+					case 2:
+						outdata[4 * i] = kappa_C2;
+						outdata[4 * i + 1] = f_cc2;
+						outdata[4 * i + 2] = f_s_squared2;
+						outdata[4 * i + 3] = f_s_over_Q2;
+						break;
+					case 3:
+						outdata[4 * i] = kappa_C3;
+						outdata[4 * i + 1] = f_cc3;
+						outdata[4 * i + 2] = f_s_squared3;
+						outdata[4 * i + 3] = f_s_over_Q3;
+						break;
+					case 4:
+						outdata[4 * i] = kappa_C4;
+						outdata[4 * i + 1] = f_cc4;
+						outdata[4 * i + 2] = f_s_squared4;
+						outdata[4 * i + 3] = f_s_over_Q4;
+						break;
+					default:
+						GST_WARNING_OBJECT(element, "Unable to find a solution for sensing function TDCFs");
+						outdata[4 * i] = 1.0;
+						outdata[4 * i + 1] = (float) element->default_fcc;
+						outdata[4 * i + 2] = (float) element->default_fs_squared;
+						outdata[4 * i + 3] = (float) element->default_fs_over_Q;
+						break;
+					}
 				}
 				break;
 			case 1:
@@ -629,19 +784,83 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 			guint64 i, samples = outmap.size / element->unit_size_out;
 			double f1 = element->freq1;
 			double f2 = element->freq2;
-			double kappa_C, f_cc;
+			double kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4;
+			guint best_solution;
+
+			/*
+			 * kappa_C is the solution of a quartic equation, so there are 4 solutions
+			 * for kappa_C, but only one is correct.  For each solution, a different
+			 * value for fcc, fs, and Q will be computed, and the correct solution
+			 * will be determined at the end.
+			 */
+			kappa_C1 = kappa_C2 = kappa_C3 = kappa_C4 = f_cc1 = f_cc2 = f_cc3 = f_cc4 = 0.0;
 			switch(element->sensing_model) {
 			case 0: ;
-				double f_s_squared, f_s_over_Q;
+				f_s_squared1 = f_s_squared2 = f_s_squared3 = f_s_squared4 = f_s_over_Q1 = f_s_over_Q2 = f_s_over_Q3 = f_s_over_Q4 = 0.0;
 				for(i = 0; i < samples; i++) {
-					kappa_C = kappa_C_0_double(crealf(indata[4 * i]), cimagf(indata[4 * i]), crealf(indata[4 * i + 1]), cimagf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), cimagf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), cimagf(indata[4 * i + 3]), f1, f2);
-					f_cc = f_cc_0_double(cimagf(indata[4 * i]), cimagf(indata[4 * i + 1]), cimagf(indata[4 * i + 2]), cimagf(indata[4 * i + 3]), f1, f2, kappa_C);
-					f_s_squared = f_s_squared_0_double(crealf(indata[4 * i]), crealf(indata[4 * i + 1]), crealf(indata[4 * i + 2]), crealf(indata[4 * i + 3]), f1, f2, kappa_C);
-					f_s_over_Q = f_s_over_Q_0_double(crealf(indata[4 * i]), crealf(indata[4 * i + 2]), f1, kappa_C, f_cc, f_s_squared);
-					outdata[4 * i] = kappa_C;
-					outdata[4 * i + 1] = f_cc;
-					outdata[4 * i + 2] = f_s_squared;
-					outdata[4 * i + 3] = f_s_over_Q;
+					kappa_C_0_double(creal(indata[4 * i]), cimag(indata[4 * i]), creal(indata[4 * i + 1]), cimag(indata[4 * i + 1]), creal(indata[4 * i + 2]), cimag(indata[4 * i + 2]), creal(indata[4 * i + 3]), cimag(indata[4 * i + 3]), f1, f2, &kappa_C1, &kappa_C2, &kappa_C3, &kappa_C4);
+
+					/* Only compute f_cc, f_s, and Q if we have to. */
+					if(kappa_C1 != 0.0) {
+						f_cc1 = f_cc_0_double(cimag(indata[4 * i]), cimag(indata[4 * i + 1]), cimag(indata[4 * i + 2]), cimag(indata[4 * i + 3]), f1, f2, kappa_C1);
+						f_s_squared1 = f_s_squared_0_double(creal(indata[4 * i]), creal(indata[4 * i + 1]), creal(indata[4 * i + 2]), creal(indata[4 * i + 3]), f1, f2, kappa_C1);
+						f_s_over_Q1 = f_s_over_Q_0_double(creal(indata[4 * i]), creal(indata[4 * i + 2]), f1, kappa_C1, f_cc1, f_s_squared1);
+					}
+
+					if(kappa_C2 != 0.0) {
+						f_cc2 = f_cc_0_double(cimag(indata[4 * i]), cimag(indata[4 * i + 1]), cimag(indata[4 * i + 2]), cimag(indata[4 * i + 3]), f1, f2, kappa_C2);
+						f_s_squared2 = f_s_squared_0_double(creal(indata[4 * i]), creal(indata[4 * i + 1]), creal(indata[4 * i + 2]), creal(indata[4 * i + 3]), f1, f2, kappa_C2);
+						f_s_over_Q2 = f_s_over_Q_0_double(creal(indata[4 * i]), creal(indata[4 * i + 2]), f1, kappa_C2, f_cc2, f_s_squared2);
+					}
+
+					if(kappa_C3 != 0.0) {
+						f_cc3 = f_cc_0_double(cimag(indata[4 * i]), cimag(indata[4 * i + 1]), cimag(indata[4 * i + 2]), cimag(indata[4 * i + 3]), f1, f2, kappa_C3);
+						f_s_squared3 = f_s_squared_0_double(creal(indata[4 * i]), creal(indata[4 * i + 1]), creal(indata[4 * i + 2]), creal(indata[4 * i + 3]), f1, f2, kappa_C3);
+						f_s_over_Q3 = f_s_over_Q_0_double(creal(indata[4 * i]), creal(indata[4 * i + 2]), f1, kappa_C3, f_cc3, f_s_squared3);
+					}
+
+					if(kappa_C4 != 0.0) {
+						f_cc4 = f_cc_0_double(cimag(indata[4 * i]), cimag(indata[4 * i + 1]), cimag(indata[4 * i + 2]), cimag(indata[4 * i + 3]), f1, f2, kappa_C4);
+						f_s_squared4 = f_s_squared_0_double(creal(indata[4 * i]), creal(indata[4 * i + 1]), creal(indata[4 * i + 2]), creal(indata[4 * i + 3]), f1, f2, kappa_C4);
+						f_s_over_Q4 = f_s_over_Q_0_double(creal(indata[4 * i]), creal(indata[4 * i + 2]), f1, kappa_C4, f_cc4, f_s_squared4);
+					}
+
+					/* Determine which solution is correct. */
+					best_solution = find_best_solution_double(kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4, f1, f2, indata[4 * i + 2] - indata[4 * i], indata[4 * i + 3] - indata[4 * i + 1], element->default_fcc);
+
+					switch(best_solution) {
+					case 1:
+						outdata[4 * i] = kappa_C1;
+						outdata[4 * i + 1] = f_cc1;
+						outdata[4 * i + 2] = f_s_squared1;
+						outdata[4 * i + 3] = f_s_over_Q1;
+						break;
+					case 2:
+						outdata[4 * i] = kappa_C2;
+						outdata[4 * i + 1] = f_cc2;
+						outdata[4 * i + 2] = f_s_squared2;
+						outdata[4 * i + 3] = f_s_over_Q2;
+						break;
+					case 3:
+						outdata[4 * i] = kappa_C3;
+						outdata[4 * i + 1] = f_cc3;
+						outdata[4 * i + 2] = f_s_squared3;
+						outdata[4 * i + 3] = f_s_over_Q3;
+						break;
+					case 4:
+						outdata[4 * i] = kappa_C4;
+						outdata[4 * i + 1] = f_cc4;
+						outdata[4 * i + 2] = f_s_squared4;
+						outdata[4 * i + 3] = f_s_over_Q4;
+						break;
+					default:
+						GST_WARNING_OBJECT(element, "Unable to find a solution for sensing function TDCFs");
+						outdata[4 * i] = 1.0;
+						outdata[4 * i + 1] = element->default_fcc;
+						outdata[4 * i + 2] = element->default_fs_squared;
+						outdata[4 * i + 3] = element->default_fs_over_Q;
+						break;
+					}
 				}
 				break;
 			case 1:
@@ -698,7 +917,10 @@ enum property {
 	ARG_SENSING_MODEL = 1,
 	ARG_FREQ1,
 	ARG_FREQ2,
-	ARG_FREQ4
+	ARG_FREQ4,
+	ARG_DEFAULT_FCC,
+	ARG_DEFAULT_FS_SQUARED,
+	ARG_DEFAULT_FS_OVER_Q
 };
 
 
@@ -720,6 +942,15 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	case ARG_FREQ4:
 		element->freq4 = g_value_get_double(value);
+		break;
+	case ARG_DEFAULT_FCC:
+		element->default_fcc = g_value_get_double(value);
+		break;
+	case ARG_DEFAULT_FS_SQUARED:
+		element->default_fs_squared = g_value_get_double(value);
+		break;
+	case ARG_DEFAULT_FS_OVER_Q:
+		element->default_fs_over_Q = g_value_get_double(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -748,6 +979,15 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_FREQ4:
 		g_value_set_double(value, element->freq4);
+		break;
+	case ARG_DEFAULT_FCC:
+		g_value_set_double(value, element->default_fcc);
+		break;
+	case ARG_DEFAULT_FS_SQUARED:
+		g_value_set_double(value, element->default_fs_over_Q);
+		break;
+	case ARG_DEFAULT_FS_OVER_Q:
+		g_value_set_double(value, element->default_fs_over_Q);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -853,6 +1093,39 @@ static void gstlal_sensingtdcfs_class_init(GSTLALSensingTDCFsClass *klass)
 			"Frequency 4",
 			"Fourth Pcal line frequency, typically around 10 Hz.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, G_MAXDOUBLE,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DEFAULT_FCC,
+		g_param_spec_double(
+			"default-fcc",
+			"Default fcc",
+			"Default value of the coupled cavity pole frequency in Hz.",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 400.0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DEFAULT_FS_SQUARED,
+		g_param_spec_double(
+			"default-fs-squared",
+			"Default fs squared",
+			"Default value of the squared frequency of the SRC optical spring in Hz^2.",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_DEFAULT_FS_OVER_Q,
+		g_param_spec_double(
+			"default-fs-over-Q",
+			"Default fs over Q",
+			"Default value of the SRC optical spring frequency in Hz divided by the quality factor.",
+			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);

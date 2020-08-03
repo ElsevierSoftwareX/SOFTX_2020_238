@@ -1094,7 +1094,7 @@ def compute_kappaa(pipeline, afctrl, EP4, EP5):
 
 	return ka
 
-def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
+def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate, default_fcc = 400, default_fs_squared = 1.0, default_fs_over_Q = 1.0):
 
 	#
 	# See P1900052, Section 5.2.6 for details.  All constants are contained in the list
@@ -1134,8 +1134,8 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 	for j in range(num_stages):
 		factor1 = pow(freqs[0], -2) - pow(freqs[2 + j], -2)
 		factor2 = pow(freqs[2 + j], -2) - pow(freqs[1], -2)
-		factor3 = pow(freqs[0], 2) - pow(freqs[2 + j], 2)
-		factor4 = freqs[0] * (freqs[2 + j] - freqs[1])
+		factor3 = freqs[1] * (pow(freqs[0], 2) - pow(freqs[2 + j], 2))
+		factor4 = freqs[0] * (pow(freqs[2 + j], 2) - pow(freqs[1], 2))
 		Vj = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yreal[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), factor1), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yreal[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), factor2)))
 		Vj = pipeparts.mkcapsfilter(pipeline, Vj, "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate)
 		Vjplus3 = mkadder(pipeline, list_srcs(pipeline, pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yimag[1], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), factor3), pipeparts.mkaudioamplify(pipeline, pipeparts.mkcapsfilter(pipeline, Yimag[0], "audio/x-raw,format=F64LE,rate=%d,channel-mask=(bitmask)0x0,channels=1" % rate), factor4)))
@@ -1209,7 +1209,7 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate):
 		Gres.append(mkadder(pipeline, Gres_components))
 
 	sensing_inputs = mkinterleave(pipeline, Gres + Y, complex_data = True)
-	sensing_outputs = pipeparts.mkgeneric(pipeline, sensing_inputs, "lal_sensingtdcfs", sensing_model = 0, freq1 = freqs[0], freq2 = freqs[1])
+	sensing_outputs = pipeparts.mkgeneric(pipeline, sensing_inputs, "lal_sensingtdcfs", sensing_model = 0, freq1 = freqs[0], freq2 = freqs[1], default_fcc = default_fcc, default_fs_squared = default_fs_squared, default_fs_over_Q = default_fs_over_Q)
 	sensing_outputs = list(mkdeinterleave(pipeline, sensing_outputs, 4))
 
 	kappas += sensing_outputs
