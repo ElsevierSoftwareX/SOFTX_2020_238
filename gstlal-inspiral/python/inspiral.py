@@ -842,9 +842,6 @@ class GracedBWrapper(object):
 
 			# get background bin from SnglInspiral objects while they're still available
 			background_bin = int(sngl_inspiral_table[0].Gamma1)
-			# translate IDs from integers to ilwd:char for
-			# backwards compatibility
-			ilwdify.do_it_to(xmldoc)
 
 			# serialize to XML
 			ligolw_utils.write_fileobj(xmldoc, message, gz = False)
