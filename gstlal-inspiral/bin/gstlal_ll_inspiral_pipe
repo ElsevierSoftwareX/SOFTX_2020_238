@@ -87,7 +87,7 @@ def set_up_jobs(options):
 		jobs['gstlalInspiralInj'] = dagparts.DAGJob('gstlal_inspiral', tag_base = "gstlal_inspiral_inj", condor_commands = inspiral_condor_commands)
 
 	# A local universe job that will run in a loop marginalizing all of the likelihoods
-	jobs['marg'] = dagparts.DAGJob('gstlal_inspiral_marginalize_likelihoods_online', universe = "local", condor_commands = local_condor_commands)
+	jobs['marg'] = dagparts.DAGJob('gstlal_inspiral_marginalize_likelihoods_online', condor_commands = non_inspiral_condor_commands)
 
 	if options.delay_uploads:
 		# event plotter that works in tandem with the event uploader
