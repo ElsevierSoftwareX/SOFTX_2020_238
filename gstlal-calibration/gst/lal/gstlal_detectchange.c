@@ -217,146 +217,146 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf) {
 	GstMapInfo mapinfo;
 	GstFlowReturn result = GST_FLOW_OK;
 
-	GST_BUFFER_FLAG_UNSET(buf, GST_BUFFER_FLAG_GAP);
+	if(!GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_GAP)) {
 
-	gst_buffer_map(buf, &mapinfo, GST_MAP_READWRITE);
+		gst_buffer_map(buf, &mapinfo, GST_MAP_READWRITE);
 
-	if(element->data_type == GSTLAL_DETECTCHANGE_F32) {
+		if(element->data_type == GSTLAL_DETECTCHANGE_F32) {
 
-		gfloat *addr, *end;
-		g_assert(mapinfo.size % sizeof(gfloat) == 0);
-		addr = (gfloat *) mapinfo.data;
-		end = (gfloat *) (mapinfo.data + mapinfo.size);
-		while(addr < end) {
-			element->current_average += *addr++;
-			element->num_in_average++;
-			if(element->num_in_average >= element->average_samples) {
+			gfloat *addr, *end;
+			g_assert(mapinfo.size % sizeof(gfloat) == 0);
+			addr = (gfloat *) mapinfo.data;
+			end = (gfloat *) (mapinfo.data + mapinfo.size);
+			while(addr < end) {
+				element->current_average += *addr++;
+				element->num_in_average++;
+				if(element->num_in_average >= element->average_samples) {
 
-				element->current_average /= element->average_samples;
-				complex double diff = element->current_average - element->last_average;
+					element->current_average /= element->average_samples;
+					complex double diff = element->current_average - element->last_average;
 
-				/* Check for detection of a change. */
-				if(element->have_data && cabs(diff) >= element->detection_threshold) {
-					if(element->filename) {
-						FILE *fp;
-						fp = fopen(element->filename, "a");
-						g_fprintf(fp, "%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
-						fclose(fp);
-					} else
-						g_print("%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
+					/* Check for detection of a change. */
+					if(element->have_data && cabs(diff) >= element->detection_threshold) {
+						if(element->filename) {
+							FILE *fp;
+							fp = fopen(element->filename, "a");
+							g_fprintf(fp, "%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
+							fclose(fp);
+						} else
+							g_print("%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
 
+					}
+
+					/* Reset element for the next average. */
+					element->num_in_average = 0;
+					element->last_average = element->current_average;
+					element->current_average = 0.0;
+					element->have_data = TRUE;
 				}
-
-				/* Reset element for the next average. */
-				element->num_in_average = 0;
-				element->last_average = element->current_average;
-				element->current_average = 0.0;
-				element->have_data = TRUE;
 			}
-		}
 
-	} else if(element->data_type == GSTLAL_DETECTCHANGE_F64) {
+		} else if(element->data_type == GSTLAL_DETECTCHANGE_F64) {
 
-		gdouble *addr, *end;
-		g_assert(mapinfo.size % sizeof(gdouble) == 0);
-		addr = (gdouble *) mapinfo.data;
-		end = (gdouble *) (mapinfo.data + mapinfo.size);
-		while(addr < end) {
-			element->current_average += *addr++;
-			element->num_in_average++;
-			if(element->num_in_average >= element->average_samples) {
-				
-				element->current_average /= element->average_samples;
-				complex double diff = element->current_average - element->last_average;
-				
-				/* Check for detection of a change. */
-				if(element->have_data && cabs(diff) >= element->detection_threshold) {
-					if(element->filename) {
-						FILE *fp;
-						fp = fopen(element->filename, "a");
-						g_fprintf(fp, "%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
-						fclose(fp);
-					} else
-						g_print("%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
+			gdouble *addr, *end;
+			g_assert(mapinfo.size % sizeof(gdouble) == 0);
+			addr = (gdouble *) mapinfo.data;
+			end = (gdouble *) (mapinfo.data + mapinfo.size);
+			while(addr < end) {
+				element->current_average += *addr++;
+				element->num_in_average++;
+				if(element->num_in_average >= element->average_samples) {
+
+					element->current_average /= element->average_samples;
+					complex double diff = element->current_average - element->last_average;
+
+					/* Check for detection of a change. */
+					if(element->have_data && cabs(diff) >= element->detection_threshold) {
+						if(element->filename) {
+							FILE *fp;
+							fp = fopen(element->filename, "a");
+							g_fprintf(fp, "%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
+							fclose(fp);
+						} else
+							g_print("%s detected change at %10.2f: %e\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff));
+					}
+
+					/* Reset element for the next average. */
+					element->num_in_average = 0;
+					element->last_average = element->current_average;
+					element->current_average = 0.0;
+					element->have_data = TRUE;
 				}
-
-				/* Reset element for the next average. */
-				element->num_in_average = 0;
-				element->last_average = element->current_average;
-				element->current_average = 0.0;
-				element->have_data = TRUE;
 			}
-		}
 
-	} else if(element->data_type == GSTLAL_DETECTCHANGE_Z64) {
+		} else if(element->data_type == GSTLAL_DETECTCHANGE_Z64) {
 
-		complex float *addr, *end;
-		g_assert(mapinfo.size % sizeof(complex float) == 0);
-		addr = (complex float *) mapinfo.data;
-		end = (complex float *) (mapinfo.data + mapinfo.size);
-		while(addr < end) {
-			element->current_average += *addr++;
-			element->num_in_average++;
-			if(element->num_in_average >= element->average_samples) {
-				
-				element->current_average /= element->average_samples;
-				complex double diff = element->current_average - element->last_average;
-				
-				/* Check for detection of a change. */
-				if(element->have_data && cabs(diff) >= element->detection_threshold) {
-					if(element->filename) {
-						FILE *fp;
-						fp = fopen(element->filename, "a");
-						g_fprintf(fp, "%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
-						fclose(fp);
-					} else
-						g_print("%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
+			complex float *addr, *end;
+			g_assert(mapinfo.size % sizeof(complex float) == 0);
+			addr = (complex float *) mapinfo.data;
+			end = (complex float *) (mapinfo.data + mapinfo.size);
+			while(addr < end) {
+				element->current_average += *addr++;
+				element->num_in_average++;
+				if(element->num_in_average >= element->average_samples) {
+
+					element->current_average /= element->average_samples;
+					complex double diff = element->current_average - element->last_average;
+
+					/* Check for detection of a change. */
+					if(element->have_data && cabs(diff) >= element->detection_threshold) {
+						if(element->filename) {
+							FILE *fp;
+							fp = fopen(element->filename, "a");
+							g_fprintf(fp, "%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
+							fclose(fp);
+						} else
+							g_print("%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
+					}
+					/* Reset element for the next average. */
+					element->num_in_average = 0;
+					element->last_average = element->current_average;
+					element->current_average = 0.0;
+					element->have_data = TRUE;
 				}
-				/* Reset element for the next average. */
-				element->num_in_average = 0;
-				element->last_average = element->current_average;
-				element->current_average = 0.0;
-				element->have_data = TRUE;
 			}
-		}
 
-	} else if(element->data_type == GSTLAL_DETECTCHANGE_Z128) {
+		} else if(element->data_type == GSTLAL_DETECTCHANGE_Z128) {
 
-		complex double *addr, *end;
-		g_assert(mapinfo.size % sizeof(complex double) == 0);
-		addr = (complex double *) mapinfo.data;
-		end = (complex double *) (mapinfo.data + mapinfo.size);
-		while(addr < end) {
-			element->current_average += *addr++;
-			element->num_in_average++;
-			if(element->num_in_average >= element->average_samples) {
-				
-				element->current_average /= element->average_samples;
-				complex double diff = element->current_average - element->last_average;
-				
-				/* Check for detection of a change. */
-				if(element->have_data && cabs(diff) >= element->detection_threshold) {
-					if(element->filename) {
-						FILE *fp;
-						fp = fopen(element->filename, "a");
-						g_fprintf(fp, "%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
-						fclose(fp);
-					} else
-						g_print("%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
+			complex double *addr, *end;
+			g_assert(mapinfo.size % sizeof(complex double) == 0);
+			addr = (complex double *) mapinfo.data;
+			end = (complex double *) (mapinfo.data + mapinfo.size);
+			while(addr < end) {
+				element->current_average += *addr++;
+				element->num_in_average++;
+				if(element->num_in_average >= element->average_samples) {
+
+					element->current_average /= element->average_samples;
+					complex double diff = element->current_average - element->last_average;
+
+					/* Check for detection of a change. */
+					if(element->have_data && cabs(diff) >= element->detection_threshold) {
+						if(element->filename) {
+							FILE *fp;
+							fp = fopen(element->filename, "a");
+							g_fprintf(fp, "%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
+							fclose(fp);
+						} else
+							g_print("%s detected change at %10.2f: %e + %ei\n", GST_OBJECT(element)->name, GST_BUFFER_PTS(buf) / 1.0e9, creal(diff), cimag(diff));
+					}
+					/* Reset element for the next average. */
+					element->num_in_average = 0;
+					element->last_average = element->current_average;
+					element->current_average = 0.0;
+					element->have_data = TRUE;
 				}
-				/* Reset element for the next average. */
-				element->num_in_average = 0;
-				element->last_average = element->current_average;
-				element->current_average = 0.0;
-				element->have_data = TRUE;
 			}
-		}
 
-	} else {
-		g_assert_not_reached();
+		} else
+			g_assert_not_reached();
+
+		gst_buffer_unmap(buf, &mapinfo);
 	}
-
-	gst_buffer_unmap(buf, &mapinfo);
 
 	return result;
 }

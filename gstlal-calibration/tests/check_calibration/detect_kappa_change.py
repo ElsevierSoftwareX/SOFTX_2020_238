@@ -53,9 +53,11 @@ parser.add_option("--gps-start-time", metavar = "seconds", type = int, help = "G
 parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS time at which to stop processing data")
 parser.add_option("--ifo", metavar = "name", type = str, help = "Name of the interferometer (IFO), e.g., H1, L1")
 parser.add_option("--frame-cache", metavar = "name", type = str, help = "Name of frame cache file that contains the data")
-parser.add_option("--channel-list", metavar = "list", type = str, default = 'DCS-CALIB_KAPPA_TST_IMAGINARY,DCS-CALIB_KAPPA_PUM_IMAGINARY,DCS-CALIB_KAPPA_UIM_IMAGINARY', help = "Comma-separated list of channel-names to read in from the frames")
+parser.add_option("--channel-list", metavar = "list", type = str, default = 'DCS-CALIB_KAPPA_TST_IMAGINARY_C01,DCS-CALIB_KAPPA_PUM_IMAGINARY_C01,DCS-CALIB_KAPPA_UIM_IMAGINARY_C01', help = "Comma-separated list of channel-names to read in from the frames")
+parser.add_option("--statevector-channel", metavar = "name", type = str, default = None, help = "Name of state vector channel used to gate the data.  If not set, data is not gated.")
+parser.add_option("--statevector-bitmask", type = int, default = 1, help = "Bitmask used to determine which bits of the state vector must be on for the data to not be gated.")
 parser.add_option("--sample-rate", metavar = "Hz", type = int, default = 16, help = "Sample rate of the channels")
-parser.add_option("--average-time", metavar = "seconds", type = float, default = 1024, help = "Duration (in seconds) of data to average before checking for changes")
+parser.add_option("--average-time", metavar = "seconds", type = float, default = 14400, help = "Duration (in seconds) of data to average before checking for changes")
 parser.add_option("--detection-threshold", type = float, default = 0.01, help = "Minimum magnitude of difference needed for detection.  Channels are summed before checking for changes.")
 parser.add_option("--filename", metavar = "name", type = str, default = None, help = "Name of file in which to write output.  If not given, no file is written")
 
@@ -67,6 +69,8 @@ channel_list = options.channel_list.split(',')
 ifo_channel_list = []
 for chan in channel_list:
 	ifo_channel_list.append((options.ifo, chan))
+if options.statevector_channel is not None:
+	ifo_channel_list.append((options.ifo, options.statevector_channel))
 
 # 
 # =============================================================================
@@ -89,10 +93,17 @@ def detect_change(pipeline, name):
 
 	streams = []
 	for chan in channel_list:
-		streams.append(calibration_parts.hook_up(pipeline, data, chan, options.ifo, 1.0))
+		stream = calibration_parts.hook_up(pipeline, data, chan, options.ifo, 64.0)
+		streams.append(stream)
 	summed_streams = calibration_parts.mkadder(pipeline, streams)
-	summed_streams = pipeparts.mkgeneric(pipeline, summed_streams, "splitcounter")
+
+	if options.statevector_channel is not None:
+		state_vector = calibration_parts.hook_up(pipeline, data, options.statevector_channel, options.ifo, 64.0)
+		state_vector = pipeparts.mkgeneric(pipeline, state_vector, "lal_logicalundersample", required_on = 1)
+		summed_streams = calibration_parts.mkgate(pipeline, summed_streams, state_vector, threshold = 1.0)
+
 	summed_streams = pipeparts.mkgeneric(pipeline, summed_streams, "lal_detectchange", average_samples = int(options.average_time * options.sample_rate), detection_threshold = options.detection_threshold, filename = options.filename)
+	pipeparts.mkfakesink(pipeline, summed_streams)
 
 	#
 	# done

@@ -4,11 +4,11 @@
 #################################
 
 # which interferometer (H or L)
-IFO = L
+IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1267749760 | bc)
+START = $(shell echo 1237831461 | bc)
 #1239997514 roaming line change
 # 1238108418 start L1 pcal2darm for paper
 # 1269021699 start of H1 BB injection for paper (178 s)
@@ -155,7 +155,7 @@ DCS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'GDS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'C00,TEST' --pcal-time-advance 0.00006103515625
 
 detect_actuation_timing_change: $(IFO)1_C01_frames.cache
-	python3 detect_kappa_change.py --gps-start-time $(START) --gps-end-time $(END) --ifo $(IFO)1 --frame-cache $(IFO)1_C01_frames.cache
+	python3 detect_kappa_change.py --gps-start-time $(START) --gps-end-time $(END) --ifo $(IFO)1 --frame-cache $(IFO)1_C01_frames.cache --statevector-channel DCS-CALIB_STATE_VECTOR_C01 filename $(IFO)_actuation_timing_changes_$(START)-$(END).txt
 
 actuation_timing_plot: 
 	#$(IFO)1_easy_raw_frames.cache $(IFO)1_realKappas_frames.cache $(IFO)1_complexKappas_frames.cache
