@@ -41,6 +41,7 @@ matplotlib.rcParams['legend.fontsize'] = 20
 matplotlib.rcParams['mathtext.default'] = 'regular'
 import glob
 import matplotlib.pyplot as plt
+from ticks_and_grid import ticks_and_grid
 
 from optparse import OptionParser, Option
 import configparser
@@ -282,7 +283,7 @@ def pcal2darm(pipeline, name):
 test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
 
 # Read data from files and plot it
-colors = ['r', 'g', 'y', 'c', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['tomato', 'green', 'mediumblue', 'c', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
 channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):
@@ -316,31 +317,29 @@ for i in range(0, len(frequencies)):
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
 	if options.show_stats:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f, \sigma = %0.3f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_')))
 	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
-	plt.ylim(float(magnitude_range.split(',')[0]), float(magnitude_range.split(',')[1]))
-	plt.grid(True)
-	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
-	leg.get_frame().set_alpha(0.5)
+	ticks_and_grid(plt.gca(), ymin = float(magnitude_range.split(',')[0]), ymax = float(magnitude_range.split(',')[1]))
+	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
+	leg.get_frame().set_alpha(0.8)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 	if options.show_stats:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(phases[0]), numpy.std(phases[0])))
+		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(phases[0]), numpy.std(phases[0])))
 	else:
 		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_')))
-	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
-	leg.get_frame().set_alpha(0.5)
+	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
+	leg.get_frame().set_alpha(0.8)
 	if i == 0:
 		plt.ylabel(r'${\rm Phase \  [deg]}$')
 	if len(frequencies) < 3 or i == int((len(frequencies) - 0.1) / 2.0):
 		plt.xlabel(r'${\rm Time \  in \  %s \  since \  %s \  UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
-	plt.ylim(float(phase_range.split(',')[0]), float(phase_range.split(',')[1]))
-	plt.grid(True)
+	ticks_and_grid(plt.gca(), ymin = float(phase_range.split(',')[0]), ymax = float(phase_range.split(',')[1]))
 	for j in range(1, len(channels)):
 		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 		magnitudes.append([])
@@ -350,18 +349,18 @@ for i in range(0, len(frequencies)):
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
 		if options.show_stats:
-			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.4f, \sigma = %0.4f]$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f, \sigma = %0.3f]$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
 		else:
 			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
-		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
-		leg.get_frame().set_alpha(0.5)
+		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
+		leg.get_frame().set_alpha(0.8)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 		if options.show_stats:
-			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f^{\circ}, \sigma = %0.3f^{\circ}]$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[j]), numpy.std(phases[j])))
+			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[j]), numpy.std(phases[j])))
 		else:
 			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
-		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3)
-		leg.get_frame().set_alpha(0.5)
+		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
+		leg.get_frame().set_alpha(0.8)
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.pdf" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
 

@@ -8,10 +8,13 @@ IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
 OBSRUN = O3
 
-START = $(shell echo 1267948818 | bc)
+START = $(shell echo 1268963218 | bc)
 #1239997514 roaming line change
-END = $(shell echo 1267950818 | bc)
-
+# 1268963218 start pcal2darm for paper
+# 1269021699 start of BB injection for paper (178 s)
+# 1269020000 - 1269022600
+END = $(shell echo 1268985618 | bc)
+# 1268985618 end pcal2darm for paper
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
 PLOT_WARMUP_TIME = 256
@@ -23,6 +26,9 @@ GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1265142330_no_response_corr_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1256655618_v2_test.ini
+SCALAR_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_SCALAR_CORR.ini
+FCC_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_FCC_CORR.ini
+ALL_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_ALL_CORR.ini
 EXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_exactKappas_1239472998.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 #../../config_files/O2/H1/tests/H1DCS_AllCorrections_Cleaning.ini
@@ -36,7 +42,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: noise_subtraction_ASD_DCS filters_tf_DCS DCS_pcal2darm_plots
+all: TDCFs_pcal2darm_plots
 #DCS_BB_injection_plots
 
 ###############################################
@@ -102,17 +108,17 @@ $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS-*.gwf | lalapps_path2cache > $@
 
-$(IFO)1_hoft_DCS_realKappas_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
-	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSREALKAPPASCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_REALKAPPASTEST-12520884*.gwf | lalapps_path2cache > $@
+$(IFO)1_SCALAR_CORR_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(SCALAR_CORR_CONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_SCALAR_CORR-*.gwf | lalapps_path2cache > $@
 
-$(IFO)1_hoft_DCS_realKappasSRC_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
-	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSREALKAPPASSRCCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_REALKAPPASSRCTEST-*.gwf | lalapps_path2cache > $@
+$(IFO)1_FCC_CORR_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(FCC_CORR_CONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_FCC_CORR-*.gwf | lalapps_path2cache > $@
 
-$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
-	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(EXACTKAPPASCONFIGS)
-	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_exactKappas-*.gwf | lalapps_path2cache > $@
+$(IFO)1_ALL_CORR_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(ALL_CORR_CONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_ALL_CORR-*.gwf | lalapps_path2cache > $@
 
 # In case we want to compare one calibration to another...
 $(IFO)1_hoft_GDS_TEST_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
@@ -152,11 +158,14 @@ GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 DCS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C00_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'GDS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'C00,TEST' --pcal-time-advance 0.00006103515625
 
+TDCFs_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_SCALAR_CORR_frames.cache $(IFO)1_FCC_CORR_frames.cache $(IFO)1_ALL_CORR_frames.cache
+	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_SCALAR_CORR_frames.cache,$(IFO)1_FCC_CORR_frames.cache,$(IFO)1_ALL_CORR_frames.cache' --config-file '$(ALL_CORR_CONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'Scalars,Cavity Pole,All' --pcal-time-advance 0.00006103515625 --show-stats
+
 pcal_GDS_transfer_functions: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 	python3 plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-PCALY_RX_PD_OUT_DQ --denominator-correction y_arm_pcal_corr --numerator-correction arm_length --frequency-max 400 --numerator-frame-cache-list $(IFO)1_hoft_GDS_frames.cache --numerator-channel-list GDS-CALIB_STRAIN --config-file $(GDSCONFIGS) --use-median --labels GDS_NO_TDCFs
 
-pcal_DCS_transfer_functions: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_hoft_DCS_TEST_frames.cache $(IFO)1_hoft_DCS_realKappas_frames.cache $(IFO)1_hoft_DCS_realKappasSRC_frames.cache $(IFO)1_C00_frames.cache
-	python3 plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-PCALY_RX_PD_OUT_DQ --denominator-correction y_arm_pcal_corr --numerator-correction arm_length --frequency-max 400 --numerator-frame-cache-list $(IFO)1_hoft_DCS_realKappas_frames.cache,$(IFO)1_hoft_DCS_realKappasSRC_frames.cache,$(IFO)1_hoft_DCS_frames.cache,$(IFO)1_hoft_DCS_TEST_frames.cache,$(IFO)1_C00_frames.cache --numerator-channel-list DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,GDS-CALIB_STRAIN --config-file $(DCSCONFIGS) --use-median --labels 'Real kappas,Real kappas + SRC,Complex kappas,Complex kappas + SRC,C00'
+pcal_DCS_transfer_functions: $(IFO)1_SCALAR_CORR_frames.cache $(IFO)1_FCC_CORR_frames.cache $(IFO)1_ALL_CORR_frames.cache
+	python3 plot_transfer_function.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --denominator-frame-cache $(IFO)1_easy_raw_frames.cache --denominator-channel-name CAL-PCALY_RX_PD_OUT_DQ --denominator-correction y_arm_pcal_corr --numerator-correction arm_length --frequency-max 400 --numerator-frame-cache-list $(IFO)1_SCALAR_CORR_frames.cache,$(IFO)1_FCC_CORR_frames.cache,$(IFO)1_ALL_CORR_frames.cache --numerator-channel-list DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN --config-file $(ALL_CORR_CONFIGS) --use-median --labels 'Scalars,Cavity Pole,All'
 
 GDS_BB_injection_plots: filters framesdir BB_inj_dir BB_plots_dir
 	python3 plot_BB_injections.py --ifo $(IFO) --obs-run $(OBSRUN) --check-directory BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_INJ_PATH)/$($(OBSRUN)_$(IFO)1_BB_INJ_DIR) --plots-directory BB_injections/$(OBSRUN)/$(IFO)1/$($(OBSRUN)_$(IFO)1_BB_PLOTS_PATH)/$($(OBSRUN)_$(IFO)1_BB_PLOTS_DIR) --update-svn --cal-versions R,HOFT_C00
@@ -167,8 +176,7 @@ DCS_BB_injection_plots: filters framesdir BB_inj_dir BB_plots_dir
 lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 	python3 demod_ratio_timeseries.py --ifo $(IFO)1 --gps-end-time $(PLOT_END) --gps-start-time $(PLOT_START) --denominator-frame-cache $(IFO)1_hoft_DCS_frames.cache --numerator-frame-cache $(IFO)1_hoft_DCS_frames.cache --denominator-channel-name 'DCS-CALIB_STRAIN' --numerator-channel-name 'DCS-CALIB_STRAIN_CLEAN' --frequencies '15.6,16.4,17.1,17.6,410.3,1083.7;2001.3,2501.3' --magnitude-ranges '0.0,1.1;0.0,1.1' --phase-ranges '-180.0,180.0;-180.0,180.0' --plot-titles '$(IFO)1 Calibration Line Subtraction;$(IFO)1 Roaming Line Subtraction'
 
-filters_tf_GDS: 
-	#$(IFO)1_hoft_GDS_frames.cache
+filters_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 	python3 plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.95 --ratio-magnitude-max 1.05 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -3 --ratio-phase-max 3
 
 filters_tf_DCS: $(IFO)1_hoft_DCS_frames.cache
@@ -206,6 +214,13 @@ DCS_over_C02: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C02_frames.cache
 
 kappastimeseries_GDS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	python3 timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_GDS_frames.cache --channel-list 'GDS-CALIB_KAPPA_TST_REAL_NOGATE','GDS-CALIB_KAPPA_TST_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_PUM_REAL_NOGATE','GDS-CALIB_KAPPA_PUM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_UIM_REAL_NOGATE','GDS-CALIB_KAPPA_UIM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_C_NOGATE','GDS-CALIB_F_CC_NOGATE' --raw-channel-list 'CAL-CS_TDEP_KAPPA_TST_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_TST_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_C_OUTPUT','CAL-CS_TDEP_F_C_OUTPUT' --raw-frame-cache $(IFO)1_easy_raw_frames.cache
+
+kappastimeseries: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C01_frames.cache
+	python3 frame_manipulator.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_C01_frames.cache --output-path txt --channel-list 'DCS-CALIB_KAPPA_TST_REAL_C01,DCS-CALIB_KAPPA_TST_IMAGINARY_C01,DCS-CALIB_KAPPA_PUM_REAL_C01,DCS-CALIB_KAPPA_PUM_IMAGINARY_C01,DCS-CALIB_KAPPA_UIM_REAL_C01,DCS-CALIB_KAPPA_UIM_IMAGINARY_C01,DCS-CALIB_KAPPA_C_C01,DCS-CALIB_F_CC_C01,DCS-CALIB_F_S_SQUARED_C01,DCS-CALIB_SRC_Q_INVERSE_C01'
+	python3 frame_manipulator.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_DCS_frames.cache --output-path txt --channel-list 'DCS-CALIB_KAPPA_TST_REAL,DCS-CALIB_KAPPA_TST_IMAGINARY,DCS-CALIB_KAPPA_PUM_REAL,DCS-CALIB_KAPPA_PUM_IMAGINARY,DCS-CALIB_KAPPA_UIM_REAL,DCS-CALIB_KAPPA_UIM_IMAGINARY,DCS-CALIB_KAPPA_C,DCS-CALIB_F_CC,DCS-CALIB_F_S_SQUARED,DCS-CALIB_SRC_Q_INVERSE'
+	python3 plot_kappas_from_txt.py --txt-list '$(IFO)1-DCS-CALIB_KAPPA_TST_REAL_C01.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_REAL_C01.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_REAL_C01.txt;$(IFO)1-DCS-CALIB_KAPPA_TST_REAL.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_REAL.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_REAL.txt:$(IFO)1-DCS-CALIB_KAPPA_TST_IMAGINARY_C01.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_IMAGINARY_C01.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_IMAGINARY_C01.txt;$(IFO)1-DCS-CALIB_KAPPA_TST_IMAGINARY.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_IMAGINARY.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_IMAGINARY.txt' --labels 'C01;TEST' --filename actuation_TDCFs.png
+	python3 plot_kappas_from_txt.py --txt-list '$(IFO)1-DCS-CALIB_KAPPA_C_C01.txt;$(IFO)1-DCS-CALIB_KAPPA_C.txt:$(IFO)1-DCS-CALIB_F_CC_C01.txt;$(IFO)1-DCS-CALIB_F_CC.txt' --labels 'C01;TEST' --filename sensing_TDCFs.png
+	python3 plot_kappas_from_txt.py --txt-list '$(IFO)1-DCS-CALIB_F_S_SQUARED_C01.txt;$(IFO)1-DCS-CALIB_F_S_SQUARED.txt:$(IFO)1-DCS-CALIB_SRC_Q_INVERSE_C01.txt;$(IFO)1-DCS-CALIB_SRC_Q_INVERSE.txt' --labels 'C01;TEST' --filename SRC_TDCFs.png
 
 SRC_detuning_C00: $(IFO)1_C00_frames.cache
 	python3 timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_C00_frames.cache --channel-list 'GDS-CALIB_F_S_SQUARED,GDS-CALIB_SRC_Q_INVERSE'

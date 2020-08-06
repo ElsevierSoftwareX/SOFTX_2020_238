@@ -311,36 +311,34 @@ test_common.build_and_run(plot_transfer_function, "plot_transfer_function", segm
 
 # Get any zeros and poles that we want to use to filter the transfer functions
 zeros = []
-if options.zeros is not None:
-	real_zeros = options.zeros.split(';')
-	if len(real_zeros) < len(labels):
-		# Then copy the last element until they are the same length
-		for i in range(len(labels) - len(real_zeros)):
-			real_zeros.append(real_zeros[-1])
-	for i in range(len(real_zeros)):
-		real_zeros[i] = real_zeros[i].split(',')
-		zeros.append([])
-		for j in range(0, len(real_zeros[i]) // 2):
-			zeros[i].append(float(real_zeros[i][2 * j]) + 1j * float(real_zeros[i][2 * j + 1]))
+real_zeros = [''] if options.zeros is None else options.zeros.split(';')
+if len(real_zeros) < len(labels):
+	# Then copy the last element until they are the same length
+	for i in range(len(labels) - len(real_zeros)):
+		real_zeros.append(real_zeros[-1])
+for i in range(len(real_zeros)):
+	real_zeros[i] = real_zeros[i].split(',')
+	zeros.append([])
+	for j in range(0, len(real_zeros[i]) // 2):
+		zeros[i].append(float(real_zeros[i][2 * j]) + 1j * float(real_zeros[i][2 * j + 1]))
 
 poles = []
-if options.poles is not None:
-	real_poles = options.poles.split(';')
-	if len(real_poles) < len(labels):
-		# Then copy the last element until they are the same length
-		for i in range(len(labels) - len(real_poles)):
-			real_poles.append(real_poles[-1])
-	for i in range(len(real_poles)):
-		real_poles[i] = real_poles[i].split(',')
-		poles.append([])
-		for j in range(0, len(real_poles[i]) // 2):
-			poles[i].append(float(real_poles[i][2 * j]) + 1j * float(real_poles[i][2 * j + 1]))
+real_poles = [''] if options.poles is None else options.poles.split(';')
+if len(real_poles) < len(labels):
+	# Then copy the last element until they are the same length
+	for i in range(len(labels) - len(real_poles)):
+		real_poles.append(real_poles[-1])
+for i in range(len(real_poles)):
+	real_poles[i] = real_poles[i].split(',')
+	poles.append([])
+	for j in range(0, len(real_poles[i]) // 2):
+		poles[i].append(float(real_poles[i][2 * j]) + 1j * float(real_poles[i][2 * j + 1]))
 
 # Decide a color scheme.
 colors = []
 
 # Start with defaults to use if we don't recognize what we are plotting.
-default_colors = ['red', 'gold', 'magenta', 'orange', 'aqua', 'darkgreen', 'blue']
+default_colors = ['tomato', 'green', 'mediumblue', 'gold', 'orange', 'aqua', 'magenta', 'blue']
 
 # Use specific colors for known version of calibration
 C02_labels = ['C02', 'c02']
