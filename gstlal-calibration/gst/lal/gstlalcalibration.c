@@ -74,7 +74,6 @@
 #include <gstlal_sensingtdcfs.h>
 #include <gstlal_makediscont.h>
 #include <gstlal_randreplace.h>
-#include <gstlal_detectchange.h>
 
 
 /*
@@ -113,7 +112,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_sensingtdcfs", GSTLAL_SENSINGTDCFS_TYPE},
 		{"lal_makediscont", GSTLAL_MAKEDISCONT_TYPE},
 		{"lal_randreplace", GSTLAL_RANDREPLACE_TYPE},
-		{"lal_detectchange", GSTLAL_DETECTCHANGE_TYPE},
 		{NULL, 0},
 	};
 
