@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (C) 2018  Aaron Viets
+# Copyright (C) 2020  Aaron Viets
 #
 # This program is free software; you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the
@@ -72,11 +72,12 @@ parser.add_option("--gstlal-frame-cache-list", metavar = "list", help = "Comma-s
 parser.add_option("--config-file", metavar = "name", help = "Configurations file used to produce gstlal calibrated frames, needed to get pcal line frequencies and correction factors")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
 parser.add_option("--gstlal-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels to compare to pcal")
+parser.add_option("--kappa-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of actuator kappa channels to read from the first frame cache file in the --gstlal-frame-cache-list.  Time advances (taus) are computed and compared to the DeltaL / Pcal ratio timeseries.")
 parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels in the raw frames to compare to pcal")
 parser.add_option("--demodulation-time", metavar = "seconds", type = int, default = 128, help = "Time in seconds of low-pass filter used for demodulation. (Default = 128)")
-parser.add_option("--pcal-line-names", metavar = "list", type = str, default = 'ka_pcal,kc_pcal,high_pcal', help = "Comma-separated list of pcal line names in filters file at which to plot ratios (default = 'ka_pcal,kc_pcal,high_pcal')")
-parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.9,1.1;0.9,1.1;0.9,1.1", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
-parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-6.0,6.0;-6.0,6.0;-6.0,6.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
+parser.add_option("--pcal-line-names", metavar = "list", type = str, default = 'ka_pcal', help = "Comma-separated list of pcal line names in filters file at which to plot ratios (default = 'ka_pcal')")
+parser.add_option("--magnitude-ranges", metavar = "list", type = str, default = "0.5,1.5", help = "Ranges for magnitude plots. Semicolons separate ranges for different plots, and commas separate min and max values.")
+parser.add_option("--phase-ranges", metavar = "list", type = str, default = "-20.0,20.0", help = "Ranges for phase plots, in degrees. Semicolons separate ranges for different plots, and commas separate min and max values.")
 parser.add_option("--labels", metavar = "list", type = str, help = "Comma-separated List of labels for each calibrated channel being tested. This is put in the plot legends and in the txt file names to distinguish them.")
 parser.add_option("--file-name-suffix", metavar = "name", type = str, default = "", help = "Suffix for naming unique file.")
 parser.add_option("--pcal-time-advance", metavar = "seconds", type = float, default = 0.0, help = "Time advance in seconds applied to the Pcal channel. Default = 0.0")
@@ -157,6 +158,13 @@ if options.calcs_channel_list is not None:
 		channel_list.append((ifo, channel))
 else:
 	calcs_channels = []
+if options.kappa_channel_list is not None:
+	kappa_channels = options.kappa_channel_list.split(',')
+	for channel in kappa_channels:
+		channel_list.append((ifo, channel))
+else:
+	kappa_channels = []
+actuation_stages = []
 
 # Set up list of labels to be used in plot legends and filenames
 labels = options.labels.split(',')
@@ -239,7 +247,7 @@ def pcal2darm(pipeline, name):
 	# Check if we are taking pcal-to-darm ratios for gstlal calibrated data
 	if options.gstlal_channel_list is not None:
 		cache_num = 0
-		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(channel_list)]):
+		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(calcs_channels) + len(gstlal_channels)]):
 			# Get gstlal channels from the gstlal frames
 			hoft_data = pipeparts.mklalcachesrc(pipeline, location = cache, cache_dsc_regex = ifo)
 			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
@@ -266,6 +274,40 @@ def pcal2darm(pipeline, name):
 				# Write to file
 				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label.replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 
+		# Check of we are reading in kappa channels
+		if options.kappa_channel_list is not None:
+			# Get gstlal channels from the gstlal frames
+			kappa_data = pipeparts.mklalcachesrc(pipeline, location = gstlal_frame_cache_list[0], cache_dsc_regex = ifo)
+			kappa_data = pipeparts.mkframecppchanneldemux(pipeline, kappa_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
+			for i in range(len(kappa_channels) // 2):
+				kappa_real = calibration_parts.hook_up(pipeline, kappa_data, kappa_channels[2 * i], ifo, 1.0, element_name_suffix = "_%d" % (2 * i))
+				kappa_imag = calibration_parts.hook_up(pipeline, kappa_data, kappa_channels[2 * i + 1], ifo, 1.0, element_name_suffix = "_%d" % (2 * i + 1))
+				kappa_real = calibration_parts.caps_and_progress(pipeline, kappa_real, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", kappa_channels[2 * i])
+				kappa_imag = calibration_parts.caps_and_progress(pipeline, kappa_imag, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", kappa_channels[2 * i + 1])
+				kappa = calibration_parts.merge_into_complex(pipeline, kappa_real, kappa_imag)
+				phase_angle = pipeparts.mkgeneric(pipeline, kappa, "carg")
+
+				actuation_stage = 'UNKNOWN'
+				act_freq = 17.0 # A guess...
+				if 'TST' in kappa_channels[2 * i]:
+					actuation_stage = 'T'
+					act_freq = float(filters["ktst_esd_line_freq"])
+				elif 'PUM' in kappa_channels[2 * i]:
+					actuation_stage = 'P'
+					act_freq = float(filters["pum_act_line_freq"])
+				elif 'UIM' in kappa_channels[2 * i]:
+					actuation_stage = 'U'
+					act_freq = float(filters["uim_act_line_freq"])
+				elif 'PU' in kappa_channels[2 * i]:
+					actuation_stage = 'PU'
+					act_freq = float(filters["ka_esd_line_freq"])
+
+				actuation_stages.append(actuation_stage)
+
+				tau = pipeparts.mkaudioamplify(pipeline, phase_angle, 1000000.0 / 2.0 / numpy.pi / act_freq)
+
+				pipeparts.mknxydumpsink(pipeline, tau, "%s_%s_%d.txt" % (ifo, actuation_stage, options.gps_start_time))
+
 	#
 	# done
 	#
@@ -280,13 +322,18 @@ def pcal2darm(pipeline, name):
 # =============================================================================
 #
 
-test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
+#test_common.build_and_run(pcal2darm, "pcal2darm", segment = segments.segment((LIGOTimeGPS(0, 1000000000 * options.gps_start_time), LIGOTimeGPS(0, 1000000000 * options.gps_end_time))))
+actuation_stages = ['T', 'P', 'U']
 
 # Read data from files and plot it
-colors = ['tomato', 'green', 'mediumblue', 'c', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['green', 'mediumblue', 'c', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
+tau_colors = ['red', 'skyblue', 'purple']
 channels = calcs_channels
 channels.extend(gstlal_channels)
-for i in range(0, len(frequencies)):
+num_rows = 2 + (1 if any(kappa_channels) else 0)
+num_columns = len(frequencies)
+
+for i in range(num_columns):
 	data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[0].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 	t_start = data[0][0]
 	dur = data[len(data) - 1][0] - t_start
@@ -302,6 +349,7 @@ for i in range(0, len(frequencies)):
 	elif dur > 100:
 		t_unit = 'minutes'
 		sec_per_t_unit = 60.0
+	dur = dur / sec_per_t_unit
 	times = []
 	magnitudes = [[]]
 	phases = [[]]
@@ -309,25 +357,26 @@ for i in range(0, len(frequencies)):
 		times.append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
 		magnitudes[0].append(data[filter_time * k][1])
 		phases[0].append(data[filter_time * k][2])
-	markersize = 150.0 * numpy.sqrt(float(filter_time / dur))
+	markersize = 150.0 * numpy.sqrt(float(filter_time / dur_in_seconds))
 	markersize = min(markersize, 10.0)
 	markersize = max(markersize, 0.2)
 	# Make plots
 	if i == 0:
-		plt.figure(figsize = (25, 15))
-	plt.subplot(2, len(frequencies), i + 1)
+		plt.figure(figsize = (4 + 10 * num_columns, 6 * num_rows))
+	plt.subplot(num_rows, num_columns, i + 1)
 	if options.show_stats:
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f, \sigma = %0.3f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
-	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
+	if(num_columns > 1):
+		plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
-	ticks_and_grid(plt.gca(), ymin = float(magnitude_range.split(',')[0]), ymax = float(magnitude_range.split(',')[1]))
+	ticks_and_grid(plt.gca(), xmin = 0, xmax = dur, ymin = float(magnitude_range.split(',')[0]), ymax = float(magnitude_range.split(',')[1]))
 	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
 	leg.get_frame().set_alpha(0.8)
-	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
+	plt.subplot(num_rows, num_columns, num_columns + i + 1)
 	if options.show_stats:
 		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[0]), numpy.std(phases[0])))
 	else:
@@ -336,10 +385,10 @@ for i in range(0, len(frequencies)):
 	leg.get_frame().set_alpha(0.8)
 	if i == 0:
 		plt.ylabel(r'${\rm Phase \  [deg]}$')
-	if len(frequencies) < 3 or i == int((len(frequencies) - 0.1) / 2.0):
+	if not any(kappa_channels) and (len(frequencies) < 3 or i == int((len(frequencies) - 0.1) / 2.0)):
 		plt.xlabel(r'${\rm Time \  in \  %s \  since \  %s \  UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
 	phase_range = options.phase_ranges.split(';')[i]
-	ticks_and_grid(plt.gca(), ymin = float(phase_range.split(',')[0]), ymax = float(phase_range.split(',')[1]))
+	ticks_and_grid(plt.gca(), xmin = 0, xmax = dur, ymin = float(phase_range.split(',')[0]), ymax = float(phase_range.split(',')[1]))
 	for j in range(1, len(channels)):
 		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 		magnitudes.append([])
@@ -347,20 +396,36 @@ for i in range(0, len(frequencies)):
 		for k in range(0, int(len(data) / filter_time)):
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
-		plt.subplot(2, len(frequencies), i + 1)
+		plt.subplot(num_rows, num_columns, i + 1)
 		if options.show_stats:
 			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f, \sigma = %0.3f]$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
 		else:
 			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[j].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
 		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
 		leg.get_frame().set_alpha(0.8)
-		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
+		plt.subplot(num_rows, num_columns, num_columns + i + 1)
 		if options.show_stats:
 			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ '), numpy.mean(phases[j]), numpy.std(phases[j])))
 		else:
 			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[j].replace(':', '{:}').replace('-' , '\mbox{-}').replace('_', '\_').replace(' ', '\ ')))
 		leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
 		leg.get_frame().set_alpha(0.8)
-plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
-plt.savefig("%s_deltal_over_pcal%s_%d-%d.pdf" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
+
+	# Now plot the time advances
+	for j in range(len(actuation_stages)):
+		actuation_stage = actuation_stages[j]
+		tau_data = numpy.loadtxt("%s_%s_%d.txt" % (ifo, actuation_stage, options.gps_start_time)).transpose()
+		tau_time = (tau_data[0] - t_start) / sec_per_t_unit
+		tau = tau_data[1]
+		plt.subplot(num_rows, num_columns, 2 * num_columns + i + 1)
+		plt.plot(tau_time, tau, tau_colors[j], linewidth = 1.0, label = r'$\tau_{\rm %s}$' % actuation_stage)
+		leg = plt.legend(fancybox = True, loc = 'upper right')
+		leg.get_frame().set_alpha(0.8)
+		ticks_and_grid(plt.gca(), xmin = 0, xmax = dur, ymin = -180, ymax = 180)
+		if len(frequencies) < 3 or i == int((len(frequencies) - 0.1) / 2.0):
+			plt.xlabel(r'${\rm Time \  in \  %s \  since \  %s \  UTC}$' % (t_unit, time.strftime("%b %d %Y %H:%M:%S".replace(':', '{:}').replace('-', '\mbox{-}').replace(' ', '\ '), time.gmtime(t_start + 315964782))))
+		plt.ylabel(r'${\rm Time} \ [\mu s]$')
+
+plt.savefig("%s_actuation_timing%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
+plt.savefig("%s_actuation_timing%s_%d-%d.pdf" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
 
