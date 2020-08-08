@@ -33,6 +33,7 @@ from math import pi
 import resource
 import datetime
 import time
+import matplotlib.patches as mpatches
 from matplotlib import rc
 rc('text', usetex = True)
 matplotlib.rcParams['font.family'] = 'Times New Roman'
@@ -92,6 +93,7 @@ parser.add_option("--magnitude-max", type = float, default = 1.1, help = "Maximu
 parser.add_option("--phase-min", metavar = "degrees", type = float, default = -6, help = "Minimum for phase plot, in degrees")
 parser.add_option("--phase-max", metavar = "degrees", type = float, default = 6, help = "Maximum for phase plot, in degrees")
 parser.add_option("--labels", metavar = "list", type = str, default = None, help = "Comma-separated list of labels corresponding to each transfer function, to be added to plot legend and txt file names.")
+parser.add_option("--latex-labels", action = "store_true", help = "Set this if the labels are latex math expressions")
 parser.add_option("--filename-suffix", type = str, default = "", help = "Suffix for filename to make it unique.")
 parser.add_option("--filename", type = str, default = None, help = "Name of plot filef, not including file extension.  Not required.")
 
@@ -357,6 +359,13 @@ for i in range(len(labels)):
 	else:
 		colors.append(default_colors[i % 7])
 
+plot_labels = []
+if options.latex_labels:
+	plot_labels = labels
+else:
+	for label in labels:
+		plot_labels.append("{\\rm %s}" % label.replace(' ', '_').replace('/', 'over'))
+
 for i in range(0, len(labels)):
 	# Remove unwanted lines from file, and re-format wanted lines
 	f = open('%s_%s_over_%s_%d-%d.txt' % (ifo, labels[i].replace(' ', '_').replace('/', 'over'), options.denominator_channel_name, options.gps_start_time, data_duration),"r")
@@ -399,11 +408,14 @@ for i in range(0, len(labels)):
 	if i == 0:
 		plt.figure(figsize = (10, 10))
 	plt.subplot(211)
-	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.75, label = r'${\rm %s}$' % labels[i].replace('_', '\_').replace(' ', '\ '))
-	leg = plt.legend(fancybox = True)
-	leg.get_frame().set_alpha(0.8)
+	plt.plot(frequency, magnitude, colors[i % 6], linewidth = 0.75) #, label = r'$%s$' % plot_labels[i])
 	if i == 0:
-		plt.title(r'${\rm %s} \ %s \ / \ %s$' % (ifo, options.numerator_name, options.denominator_name))
+		patches = [mpatches.Patch(color = colors[j], label = r'$%s$' % plot_labels[j]) for j in range(len(labels))]
+		plt.legend(handles = patches, loc = 'lower right', ncol = 1)
+	#leg = plt.legend(fancybox = True, loc = "lower right")
+	#leg.get_frame().set_alpha(0.8)
+	if i == 0:
+		#plt.title(r'${\rm %s} \ %s \ / \ %s$' % (ifo, options.numerator_name, options.denominator_name))
 		plt.ylabel(r'${\rm Magnitude}$')
 	ticks_and_grid(plt.gca(), xmin = options.frequency_min, xmax = options.frequency_max, ymin = options.magnitude_min, ymax = options.magnitude_max, xscale = freq_scale, yscale = mag_scale)
 	ax = plt.subplot(212)

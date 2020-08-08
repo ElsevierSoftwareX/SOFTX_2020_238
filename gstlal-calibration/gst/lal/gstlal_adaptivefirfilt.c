@@ -512,6 +512,8 @@ static gboolean get_unit_size(GstBaseSink *sink, GstCaps *caps, gsize *size) {
 static gboolean start(GstBaseSink *sink) {
 
 	GSTLALAdaptiveFIRFilt *element = GSTLAL_ADAPTIVEFIRFILT(sink);
+	double alpha;
+	guint i;
 
 	/* Timestamp bookkeeping */
 	element->t0 = GST_CLOCK_TIME_NONE;
@@ -553,7 +555,7 @@ static gboolean start(GstBaseSink *sink) {
 
 	/* Make a window function as specified by element properties */
 	/* Frequency resolution in units of frequency bins of fft data */
-	double alpha = element->frequency_resolution * element->adaptive_filter_length / element->filter_sample_rate;
+	alpha = element->frequency_resolution * element->adaptive_filter_length / element->filter_sample_rate;
 	switch(element->window_type) {
 	case GSTLAL_ADAPTIVEFIRFILT_DPSS:
 		element->window = dpss_double(element->adaptive_filter_length, alpha, 5.0, NULL, FALSE, FALSE);
@@ -591,6 +593,13 @@ static gboolean start(GstBaseSink *sink) {
 			/* Then compute the static frequency-domain model from the static filter */
 			element->static_model = gstlal_rfft_double(element->static_filter, (guint) element->static_filter_length, NULL, 0, NULL, FALSE, 0, NULL, 0, NULL, NULL, NULL, FALSE);
 			element->static_model_length = element->static_filter_length / 2 + 1;
+
+			/*
+			 * Advance the static model, since the filter was (probably) centered in time.
+			 * FIXME: we should handle general filters that may not be centered in time.
+			 */
+			for(i = 0; i < element->static_model_length; i++)
+				element->static_model[i] *= cexp(2 * M_PI * I * i * (element->static_filter_length / 2) / element->static_filter_length);
 		}
 
 		/* We may need to upsample the static model or the adaptive model */

@@ -427,13 +427,14 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 			# Find amplitude and phase of line in signal
 			line_in_signal = pipeparts.mkgeneric(pipeline, signal, "lal_demodulate", line_frequency = freqs[m][n])
 			# Connect to line frequency updater if given
-			if freq_channels[m][n] is not None:
-				if type(freq_channels[m][n]) is float:
-					# It's a harmonic of the frequency in freq_channels[m][0]
-					freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, line_in_signal, "timestamped_average", "line_frequency", freq_channels[m][n])
-				else:
-					# The channel carries the correct frequency
-					freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, line_in_signal, "timestamped_average", "line_frequency", 1)
+			if any(freq_channels):
+				if freq_channels[m][n] is not None:
+					if type(freq_channels[m][n]) is float:
+						# It's a harmonic of the frequency in freq_channels[m][0]
+						freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, line_in_signal, "timestamped_average", "line_frequency", freq_channels[m][n])
+					else:
+						# The channel carries the correct frequency
+						freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, line_in_signal, "timestamped_average", "line_frequency", 1)
 			line_in_signal = mkresample(pipeline, line_in_signal, downsample_quality, zero_latency, compute_rate)
 			line_in_signal = lowpass(pipeline, line_in_signal, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 			line_in_signal = pipeparts.mktee(pipeline, line_in_signal)
@@ -448,13 +449,14 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				# Find amplitude and phase of each harmonic in each witness channel
 				line_in_witness = pipeparts.mkgeneric(pipeline, witnesses[m][i], "lal_demodulate", line_frequency = freqs[m][n])
 				# Connect to line frequency updater if given
-				if freq_channels[m][n] is not None:
-					if type(freq_channels[m][n]) is float:
-						# It's a harmonic of the frequency in freq_channels[m][0]
-						freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, line_in_witness, "timestamped_average", "line_frequency", freq_channels[m][n])
-					else:
-						# The channel carries the correct frequency
-						freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, line_in_witness, "timestamped_average", "line_frequency", 1)
+				if any(freq_channels):
+					if freq_channels[m][n] is not None:
+						if type(freq_channels[m][n]) is float:
+							# It's a harmonic of the frequency in freq_channels[m][0]
+							freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, line_in_witness, "timestamped_average", "line_frequency", freq_channels[m][n])
+						else:
+							# The channel carries the correct frequency
+							freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, line_in_witness, "timestamped_average", "line_frequency", 1)
 				line_in_witness = mkresample(pipeline, line_in_witness, downsample_quality, zero_latency, compute_rate)
 				line_in_witness = lowpass(pipeline, line_in_witness, compute_rate, length = filter_length, fcut = 0, filter_latency = filter_latency)
 				line_in_witness = pipeparts.mktee(pipeline, line_in_witness)
@@ -493,13 +495,14 @@ def remove_lines_with_witnesses(pipeline, signal, witnesses, freqs, freq_vars, f
 				reconstructed_line_in_signal = mkresample(pipeline, reconstructed_line_in_signal, upsample_quality, zero_latency, rate_out)
 				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "lal_demodulate", line_frequency = -1.0 * freqs[m][n], prefactor_real = -2.0)
 				# Connect to line frequency updater if given
-				if freq_channels[m][n] is not None:
-					if type(freq_channels[m][n]) is float:
-						# It's a harmonic of the frequency in freq_channels[m][0]
-						freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, reconstructed_line_in_signal, "timestamped_average", "line_frequency", -1.0 * freq_channels[m][n])
-					else:
-						# The channel carries the correct frequency
-						freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, reconstructed_line_in_signal, "timestamped_average", "line_frequency", -1.0)
+				if any(freq_channels):
+					if freq_channels[m][n] is not None:
+						if type(freq_channels[m][n]) is float:
+							# It's a harmonic of the frequency in freq_channels[m][0]
+							freq_channels[m][0].connect("notify::timestamped-average", update_timestamped_property, reconstructed_line_in_signal, "timestamped_average", "line_frequency", -1.0 * freq_channels[m][n])
+						else:
+							# The channel carries the correct frequency
+							freq_channels[m][n].connect("notify::timestamped-average", update_timestamped_property, reconstructed_line_in_signal, "timestamped_average", "line_frequency", -1.0)
 				reconstructed_line_in_signal = pipeparts.mkgeneric(pipeline, reconstructed_line_in_signal, "creal")
 
 				signal_minus_lines.append(reconstructed_line_in_signal)
