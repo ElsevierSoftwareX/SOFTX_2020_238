@@ -334,7 +334,8 @@ class LnSignalDensity(LnLRDensity):
 		super(LnSignalDensity, self).__init__(*args, **kwargs)
 		# install SNR, chi^2 PDF (one for all instruments)
 		self.densities = {
-			"snr_chi": inspiral_extrinsics.NumeratorSNRCHIPDF(self.snr_chi_binning)
+			"snr_chi": inspiral_extrinsics.NumeratorSNRCHIPDF(self.snr_chi_binning),
+			"snr_bankchi": inspiral_extrinsics.NumeratorSNRCHIPDF(self.snr_bankchi_binning)
 		}
 
 		# record of horizon distances for all instruments in the
