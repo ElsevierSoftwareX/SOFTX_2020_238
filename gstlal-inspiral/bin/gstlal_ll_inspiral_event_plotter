@@ -52,12 +52,11 @@ from gstlal import lvalert_helper
 from gstlal import plotfar
 from gstlal import plotpsd
 
-# FIXME Replace glue with ligo.lw once gracedb uploads no longer use ilwdchar
-from glue.ligolw import utils as ligolw_utils
-from glue.ligolw import lsctables
-from glue.ligolw import array as ligolw_array
-from glue.ligolw import param as ligolw_param
-from glue.ligolw import ligolw
+from ligo.lw import utils as ligolw_utils
+from ligo.lw import lsctables
+from ligo.lw import array as ligolw_array
+from ligo.lw import param as ligolw_param
+from ligo.lw import ligolw
 
 import matplotlib
 matplotlib.rcParams.update({
@@ -170,7 +169,7 @@ class EventPlotter(events.EventProcessor):
 
 		time = LIGOTimeGPS(payload['time'], payload['time_ns'])
 		coinc_fileobj = StringIO.StringIO(payload['coinc'])
-		xmldoc = ligolw_utils.load_fileobj(coinc_fileobj, contenthandler=ligolwcontenthandler)[0]
+		xmldoc = ligolw_utils.load_fileobj(coinc_fileobj, gz=False, contenthandler=ligolwcontenthandler)
 		coinc_fileobj.close()
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
 		bank_bin = '{:04}'.format(int(sngl_inspiral_table[0].Gamma1))
@@ -195,7 +194,7 @@ class EventPlotter(events.EventProcessor):
 			self.events[event_key]['gid'] = payload['gid']
 			self.events[event_key]['coinc'] = xmldoc
 			psd_fileobj = StringIO.StringIO(payload['psd'])
-			self.events[event_key]['psd'] = ligolw_utils.load_fileobj(psd_fileobj, contenthandler=series.PSDContentHandler)[0]
+			self.events[event_key]['psd'] = ligolw_utils.load_fileobj(psd_fileobj, contenthandler=series.PSDContentHandler)
 			psd_fileobj.close()
 
 
