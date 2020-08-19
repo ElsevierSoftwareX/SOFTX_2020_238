@@ -1308,18 +1308,27 @@ static void gstlal_itacac_pad_dispose(GObject *object)
 		itacacpad->data = NULL;
 	}
 
+	if(itacacpad->autocorrelation_matrix) {
+		gsl_matrix_complex_free(itacacpad->autocorrelation_matrix);
+		itacacpad->autocorrelation_matrix = NULL;
+	}
+
+	if(itacacpad->autocorrelation_mask) {
+		gsl_matrix_int_free(itacacpad->autocorrelation_mask);
+		itacacpad->autocorrelation_mask = NULL;
+	}
+
+	if(itacacpad->autocorrelation_norm) {
+		gsl_vector_free(itacacpad->autocorrelation_norm);
+		itacacpad->autocorrelation_norm = NULL;
+	}
+
 	free(itacacpad->snr_mat);
 	free(itacacpad->tmp_snr_mat);
-	free(itacacpad->autocorrelation_matrix);
-	free(itacacpad->autocorrelation_mask);
-	free(itacacpad->autocorrelation_norm);
 	free(itacacpad->chi2);
 	free(itacacpad->tmp_chi2);
 	itacacpad->snr_mat = NULL;
 	itacacpad->tmp_snr_mat = NULL;
-	itacacpad->autocorrelation_matrix = NULL;
-	itacacpad->autocorrelation_mask = NULL;
-	itacacpad->autocorrelation_norm = NULL;
 	itacacpad->chi2 = NULL;
 	itacacpad->tmp_chi2 = NULL;
 
