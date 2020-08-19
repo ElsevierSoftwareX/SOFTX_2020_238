@@ -251,6 +251,7 @@ static gboolean setcaps(GstAggregator *agg, GstAggregatorPad *aggpad, GstEvent *
 	itacacpad->adapter_unit_size = itacac->channels * width;
 	g_object_set(itacacpad->adapter, "unit-size", itacacpad->adapter_unit_size, NULL);
 	// chi^2 is real, so we only need half of the size of the complex variables
+	g_assert(width % 2 == 0);
 	itacacpad->chi2 = calloc(itacac->channels, width / 2);
 	itacacpad->tmp_chi2 = calloc(itacac->channels, width / 2);
 
