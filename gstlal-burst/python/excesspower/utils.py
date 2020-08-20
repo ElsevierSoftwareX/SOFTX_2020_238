@@ -27,8 +27,8 @@ from scipy.stats import chi2, poisson, mannwhitneyu, norm
 
 from pylal import datatypes as laltypes
 
-from glue import lal
-from glue.segments import segment, segmentlist
+from lal.utils import CacheEntry
+from ligo import segments
 
 #
 # =============================================================================
@@ -104,14 +104,14 @@ class SBStats(object):
 		Calculate the Poissonian significance of the 'on source' trial set for up to the loudest nevents.
 		"""
 
-		offtime = float(abs(segmentlist(self.offsource.keys())))
+		offtime = float(abs(segments.segmentlist(self.offsource.keys())))
 		offsource = sorted(chain(*self.offsource.values()), key=lambda sb: -sb.snr )
 		offrate = zip(offsource, map(lambda i:i/offtime, range(1, len(offsource)+1)))
 		offrate = offrate[::-1]
 		offsource = offsource[::-1]
 		offsnr = [sb.snr for sb in offsource]
 
-		ontime = float(abs(segmentlist(self.onsource.keys())))
+		ontime = float(abs(segments.segmentlist(self.onsource.keys())))
 		if ontime == 0:
 			return []
 		onsource = sorted(chain(*self.onsource.values()), key=lambda sb: -sb.snr)
@@ -133,14 +133,14 @@ class SBStats(object):
 		if rank_fcn is None:
 			rank_fcn = lambda e: e.snr
 
-		offtime = float(abs(segmentlist(self.offsource.keys())))
+		offtime = float(abs(segments.segmentlist(self.offsource.keys())))
 		offsource = sorted(chain(*self.offsource.values()), key=lambda sb: -sb.snr)
 		offrate = zip(offsource, map( lambda i:i/offtime, range(1, len(offsource)+1)))
 		offrate = offrate[::-1]
 		offsource = offsource[::-1]
 		offsnr = map(rank_fcn, offsource)
 
-		ontime = float(abs(segmentlist(self.onsource.keys())))
+		ontime = float(abs(segments.segmentlist(self.onsource.keys())))
 		if ontime == 0:
 			return []
 		onsource = sorted(chain(*self.onsource.values()), key=lambda sb: -sb.snr)
@@ -195,12 +195,12 @@ class SBStats(object):
 		"""
 		Redistribute events to offsource and onsource based on current time span.
 		"""
-		all_segs = segmentlist(self.onsource.keys())
+		all_segs = segments.segmentlist(self.onsource.keys())
 		if len(all_segs) == 0:
 			return
 
 		if len(self.offsource.keys()) > 0:
-			all_segs += segmentlist(self.offsource.keys())
+			all_segs += segments.segmentlist(self.offsource.keys())
 		all_segs.coalesce()
 		begin, end = all_segs[0][0], all_segs[-1][1] 
 		span = float(end-begin)
@@ -211,8 +211,8 @@ class SBStats(object):
 		if span > self.offsource_interval + self.onsource_interval:
 			begin = end - (self.offsource_interval + self.onsource_interval)
 
-		onsource_seg = segment(end-self.onsource_interval, end)
-		offsource_seg = segment(begin, end-self.onsource_interval)
+		onsource_seg = segments.segment(end-self.onsource_interval, end)
+		offsource_seg = segments.segment(begin, end-self.onsource_interval)
 
 		for seg, sbt in self.offsource.items():
 			try:
@@ -260,9 +260,9 @@ class SBStats(object):
 			for sb in sbtable:
 				start = sb.start_time + 1e-9*sb.start_time_ns
 				stop = sb.start_time + sb.duration
-				inseg.append(segment(start, stop))
-			inseg = segmentlist(inseg).coalesce()
-			inseg = segment(inseg[0][0], inseg[-1][1])
+				inseg.append(segments.segment(start, stop))
+			inseg = segments.segmentlist(inseg).coalesce()
+			inseg = segments.segment(inseg[0][0], inseg[-1][1])
 
 		oldsegs = filter(lambda s: s.intersects(inseg), self.onsource.keys())
 
@@ -292,27 +292,24 @@ def subdivide(seglist, length, min_length=0):
 	newlist = []
 	for seg in seglist:
 		while abs(seg) - min_length > length + min_length:
-			newlist.append(segment(seg[0], seg[0]+length))
-			seg = segment(seg[0] + length, seg[1])
+			newlist.append(segments.segment(seg[0], seg[0]+length))
+			seg = segments.segment(seg[0] + length, seg[1])
 
 		if abs(seg) > 0:
-			newlist.append(segment(seg[0], seg[1] - min_length))
-			newlist.append(segment(seg[1] - min_length, seg[1]))
+			newlist.append(segments.segment(seg[0], seg[1] - min_length))
+			newlist.append(segments.segment(seg[1] - min_length, seg[1]))
 
-	return segmentlist(newlist)	
+	return segments.segmentlist(newlist)	
 
 def duration_from_cache(cachen):
 	"""
 	Determine the spanned duration of a cachefile
-	FIXME: Replace with the method to_segmentlistdict
 	"""
-	with open(cachen) as cachef:
-		cache = lal.Cache.fromfile(open(cachef))
-	duration = cache[0].segment
-	for entry in cache[1:]:
-		duration |= entry.segment
-
-	return duration[0], abs(duration)
+	segs = segments.segmentlistdict()
+	for entry in map(CacheEntry, open(cachef)):
+		segs |= entry.segmentlistdict
+	segs = segs.union(segs)
+	return segs[0], abs(segs)
 
 def determine_thresh_from_fap(fap, ndof = 2):
 	"""
@@ -329,7 +326,7 @@ def determine_segment_with_whitening(analysis_segment, whiten_seg):
 		if analysis_segment in whiten_seg:
 			# All the analyzed time is within the settling time
 			# We make this explicit because the segment constructor will just reverse the arguments if arg2 < arg1 and create an incorrect segment
-			analysis_segment = segment(analysis_segment[1], analysis_segment[1])
+			analysis_segment = segments.segment(analysis_segment[1], analysis_segment[1])
 		else:
 			analysis_segment -= whiten_seg
 	return analysis_segment

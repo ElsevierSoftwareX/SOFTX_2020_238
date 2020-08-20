@@ -21,9 +21,7 @@ this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
 __author__ = 'Duncan Brown <duncan@gravity.phys.uwm.edu>'
-from glue import git_version
-__date__ = git_version.date
-__version__ = git_version.id
+from . import __date__, __version__
 
 from collections import OrderedDict
 import os
