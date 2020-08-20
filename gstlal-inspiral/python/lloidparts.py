@@ -77,12 +77,12 @@ GObject.threads_init()
 Gst.init(None)
 
 
-from glue import iterutils
 from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import pipeio
 from gstlal.stats.inspiral_lr import LnLRDensity
+from lal import iterutils
 
 
 #

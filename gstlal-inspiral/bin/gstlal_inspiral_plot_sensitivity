@@ -40,11 +40,11 @@ from ligo.lw import lsctables
 from ligo.lw import dbtables
 from ligo.lw import utils as ligolw_utils
 from ligo.lw import array as ligolw_array
-from glue import iterutils
 from ligo import segments
 from ligo.segments import utils as segmentsUtils
 
 import lal
+from lal import iterutils
 from lal import rate
 from lal.utils import CacheEntry
 

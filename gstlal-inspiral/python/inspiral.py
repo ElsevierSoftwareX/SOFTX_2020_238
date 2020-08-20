@@ -63,7 +63,6 @@ import tempfile
 import os
 from urllib.parse import urlparse
 
-from glue import iterutils
 from ligo.lw import ligolw
 from ligo.lw import dbtables
 from ligo.lw import ilwd
@@ -77,6 +76,7 @@ from ligo.lw.utils import process as ligolw_process
 from ligo.lw.utils import segments as ligolw_segments
 from ligo.lw.utils import time_slide as ligolw_time_slide
 import lal
+from lal import iterutils
 from lal import LIGOTimeGPS
 from lal import series as lalseries
 from lalburst.snglcoinc import light_travel_time

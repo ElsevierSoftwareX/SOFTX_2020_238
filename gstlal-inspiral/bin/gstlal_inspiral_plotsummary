@@ -58,9 +58,9 @@ import sys
 
 import lal
 from lal import gpstime
+from lal import iterutils
 from lal.utils import CacheEntry
 
-from glue import iterutils
 from ligo import segments
 from ligo.lw import dbtables
 from ligo.lw import lsctables

@@ -42,7 +42,8 @@ pygst.require('0.10')
 import gst
 
 
-from glue import iterutils
+from lal import iterutils
+from lal import LIGOTimeGPS
 from ligo import segments
 from ligo.lw import ligolw
 from ligo.lw import lsctables
@@ -56,7 +57,6 @@ from gstlal import pipeio
 from gstlal import pipeparts
 from gstlal import simplehandler
 from gstlal import simulation
-from pylal.datatypes import LIGOTimeGPS
 
 #
 # SPIIR many instruments, many template banks

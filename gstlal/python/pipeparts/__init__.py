@@ -39,9 +39,9 @@ GObject.threads_init()
 Gst.init(None)
 
 
-from glue import iterutils
 from ligo import segments
 from gstlal import pipeio
+from lal import iterutils
 from lal import LIGOTimeGPS
 from lal.utils import CacheEntry
 
