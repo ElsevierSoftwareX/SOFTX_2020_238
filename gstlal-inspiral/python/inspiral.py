@@ -340,7 +340,7 @@ class CoincsDocument(object):
 		# major contributor to the size of merged databases and xml
 		# files.  A patch to ligolw_process.register_to_xmldoc would be
 		# welcomed
-		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"environment_variables", os.environ)
+		process_params.update(os.environ)
 		self.process = ligolw_process.register_to_xmldoc(self.xmldoc, u"gstlal_inspiral", process_params, comment = comment, ifos = instruments)
 		if process_start_time is not None:
 			self.process.start_time = process_start_time
