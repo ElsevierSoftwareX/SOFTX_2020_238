@@ -35,7 +35,7 @@ DEPS_DIR:=/path/to/deps
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
 LIGOSCALD_GIT=0
-LALSUITE_GIT=0
+LALSUITE_GIT=1
 
 # Define which branch from git to build. Defaults to 'master', but the user can
 # set the variable below. The git clone and compilation should fail if this is set to
@@ -43,7 +43,7 @@ LALSUITE_GIT=0
 #
 GSTLAL_GIT_BRANCH="master"
 LIGOSCALD_GIT_BRANCH="master"
-LALSUITE_GIT_BRANCH="master"
+LALSUITE_GIT_BRANCH="lalsuite-v6.74"
 
 # Set package release versions
 GSTLALINSPIRAL=gstlal-inspiral-1.7.3
@@ -462,6 +462,7 @@ $(LOGS_DIR) :
 		else \
 			mkdir -p $(LALSUITE_REPO) ; \
 			git clone -b $(LALSUITE_GIT_BRANCH) https://git.ligo.org/lscsoft/lalsuite.git $(LALSUITE_REPO) ; \
+			cd $(LALSUITE_REPO) && git revert 543ffff2e7c509c466d0369a8e61f61b51f9d9dd --no-commit ; \
 		fi ; \
 	else \
 		wget --no-check-certificate http://software.igwn.org/lscsoft/source/lalsuite/$(LAL).tar.xz --directory-prefix=$(TAR_DIR) -nc ; \
