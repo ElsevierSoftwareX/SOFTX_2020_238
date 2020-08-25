@@ -18,6 +18,11 @@ SHELL := /bin/bash # Use bash syntax
 # Determine cluster
 CLUSTER:=$(shell hostname -d)
 
+# Set python version and executable
+PYTHON = python3
+PYTHON_VERSION = python3.6
+PYTHON_SHORT_VERSION = 3.6
+
 # Set directories and paths
 SRC_DIR:=${PWD}/src
 TAR_DIR:=tarball
@@ -70,8 +75,8 @@ GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
-LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/python2.7/site-packages/$(LIGOSCALD)-py2.7.egg
-KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/python2.7/site-packages/confluent_kafka-$(KAFKA_PYTHON)-py2.7-linux-x86_64.egg
+LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/$(PYTHON_VERSION)/site-packages/$(LIGOSCALD)-py$(PYTHON_SHORT_VERSION).egg
+KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/$(PYTHON_VERSION)/site-packages/confluent_kafka-$(KAFKA_PYTHON)-py$(PYTHON_SHORT_VERSION)-linux-x86_64.egg
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
 LALINFER_TARGET=$(INSTALL_DIR)/lib/liblalinference.so
@@ -145,7 +150,7 @@ env.sh :
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${LAL_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${LAL_PATH}/lib/pkgconfig:$${LAL_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
-	@echo 'PYTHONPATH=$${LAL_PATH}/lib/python2.7/site-packages:$${LAL_PATH}/lib64/python2.7/site-packages:$${PYTHONPATH}' >> $@
+	@echo 'PYTHONPATH=$${LAL_PATH}/lib/$(PYTHON_VERSION)/site-packages:$${LAL_PATH}/lib64/$(PYTHON_VERSION)/site-packages:$${PYTHONPATH}' >> $@
 	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
 	@echo 'GST_PLUGIN_PATH=$${LAL_PATH}/lib/gstreamer-1.0:$${GST_PLUGIN_PATH}' >> $@
 	@echo 'GST_REGISTRY_1_0=$${LAL_PATH}/registry.bin' >> $@
@@ -248,12 +253,12 @@ $(LOGS_DIR)/ligo-scald.txt : $(LOGS_DIR)/kafka-python.txt $(LIGOSCALD_TARGET)
 
 $(LIGOSCALD_TARGET) : $(KAFKA_PYTHON_TARGET)
 	@echo $(GREEN)ligo-scald$(WHITE) 1>&2
-	mkdir -p $(INSTALL_DIR)/lib/python2.7/site-packages
+	mkdir -p $(INSTALL_DIR)/lib/$(PYTHON_VERSION)/site-packages
 	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
-		cd $(LIGOSCALD_REPO) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+		cd $(LIGOSCALD_REPO) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) ; \
 	else \
 		tar -xzf $(TAR_DIR)/$(LIGOSCALD).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(LIGOSCALD) && python setup.py install --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LIGOSCALD) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) ; \
 	fi ;
 
 # confluent-kafka-python
@@ -265,7 +270,7 @@ $(LOGS_DIR)/kafka-python.txt : $(LOGS_DIR)/librdkafka.txt $(KAFKA_PYTHON_TARGET)
 $(KAFKA_PYTHON_TARGET) : $(LIBRDKAFKA_TARGET)
 	@echo $(GREEN)kafka-python$(WHITE) 1>&2
 	tar -xzf $(TAR_DIR)/confluent-kafka-python-$(KAFKA_PYTHON).tar.gz -C $(SRC_DIR) ; \
-	cd $(SRC_DIR)/confluent-kafka-python-$(KAFKA_PYTHON) &&  python setup.py install --prefix=$(INSTALL_DIR) ; \
+	cd $(SRC_DIR)/confluent-kafka-python-$(KAFKA_PYTHON) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) ; \
 
 # librdkafka
 librdkafka : $(LOGS_DIR)/librdkafka.txt

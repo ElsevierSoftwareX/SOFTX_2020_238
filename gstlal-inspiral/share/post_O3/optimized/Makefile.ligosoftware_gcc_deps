@@ -18,6 +18,10 @@ SHELL := /bin/bash # Use bash syntax
 # Determine cluster
 CLUSTER:=$(shell hostname -d | tr '[:upper:]' '[:lower:]')
 
+# Set python version and executable
+PYTHON = python3
+PYTHON_VERSION = python3.6
+
 # Set directories and paths
 SRC_DIR:=${PWD}/src
 TAR_DIR:=tarball
@@ -25,11 +29,11 @@ LOGS_DIR:=logs
 PATCH_DIR:=${PWD}/patches
 INSTALL_DIR:=${DEPS_PATH}
 ifeq ($(findstring debian,$(shell cat /etc/os-release | grep ID=)),debian)
-	PYTHON_LIB_DIR:=/usr/lib/python2.7/config-x86_64-linux-gnu
-	PYTHON_DIR:=${DEPS_PATH}/lib/python2.7/site-packages
+	PYTHON_LIB_DIR:=/usr/lib/$(PYTHON_VERSION)/config-x86_64-linux-gnu
+	PYTHON_DIR:=${DEPS_PATH}/lib/$(PYTHON_VERSION)/site-packages
 else
 	PYTHON_LIB_DIR:=/usr/lib64
-	PYTHON_DIR:=${DEPS_PATH}/lib64/python2.7/site-packages
+	PYTHON_DIR:=${DEPS_PATH}/lib64/$(PYTHON_VERSION)/site-packages
 endif
 
 # Set package release versions
@@ -129,7 +133,7 @@ deps_env.sh :
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${DEPS_PATH}/bin:$${PATH}' >> $@
 	@echo 'PKG_CONFIG_PATH=$${DEPS_PATH}/lib/pkgconfig:$${DEPS_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}' >> $@
-	@echo 'PYTHONPATH=$${DEPS_PATH}/lib/python2.7/site-packages:$${DEPS_PATH}/lib64/python2.7/site-packages' >> $@
+	@echo 'PYTHONPATH=$${DEPS_PATH}/lib/$(PYTHON_VERSION)/site-packages:$${DEPS_PATH}/lib64/$(PYTHON_VERSION)/site-packages' >> $@
 	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
 	@echo 'GST_PLUGIN_PATH=$${DEPS_PATH}/lib/gstreamer-1.0' >> $@
 	@echo 'GST_REGISTRY_1_0=$${DEPS_PATH}/registry.bin' >> $@
@@ -210,7 +214,7 @@ $(GSTPYTHON_TARGET) : $(GSTGOOD_TARGET)
 	@echo $(GREEN)gst-python$(WHITE) 1>&2
 	#mkdir -p $(INSTALL_DIR)/lib64/python2.7/site-packages/gi/overrides
 	tar -xf $(TAR_DIR)/$(GSTPYTHON).tar.xz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(GSTPYTHON) && ./configure --prefix=$(INSTALL_DIR) --exec-prefix=$(INSTALL_DIR) --with-libpython-dir=$(PYTHON_LIB_DIR) --with-pygi-overrides-dir=$(INSTALL_DIR)/lib/python2.7/site-packages/gi/overrides
+	cd $(SRC_DIR)/$(GSTPYTHON) && ./configure --prefix=$(INSTALL_DIR) --exec-prefix=$(INSTALL_DIR) --with-libpython-dir=$(PYTHON_LIB_DIR) --with-pygi-overrides-dir=$(INSTALL_DIR)/lib/$(PYTHON_VERSION)/site-packages/gi/overrides
 	cd $(SRC_DIR)/$(GSTPYTHON) && make -j$(CORES) && make install -j$(CORES)
 
 # gstreamer plugin good
