@@ -49,7 +49,7 @@ stages:
 #
 
 .levelN:rpm: &levelN-rpm-package
-  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   variables:
     GIT_STRATEGY: fetch
     RPM_BUILD_CPUS: 4
@@ -110,7 +110,7 @@ level2:rpm:gstlal-burst:
 
 
 test:gstlal:
-  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-gstlal
   dependencies:
     - level0:rpm:gstlal
@@ -138,7 +138,7 @@ test:gstlal:
     - pushes
 
 test:gstlal-inspiral:
-  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-inspiral
   dependencies:
     - level0:rpm:gstlal
@@ -162,7 +162,7 @@ test:gstlal-inspiral:
   allow_failure: true
 
 test:gstlal-burst:
-  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-burst
   dependencies:
     - level0:rpm:gstlal
@@ -186,7 +186,7 @@ test:gstlal-burst:
   allow_failure: true
 
 test:offline:
-  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-offline
   dependencies:
     - level0:rpm:gstlal
@@ -235,7 +235,7 @@ test:offline:
   allow_failure: true
   
 pages:
-  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+  image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: nightly-pages
   script:
     # Install RPMs and set up the test environment:
