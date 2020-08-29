@@ -6,15 +6,15 @@
 # which interferometer (H or L)
 IFO = H
 # determines where to look for filters files (e.g., O1, O2, O3, ER10, ER13, ER14, PreER10, PreER13, PreER14)
-OBSRUN = O2
+OBSRUN = O3
 
-START = $(shell echo 1185753618 | bc)
+START = $(shell echo 1269124318 | bc)
 #1239997514 roaming line change
 # 1269114318 start H1 pcal2darm for paper
 # 1269021699 start of BB injection for paper (178 s)
 # 1269020000 - 1269022600
 # O2 H1 actuation timing plot: 1185753618 - 1185775218
-END = $(shell echo 1185775218 | bc)
+END = $(shell echo 1269128430 | bc)
 # 1269136430 end H1 pcal2darm for paper
 SHMRUNTIME = 600
 # How much time does the calibration need to settle at the start and end?
@@ -29,7 +29,7 @@ SCALAR_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_SCALAR_CORR
 FCC_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_FCC_CORR.ini
 ALL_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_ALL_CORR.ini
 FCCFS_CORR_CONFIGS = Filters/O2/GDSFilters/H1DCS_FccFsCorrections_Cleaning.ini
-ALL_CORR_CONFIGS = Filters/O2/GDSFilters/H1DCS_AllCorrections_Cleaning.ini
+NO_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_NO_CORR.ini
 EXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_exactKappas_1239472998.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
@@ -42,7 +42,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: actuation_timing_plot
+all: filters_tf_DCS
 #pcal_DCS_transfer_functions
 #TDCFs_pcal2darm_plots
 #actuation_timing_plot
@@ -127,6 +127,10 @@ $(IFO)1_ALL_CORR_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(ALL_CORR_CONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_ALL_CORR-*.gwf | lalapps_path2cache > $@
 
+$(IFO)1_NO_CORR_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(NO_CORR_CONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_NO_CORR-*.gwf | lalapps_path2cache > $@
+
 # In case we want to compare one calibration to another...
 $(IFO)1_hoft_GDS_TEST_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/GDS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(GDSTESTCONFIGS)
@@ -193,7 +197,7 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 filters_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 	python3 plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.95 --ratio-magnitude-max 1.05 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -3 --ratio-phase-max 3
 
-filters_tf_DCS: $(IFO)1_ALL_CORR_frames.cache
+filters_tf_DCS: $(IFO)1_NO_CORR_frames.cache
 	python3 plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.9 --ratio-magnitude-max 1.1 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -10 --ratio-phase-max 10
 
 filters_tf_CALCS: $(IFO)1_easy_raw_frames.cache

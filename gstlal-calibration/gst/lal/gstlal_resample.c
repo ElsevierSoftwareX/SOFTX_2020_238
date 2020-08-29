@@ -1103,11 +1103,14 @@ static void prepare_element(GSTLALResample *element) {
 		element->sinc_table = g_malloc((1 + element->sinc_length / 2) * sizeof(double));
 		*(element->sinc_table) = 1.0;
 		gint32 i;
-		double sin_arg;
+		double sin_arg, alpha, f_cut;
 		/* Frequency resolution in units of frequency bins of the sinc table */ \
-		double alpha = (1 + sinc_length_at_low_rate / 24.0); \
+		if(element->frequency_resolution)
+			alpha = element->frequency_resolution * element->sinc_length / element->rate_in;
+		else
+			alpha = 1 + sinc_length_at_low_rate / 24.0; \
 		/* Low-pass cutoff frequency as a fraction of the sampling frequency of the sinc table */ \
-		double f_cut = 0.5 / inv_cadence - alpha / element->sinc_length; \
+		f_cut = 0.5 / inv_cadence - alpha / element->sinc_length; \
 		for(i = 1; i <= element->sinc_length / 2; i++) {
 			sin_arg = 2 * M_PI * f_cut * i;
 			element->sinc_table[i] = sin(sin_arg) / sin_arg;
@@ -1173,11 +1176,14 @@ static void prepare_element(GSTLALResample *element) {
 		element->sinc_table = g_malloc((1 + element->sinc_length / 2) * sizeof(double));
 		*(element->sinc_table) = 1.0;
 		gint32 i, j;
-		double sin_arg;
+		double sin_arg, alpha, f_cut;
 		/* Frequency resolution in units of frequency bins of the sinc table */ \
-		double alpha = (1 + sinc_length_at_low_rate / 24.0); \
+		if(element->frequency_resolution)
+			alpha = element->frequency_resolution * element->sinc_length / element->rate_out;
+		else
+			alpha = 1 + sinc_length_at_low_rate / 24.0; \
 		/* Low-pass cutoff frequency as a fraction of the sampling frequency of the sinc table */ \
-		double f_cut = 0.5 / cadence - alpha / element->sinc_length; \
+		f_cut = 0.5 / cadence - alpha / element->sinc_length; \
 		for(i = 1; i <= element->sinc_length / 2; i++) {
 			sin_arg = 2 * M_PI * f_cut * i;
 			element->sinc_table[i] = sin(sin_arg) / sin_arg;
@@ -1750,7 +1756,8 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 enum property {
 	ARG_QUALITY = 1,
 	ARG_ZERO_LATENCY,
-	ARG_WINDOW
+	ARG_WINDOW,
+	ARG_FREQUENCY_RESOLUTION
 };
 
 
@@ -1772,6 +1779,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	case ARG_WINDOW:
 		element->window = g_value_get_enum(value);
+		break;
+	case ARG_FREQUENCY_RESOLUTION:
+		element->frequency_resolution = g_value_get_double(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1797,6 +1807,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_WINDOW:
 		g_value_set_enum(value, element->window);
+		break;
+	case ARG_FREQUENCY_RESOLUTION:
+		g_value_set_double(value, element->frequency_resolution);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1919,6 +1932,18 @@ static void gstlal_resample_class_init(GSTLALResampleClass *klass) {
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_FREQUENCY_RESOLUTION,
+		g_param_spec_double(
+			"frequency-resolution",
+			"Frequency Resolution",
+			"Frequency resolution in of sinc table in Hz.  If unset, resolution is\n\t\t\t"
+			"determined from quality and sample rate",
+			0, G_MAXDOUBLE, 0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 }
 
 
@@ -1946,6 +1971,7 @@ static void gstlal_resample_init(GSTLALResample *element) {
 	element->num_end_samples = 0;
 	element->produced_outbuf = FALSE;
 	element->leading_samples = 0;
+	element->frequency_resolution = 0.0;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
 

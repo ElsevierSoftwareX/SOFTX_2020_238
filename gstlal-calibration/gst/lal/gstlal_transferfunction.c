@@ -1511,7 +1511,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
 			 */
 
-			if(element->fir_length == element->fft_length && element->frequency_resolution <= (double) element->rate / element->fir_length) {
+			if(element->fir_length == element->fft_length) {
 				element->workspace.wspf.sinc_length = 1;
 				element->workspace.wspf.sinc_table = g_malloc(sizeof(*element->workspace.wspf.sinc_table));
 				*element->workspace.wspf.sinc_table = 1.0;
@@ -1736,7 +1736,7 @@ static gboolean set_caps(GstBaseSink *sink, GstCaps *caps) {
 			 * Make a sinc table to resample and/or low-pass filter the transfer functions when we make FIR filters
 			 */
 
-			if(element->fir_length == element->fft_length && element->frequency_resolution < (double) element->rate / element->fir_length) {
+			if(element->fir_length == element->fft_length) {
 				element->workspace.wdpf.sinc_length = 1;
 				element->workspace.wdpf.sinc_table = g_malloc(sizeof(*element->workspace.wdpf.sinc_table));
 				*element->workspace.wdpf.sinc_table = 1.0;
