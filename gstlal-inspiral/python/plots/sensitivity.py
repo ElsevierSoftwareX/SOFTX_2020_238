@@ -17,28 +17,219 @@
 import datetime
 from itertools import chain
 import math
+
 import matplotlib
 matplotlib.use('Agg')
 matplotlib.rcParams.update({
-        "font.size": 10.0,
-        "axes.titlesize": 10.0,
-        "axes.labelsize": 10.0,
-        "xtick.labelsize": 8.0,
-        "ytick.labelsize": 8.0,
-        "legend.fontsize": 8.0,
-        "figure.dpi": 200,
-        "savefig.dpi": 200,
-        "text.usetex": True
+	"font.size": 10.0,
+	"axes.titlesize": 10.0,
+	"axes.labelsize": 10.0,
+	"xtick.labelsize": 8.0,
+	"ytick.labelsize": 8.0,
+	"legend.fontsize": 8.0,
+	"figure.dpi": 200,
+	"savefig.dpi": 200,
+	"text.usetex": True
 })
 from matplotlib import pyplot as plt
 from matplotlib import ticker as tkr
 import numpy
 
-from ligo.lw import utils as ligolw_utils
-from gstlal import plotsegments
+from lal import iterutils
 from lal import GPSToUTC
 from lal import rate
+from ligo.lw import utils as ligolw_utils
+
 from gstlal import imr_utils
+from gstlal.plots import segments as plotsegments
+from gstlal.plots import util as plotutil
+
+
+def bin_type_to_label(bin_type, mlo, mmid, mhi):
+	if bin_type == "Aligned_Spin":
+		label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
+	if bin_type == "Mass_Ratio":
+		label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
+	if bin_type == "Total_Mass":
+		label = "$M_\mathrm{total} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
+	if bin_type == "Chirp_Mass" or bin_type == "Source_Type":
+		label = "$M_\mathrm{chirp} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
+	if bin_type == "Mass1_Mass2":
+		if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
+			return
+		label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
+	if bin_type == "Duration":
+		if mlo[0] == 0:
+			label = "$t_\mathrm{template} \leq %.2f \,\mathrm{s}$" % mhi[0]
+		elif numpy.isinf(mhi[0]):
+			label = "$t_\mathrm{template} > %.2f \,\mathrm{s}$" % mlo[0]
+		else:
+			label = "$%.2f \,\mathrm{s} < t_\mathrm{template} \leq %.2f \,\mathrm{s}$" % (mlo[0], mhi[0])
+	return label
+
+def volumes_bins_to_range_label(volumes, bins, bin_type):
+	for bin_lo, bin_mid, bin_hi in zip(
+		iterutils.MultiIter(*bins.lower()),
+		iterutils.MultiIter(*bins.centres()),
+		iterutils.MultiIter(*bins.upper())
+	):
+		center = numpy.array([v[bin_mid] for v in volumes[1]])
+		if (center == 0).all():
+			continue
+		lo = numpy.array([v[bin_mid] for v in volumes[0]])
+		hi = numpy.array([v[bin_mid] for v in volumes[2]])
+
+		yield lo, center, hi, bin_type_to_label(bin_type, bin_lo, bin_mid, bin_hi)
+
+def fiducial_efficiency_to_range_label(eff_fid, bins, zero_bin, bin_type):
+	for bin_lo, bin_mid, bin_hi in zip(
+		iterutils.MultiIter(*bins.lower()),
+		iterutils.MultiIter(*bins.centres()),
+		iterutils.MultiIter(*bins.upper())
+	):
+		ds = (zero_bin.lower() + zero_bin.upper()) / 2
+		center = numpy.array([eff_fid[(d,) + bin_mid] for d in ds])
+		lo = numpy.array([eff_fid_lo[(d,) + bin_mid] for d in ds])
+		hi = numpy.array([eff_fid_hi[(d,) + bin_mid] for d in ds])
+
+		yield lo, center, hi, bin_type_to_label(bin_type, bin_lo, bin_mid, bin_hi)
+
+def vt_to_range(volume, livetime):
+	return (volume / (4 * math.pi * livetime / 3))**(1./3)
+
+def plot_sensitivity_vs_far(volumes, fars, livetime, ifos, bins, bin_type):
+	fig = plt.figure()
+	fig.set_size_inches((8., 8. / plotutil.golden_ratio))
+	ax_far = fig.gca()
+
+	# plot the volume/range versus far/snr for each bin
+	mbins = rate.NDBins(bins[1:])
+	labels = []
+	for lo, center, hi, label in volumes_bins_to_range_label(volumes, mbins, bin_type):
+		labels.append(label)
+
+		# NOTE create regular plots, and define log x,y scales below
+		#      since otherwise, fill_between allocates too many blocks and crashes
+		line, = ax_far.plot(fars, center, label=label, linewidth=2)
+		ax_far.fill_between(fars, lo, hi, alpha=0.5, color=line.get_color())
+
+	ax_far.set_xlabel("Combined FAR (Hz)")
+	ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
+	ax_far.set_xscale("log")
+	ax_far.set_yscale("log")
+	ax_far.set_xlim([min(fars), max(fars)])
+	ax_far.invert_xaxis()
+	ax_far.legend(loc="lower left")
+	ax_far.grid()
+
+	vol_tix = ax_far.get_yticks()
+	tx = ax_far.twinx() # map volume to distance
+	tx.set_yticks(vol_tix)
+	tx.set_yscale("log")
+	tx.set_ylim(ax_far.get_ylim())
+	tx.set_yticklabels(["%.3g" % (vt_to_range(float(k), livetime[ifos]) for k in vol_tix])
+	tx.set_ylabel("Range (Mpc)")
+
+	ax_far.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(ifos))), livetime[ifos]*365.25))
+	fig.tight_layout(pad = .8)
+
+	return fig
+
+def plot_range_vs_far(volumes, fars, livetime, ifos, bins, bin_type):
+	fig = plt.figure()
+	fig.set_size_inches((8., 8. / plotutil.golden_ratio))
+	ax_far_range = fig.gca()
+
+	# plot the volume/range versus far/snr for each bin
+	mbins = rate.NDBins(bins[1:])
+	labels = []
+	for lo, center, hi, label in volumes_bins_to_range_label(volumes, mbins, bin_type):
+		labels.append(label)
+
+		# NOTE create regular plots, and define log x,y scales below
+		#      since otherwise, fill_between allocates too many blocks and crashes
+		center = vt_to_range(center, livetime[ifos])
+		lo = vt_to_range(lo, livetime[ifos])
+		hi = vt_to_range(hi, livetime[ifos])
+		line, = ax_far_range.plot(fars, center, label=label, linewidth=2)
+		ax_far_range.fill_between(fars, lo, hi, alpha=0.5, color=line.get_color())
+
+	ax_far_range.set_xlabel("Combined FAR (Hz)")
+	ax_far_range.set_ylabel("Range (Mpc)")
+	ax_far_range.set_xscale("log")
+	ax_far_range.set_xlim([min(fars), max(fars)])
+	ax_far_range.invert_xaxis()
+	ax_far_range.legend(loc="lower left")
+	ax_far_range.grid()
+
+	ax_far_range.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(ifos))), livetime[ifos]*365.25))
+	fig.tight_layout(pad = .8)
+
+	return fig
+
+def plot_sensitivity_vs_snr(volumes, snrs, livetime, ifos, bins, bin_type):
+	fig = plt.figure()
+	fig.set_size_inches((8., 8. / plotutil.golden_ratio))
+	ax_snr = fig.gca()
+
+	# plot the volume/range versus far/snr for each bin
+	mbins = rate.NDBins(bins[1:])
+	labels = []
+	for lo, center, hi, label in volumes_bins_to_range_label(volumes, mbins, bin_type):
+		labels.append(label)
+
+		# NOTE create regular plots, and define log x,y scales below
+		#      since otherwise, fill_between allocates too many blocks and crashes
+		line, = ax_snr.plot( snrs, center, label=label, linewidth=2 )
+		ax_snr.fill_between( snrs, lo, hi, alpha=0.5, color=line.get_color())
+
+	ax_snr.set_xlabel("Network SNR")
+	ax_snr.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
+	ax_snr.set_yscale("log")
+	ax_snr.set_xlim([min(snrs), max(snrs)])
+	ax_snr.set_ylim(ymin=0)
+	ax_snr.legend(loc="lower left")
+	ax_snr.grid()
+
+	vol_tix = ax_snr.get_yticks()
+	tx = ax_snr.twinx() # map volume to distance
+	tx.set_yticks(vol_tix)
+	tx.set_yscale("log")
+	tx.set_ylim(ax_snr.get_ylim())
+	tx.set_yticklabels(["%.3g" % (vt_to_range(float(k), livetime[ifos]) for k in vol_tix])
+	tx.set_ylabel("Range (Mpc)")
+
+	ax_snr.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(ifos))), livetime[ifos]*365.25))
+	fig.tight_layout(pad = .8)
+
+	return fig
+
+def plot_fiducial_efficiency(eff_fids, fiducial_far, ifos, bins, bin_type):
+	fig = plt.figure()
+	fig.set_size_inches((8., 8. / plotutil.golden_ratio))
+	ax_eff = fig.gca()
+
+	# plot the volume/range versus far/snr for each bin
+	mbins = rate.NDBins(bins[1:])
+	labels = []
+	for lo, center, hi, label in fiducial_efficiency_to_range_label(eff_fids, mbins, bins[0], bin_type):
+		labels.append(label)
+
+		# NOTE create regular plots, and define log x,y scales below
+		#      since otherwise, fill_between allocates too many blocks and crashes
+		line, = ax_eff.plot(ds, eff, label=label, linewidth=2 )
+		ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
+
+	ax_eff.set_xlabel("Distance (Mpc)")
+	ax_eff.set_ylabel("Efficiency")
+	ax_eff.set_xscale("log")
+	ax_eff.legend(loc="upper right")
+	ax_eff.grid()
+
+	ax_eff.set_title("%s Observing ($\mathrm{FAR} < %s\,\mathrm{Hz}$)" % ("".join(sorted(list(ifos))), plotutil.latexnumber("%.2e" % fiducial_far)))
+	fig.tight_layout(pad = .8)
+
+	return fig
 
 # FIXME Currently this program assumes there are only two ifos
 def parse_sensitivity_docs(database, cumulative_segments_file, simdb_query_end_time):

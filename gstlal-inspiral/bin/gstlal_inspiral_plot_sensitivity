@@ -18,22 +18,15 @@
 
 ### A program to plot the sensitivity of a gstlal inspiral search, e.g., VT
 
-import math
-import numpy
-
-import sqlite3
-
-import matplotlib
-matplotlib.use("agg")
-from matplotlib import pyplot
-
-import os
-import sys
-from optparse import OptionParser
 import itertools
+import math
+from optparse import OptionParser
+import os
+import sqlite3
+import sys
 
-from gstlal import dagparts
-from gstlal.plots import util as plotutil
+from matplotlib import pyplot
+import numpy
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables
@@ -41,14 +34,15 @@ from ligo.lw import dbtables
 from ligo.lw import utils as ligolw_utils
 from ligo.lw import array as ligolw_array
 from ligo import segments
-from ligo.segments import utils as segmentsUtils
 
 import lal
-from lal import iterutils
 from lal import rate
 from lal.utils import CacheEntry
 
 from gstlal import imr_utils
+from gstlal import dagparts
+from gstlal.plots import sensitivity as plotsens
+
 
 __author__ = "Stephen Privitera <sprivite@caltech.edu>, Chad Hanna <channa@perimeterinstitute.ca>, Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "git id %s" % ""	# FIXME
@@ -369,26 +363,13 @@ The program gstlal_inspiral_plot_sensitivity computes the sensitive volume of a 
     parser.add_option("--exclude-sim-type", default = [], action = "append", metavar = "SIM", help = "When computing the search volume, exclude injections made using the SIM waveform family. Example: SpinTaylorthreePointFivePN. Use this option multiple times to exclude more than one injection type.")
     parser.add_option("--remove-precession", action = "store_true", help = "Exclude precessing injections when plotting sensitivity.")
 
-    # more options
-    # Bin injections in mass by m1-m2
+    # binning options
     parser.add_option("--bin-by-mass1-mass2", default = False, action = "store_true", help = "Bin injections by component mass in two dimensions when estimating the search efficiency.")
-
-    # Bin injections by total mass
     parser.add_option("--bin-by-total-mass", default = False, action = "store_true", help = "Bin injections by total mass when estimating the search efficiency.")
-
-    # Bin injections by chirp mass
     parser.add_option("--bin-by-chirp-mass", default = False, action = "store_true", help = "Bin injections by chirp mass when estimating the search efficiency.")
-
-    # aligned spin
     parser.add_option("--bin-by-aligned-spin", default = False, action = "store_true", help = "Bin injections by aligned spin parameter when estimating the search efficiency.")
-
-    # mass ratio
     parser.add_option("--bin-by-mass-ratio", default = False, action = "store_true", help = "Bin injections by mass ratio when estimating the search efficiency.")
-
-    # bin by source type
     parser.add_option("--bin-by-source-type", default = False, action = "store_true", help = "Bin injections by source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0")
-
-    # bin by duration
     parser.add_option("--bin-by-duration", default = False, action = "store_true", help = "Bin injections by template duration when estimating the search efficiency.")
 
     opts, filenames = parser.parse_args()
@@ -599,162 +580,28 @@ for bin_type in opts.bin_types:
         cache_list.append( CacheEntry( "".join(sorted(list(instr))), bin_type,segments.segment(UL.start_time, UL.end_time), "file://localhost%s/%s" % (os.getcwd(), output_filename)) )
 
         #
-        # set up figures for plots FIXME: since we are now writing the
-        # data to disk, it may make more sense to carry out the
-        # plotting in a separate code
-        #
-        fig_far, fig_far_range, fig_snr, fig_eff = pyplot.figure(), pyplot.figure(), pyplot.figure(), pyplot.figure()
-        fig_far.set_size_inches((8., 8. / plotutil.golden_ratio))
-        fig_far_range.set_size_inches((8., 8. / plotutil.golden_ratio))
-        fig_snr.set_size_inches((8., 8. / plotutil.golden_ratio))
-        fig_eff.set_size_inches((8., 8. / plotutil.golden_ratio))
-        ax_far = fig_far.gca()
-        ax_far_range = fig_far_range.gca()
-        ax_snr = fig_snr.gca()
-        ax_eff = fig_eff.gca()
-
         # plot the volume/range versus far/snr for each bin
-        mbins = rate.NDBins(bins[1:])
-        labels = []
-        for mlo, mmid, mhi in zip(iterutils.MultiIter(*mbins.lower()),
-                                  iterutils.MultiIter(*mbins.centres()),
-                                  iterutils.MultiIter(*mbins.upper())):
+        # FIXME: since we are now writing the data to disk,
+        # it may make more sense to carry out the plotting
+        # in a separate code
+        #
 
-            # plot labels
-            if bin_type == "Aligned_Spin":
-                label = "$\chi \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
-            if bin_type == "Mass_Ratio":
-                label = "$m_1/m_2 \in [%.2f, %.2f]$" % (mlo[0], mhi[0])
-            if bin_type == "Total_Mass":
-                label = "$M_\mathrm{total} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
-            if bin_type == "Chirp_Mass" or bin_type == "Source_Type":
-                label = "$M_\mathrm{chirp} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
-            if bin_type == "Mass1_Mass2":
-                if mmid[0] > mmid[1]: # symmetrized sims have m1 < m2
-                    continue
-                label = "$m_1 \in [%.2f, %.2f], m_2 \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0], mlo[1], mhi[1])
-            if bin_type == "Duration":
-                if mlo[0] == 0:
-                    label = "$t_\mathrm{template} \leq %.2f \,\mathrm{s}$" % mhi[0]
-                elif numpy.isinf(mhi[0]):
-                    label = "$t_\mathrm{template} > %.2f \,\mathrm{s}$" % mlo[0]
-                else:
-                    label = "$%.2f \,\mathrm{s} < t_\mathrm{template} \leq %.2f \,\mathrm{s}$" % (mlo[0], mhi[0])
-            labels.append(label)
+        far_vols = (vols_lo_far, vols_far, vols_hi_far)
+        snr_vols = (vols_lo_snr, vols_snr, vols_hi_snr)
+        eff_fids = (eff_fid_lo, eff_fid, eff_fid_hi)
 
-            # NOTE create regular plots, and define log x,y scales below
-            #      since otherwise, fill_between allocates too many blocks and crashes
-            # sensitivity vs far
-            center = numpy.array([v[mmid] for v in vols_far])
-            if (center == 0).all():
-                continue
-            lo = numpy.array([v[mmid] for v in vols_lo_far])
-            hi = numpy.array([v[mmid] for v in vols_hi_far])
-            line, = ax_far.plot( fars, center, label=label, linewidth=2 )
-            ax_far.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
-
-            # range vs far
-            center = (center/(4*math.pi*UL.livetime[instr]/3))**(1./3)
-            lo = (lo/(4*math.pi*UL.livetime[instr]/3))**(1./3)
-            hi = (hi/(4*math.pi*UL.livetime[instr]/3))**(1./3)
-            line, = ax_far_range.plot( fars, center, label=label, linewidth=2 )
-            ax_far_range.fill_between( fars, lo, hi, alpha=0.5, color=line.get_color())
-
-            # sensitivity vs snr
-            center = numpy.array([v[mmid] for v in vols_snr])
-            lo = numpy.array([v[mmid] for v in vols_lo_snr])
-            hi = numpy.array([v[mmid] for v in vols_hi_snr])
-            line, = ax_snr.plot( snrs, center, label=label, linewidth=2 )
-            ax_snr.fill_between( snrs, lo, hi, alpha=0.5, color=line.get_color())
-
-            # plot fiducial efficiency
-            # # far vs snr
-            ds = (bins[0].lower() + bins[0].upper() )/2
-            eff = numpy.array([eff_fid[(d,) + mmid] for d in ds])
-            lo = numpy.array([eff_fid_lo[(d,) + mmid] for d in ds])
-            hi = numpy.array([eff_fid_hi[(d,) + mmid] for d in ds])
-            line, = ax_eff.plot(ds, eff, label=label, linewidth=2 )
-            ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
-
-        # sensitivity vs far
-        ax_far.set_xlabel("Combined FAR (Hz)")
-        ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
-        ax_far.set_xscale("log")
-        ax_far.set_yscale("log")
-        ax_far.set_xlim([min(fars), max(fars)])
-        ax_far.invert_xaxis()
-        ax_far.legend(loc="lower left")
-        ax_far.grid()
-
-        vol_tix = ax_far.get_yticks()
-        tx = ax_far.twinx() # map volume to distance
-        tx.set_yticks(vol_tix)
-        tx.set_yscale("log")
-        tx.set_ylim(ax_far.get_ylim())
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
-        tx.set_ylabel("Range (Mpc)")
-
-        # range vs far
-        ax_far_range.set_xlabel("Combined FAR (Hz)")
-        ax_far_range.set_ylabel("Range (Mpc)")
-        ax_far_range.set_xscale("log")
-        ax_far_range.set_xlim([min(fars), max(fars)])
-        ax_far_range.invert_xaxis()
-        ax_far_range.legend(loc="lower left")
-        ax_far_range.grid()
-
-        # sensitivity vs snr
-        ax_snr.set_xlabel("Network SNR")
-        ax_snr.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
-        ax_snr.set_yscale("log")
-        ax_snr.set_xlim([min(snrs), max(snrs)])
-        ax_snr.set_ylim(ymin=0)
-        ax_snr.legend(loc="lower left")
-        ax_snr.grid()
-
-        vol_tix = ax_snr.get_yticks()
-        tx = ax_snr.twinx() # map volume to distance
-        tx.set_yticks(vol_tix)
-        tx.set_yscale("log")
-        tx.set_ylim(ax_snr.get_ylim())
-        tx.set_yticklabels( ["%.3g" % ((float(k)/(4*math.pi*UL.livetime[instr]/3))**(1./3)) for k in vol_tix] )
-        tx.set_ylabel("Range (Mpc)")
-
-        # efficiency vs distance
-        ax_eff.set_xlabel("Distance (Mpc)")
-        ax_eff.set_ylabel("Efficiency")
-        ax_eff.set_xscale("log")
-        ax_eff.legend(loc="upper right")
-        ax_eff.grid()
-
-        ax_snr.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
-        ax_far.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
-        ax_far_range.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(instr))), UL.livetime[instr]*365.25))
-        ax_eff.set_title("%s Observing ($\mathrm{FAR} < %s\,\mathrm{Hz}$)" % ("".join(sorted(list(instr))), plotutil.latexnumber("%.2e" % opts.fiducial_far)))
-
-        fig_far.tight_layout(pad = .8)
-        fig_far_range.tight_layout(pad = .8)
-        fig_snr.tight_layout(pad = .8)
-        fig_eff.tight_layout(pad = .8)
+        fig_far = plotsens.plot_sensitivity_vs_far(far_vols, fars, UL.livetime, instr, bins, bin_type)
+        fig_far_range = plotsens.plot_range_vs_far(far_vols, fars, UL.livetime, instr, bins, bin_type)
+        fig_snr = plotsens.plot_sensitivity_vs_far(snr_vols, snrs, UL.livetime, instr, bins, bin_type)
+        fig_eff = plotsens.plot_fiducial_efficiency(eff_fids, opts.fiducial_far, inste, bins, bin_type)
 
         # save and close figures
         ifostr = "%s_%s" % (UL.searched_instruments, "".join(sorted(instr)))
-
-        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
-        fig_far.savefig(tag)
-        pyplot.close(fig_far)
-
-        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_RANGE_VS_FAR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
-        fig_far_range.savefig(tag)
-        pyplot.close(fig_far_range)
-
-        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_VOLUME_VS_SNR_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
-        fig_snr.savefig(tag)
-        pyplot.close(fig_snr)
-
-        tag = dagparts.T050017_filename(ifostr, "GSTLAL_INSPIRAL_PLOT_SENSITIVITY_%s_EFFICIENCY_BINNED_BY_%s" % (opts.user_tag, bin_type.upper()), (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
-        fig_eff.savefig(tag)
-        pyplot.close(fig_eff)
+        for fig, plot_type in zip((fig_far, fig_far_range, fig_snr, fig_eff), ("VOLUME_VS_FAR", "RANGE_VS_FAR", "VOLUME_VS_SNR", "EFFICIENCY")):
+            plot_desc = f"GSTLAL_INSPIRAL_PLOT_SENSITIVITY_{plot_type}_{opts.user_tag}_BINNED_BY_{bin_type.upper()}"
+            tag = dagparts.T050017_filename(ifostr, plot_desc, (UL.start_time, UL.end_time), ".png", path = opts.output_dir)
+            fig.savefig(tag)
+            pyplot.close(fig)
 
 
 # write a cache file describing the files generated during by this program
