@@ -56,7 +56,7 @@ from glue.lal import CacheEntry
 
 from gstlal import svd_bank
 from gstlal import dagparts
-from gstlal.plotutil import golden_ratio
+from gstlal.plots.util import golden_ratio
 
 from matplotlib.ticker import MultipleLocator, NullLocator, ScalarFormatter,FixedLocator
 import math

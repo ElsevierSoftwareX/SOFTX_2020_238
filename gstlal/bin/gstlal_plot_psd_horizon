@@ -29,8 +29,8 @@ import numpy
 import lal
 import lal.series
 from ligo.lw import utils as ligolw_utils
-from gstlal import plotutil
 from gstlal import reference_psd
+from gstlal.plots import util as plotutil
 
 if len(sys.argv) < 3:
 	print("USAGE gstlal_plot_psd output_name psd_file1 psd_file2 ...")

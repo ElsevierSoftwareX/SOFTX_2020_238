@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
-SUBDIRS = emcee stats
+SUBDIRS = emcee plots stats
 
 # This is a trick taken from the gst-python automake setup.
 # All of the Python scripts will be installed under the exec dir,
@@ -20,13 +20,8 @@ pkgpython_PYTHON = \
 	inspiral.py \
 	lloidhandler.py \
 	lloidparts.py \
-	lloidplots.py \
 	llweb.py \
 	lvalert_helper.py \
-	plotfar.py \
-	plotsegments.py \
-	plotsensitivity.py \
-	plotsnr.py \
 	rate_estimation.py \
 	snglinspiraltable.py \
 	spawaveform.py \

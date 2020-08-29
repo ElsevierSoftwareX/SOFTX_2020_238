@@ -67,7 +67,7 @@ from ligo.lw import lsctables
 from ligo.lw.utils import segments as ligolw_segments
 from gstlal import far
 from gstlal import dagparts
-from gstlal.plotutil import golden_ratio
+from gstlal.plots.util import golden_ratio
 
 
 def format_column(column):

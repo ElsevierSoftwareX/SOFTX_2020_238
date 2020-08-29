@@ -37,9 +37,9 @@ from matplotlib import figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib import ticker
 import numpy
-from gstlal import plotutil
 from ligo.lw import lsctables
 from gstlal import reference_psd
+from gstlal.plots import util as plotutil
 
 
 def summarize_coinc_xmldoc(coinc_xmldoc):

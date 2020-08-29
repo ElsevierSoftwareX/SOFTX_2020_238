@@ -44,8 +44,8 @@ matplotlib.rcParams.update({
 	"text.usetex": True
 })
 import numpy
-from gstlal import plotutil
 from gstlal import far
+from gstlal.plots import util as plotutil
 
 def init_plot(figsize):
 	fig = figure.Figure()

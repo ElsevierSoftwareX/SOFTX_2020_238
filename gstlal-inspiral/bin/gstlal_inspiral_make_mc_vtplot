@@ -16,7 +16,8 @@ import lal
 from lal import rate
 from ligo import segments
 from ligo.lw import ligolw, lsctables, dbtables
-from gstlal import plotutil, imr_utils
+from gstlal import imr_utils
+from gstlal.plots import util as plotutil
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):

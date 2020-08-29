@@ -28,6 +28,7 @@ AC_CONFIG_FILES([ \
 	Makefile \
 	python/emcee/Makefile \
 	python/Makefile \
+	python/plots/Makefile \
 	python/stats/Makefile \
 	share/Makefile \
 	share/population_models/Makefile \

@@ -46,7 +46,7 @@ from lalinspiral.thinca import InspiralCoincDef
 
 from gstlal import far
 from gstlal import lvalert_helper
-from gstlal import plotfar
+from gstlal.plots import far as plotfar
 
 import matplotlib
 matplotlib.rcParams.update({

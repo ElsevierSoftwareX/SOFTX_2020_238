@@ -26,7 +26,7 @@ from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import segments as ligolw_segments
 from gstlal import far
-from gstlal import plotsensitivity
+from gstlal.plots import sensitivity as plotsensitivity
 from lal import GPSTimeNow
 
 #

@@ -42,7 +42,7 @@ import lal
 
 from glue.ligolw import utils as ligolw_utils
 from gstlal import lvalert_helper
-from gstlal import plotpsd
+from gstlal.plots import psd as plotpsd
 from ligo.gracedb import rest as gracedb
 
 

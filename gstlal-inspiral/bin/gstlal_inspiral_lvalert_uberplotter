@@ -57,8 +57,8 @@ from lal import series
 
 from gstlal import far
 from gstlal import lvalert_helper
-from gstlal import plotfar
-from gstlal import plotpsd
+from gstlal.plots import far as plotfar
+from gstlal.plots import psd as plotpsd
 
 import matplotlib
 matplotlib.rcParams.update({

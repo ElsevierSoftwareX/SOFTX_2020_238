@@ -23,6 +23,7 @@ AC_CONFIG_FILES([ \
 	python/__init__.py \
 	python/Makefile \
 	python/pipeparts/Makefile \
+	python/plots/Makefile \
 	python/stats/Makefile \
 	gst/Makefile \
 	gst/debug/Makefile \

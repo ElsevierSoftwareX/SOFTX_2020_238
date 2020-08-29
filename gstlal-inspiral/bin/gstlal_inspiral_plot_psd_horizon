@@ -11,7 +11,8 @@ from matplotlib import pyplot
 from optparse import OptionParser
 import numpy
 
-from gstlal import far, plotutil
+from gstlal import far
+from gstlal.plots import util as plotutil
 from lal.utils import CacheEntry
 
 

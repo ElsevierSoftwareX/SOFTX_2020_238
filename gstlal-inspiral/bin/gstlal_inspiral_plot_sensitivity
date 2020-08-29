@@ -33,7 +33,7 @@ from optparse import OptionParser
 import itertools
 
 from gstlal import dagparts
-from gstlal import plotutil
+from gstlal.plots import util as plotutil
 
 from ligo.lw import ligolw
 from ligo.lw import lsctables

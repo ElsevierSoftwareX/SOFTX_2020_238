@@ -1,4 +1,4 @@
-SUBDIRS = pipeparts stats
+SUBDIRS = pipeparts plots stats
 
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
@@ -23,8 +23,6 @@ pkgpython_PYTHON = \
 	pipeio.py \
 	pipeline.py \
 	pipeutil.py \
-	plotpsd.py \
-	plotutil.py \
 	reference_psd.py \
 	servicediscovery.py \
 	simplehandler.py \

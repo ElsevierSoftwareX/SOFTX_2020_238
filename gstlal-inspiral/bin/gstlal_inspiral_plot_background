@@ -60,8 +60,8 @@ from ligo.segments import utils as segmentsUtils
 
 
 from gstlal import far
-from gstlal import plotfar
 from gstlal import dagparts
+from gstlal.plots import far as plotfar
 
 
 class SnrChiColourNorm(matplotlib.colors.Normalize):

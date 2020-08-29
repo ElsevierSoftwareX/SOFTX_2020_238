@@ -46,7 +46,7 @@ import sys
 
 from ligo import segments
 from gstlal import far
-from gstlal import plotfar
+from gstlal.plots import far as plotfar
 
 
 #

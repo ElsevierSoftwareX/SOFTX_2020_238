@@ -19,8 +19,8 @@ matplotlib.rcParams.update({
 })
 from matplotlib import pyplot
 
-from gstlal import plotutil
 from gstlal import svd_bank_snr
+from gstlal.plots import util as plotutil
 
 def plot_snr(SNR_dict, width=8, center=None, span=None, verbose=False):
 	"""Plot snr time series from SNR_dicts.
