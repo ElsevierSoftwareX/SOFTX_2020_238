@@ -244,6 +244,10 @@ sens += report.Description("""This page shows plots that characterize the overal
 
 for tag in opts.output_user_tag:
 	visible = 'ALL_LLOID_COMBINED' in tag
+	plots = os.path.join(opts.glob_path, '*%s*_BINNED_BY_DURATION*.png' % tag)
+	imgfooter = "Binned by duration"
+	sens += report.ImageGrid("Sensitive volume (V*T) and mean sensitive distance: %s" % tag, grid_size=3, footer=imgfooter, visible=visible).glob(plots)
+
 	plots = os.path.join(opts.glob_path, '*%s*_BINNED_BY_SOURCE_TYPE*.png' % tag)
 	imgfooter = "Binned by source type"
 	sens += report.ImageGrid("Sensitive volume (V*T) and mean sensitive distance: %s" % tag, grid_size=3, footer=imgfooter, visible=visible).glob(plots)

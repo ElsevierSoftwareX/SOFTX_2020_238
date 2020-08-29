@@ -30,6 +30,8 @@ from ligo.lw.utils import process
 from lalsimulation import SimInspiralTaylorF2ReducedSpinComputeChi, SimIMRPhenomBComputeChi
 
 import sqlite3
+from gstlal import chirptime
+import lal
 
 def get_thinca_zero_lag_segments(connection, program_name = "thinca"):
 	"""

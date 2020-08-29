@@ -463,6 +463,7 @@ def summary_plot_layer(dag, jobs, farnode, options, injdbs, noninjdb, output_dir
 		"tmp-space":dagparts.condor_scratch_space(),
 		"veto-segments-name":"vetoes",
 		"bin-by-source-type":"",
+		"bin-by-duration":"",
 		"dist-bins":200,
 		"data-segments-name":"datasegments"
 	}
