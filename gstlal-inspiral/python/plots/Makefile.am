@@ -7,7 +7,8 @@ plots_PYTHON = \
 	lloid.py \
 	segments.py \
 	sensitivity.py \
-	snr.py
+	snr.py \
+	summary.py
 
 EXTRA_DIST = \
 	__init__.py

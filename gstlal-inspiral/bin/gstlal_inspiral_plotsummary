@@ -65,8 +65,10 @@ from ligo import segments
 from ligo.lw import dbtables
 from ligo.lw import lsctables
 from ligo.lw.utils import segments as ligolw_segments
+
 from gstlal import far
 from gstlal import dagparts
+from gstlal.plots import summary as plotsumm
 from gstlal.plots.util import golden_ratio
 
 
@@ -346,25 +348,6 @@ def truncate(f, digits, si=True):
 		return float(('%10.' + str(digits) + 'e') % f)
 	else:
 		return float(('%10.' + str(digits) + 'f') % f)
-
-#
-# width is in mm, default aspect ratio is the golden ratio
-#
-
-
-def create_plot(x_label = None, y_label = None, width = 165.0, aspect = golden_ratio):
-	fig = matplotlib.figure.Figure()
-	FigureCanvas(fig)
-	if aspect is None:
-		aspect = golden_ratio
-	fig.set_size_inches(width / 25.4, width / 25.4 / aspect)
-	axes = fig.add_axes((0.1, 0.12, .875, .80))
-	axes.grid(True)
-	if x_label is not None:
-		axes.set_xlabel(x_label)
-	if y_label is not None:
-		axes.set_ylabel(y_label)
-	return fig, axes
 
 
 def create_sim_coinc_view(connection):
@@ -701,13 +684,6 @@ FROM
 			instruments = frozenset(instrument for instrument, segments in contents.seglists.items() if sim.time_geocent in segments)
 			self.injections.setdefault(sim.waveform, []).append(sim)
 
-	@staticmethod
-	def marker_and_size(n):
-		if n > 2000:
-			return "ko", (10000.0 / n)**0.7
-		else:
-			return "k.", None
-
 	def finish(self):
 		for waveform, sims in self.injections.items():
 			for col1, col2, ax1, ax2, name, aspect in [
@@ -717,18 +693,7 @@ FROM
 				([math.cos(sim.inclination) for sim in sims], [sim.polarization for sim in sims], r"$\cos \mathrm{inclination}$", r"$\textrm{Polarization (rad)}$", "sim_dist_inc_pol_%s", None),
 				([sim.spin1z for sim in sims], [sim.spin2z for sim in sims], r"$s1_z$", r"$s2_z$", "sim_dist_spin1z_spin2z_%s", None)
 			]:
-				fig, axes = create_plot(ax1, ax2, aspect = aspect)
-				axes.set_title(r"$\textrm{Injection Parameter Distribution (%s Injections)}$" % waveform if "_" not in waveform else waveform.replace("_", "\_"))
-				mrkr, markersize = self.marker_and_size(len(col1))
-				if markersize is not None:
-					axes.plot(col1,col2, mrkr, markersize = markersize)
-				else:
-					axes.plot(col1,col2, mrkr)
-				minx, maxx = axes.get_xlim()
-				miny, maxy = axes.get_ylim()
-				if aspect == 1:
-					axes.set_xlim((min(minx, miny), max(maxx, maxy)))
-					axes.set_ylim((min(minx, miny), max(maxx, maxy)))
+				fig = plotsumm.plot_injection_param_dist(col1, col2, ax1, ax2, waveform)
 				yield fig, name % (waveform), False
 
 
@@ -838,23 +803,27 @@ FROM
 				(r"$\textrm{Decisive Distance vs.\ Effective Spin (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_chi"),
 				(r"$\textrm{Decisive Distance vs.\ Time (With %s Operating)}$" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.time_geocent, r"$\mathrm{Decisive} D_{\mathrm{eff}}$ ($\mathrm{Mpc}$)", decisive_distance, "deff_vs_t")
 				)):
-
-				fig, axes = create_plot(x_label, y_label)
-				legend = []
 				ifo_count_summary = {''.join(sorted(combo)): '---' for num_ifos in range(1, len(self.missed_found_plots.instruments)+1) for combo in sorted(list(itertools.combinations(self.missed_found_plots.instruments, num_ifos)), reverse=True)}
 				ifo_count_summary['missed'] = '---'
+				found_data = {}
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 					if cnt == 0:
 						ifo_count_summary["".join(sorted(participating_instruments))] = len(sims)
-					legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
-					axes.semilogy([x_func(sim) for sim in sims], [y_func(sim, participating_instruments) for sim in sims], ".")
+					found[participating_instruments] = (
+						[x_func(sim) for sim in sims],
+						[y_func(sim, participating_instruments) for sim in sims]
+					)
 				if missed:
 					if cnt == 0:
 						ifo_count_summary["missed"] = len(missed)
 						for rank, sim in enumerate(missed):
 							self.missed_found_plots.missed_summary_data.append(["".join(sorted(self.on_instruments)), sim.waveform, float(sim.time_at_instrument("H1", {"H1": 0.0})), float(sim.time_at_instrument("L1", {"L1": 0.0})), float(sim.time_at_instrument("V1", {"V1": 0.0})), sim.mass1, sim.mass2, sim.spin1x, sim.spin1y, sim.spin1z, sim.spin2x, sim.spin2y, sim.spin2z, sim.distance, decisive_chirp_distance(sim, self.on_instruments), sim.inclination, sim.alpha4, sim.alpha5, sim.alpha6, decisive_charsnr(sim, self.on_instruments)])
-					legend.append("Missed")
-					axes.semilogy([x_func(sim) for sim in missed], [y_func(sim, self.on_instruments) for sim in missed], "k.")
+					missed_data = (
+						[x_func(sim) for sim in missed],
+						[y_func(sim, self.on_instruments) for sim in missed]
+					)
+				else:
+					missed_data = None
 				if cnt == 0:
 					total_count = 0
 					for ifos in ifo_count_summary.keys():
@@ -864,11 +833,7 @@ FROM
 					ifo_columns = sorted([key for key in ifo_count_summary.keys() if 'missed' not in key and 'total' not in key], key=lambda item: (-len(item), item)) + ['missed', 'total']
 					missed_found_row = ["".join(sorted(self.on_instruments))] + [ifo_count_summary[ifo_col] for ifo_col in ifo_columns]
 					self.missed_found_plots.injection_summary_data.append(missed_found_row)
-
-
-				if legend:
-					axes.legend(legend)
-				axes.set_title(title)
+				fig = plotsumm.plot_missed_found(found_data, missed_data, x_label, y_label, title)
 				yield fig, filename_fragment, False
 
 			for cnt, (title, x_label, x_func, y_label, filename_fragment) in enumerate((
@@ -878,18 +843,21 @@ FROM
 				(r"Decisive Characteristic SNR vs.\ Effective Spin (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"$\chi$", lambda sim: (sim.spin1z*sim.mass1 + sim.spin2z*sim.mass2)/(sim.mass1 + sim.mass2), r"Decisive Characteristic SNR", "dec_expsnr_vs_chi"),
 				(r"Decisive Characteristic SNR vs.\ Time (With %s Operating)" % ", ".join(sorted(self.on_instruments)), r"GPS Time (s)", lambda sim: sim.time_geocent, r"Decisivive Characteristic SNR", "dec_expsnr_vs_t")
 			)):
-				fig, axes = create_plot(x_label, y_label)
-				legend = []
 				try:
+					found_data = {}
 					for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
-						legend.append("Found in %s" % ", ".join(sorted(participating_instruments)))
-						axes.semilogy([x_func(sim) for sim in sims], [decisive_charsnr(sim, self.on_instruments) for sim in sims], ".")
+						found_data[participating_instruments] = (
+							[x_func(sim) for sim in sims],
+							[decisive_charsnr(sim, self.on_instruments) for sim in sims]
+						)
 					if missed:
-						legend.append("Missed")
-						axes.semilogy([x_func(sim) for sim in missed], [decisive_charsnr(sim, self.on_instruments) for sim in missed], "k.")
-					if legend:
-						axes.legend(legend)
-					axes.set_title(title)
+						missed_data = (
+							[x_func(sim) for sim in missed],
+							[decisive_charsnr(sim, self.on_instruments) for sim in missed]
+						)
+					else:
+						missed_data = None
+					fig = plotsumm.plot_missed_found(found_data, missed_data, x_label, y_label, title)
 					yield fig, filename_fragment, False
 				except ValueError:
 					print >> sys.stderr, "Cannot create expected SNR plots, no positive values, probably the SNRs are not set"
@@ -942,6 +910,11 @@ class ParameterAccuracyPlots(object):
 		self.far_thresh = far_thresh
 		self.sim_sngl_pairs = {}
 
+	@staticmethod
+	def get_inj_snr(sim, instrument):
+		alphas = {'H1':'alpha4', 'L1':'alpha5', 'V1':'alpha6'}
+		return getattr(sim, "%s" % alphas[instrument])
+
 	def add_contents(self, contents):
 		if contents.sim_inspiral_table is None:
 			# not an injections file
@@ -957,102 +930,138 @@ class ParameterAccuracyPlots(object):
 				del sngl.process_id, sngl.event_id
 				self.sim_sngl_pairs.setdefault((sim.waveform, sngl.ifo), []).append((sim, sngl, far))
 
-
 	def finish(self):
-
-		def hist(arr, axes):
-			start = scipy.stats.mstats.mquantiles(arr, 0.01)
-			end = scipy.stats.mstats.mquantiles(arr, 0.99)
-
-			axes.hist(arr, numpy.linspace(start, end, 100))
-
 		for (waveform, instrument), pairs in self.sim_sngl_pairs.items():
-			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)")
-			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [sngl.mchirp - sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
-			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			fig = plotsumm.plot_param_accuracy_scatter(
+				[sim.mchirp for sim, sngl, far in pairs],
+				[sngl.mchirp - sim.mchirp for sim, sngl, far in pairs],
+				[far for sim, sngl, far in pairs],
+				r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)",
+				r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)",
+				"FAR (Hz)",
+				r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "mchirp_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", "Number")
-			axes.set_title(r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([sngl.mchirp - sim.mchirp for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([sngl.mchirp - sim.mchirp for sim, sngl, far in pairs]),
+				r"Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)",
+				r"Absolute $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "mchirp_acc_abs_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$) / Inj. $M_{\mathrm{chirp}}$")
-			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			cb = axes.scatter([sim.mchirp for sim, sngl, far in pairs], [(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
-			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			fig = plotsumm.plot_param_accuracy_scatter(
+				[sim.mchirp for sim, sngl, far in pairs],
+				[(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs],
+				[far for sim, sngl, far in pairs],
+				r"Inj. $M_{\mathrm{chirp}}$ ($\mathrm{M}_{\odot}$)",
+				r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$) / Inj. $M_{\mathrm{chirp}}$",
+				"FAR (Hz)",
+				r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "mchirp_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$)/ Inj. $M_{\mathrm{chirp}}$", "Number")
-			axes.set_title(r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([(sngl.mchirp - sim.mchirp) / sim.mchirp for sim, sngl, far in pairs]),
+				r"(Rec. $M_{\mathrm{chirp}}$ - Inj. $M_{\mathrm{chirp}}$)/ Inj. $M_{\mathrm{chirp}}$",
+				r"Fractional $M_{\mathrm{chirp}}$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "mchirp_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Inj. $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)", r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$")
-			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			cb = axes.scatter([sim.mtotal for sim, sngl, far in pairs], [(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
-			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			fig = plotsumm.plot_param_accuracy_scatter(
+				[sim.mtotal for sim, sngl, far in pairs],
+				[(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs],
+				[far for sim, sngl, far in pairs],
+				r"Inj. $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)",
+				r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$",
+				"FAR (Hz)",
+				r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % waveform.replace("_", "\_"))
+			)
 			yield fig, "mtotal_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$", "Number")
-			axes.set_title(r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([(sngl.mtotal - sim.mtotal) / sim.mtotal for sim, sngl, far in pairs]),
+				r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$",
+				r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "mtotal_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Inj. $\eta$", r"Rec. $\eta$ - Inj. $\eta$")
-			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [sngl.eta - sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
-			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			fig = plotsumm.plot_param_accuracy_scatter(
+				[sim.eta for sim, sngl, far in pairs],
+				[sngl.eta - sim.eta for sim, sngl, far in pairs],
+				[far for sim, sngl, far in pairs],
+				r"Inj. $\eta$",
+				r"Rec. $\eta$ - Inj. $\eta$",
+				"FAR (Hz)",
+				r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "eta_acc_abs_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Rec. $\eta$ - Inj. $\eta$", "Number")
-			axes.set_title(r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([sngl.eta - sim.eta for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([sngl.eta - sim.eta for sim, sngl, far in pairs]),
+				r"Rec. $\eta$ - Inj. $\eta$",
+				r"Absolute $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "eta_acc_abs_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Inj. $\eta$", r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$")
-			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			cb = axes.scatter([sim.eta for sim, sngl, far in pairs], [(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs], c=[far for sim, sngl, far in pairs], norm=matplotlib.colors.LogNorm(), vmin=1e-13, vmax=1e-3, linewidth=0.2, alpha=0.8)
-			fig.colorbar(cb, ax=axes).set_label("FAR (Hz)")
+			fig = plotsumm.plot_param_accuracy_scatter(
+				[sim.eta for sim, sngl, far in pairs],
+				[(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs],
+				[far for sim, sngl, far in pairs],
+				r"Inj. $\eta$",
+				r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$",
+				"FAR (Hz)",
+				r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "eta_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$", "Number")
-			axes.set_title(r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([(sngl.eta - sim.eta) / sim.eta for sim, sngl, far in pairs]),
+				r"(Rec. $\eta$ - Inj. $\eta$) / Inj. $\eta$",
+				r"Fractional $\eta$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "eta_acc_frac_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Injection End Time (GPS s)", r"Rec. End Time - Injection End Time (ms)")
-			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			axes.plot([sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs], [(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs], "kx")
+			fig = plotsumm.plot_param_accuracy(
+				[sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs],
+				[(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs],
+				r"Injection End Time (GPS s)",
+				r"Rec. End Time - Injection End Time (ms)"
+				r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Rec. End Time - Injection End Time (ms)", "Number")
-			axes.set_title(r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([float(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs]),
+				r"Rec. End Time - Injection End Time (ms)",
+				r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "t_acc_hist_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"Inj. $\chi$", r"Rec. $\chi$")
-			axes.set_title(r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			axes.plot([sim.chi for sim, sngl, far in pairs], [sngl.chi for sim, sngl, far in pairs], "kx")
+			fig = plotsumm.plot_param_accuracy(
+				[sim.chi for sim, sngl, far in pairs],
+				[sngl.chi for sim, sngl, far in pairs],
+				r"Inj. $\chi$",
+				r"Rec. $\chi$",
+				r"Effective Spin Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "chi_acc_scatter_%s_%s" % (waveform, instrument), False
 
-
-			def get_inj_snr(sim, instrument):
-				alphas = {'H1':'alpha4', 'L1':'alpha5', 'V1':'alpha6'}
-				return getattr(sim, "%s" % alphas[instrument])
-
-			fig, axes = create_plot(r"Inj. SNR", r"Rec. SNR")
-			axes.set_title(r"SNR Recovery in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			if max([get_inj_snr(sim, instrument) for sim, sngl, far in pairs]) > 20:
-				axes.loglog([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
-			else:
-				axes.plot([get_inj_snr(sim, instrument) for sim, sngl, far in pairs], [sngl.snr for sim, sngl, far in pairs], "kx")
+			fig = plotsumm.plot_param_accuracy(
+				[self.get_inj_snr(sim, instrument) for sim, sngl, far in pairs],
+				[sngl.snr for sim, sngl, far in pairs],
+				r"Inj. SNR",
+				r"Rec. SNR",
+				r"SNR Recovery in %s (%s Injections)" % (instrument, waveform.replace("_", "\_")),
+				loglog=max([self.get_inj_snr(sim, instrument) for sim, sngl, far in pairs]) > 20
+			)
 			yield fig, "snr_rec_scatter_%s_%s" % (waveform, instrument), False
 
-			fig, axes = create_plot(r"(Rec. SNR - Inj SNR)", "Number")
-			axes.set_title(r"SNR Diff in %s (%s Injections)" % (instrument, waveform if "_" not in waveform else waveform.replace("_", "\_")))
-			hist(numpy.array([(sngl.snr - get_inj_snr(sim, instrument)) for sim, sngl, far in pairs]), axes)
+			fig = plotsumm.plot_param_accuracy_histogram(
+				numpy.array([(sngl.snr - self.get_inj_snr(sim, instrument)) for sim, sngl, far in pairs]),
+				r"(Rec. SNR - Inj SNR)", "Number",
+				r"SNR Diff in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
+			)
 			yield fig, "snr_diff_hist_%s_%s" % (waveform, instrument), False
 
 #
@@ -1399,204 +1408,6 @@ WHERE
 #
 
 
-def sigma_region(mean, nsigma):
-	return numpy.concatenate((mean - nsigma * numpy.sqrt(mean), (mean + nsigma * numpy.sqrt(mean))[::-1]))
-
-
-def create_rate_vs_ifar_plot(axes, zerolag_stats, fapfar, is_open_box):
-	expected_count_y = numpy.logspace(-7, numpy.log10(len(zerolag_stats)), 100)
-	expected_count_x = fapfar.livetime / expected_count_y
-
-	axes.loglog()
-
-	#
-	# determine plot limits
-	#
-
-	xlim = (fapfar.livetime / fapfar.count_above_threshold, fapfar.livetime / 1e-4)
-	xlim = max(zerolag_stats.min(), xlim[0]), max(2.**math.ceil(math.log(zerolag_stats.max(), 2.)), xlim[1])
-	ylim = 0.001, (10.**math.ceil(math.log10(expected_count_y[::-1][bisect.bisect_right(expected_count_x[::-1], xlim[0])])) if xlim[0] is not None else None)
-
-	#
-	# background.  uncomment the two lines to make the background
-	# stair-step-style like the observed counts
-	#
-
-	#expected_count_x = expected_count_x.repeat(2)[1:]
-	#expected_count_y = expected_count_y.repeat(2)[:-1]
-	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
-
-	#
-	# error bands
-	#
-
-	expected_count_x = numpy.concatenate((expected_count_x, expected_count_x[::-1]))
-	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(*ylim), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
-	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(*ylim), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
-	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(*ylim), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
-
-	#
-	# zero-lag
-	#
-
-	N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
-	line5, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
-
-	#
-	# legend
-	#
-
-	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Observed", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
-	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"Observed (time shifted)", r"Expected, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
-
-	#
-	# adjust bounds of plot
-	#
-
-	axes.set_xlim(xlim)
-	axes.set_ylim(ylim)
-
-
-def create_rate_vs_lnL_plot(axes, zerolag_stats, fapfar, is_open_box):
-	axes.semilogy()
-
-	#
-	# plot limits and expected counts
-	#
-
-	def expected_count(lr):
-		return fapfar.far_from_rank(lr) * fapfar.livetime
-
-	xlim = max(zerolag_stats.min(), fapfar.minrank), max(2. * math.ceil(zerolag_stats.max() / 2.), 30.)
-	ylim = 0.001, 10.**math.ceil(math.log10(expected_count(xlim[0])))
-
-	#
-	# expected count curve
-	#
-
-	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = list(map(expected_count, expected_count_x))
-	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
-
-	#
-	# error bands
-	#
-
-	expected_count_x = numpy.concatenate((expected_count_x, expected_count_x[::-1]))
-	line2, = axes.fill(expected_count_x, sigma_region(expected_count_y, 3.0).clip(*ylim), alpha = 0.25, facecolor = [0.75, 0.75, 0.75])
-	line3, = axes.fill(expected_count_x, sigma_region(expected_count_y, 2.0).clip(*ylim), alpha = 0.25, facecolor = [0.5, 0.5, 0.5])
-	line4, = axes.fill(expected_count_x, sigma_region(expected_count_y, 1.0).clip(*ylim), alpha = 0.25, facecolor = [0.25, 0.25, 0.25])
-
-	#
-	# zero-lag
-	#
-
-	if zerolag_stats is not None:
-		N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
-		line5, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
-
-	#
-	# legend
-	#
-
-	if is_open_box:
-		axes.legend((line5, line1, line4, line3, line2), ("Observed", r"Noise Model, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
-	else:
-		axes.legend((line5, line1, line4, line3, line2), (r"Observed (time shifted)", r"Noise Model, $\langle N \rangle$", r"$\pm\sqrt{\langle N \rangle}$", r"$\pm 2\sqrt{\langle N \rangle}$", r"$\pm 3\sqrt{\langle N \rangle}$"), loc = "upper right")
-
-	#
-	# adjust bounds of plot
-	#
-
-	axes.set_xlim(xlim)
-	axes.set_ylim(ylim)
-
-
-def create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, fapfar):
-	#
-	# plot limits and expected counts
-	#
-
-	def expected_count(lr):
-		return fapfar.far_from_rank(lr) * fapfar.livetime
-
-	xlim = max(zerolag_stats.min(), fapfar.minrank), 2. * math.ceil(min(max(zerolag_stats.max(), background_stats.max()), 200.) / 2.)
-	ylim = 10.**math.floor(math.log10(expected_count(zerolag_stats.max()))), 10.**math.ceil(math.log10(expected_count(xlim[0])))
-
-	axes.set_position((0.10, 0.12, .88, .78))
-	axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold", position = (0.5, 1.05))
-
-	#
-	# expected count curve
-	#
-
-	expected_count_x = numpy.linspace(xlim[0], xlim[1], 10000)
-	expected_count_y = list(map(expected_count, expected_count_x))
-	line1, = axes.plot(expected_count_x, expected_count_y, 'k--', linewidth = 1)
-
-	#
-	# time slide
-	#
-
-	N = numpy.arange(1., len(background_stats) + 1., dtype = "double")
-	line5, = axes.plot(background_stats.repeat(2)[1:], N.repeat(2)[:-1], 'k', linewidth = 2)
-
-	#
-	# zero-lag
-	#
-
-	N = numpy.arange(1., len(zerolag_stats) + 1., dtype = "double")
-	line6, = axes.plot(zerolag_stats.repeat(2)[1:], N.repeat(2)[:-1], 'r', linewidth = 1)
-
-	#
-	# legend
-	#
-
-	axes.legend((line1, line5, line6), (r"Noise Model", r"Time-shifted Trial", r"Observed"), loc = "lower left", handlelength = 5)
-
-	#
-	# adjust bounds of plot
-	#
-
-	axes.set_xlim(xlim)
-	axes.set_ylim(ylim)
-
-	#
-	# build false-alarm probability labels
-	#
-
-	ax = axes.twiny()
-	ax.set_xlim(xlim)
-	ax.set_xlabel(r"$P(\geq 1 \mathrm{candidate} | \mathrm{noise})$", horizontalalignment = "left", position = (0.05, 1.02), size = "small")
-
-	if False:
-		label_rank_alpha = [
-			(None, xlim[0], None),	# left-edge of plot
-			(r"$1 \sigma$", fapfar.rank_from_fap(math.erfc(1. / math.sqrt(2.))), 0.1),
-			(r"$2 \sigma$", fapfar.rank_from_fap(math.erfc(2. / math.sqrt(2.))), 0.2),
-			(r"$3 \sigma$", fapfar.rank_from_fap(math.erfc(3. / math.sqrt(2.))), 0.3),
-			(r"$4 \sigma$", fapfar.rank_from_fap(math.erfc(4. / math.sqrt(2.))), 0.4),
-			(r"$5 \sigma$", fapfar.rank_from_fap(math.erfc(5. / math.sqrt(2.))), 0.5)
-		]
-	else:
-		label_rank_alpha = [
-			(None, xlim[0], None),	# left-edge of plot
-			(r"$10^{-1}$", fapfar.rank_from_fap(0.1), 0.1),
-			(r"$10^{-3}$", fapfar.rank_from_fap(0.001), 0.2),
-			(r"$10^{-6}$", fapfar.rank_from_fap(0.000001), 0.3)
-		]
-
-	for (_, lo, _), (_, hi, alpha) in zip(label_rank_alpha[:-1], label_rank_alpha[1:]):
-		if hi < lo:	# can happen if xlim[0] > 1 sigma
-			continue
-		ax.axvspan(lo, hi, color = "k", alpha = alpha)
-
-	ax.set_xticks([rank for (label, rank, _) in label_rank_alpha[1:]])
-	ax.set_xticklabels([label for (label, rank, _) in label_rank_alpha[1:]])
-
-
 class RateVsThreshold(object):
 	def __init__(self, fapfar, snr_min):
 		self.background_ln_likelihood_ratio = []
@@ -1675,7 +1486,7 @@ WHERE
 				fig, axes = create_plot(r"Inverse False-Alarm Rate (s)", r"Number of Events")
 				# fars in ascending order --> ifars in descending order
 				zerolag_stats = 1. / numpy.array(sorted(fars))
-				create_rate_vs_ifar_plot(axes, zerolag_stats, self.fapfar, is_open_box)
+				plotsumm.create_rate_vs_ifar_plot(axes, zerolag_stats, self.fapfar, is_open_box)
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Inverse False-Alarm Rate Threshold")
 				else:
@@ -1686,7 +1497,7 @@ WHERE
 				fig, axes = create_plot(r"$\ln \mathcal{L}$ Threshold", r"Number of Events $\geq \ln \mathcal{L}$")
 				# ln(L) in ascending order
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
-				create_rate_vs_lnL_plot(axes, zerolag_stats, self.fapfar, is_open_box)
+				plotsumm.create_rate_vs_lnL_plot(axes, zerolag_stats, self.fapfar, is_open_box)
 				if is_open_box:
 					axes.set_title(r"Event Count vs.\ Ranking Statistic Threshold")
 				else:
@@ -1698,7 +1509,7 @@ WHERE
 			axes.semilogy()
 			background_stats = numpy.array(sorted(self.background_ln_likelihood_ratio, reverse = True))
 			zerolag_stats = numpy.array(sorted(self.zerolag_ln_likelihood_ratio, reverse = True))
-			create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar)
+			plotsumm.create_rate_vs_lnL_plot_fig3(axes, zerolag_stats, background_stats, self.fapfar)
 			yield fig, "count_vs_lr_fig3", True
 
 
