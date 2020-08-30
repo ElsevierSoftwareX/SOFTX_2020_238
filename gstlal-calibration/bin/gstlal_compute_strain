@@ -2165,7 +2165,7 @@ elif test_filters:
 	ctrltee = pipeparts.mktee(pipeline, ctrl)	
 
 # resample what will become the TST actuation chain to the TST FIR filter sample rate
-tst = calibration_parts.mkresample(pipeline, tst, 5, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr)
+tst = calibration_parts.mkresample(pipeline, tst, 5, False, "audio/x-raw, format=F64LE, rate=%d" %  tstchainsr, window = 3, f_cut = 0.95)
 # Remove any DC component
 if remove_dc:
 	tst = calibration_parts.removeDC(pipeline, tst, tstchainsr)
@@ -2202,7 +2202,7 @@ if apply_kappatst and not apply_complex_kappatst:
 # If we want, measure the transfer function applied by the TST filter(s)
 if test_filters:
 	tst = pipeparts.mktee(pipeline, tst)
-	tst_tf = calibration_parts.mkinterleave(pipeline, [tst, calibration_parts.mkresample(pipeline, ctrltee, 5, False, tstchainsr)])
+	tst_tf = calibration_parts.mkinterleave(pipeline, [tst, calibration_parts.mkresample(pipeline, ctrltee, 5, False, tstchainsr, window = 3, f_cut = 0.95)])
 	tst_tf_delay = tst_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappatst else 0)
 	tst_tf_start = start + tst_tf_delay
 	tst_tf_dur = gps_end_time - tst_tf_start - tst_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
@@ -2213,13 +2213,13 @@ if test_filters:
 
 # resample the TST actuation chain if necessary
 if tstchainsr < actsr:
-	tst = calibration_parts.mkresample(pipeline, tst, 4, False, actsr)
+	tst = calibration_parts.mkresample(pipeline, tst, 4, False, actsr, window = 3, f_cut = 0.95)
 
 # Check whether we need to filter the PUM and UIM stages separately or together
 if pum_uim_separate:
 	# resample what will become the PUM and UIM actuation paths to the PUM and UIM FIR filter sample rates
-	pum = calibration_parts.mkresample(pipeline, pumtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumchainsr)
-	uim = calibration_parts.mkresample(pipeline, uimtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % uimchainsr)
+	pum = calibration_parts.mkresample(pipeline, pumtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumchainsr, window = 3, f_cut = 0.95)
+	uim = calibration_parts.mkresample(pipeline, uimtee, 5, False, "audio/x-raw, format=F64LE, rate=%d" % uimchainsr, window = 3, f_cut = 0.95)
 	# Remove any DC component
 	if remove_dc:
 		pum = calibration_parts.removeDC(pipeline, pum, pumchainsr)
@@ -2260,7 +2260,7 @@ if pum_uim_separate:
 	# If we want, measure the transfer function applied by the PUM filter(s)
 	if test_filters:
 		pum = pipeparts.mktee(pipeline, pum)
-		pum_tf = calibration_parts.mkinterleave(pipeline, [pum, calibration_parts.mkresample(pipeline, ctrltee, 5, False, pumchainsr)])
+		pum_tf = calibration_parts.mkinterleave(pipeline, [pum, calibration_parts.mkresample(pipeline, ctrltee, 5, False, pumchainsr, window = 3, f_cut = 0.95)])
 		pum_tf_delay = pum_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappapum else 0)
 		pum_tf_start = start + pum_tf_delay
 		pum_tf_dur = gps_end_time - pum_tf_start - pum_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
@@ -2296,7 +2296,7 @@ if pum_uim_separate:
 	# If we want, measure the transfer function applied by the UIM filter(s)
 	if test_filters:
 		uim = pipeparts.mktee(pipeline, uim)
-		uim_tf = calibration_parts.mkinterleave(pipeline, [uim, calibration_parts.mkresample(pipeline, ctrltee, 5, False, uimchainsr)])
+		uim_tf = calibration_parts.mkinterleave(pipeline, [uim, calibration_parts.mkresample(pipeline, ctrltee, 5, False, uimchainsr, window = 3, f_cut = 0.95)])
 		uim_tf_delay = uim_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappauim else 0)
 		uim_tf_start = start + uim_tf_delay
 		uim_tf_dur = gps_end_time - uim_tf_start - uim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
@@ -2307,17 +2307,17 @@ if pum_uim_separate:
 
 	# resample the PUM actuation path if necessary
 	if pumchainsr < actsr:
-		pum = calibration_parts.mkresample(pipeline, pum, 4, False, actsr)
+		pum = calibration_parts.mkresample(pipeline, pum, 4, False, actsr, window = 3, f_cut = 0.95)
 
 	# resample the UIM actuation path if necessary
 	if uimchainsr < actsr:
-		uim = calibration_parts.mkresample(pipeline, uim, 4, False, actsr)
+		uim = calibration_parts.mkresample(pipeline, uim, 4, False, actsr, window = 3, f_cut = 0.95)
 
 	# Add the TST, PUM, and UIM paths together to form the full actuation path
 	ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, tst, pum, uim))
 else:
 	# resample what will become the PUM/UIM actuation chain to the PUM/UIM FIR filter sample rate
-	pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr)
+	pumuim = calibration_parts.mkresample(pipeline, pumuim, 5, False, "audio/x-raw, format=F64LE, rate=%d" % pumuimchainsr, window = 3, f_cut = 0.95)
 	# Remove any DC component
 	if remove_dc:
 		pumuim = calibration_parts.removeDC(pipeline, pumuim, pumuimchainsr)
@@ -2354,7 +2354,7 @@ else:
 	# If we want, measure the transfer function applied by the PUM/UIM filter(s)
 	if test_filters:
 		pumuim = pipeparts.mktee(pipeline, pumuim)
-		pumuim_tf = calibration_parts.mkinterleave(pipeline, [pumuim, calibration_parts.mkresample(pipeline, ctrltee, 5, False, pumuimchainsr)])
+		pumuim_tf = calibration_parts.mkinterleave(pipeline, [pumuim, calibration_parts.mkresample(pipeline, ctrltee, 5, False, pumuimchainsr, window = 3, f_cut = 0.95)])
 		pumuim_tf_delay = pumuim_filter_settle_time + ((1.0 - filter_latency_factor) * (demodulation_filter_time + (median_smoothing_samples + factors_average_samples) / compute_factors_sr) + actuation_filter_update_time if apply_complex_kappapu else 0)
 		pumuim_tf_start = start + pumuim_tf_delay
 		pumuim_tf_dur = gps_end_time - pumuim_tf_start - pumuim_filter_latency - 10 if InputConfigs["datasource"] == "frames" else 300
@@ -2365,14 +2365,14 @@ else:
 
 	# resample the PUM/UIM actuation chain if necessary
 	if pumuimchainsr < actsr:
-		pumuim = calibration_parts.mkresample(pipeline, pumuim, 4, False, actsr)
+		pumuim = calibration_parts.mkresample(pipeline, pumuim, 4, False, actsr, window = 3, f_cut = 0.95)
 
 	# Add the TST and PUM/UIM chains together to form the full actuation chain
 	ctrl = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, tst, pumuim))
 
 # Resample \DeltaL_ctrl to the full h(t) sample rate
 if actsr != hoft_sr:
-	ctrl = calibration_parts.mkresample(pipeline, ctrl, 4, False, hoft_caps)
+	ctrl = calibration_parts.mkresample(pipeline, ctrl, 4, False, hoft_caps, window = 3, f_cut = 0.95)
 
 if (test_latency or InputConfigs["datasource"] == "lvshm"):
 	ctrl = pipeparts.mktee(pipeline, ctrl)

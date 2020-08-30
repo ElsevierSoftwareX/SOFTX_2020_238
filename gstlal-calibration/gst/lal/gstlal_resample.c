@@ -1110,7 +1110,8 @@ static void prepare_element(GSTLALResample *element) {
 		else
 			alpha = 1 + sinc_length_at_low_rate / 24.0; \
 		/* Low-pass cutoff frequency as a fraction of the sampling frequency of the sinc table */ \
-		f_cut = 0.5 / inv_cadence - alpha / element->sinc_length; \
+		f_cut = element->f_cut ? element->f_cut * 0.5 / inv_cadence : 0.5 / inv_cadence - alpha / element->sinc_length; \
+		f_cut = (f_cut > 0.0) ? f_cut : 0.0;
 		for(i = 1; i <= element->sinc_length / 2; i++) {
 			sin_arg = 2 * M_PI * f_cut * i;
 			element->sinc_table[i] = sin(sin_arg) / sin_arg;
@@ -1183,7 +1184,8 @@ static void prepare_element(GSTLALResample *element) {
 		else
 			alpha = 1 + sinc_length_at_low_rate / 24.0; \
 		/* Low-pass cutoff frequency as a fraction of the sampling frequency of the sinc table */ \
-		f_cut = 0.5 / cadence - alpha / element->sinc_length; \
+		f_cut = element->f_cut ? element->f_cut * 0.5 / cadence : 0.5 / cadence - alpha / element->sinc_length; \
+		f_cut = (f_cut > 0.0) ? f_cut : 0.0;
 		for(i = 1; i <= element->sinc_length / 2; i++) {
 			sin_arg = 2 * M_PI * f_cut * i;
 			element->sinc_table[i] = sin(sin_arg) / sin_arg;
@@ -1757,7 +1759,8 @@ enum property {
 	ARG_QUALITY = 1,
 	ARG_ZERO_LATENCY,
 	ARG_WINDOW,
-	ARG_FREQUENCY_RESOLUTION
+	ARG_FREQUENCY_RESOLUTION,
+	ARG_F_CUT
 };
 
 
@@ -1782,6 +1785,9 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 		break;
 	case ARG_FREQUENCY_RESOLUTION:
 		element->frequency_resolution = g_value_get_double(value);
+		break;
+	case ARG_F_CUT:
+		element->f_cut = g_value_get_double(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1810,6 +1816,9 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 		break;
 	case ARG_FREQUENCY_RESOLUTION:
 		g_value_set_double(value, element->frequency_resolution);
+		break;
+	case ARG_F_CUT:
+		g_value_set_double(value, element->f_cut);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1944,6 +1953,19 @@ static void gstlal_resample_class_init(GSTLALResampleClass *klass) {
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_F_CUT,
+		g_param_spec_double(
+			"f-cut",
+			"Cutoff Frequency",
+			"Cutoff frequency of the sinc table, as a fraction of the lower Nyquist rate.\n\t\t\t"
+			"If unset, it will be equal to the lower Nyquist rate minus the frequency\n\t\t\t"
+			"resolution.",
+			0, G_MAXDOUBLE, 0,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+		)
+	);
 }
 
 
@@ -1972,6 +1994,7 @@ static void gstlal_resample_init(GSTLALResample *element) {
 	element->produced_outbuf = FALSE;
 	element->leading_samples = 0;
 	element->frequency_resolution = 0.0;
+	element->f_cut = 0.0;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
 

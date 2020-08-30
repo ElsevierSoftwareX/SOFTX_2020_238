@@ -116,6 +116,7 @@ struct _GSTLALResample {
 	gboolean zero_latency;
 	enum gstlal_resample_window_type window;
 	double frequency_resolution;
+	double f_cut;
 
 	/* filter */
 	double complex dxdt0;

@@ -77,10 +77,10 @@ def mkstockresample(pipeline, head, caps):
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
 
-def mkresample(pipeline, head, quality, zero_latency, caps, frequency_resolution = 0.0):
+def mkresample(pipeline, head, quality, zero_latency, caps, window = 0, frequency_resolution = 0.0, f_cut = 0.0):
 	if type(caps) is int:
 		caps = "audio/x-raw,rate=%d,channel-mask=(bitmask)0x0" % caps
-	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", quality = quality, zero_latency = zero_latency, frequency_resolution = frequency_resolution)
+	head = pipeparts.mkgeneric(pipeline, head, "lal_resample", quality = quality, zero_latency = zero_latency, window = window, frequency_resolution = frequency_resolution, f_cut = f_cut)
 	head = pipeparts.mkcapsfilter(pipeline, head, caps)
 	return head
 
