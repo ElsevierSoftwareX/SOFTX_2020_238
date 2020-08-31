@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 #
 # Copyright (C) 2012 Stephen Privitera
 # Copyright (C) 2011-2014 Chad Hanna
@@ -113,7 +113,7 @@ def parse_command_line():
 	required_options = ("n", "instrument", "sort_by", "approximant", "f_low", "num_banks", "output_stats_file", "psd_xml")
 	missing_options = [option for option in required_options if getattr(options, option) is None]
 	if missing_options:
-		raise ValueError, "missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options)
+		raise ValueError("missing required option(s) %s" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options))
 
 	if options.overlap % 2:
 		raise ValueError("overlap must be even")
@@ -135,7 +135,7 @@ def parse_command_line():
 
 	if options.psd_xml:
 		psd = reference_psd.harmonic_mean(series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler)))
-		print psd.deltaF, psd.data.length
+		print(psd.deltaF, psd.data.length)
 		f = numpy.arange(len(psd.data.data)) * psd.deltaF
 		psdinterp = scipy.interpolate.interp1d(f, psd.data.data)
 	else:
@@ -180,14 +180,14 @@ for chirows in group_templates(sngl_inspiral_table, len(sngl_inspiral_table) / o
 		assert len(rows) >= options.n/2, "There are too few templates in this chi interval.  Requested %d: have %d" % (options.n, len(rows))
 		# Pad the first group with an extra overlap / 2 templates
 		if numrow == 0:
-			rows = rows[:options.overlap/2] + rows
+			rows = rows[:options.overlap//2] + rows
 		outputrows.append((rows[0], rows))
 	# Pad the last group with an extra overlap / 2 templates
-	outputrows[-1] = (rows[0], rows + rows[-options.overlap/2:])
+	outputrows[-1] = (rows[0], rows + rows[-options.overlap//2:])
 
 # A sort of the groups of templates so that the sub banks are ordered.
-def sort_func((row, rows), column = options.sort_by):
-	return getattr(row, column)
+def sort_func(row_rows_tup, column = options.sort_by):
+	return getattr(row_rows_tup[0], column)
 
 outputrows.sort(key=sort_func, reverse = True if options.sort_by == "template_duration" else False)
 svd_dirs = []

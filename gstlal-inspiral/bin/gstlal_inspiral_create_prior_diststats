@@ -80,6 +80,7 @@ def parse_command_line():
 	parser.add_option("-p", "--background-prior", metavar = "N", default = 1, type = "float", help = "Include an exponential background prior with the maximum bin count = N, default 1")
 	parser.add_option("--df", metavar = "N", default = 40, help = "set the degrees of freedom for the background chisq prior: default 40. You can also use template bandwidth to set this by setting it to 'bandwidth'")
 	parser.add_option("--svd-file", metavar = "filename", help = "The SVD file to read the template ids from")
+	parser.add_option("--svd-bin", metavar = "%04d", help = "The bin that this is, required if giving json manifest for --svd-file")
 	parser.add_option("--mass-model-file", metavar = "filename", help = "The mass model file to read from (hdf5 format)")
 	parser.add_option("--dtdphi-file", metavar = "filename", help = "dtdphi snr ratio pdfs to read from (hdf5 format). Default passed by gstlal_inspiral_pipe, but not when run as a standalone program.")
 	parser.add_option("--idq-file", metavar = "filename", help = "idq glitch file (hdf5 format)")
@@ -112,13 +113,24 @@ def parse_command_line():
 	template_ids = []
 	horizon_factors = {}
 	bandwidths = []
-	for n, bank in enumerate(svd_bank.read_banks(options.svd_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)):
-		template_ids += [row.template_id for row in bank.sngl_inspiral_table]
-		# FIXME don't hard code
-		if options.df == "bandwidth":
-			for ifo in psd:
-				bandwidths += [templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo]) for row in bank.sngl_inspiral_table]
-		horizon_factors.update(bank.horizon_factors)
+	if options.svd_file.endswith(".xml") or options.svd_file.endswith(".xml.gz"):
+		for n, bank in enumerate(svd_bank.read_banks(options.svd_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose)):
+			template_ids += [row.template_id for row in bank.sngl_inspiral_table]
+			# FIXME don't hard code
+			if options.df == "bandwidth":
+				for ifo in psd:
+					bandwidths += [templates.bandwidth(row.mass1, row.mass2, row.spin1z, row.spin2z, f_min = 10.0, f_max = row.f_final, delta_f = 0.25, psd = psd[ifo]) for row in bank.sngl_inspiral_table]
+			horizon_factors.update(bank.horizon_factors)
+	elif options.svd_file.endswith(".json"):
+		assert options.svd_bin is not None
+		import json
+		with open(options.svd_file) as f
+			manifest = json.loads(f.read())
+		bandwidths = [manifest[options.svd_bin]["min_bw"], manifest[options.svd_bin]["max_bw"]]
+		horizon_factors.update(manifest[options.svd_bin]["horizon_factors"])
+	else:
+		raise ValueError("svd file cannot be read")
+
 	if options.df == "bandwidth":
 		# don't let the bandwidth get too small
 		options.df = max(int(min(bandwidths)) + 1, 10) * 3

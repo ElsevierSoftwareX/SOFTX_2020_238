@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2011-2020  Kipp Cannon, Chad Hanna, Drew Keppel
 #
@@ -88,7 +88,7 @@ options, filenames = parse_command_line()
 gw_data_source = datasource.GWDataSourceInfo(options)
 
 ## Assume instrument is the first and only key of the python.datasource.GWDataSourceInfo.channel_dict
-instrument = gw_data_source.channel_dict.keys()[0]
+instrument = list(gw_data_source.channel_dict.keys())[0]
 
 # disable progress reports if not verbose
 if not options.verbose:
@@ -124,16 +124,16 @@ if not os.path.isdir(options.output_path):
 	try:
 		os.makedirs(options.output_path)
 	except:
-		print >> sys.stderr, "Unable to make directory ", options.output_path
+		print("Unable to make directory ", options.output_path, file=sys.stderr)
 		pass
 else:
-	print "Target output directory already exists."
+	print("Target output directory already exists.")
 
 ## create frames
 head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.output_channel_name): head}, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file)
 
 ## Write the frames to disk
-head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_type, path = options.output_path)
+head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_type)
 
 # Put O(100000 s) frames in each directory
 #head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, 5))
