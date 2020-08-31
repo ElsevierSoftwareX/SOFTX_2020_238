@@ -172,7 +172,7 @@ def plot_snr_chi2_background(ifo, min_snr, injections, background, zerolag=None)
 	axes.loglog(injections[ifo].snr, injections[ifo].chi2, 'r.', label = "Inj")
 	axes.loglog(background[ifo].snr, background[ifo].chi2, "kx", label = "Background")
 	if zerolag:
-		axes.loglog(zerolag[ifo].snr, self.zerolag[ifo].chi2, "bx", label = "Zero-lag")
+		axes.loglog(zerolag[ifo].snr, zerolag[ifo].chi2, "bx", label = "Zero-lag")
 		axes.set_title(fr"$\chi^{2}$ vs.\ $\rho$ in {ifo}")
 	else:
 		axes.set_title(fr"$\chi^{2}$ vs.\ $\rho$ in {ifo} (Closed box)")

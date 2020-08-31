@@ -794,7 +794,7 @@ FROM
 				for participating_instruments, sims in sorted(self.found_in.items(), key = (lambda x: lsctables.instrumentsproperty.set(x[0]))):
 					if cnt == 0:
 						ifo_count_summary["".join(sorted(participating_instruments))] = len(sims)
-					found[participating_instruments] = (
+					found_data[participating_instruments] = (
 						[x_func(sim) for sim in sims],
 						[y_func(sim, participating_instruments) for sim in sims]
 					)
@@ -960,7 +960,7 @@ class ParameterAccuracyPlots(object):
 				r"Inj. $M_{\mathrm{total}}$ ($\mathrm{M}_{\odot}$)",
 				r"(Rec. $M_{\mathrm{total}}$ - Inj. $M_{\mathrm{total}}$) / Inj. $M_{\mathrm{total}}$",
 				"FAR (Hz)",
-				r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % waveform.replace("_", "\_"))
+				r"Fractional $M_{\mathrm{total}}$ Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
 			)
 			yield fig, "mtotal_acc_frac_scatter_%s_%s" % (waveform, instrument), False
 
@@ -1011,7 +1011,7 @@ class ParameterAccuracyPlots(object):
 				[sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}) for sim, sngl, far in pairs],
 				[(sngl.end - sim.time_at_instrument(sngl.ifo, {sngl.ifo: 0.0}))*1000. for sim, sngl, far in pairs],
 				r"Injection End Time (GPS s)",
-				r"Rec. End Time - Injection End Time (ms)"
+				r"Rec. End Time - Injection End Time (ms)",
 				r"End Time Accuracy in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
 			)
 			yield fig, "t_acc_scatter_%s_%s" % (waveform, instrument), False
@@ -1044,7 +1044,7 @@ class ParameterAccuracyPlots(object):
 
 			fig = plotsumm.plot_param_accuracy_histogram(
 				numpy.array([(sngl.snr - self.get_inj_snr(sim, instrument)) for sim, sngl, far in pairs]),
-				r"(Rec. SNR - Inj SNR)", "Number",
+				r"(Rec. SNR - Inj SNR)",
 				r"SNR Diff in %s (%s Injections)" % (instrument, waveform.replace("_", "\_"))
 			)
 			yield fig, "snr_diff_hist_%s_%s" % (waveform, instrument), False
@@ -1188,7 +1188,7 @@ WHERE
 				bg_chieffs = numpy.array(self.background[instrument].chieff)[sortable]
 
 				# mass dependence of chisq
-				fig = plot_mass_chi2_snr2_background(inj_mcs, inj_chisq, inj_snrs, bg_mcs, bg_chisq, bg_snrs, instrument)
+				fig = plotsumm.plot_mass_chi2_snr2_background(inj_mcs, inj_chisq, inj_snrs, bg_mcs, bg_chisq, bg_snrs, instrument)
 				yield fig, "chi2_vs_mc_vs_rho_%s" % instrument, False
 
 				# background parameter distributions
@@ -1422,10 +1422,10 @@ WHERE
 				self.zerolag_snr.append(snr)
 
 	def finish(self):
-		fig = plot_candidate_lnL_vs_snr(self.snr_min, self.background_snr, self.background_ln_likelihood_ratio)
+		fig = plotsumm.plot_candidate_lnL_vs_snr(self.snr_min, self.background_snr, self.background_ln_likelihood_ratio)
 		yield fig, "lr_vs_snr", False
 
-		fig = plot_candidate_lnL_vs_snr(
+		fig = plotsumm.plot_candidate_lnL_vs_snr(
 			self.snr_min, self.background_snr, self.background_ln_likelihood_ratio,
 			self.zerolag_snr, self.zerolag_ln_likelihood_ratio
 		)
@@ -1441,7 +1441,7 @@ WHERE
 			if ln_likelihood_ratio:
 				# ln(L) in ascending order
 				zerolag_stats = numpy.array(sorted(ln_likelihood_ratio, reverse = True))
-				fig = plotsumm.create_rate_vs_lnL_plot(zerolag_stats, self.fapfar, is_open_box)
+				fig = plotsumm.plot_rate_vs_lnL(zerolag_stats, self.fapfar, is_open_box)
 				yield fig, "count_vs_lr", is_open_box
 
 		if self.background_ln_likelihood_ratio:

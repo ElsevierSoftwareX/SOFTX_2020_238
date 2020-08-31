@@ -88,11 +88,11 @@ def fiducial_efficiency_to_range_label(eff_fid, bins, zero_bin, bin_type):
 		iterutils.MultiIter(*bins.upper())
 	):
 		ds = (zero_bin.lower() + zero_bin.upper()) / 2
-		center = numpy.array([eff_fid[(d,) + bin_mid] for d in ds])
-		lo = numpy.array([eff_fid_lo[(d,) + bin_mid] for d in ds])
-		hi = numpy.array([eff_fid_hi[(d,) + bin_mid] for d in ds])
+		center = numpy.array([eff_fid[1][(d,) + bin_mid] for d in ds])
+		lo = numpy.array([eff_fid[0][(d,) + bin_mid] for d in ds])
+		hi = numpy.array([eff_fid[2][(d,) + bin_mid] for d in ds])
 
-		yield lo, center, hi, bin_type_to_label(bin_type, bin_lo, bin_mid, bin_hi)
+		yield lo, center, hi, ds, bin_type_to_label(bin_type, bin_lo, bin_mid, bin_hi)
 
 def vt_to_range(volume, livetime):
 	return (volume / (4 * math.pi * livetime / 3))**(1./3)
@@ -212,12 +212,12 @@ def plot_fiducial_efficiency(eff_fids, fiducial_far, ifos, bins, bin_type):
 	# plot the volume/range versus far/snr for each bin
 	mbins = rate.NDBins(bins[1:])
 	labels = []
-	for lo, center, hi, label in fiducial_efficiency_to_range_label(eff_fids, mbins, bins[0], bin_type):
+	for lo, eff, hi, ds, label in fiducial_efficiency_to_range_label(eff_fids, mbins, bins[0], bin_type):
 		labels.append(label)
 
 		# NOTE create regular plots, and define log x,y scales below
 		#      since otherwise, fill_between allocates too many blocks and crashes
-		line, = ax_eff.plot(ds, eff, label=label, linewidth=2 )
+		line, = ax_eff.plot(ds, eff, label=label, linewidth=2)
 		ax_eff.fill_between(ds, lo, hi, alpha=0.5, color=line.get_color())
 
 	ax_eff.set_xlabel("Distance (Mpc)")

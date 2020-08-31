@@ -25,7 +25,6 @@ import os
 import sqlite3
 import sys
 
-from matplotlib import pyplot
 import numpy
 
 from ligo.lw import ligolw
@@ -42,14 +41,12 @@ from lal.utils import CacheEntry
 from gstlal import imr_utils
 from gstlal import dagparts
 from gstlal.plots import sensitivity as plotsens
+from matplotlib import pyplot
 
 
 __author__ = "Stephen Privitera <sprivite@caltech.edu>, Chad Hanna <channa@perimeterinstitute.ca>, Kipp Cannon <kipp.cannon@ligo.org>"
 __version__ = "git id %s" % ""	# FIXME
 __date__ = ""	# FIXME
-
-pyplot.rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
-matplotlib.rcParams.update({"text.usetex": True})
 
 
 def source_type_distance_chirp_mass_bins_from_sims(sims, distbins = 200):
@@ -107,7 +104,7 @@ class upper_limit(object):
         # read the zero lag databases first
         for f in self.opts.zero_lag_database:
             if opts.verbose:
-                print >> sys.stdout, "\nGathering search data from zero-lag database: %s...." % (f,)
+                print(f"Gathering search data from zero-lag database: {f}....", file=sys.stderr)
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
             connection = sqlite3.connect(str(working_filename))
 
@@ -130,7 +127,7 @@ class upper_limit(object):
         self.total_injections = {}
         for f in self.opts.injection_database:
             if opts.verbose:
-                print("Reading results of injection analysis from %s ..."%f)
+                print(f"Reading results of injection analysis from {f} ...", file=sys.stderr)
             working_filename = dbtables.get_connection_filename(f, tmp_path=opts.tmp_space, verbose = opts.verbose)
             connection = sqlite3.connect(str(working_filename))
             for inst in self.instrument_combos:
@@ -593,7 +590,7 @@ for bin_type in opts.bin_types:
         fig_far = plotsens.plot_sensitivity_vs_far(far_vols, fars, UL.livetime, instr, bins, bin_type)
         fig_far_range = plotsens.plot_range_vs_far(far_vols, fars, UL.livetime, instr, bins, bin_type)
         fig_snr = plotsens.plot_sensitivity_vs_far(snr_vols, snrs, UL.livetime, instr, bins, bin_type)
-        fig_eff = plotsens.plot_fiducial_efficiency(eff_fids, opts.fiducial_far, inste, bins, bin_type)
+        fig_eff = plotsens.plot_fiducial_efficiency(eff_fids, opts.fiducial_far, instr, bins, bin_type)
 
         # save and close figures
         ifostr = "%s_%s" % (UL.searched_instruments, "".join(sorted(instr)))
