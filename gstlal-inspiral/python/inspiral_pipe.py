@@ -446,7 +446,7 @@ def svd_layer(dag, jobs, parent_nodes, psd, bank_cache, options, seg, output_dir
 				if '%04d' % (i+bin_offset,) not in new_template_mchirp_dict and mchirp_interval != (float("inf"), 0):
 					new_template_mchirp_dict['%04d' % (i+bin_offset,)] = mchirp_interval
 
-				for key, value in autocorrelation_dict.iteritems():
+				for key, value in autocorrelation_dict.items():
 					if key[0] <= new_template_mchirp_dict['%04d' % (i+bin_offset,)][1] < key[1]:
 						options.autocorrelation_length = value
 
