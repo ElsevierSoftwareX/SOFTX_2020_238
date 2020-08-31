@@ -213,7 +213,7 @@ class EyeCandy(object):
 			for ifo, event in maxevents.items():
 				t, snr = float(event.end), event.snr
 				self.ifo_snr_history[ifo].append((t, snr))
-				if self.producer is not None:
+				if self.client is not None:
 					self.kafka_data["%s_snr_history" % ifo]["time"].append(t)
 					self.kafka_data["%s_snr_history" % ifo]["data"].append(snr)
 		if last_coincs:
@@ -258,7 +258,7 @@ class EyeCandy(object):
 			if max_likelihood_far is not None:
 				self.far_history.append((max_likelihood_t, max_likelihood_far))
 
-			if self.producer is not None:
+			if self.client is not None:
 				for ii, column in enumerate(["time", "data"]):
 					self.kafka_data["latency_history"][column].append(float(self.latency_history[-1][ii]))
 					self.kafka_data["snr_history"][column].append(float(self.snr_history[-1][ii]))
