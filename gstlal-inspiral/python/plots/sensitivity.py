@@ -127,7 +127,7 @@ def plot_sensitivity_vs_far(volumes, fars, livetime, ifos, bins, bin_type):
 	tx.set_yticks(vol_tix)
 	tx.set_yscale("log")
 	tx.set_ylim(ax_far.get_ylim())
-	tx.set_yticklabels(["%.3g" % (vt_to_range(float(k), livetime[ifos]) for k in vol_tix])
+	tx.set_yticklabels(["%.3g" % (vt_to_range(float(k), livetime[ifos])) for k in vol_tix])
 	tx.set_ylabel("Range (Mpc)")
 
 	ax_far.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(ifos))), livetime[ifos]*365.25))
@@ -196,7 +196,7 @@ def plot_sensitivity_vs_snr(volumes, snrs, livetime, ifos, bins, bin_type):
 	tx.set_yticks(vol_tix)
 	tx.set_yscale("log")
 	tx.set_ylim(ax_snr.get_ylim())
-	tx.set_yticklabels(["%.3g" % (vt_to_range(float(k), livetime[ifos]) for k in vol_tix])
+	tx.set_yticklabels(["%.3g" % (vt_to_range(float(k), livetime[ifos])) for k in vol_tix])
 	tx.set_ylabel("Range (Mpc)")
 
 	ax_snr.set_title("%s Observing (%.2f days)" % ("".join(sorted(list(ifos))), livetime[ifos]*365.25))

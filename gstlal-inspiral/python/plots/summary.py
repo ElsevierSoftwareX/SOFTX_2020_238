@@ -106,7 +106,7 @@ def sigma_region(mean, nsigma):
 def plot_injection_param_dist(x, y, x_label, y_label, waveform, aspect=None):
 	fig, axes = create_plot(x_label, y_label)
 	waveform_name = waveform.replace("_", "\_")
-	axes.set_title(fr"$\textrm{Injection Parameter Distribution ({waveform_name} Injections)}$")
+	axes.set_title(fr"$\textrm{{Injection Parameter Distribution ({waveform_name} Injections)}}$")
 	mrkr, markersize = marker_and_size(len(x))
 	if markersize is not None:
 		axes.plot(x, y, mrkr, markersize=markersize)
@@ -182,7 +182,7 @@ def plot_snr_chi2_background(ifo, min_snr, injections, background, zerolag=None)
 	return fig
 
 
-def plot_param_background_multiifo(ifo1, ifo2, min_snr, name, symbol, injections, background, zerolag=None)
+def plot_param_background_multiifo(ifo1, ifo2, min_snr, name, symbol, injections, background, zerolag=None):
 	fig, axes = create_plot(fr"{symbol} in {ifo1}", fr"{symbol} in {ifo2}", aspect = 1.0)
 	axes.grid(True, which = "both")
 	axes.loglog([x for x, y in injections], [y for x, y in injections], "rx", label = "Injections")

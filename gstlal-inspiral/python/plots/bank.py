@@ -93,7 +93,7 @@ def create_plot(x_label = None, y_label = None, width = 165.0, aspect = golden_r
 
 def set_logx_ticks(axis,ax_min,ax_max):
 	n = int(numpy.floor(math.log10(ax_max - ax_min)))
- 	x_minor = MultipleLocator(10**n)
+	x_minor = MultipleLocator(10**n)
 	axis.xaxis.set_minor_locator(x_minor)
 	while len(axis.get_xticks(minor=True))<5:
 		n-=1
@@ -107,7 +107,7 @@ def set_logx_ticks(axis,ax_min,ax_max):
 
 def set_logy_ticks(axis,ax_min,ax_max):
 	n = int(numpy.floor(math.log10(ax_max - ax_min)))
- 	x_minor = MultipleLocator(10**n)
+	x_minor = MultipleLocator(10**n)
 	axis.yaxis.set_minor_locator(x_minor)
 	while len(axis.get_yticks(minor=True))<5:
 		n-=1
