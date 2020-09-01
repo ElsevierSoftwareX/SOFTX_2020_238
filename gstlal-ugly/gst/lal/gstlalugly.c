@@ -51,7 +51,6 @@
 
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_aggregator.h>
-#include <gstlal_iirbank.h>
 #include <gstlal_interpolator.h>
 #include <gstlal_tdwhiten.h>
 /*#include <gstlal_specgram.h>
@@ -79,7 +78,6 @@ static gboolean plugin_init(GstPlugin *plugin)
 		GType type;
 	} *element, elements[] = {
 		{"lal_aggregator", GSTLAL_AGGREGATOR_TYPE},
-		{"lal_iirbank", GSTLAL_IIRBANK_TYPE},
 		{"lal_interpolator", GSTLAL_INTERPOLATOR_TYPE},
 		{"lal_tdwhiten", GSTLAL_TDWHITEN_TYPE},
 		/*{"lal_specgram", GSTLAL_SPECGRAM_TYPE},*/

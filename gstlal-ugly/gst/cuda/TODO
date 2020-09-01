@@ -1,3 +1,0 @@
-TODO list:
-==========
- * cudarize audioresample element (replace most time-consuming functions in cuda code)

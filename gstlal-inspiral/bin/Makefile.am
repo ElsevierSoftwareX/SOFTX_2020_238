@@ -1,8 +1,6 @@
 dist_bin_SCRIPTS = \
 	gstlal_bank_splitter \
 	gstlal_compute_far_from_snr_chisq_histograms \
-	gstlal_iir_bank \
-	gstlal_iir_inspiral \
 	gstlal_inspiral \
 	gstlal_inspiral_add_mass_models \
 	gstlal_inspiral_add_template_ids \
@@ -25,7 +23,6 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_destagger_injections \
 	gstlal_inspiral_dlrs_diag \
 	gstlal_inspiral_grid_bank \
-	gstlal_inspiral_iir_bank_pipe \
 	gstlal_inspiral_injection_snr \
 	gstlal_inspiral_lnlrcdf_signal \
 	gstlal_inspiral_lvalert_background_plotter \

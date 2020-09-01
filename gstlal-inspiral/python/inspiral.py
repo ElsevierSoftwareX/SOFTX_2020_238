@@ -85,7 +85,6 @@ from ligo import gracedb
 
 
 from gstlal import bottle
-from gstlal import cbc_template_iir
 from gstlal import ilwdify
 from gstlal import svd_bank
 
@@ -138,23 +137,6 @@ def parse_svdbank_string(bank_string):
 	return out
 
 
-def parse_iirbank_string(bank_string):
-	"""
-	parses strings of form
-
-	H1:bank1.xml,L1:bank2.xml,V1:bank3.xml,H1:bank4.xml,...
-
-	into a dictionary of lists of bank files.
-	"""
-	out = {}
-	if bank_string is None:
-		return out
-	for b in bank_string.split(','):
-		ifo, bank = b.split(':')
-		out.setdefault(ifo, []).append(bank)
-	return out
-
-
 def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 	"""
 	given a dictionary of lists of svd template bank file names parse them
@@ -186,25 +168,6 @@ def parse_bank_files(svd_banks, verbose, snr_threshold = None):
 		raise ValueError("Could not parse bank files into valid bank dictionary.\n\t- Perhaps you are using out-of-date svd bank files?  Please ensure that they were generated with the same code version as the parsing code")
 	return banks
 
-
-def parse_iirbank_files(iir_banks, verbose, snr_threshold = 4.0):
-	"""
-	given a dictionary of lists of iir template bank file names parse them
-	into a dictionary of bank classes
-	"""
-
-	banks = {}
-
-	for instrument, files in iir_banks.items():
-		for n, filename in enumerate(files):
-			# FIXME over ride the file name stored in the bank file with
-			# this file name this bank I/O code needs to be fixed
-			bank = cbc_template_iir.load_iirbank(filename, snr_threshold, contenthandler = LIGOLWContentHandler, verbose = verbose)
-			bank.template_bank_filename = filename
-			bank.logname = "%sbank%d" % (instrument,n)
-			banks.setdefault(instrument,[]).append(bank)
-
-	return banks
 
 def set_common_snglinspiral_values(sngl_inspiral_table):
 	sngl_inspiral_table[-1].search = sngl_inspiral_table[0].search

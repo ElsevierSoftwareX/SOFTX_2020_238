@@ -576,34 +576,6 @@ def mktdwhiten(pipeline, src, latency = None, kernel = None, taper_length = None
 	return mkgeneric(pipeline, src, "lal_tdwhiten", **properties)
 
 
-def mkiirbank(pipeline, src, a1, b0, delay, name=None):
-	properties = dict((name, value) for name, value in (("name", name), ("delay_matrix", delay)) if value is not None)
-	if a1 is not None:
-		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
-	if b0 is not None:
-		properties["b0_matrix"] = pipeio.repack_complex_array_to_real(b0)
-	elem = mkgeneric(pipeline, src, "lal_iirbank", **properties)
-	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
-	return elem
-
-
-def mkcudaiirbank(pipeline, src, a1, b0, delay, name=None):
- 	properties = dict((name, value) for name, value in (("name", name), ("delay_matrix", delay)) if value is not None)
- 	if a1 is not None:
- 		properties["a1_matrix"] = pipeio.repack_complex_array_to_real(a1)
- 	if b0 is not None:
- 		properties["b0_matrix"] = pipeio.repack_complex_array_to_real(b0)
- 	elem = mkgeneric(pipeline, src, "cuda_iirbank", **properties)
- 	elem = mknofakedisconts(pipeline, elem)	# FIXME:  remove after basetransform behaviour fixed
- 	return elem
-
-
-def mkcudamultiratespiir(pipeline, src, bank_struct, bank_id=0, name=None):
-	properties = dict((name, value) for name, value in (("name", name), ("spiir_bank", bank_struct), ("bank_id", bank_id)) if value is not None)
-	elem = mkgeneric(pipeline, src, "cuda_multiratespiir", **properties)
-	return elem
-
-
 def mktrim(pipeline, src, initial_offset = None, final_offset = None, inverse = None):
 	properties = dict((name, value) for name, value in zip(("initial-offset", "final-offset", "inverse"), (initial_offset,final_offset,inverse)) if value is not None)
 	return mkgeneric(pipeline, src, "lal_trim", **properties)
