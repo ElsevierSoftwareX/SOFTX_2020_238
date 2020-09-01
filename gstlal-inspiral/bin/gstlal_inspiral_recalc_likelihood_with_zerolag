@@ -49,7 +49,7 @@ from lalburst import calc_likelihood
 
 def parse_command_line():
 	parser = OptionParser()
-	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
+	parser.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file, These can be given as a comma separated list such as H1:file1,L1:file2,V1:file3 to analyze multiple instruments.  This option can be given multiple times in order to analyze bank serially.  At least one svd bank for at least 2 detectors is required.")
 	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files")
 	parser.add_option("--likelihood-file", metavar = "filename", action = "append", help = "Set the name of the likelihood ratio data file to use. Can be given more than once. File names should file T050017 naming convention, with an integer corresponding to split bank it is associated with (e.g. H1L1-0_DIST_STATS-1127307417-3805.xml.gz)")
 	parser.add_option("--global-likelihood-file", metavar = "filename", action = "append", help = "Set the name of a likelihood file not associated with a specific split ban. Can be given multiple times.")

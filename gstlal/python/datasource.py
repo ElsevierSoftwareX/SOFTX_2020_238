@@ -72,8 +72,8 @@ def channel_dict_from_channel_list(channel_list):
 
 	Examples:
 
-		>>> channel_dict_from_channel_list(["H1=LSC-STRAIN", "H2=SOMETHING-ELSE"])
-		{'H1': 'LSC-STRAIN', 'H2': 'SOMETHING-ELSE'}
+		>>> channel_dict_from_channel_list(["H1=LSC-STRAIN", "L1=SOMETHING-ELSE"])
+		{'H1': 'LSC-STRAIN', 'L1': 'SOMETHING-ELSE'}
 	"""
 	return dict(instrument_channel.split("=") for instrument_channel in channel_list)
 
@@ -111,14 +111,14 @@ def pipeline_channel_list_from_channel_dict(channel_dict, ifos = None, opt = "ch
 
 	Examples:
 
-		>>> pipeline_channel_list_from_channel_dict({'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'})
-		'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict({'L1': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'})
+		'L1=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
 
-		>>> pipeline_channel_list_from_channel_dict({'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}, ifos=["H1"])
+		>>> pipeline_channel_list_from_channel_dict({'L1': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}, ifos=["H1"])
 		'H1=LSC-STRAIN '
 
-		>>> pipeline_channel_list_from_channel_dict({'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}, opt="test-string")
-		'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict({'L1': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}, opt="test-string")
+		'L1=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
 	"""
 	outstr = ""
 	if ifos is None:
@@ -145,14 +145,14 @@ def pipeline_channel_list_from_channel_dict_with_node_range(channel_dict, node =
 
 	Examples:
 
-		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
-		'H2=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'L1': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0)
+		'L1=SOMETHING-ELSE --channel-name=H1=LSC-STRAIN '
 
-		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
+		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'L1': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, ifos=["H1"])
 		'H1=LSC-STRAIN '
 
-		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'H2': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
-		'H2=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
+		>>> pipeline_channel_list_from_channel_dict_with_node_range({'0000': {'L1': 'SOMETHING-ELSE', 'H1': 'LSC-STRAIN'}}, node=0, opt="test-string")
+		'L1=SOMETHING-ELSE --test-string=H1=LSC-STRAIN '
 	"""
 	outstr = ""
 	node = str(node).zfill(4)
@@ -189,7 +189,6 @@ def injection_dict_from_channel_list_with_node_range(injection_list):
 # Used as the default argument to state_vector_on_off_dict_from_bit_lists()
 state_vector_on_off_dict = {
 	"H1" : [0x7, 0x160],
-	"H2" : [0x7, 0x160],
 	"L1" : [0x7, 0x160],
 	"V1" : [0x67, 0x100]
 }
@@ -199,7 +198,6 @@ state_vector_on_off_dict = {
 # Used as the default argument to dq_vector_on_off_dict_from_bit_lists()
 dq_vector_on_off_dict = {
 	"H1" : [0x7, 0x0],
-	"H2" : [0x7, 0x0],
 	"L1" : [0x7, 0x0],
 	"V1" : [0x7, 0x0]
 }
@@ -220,7 +218,7 @@ def state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list, state_vec
 		>>> on_bit_list = ["V1=7", "H1=7", "L1=7"]
 		>>> off_bit_list  = ["V1=256", "H1=352", "L1=352"]
 		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list)
-		{'H1': [7, 352], 'H2': [7, 352], 'L1': [7, 352], 'V1': [7, 256]}
+		{'H1': [7, 352], 'L1': [7, 352], 'V1': [7, 256]}
 
 		>>> state_vector_on_off_dict_from_bit_lists(on_bit_list, off_bit_list,{})
 		{'V1': [7, 256], 'H1': [7, 352], 'L1': [7, 352]}
@@ -256,9 +254,9 @@ def state_vector_on_off_list_from_bits_dict(bit_dict):
 
 	Examples:
 
-		>>> state_vector_on_off_dict = {"H1":[0x7, 0x160], "H2":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
+		>>> state_vector_on_off_dict = {"H1":[0x7, 0x160], "L1":[0x7, 0x160], "V1":[0x67, 0x100]}
 		>>> state_vector_on_off_list_from_bits_dict(state_vector_on_off_dict)
-		('H1=7 --state-vector-on-bits=H2=7 --state-vector-on-bits=L1=7 --state-vector-on-bits=V1=103 ', 'H1=352 --state-vector-off-bits=H2=352 --state-vector-off-bits=L1=352 --state-vector-off-bits=V1=256 ')
+		('H1=7 --state-vector-on-bits=L1=7 --state-vector-on-bits=V1=103 ', 'H1=352 --state-vector-off-bits=L1=352 --state-vector-off-bits=V1=256 ')
 	"""
 
 	onstr = ""
@@ -443,7 +441,7 @@ class GWDataSourceInfo(object):
 		## A dictionary of the requested channels, e.g., {"H1":"LDAS-STRAIN", "L1":"LDAS-STRAIN"}
 		self.channel_dict = channel_dict_from_channel_list(options.channel_name)
 
-		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
+		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		self.shm_part_dict = {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( channel_dict_from_channel_list(options.shared_memory_partition) )
@@ -495,9 +493,9 @@ class GWDataSourceInfo(object):
 			## if no frame segments provided, set them to an empty segment list dictionary
 			self.frame_segments = segments.segmentlistdict((instrument, None) for instrument in self.channel_dict)
 
-		## DQ and state vector channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "H2": "LLD-DQ_VECTOR","L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
-		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "H2": "DMT-DQ_VECTOR","L1": "DMT-DQ_VECTOR", "V1": "DMT-DQ_VECTOR" }
+		## DQ and state vector channel dictionary, e.g., { "H1": "LLD-DQ_VECTOR", "L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		self.state_channel_dict = { "H1": "LLD-DQ_VECTOR", "L1": "LLD-DQ_VECTOR", "V1": "LLD-DQ_VECTOR" }
+		self.dq_channel_dict = { "H1": "DMT-DQ_VECTOR", "L1": "DMT-DQ_VECTOR", "V1": "DMT-DQ_VECTOR" }
 
 		if options.state_channel_name is not None:
 			state_channel_dict_from_options = channel_dict_from_channel_list( options.state_channel_name )
@@ -509,7 +507,7 @@ class GWDataSourceInfo(object):
 			instrument = list(dq_channel_dict_from_options.keys())[0]
 			self.dq_channel_dict.update( dq_channel_dict_from_options )
 
-		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "H2" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
+		## Dictionary of state vector on, off bits like {"H1" : [0x7, 0x160], "L1" : [0x7, 0x160], "V1" : [0x67, 0x100]}
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits, state_vector_on_off_dict)
 		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits, dq_vector_on_off_dict)
 
