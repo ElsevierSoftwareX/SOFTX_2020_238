@@ -19,7 +19,6 @@ pkgpython_PYTHON = \
 	inspiral.py \
 	lloidhandler.py \
 	lloidparts.py \
-	llweb.py \
 	lvalert_helper.py \
 	rate_estimation.py \
 	snglinspiraltable.py \

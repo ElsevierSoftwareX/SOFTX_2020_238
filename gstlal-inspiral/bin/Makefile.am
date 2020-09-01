@@ -56,12 +56,12 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_rerank_pipe \
 	gstlal_inspiral_reset_likelihood \
 	gstlal_inspiral_reset_zerolag_counts \
+	gstlal_inspiral_summary_page \
+	gstlal_inspiral_summary_page_lite \
 	gstlal_inspiral_combine_injection_sets \
 	gstlal_inspiral_svd_bank \
 	gstlal_inspiral_svd_bank_pipe \
 	gstlal_ll_inspiral_calculate_range \
-	gstlal_ll_inspiral_daily_page \
-	gstlal_ll_inspiral_daily_page_online \
 	gstlal_ll_inspiral_event_plotter \
 	gstlal_ll_inspiral_event_uploader \
 	gstlal_ll_inspiral_get_urls \
@@ -71,10 +71,5 @@ dist_bin_SCRIPTS = \
 	gstlal_ll_inspiral_plot_sensitivity \
 	gstlal_ll_inspiral_save_state \
 	gstlal_ll_inspiral_trigger_counter \
-	gstlal_inspiral_summary_page \
-	gstlal_inspiral_summary_page_lite \
-	gstlalcbcnode \
-	gstlalcbcsummary \
-	gstlal_svd_bank
 	gstlal_svd_bank \
 	gstlal_svd_bank_calc_psd
