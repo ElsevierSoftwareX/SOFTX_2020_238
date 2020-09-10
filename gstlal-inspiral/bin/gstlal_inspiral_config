@@ -53,7 +53,7 @@ class gYAML(object):
 			svddir = arg.split(".")[3]
 			ifostr = arg.split('.')[2]
 			import sys
-			print >> sys.stderr, ifostr
+			print(ifostr, file=sys.stderr)
 			ifos = [ifostr[2*n:2*n+2] for n in range(len(ifostr) // 2)]
 			return ",".join(["%s:%s/%s-%s" % (x,svddir,x,basename) for x in ifos])
 
@@ -61,7 +61,7 @@ class gYAML(object):
 			ac1,mct,ac2 = self("svd.auto-chisq-len-range").split(":")
 			sbin = arg.split(".")[-1]
 			mc = float(self.svdstats[sbin]["median_mchirp"])
-			return ac1 if mc < mct else ac2
+			return ac1 if mc < float(mct) else ac2
 
 		if "svd.number-of-svd-bins" in arg:
 			return len(self.svdstats)
