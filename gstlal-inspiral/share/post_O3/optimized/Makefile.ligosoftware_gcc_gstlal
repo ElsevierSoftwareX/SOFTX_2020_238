@@ -39,7 +39,7 @@ DEPS_DIR:=/path/to/deps
 
 # Set to build from git (0 = tarball, 1 = git)
 GSTLAL_GIT=1
-LIGOSCALD_GIT=0
+LIGOSCALD_GIT=1
 LALSUITE_GIT=1
 
 # Define which branch from git to build. Defaults to 'master', but the user can
@@ -48,7 +48,7 @@ LALSUITE_GIT=1
 #
 GSTLAL_GIT_BRANCH="master"
 LIGOSCALD_GIT_BRANCH="master"
-LALSUITE_GIT_BRANCH="lalsuite-v6.74"
+LALSUITE_GIT_BRANCH="master"
 
 # Set package release versions
 GSTLALINSPIRAL=gstlal-inspiral-1.7.3
@@ -75,7 +75,7 @@ GSTLALCALIB_TARGET=$(INSTALL_DIR)/bin/gstlal_compute_strain
 GSTLALBURST_TARGET=$(INSTALL_DIR)/lib/libgstlalburst.so
 GSTLALUGLY_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstnds.so
 GSTLAL_TARGET=$(INSTALL_DIR)/lib/libgstlal.so
-LIGOSCALD_TARGET=$(INSTALL_DIR)/lib/$(PYTHON_VERSION)/site-packages/$(LIGOSCALD)-py$(PYTHON_SHORT_VERSION).egg
+LIGOSCALD_TARGET=$(INSTALL_DIR)/bin/scald
 KAFKA_PYTHON_TARGET=$(INSTALL_DIR)/lib64/$(PYTHON_VERSION)/site-packages/confluent_kafka-$(KAFKA_PYTHON)-py$(PYTHON_SHORT_VERSION)-linux-x86_64.egg
 LIBRDKAFKA_TARGET=$(INSTALL_DIR)/lib/librdkafka.so
 LALAPPS_TARGET=$(INSTALL_DIR)/bin/lalapps_psinject
@@ -255,10 +255,10 @@ $(LIGOSCALD_TARGET) : $(KAFKA_PYTHON_TARGET)
 	@echo $(GREEN)ligo-scald$(WHITE) 1>&2
 	mkdir -p $(INSTALL_DIR)/lib/$(PYTHON_VERSION)/site-packages
 	if [ "${LIGOSCALD_GIT}" = "1" ]; then \
-		cd $(LIGOSCALD_REPO) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) ; \
+		cd $(LIGOSCALD_REPO) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) --root=/ --single-version-externally-managed ; \
 	else \
 		tar -xzf $(TAR_DIR)/$(LIGOSCALD).tar.gz -C $(SRC_DIR) ; \
-		cd $(SRC_DIR)/$(LIGOSCALD) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LIGOSCALD) && $(PYTHON) setup.py install --prefix=$(INSTALL_DIR) --root=/ --single-version-externally-managed ; \
 	fi ;
 
 # confluent-kafka-python
@@ -299,12 +299,12 @@ $(LALAPPS_TARGET) : $(LALINFER_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalapps && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalapps && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalapps && PYTHON=$(PYTHON) ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalapps && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALAPPS).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALAPPS) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALAPPS) && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(SRC_DIR)/$(LALAPPS) && PYTHON=$(PYTHON) ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(SRC_DIR)/$(LALAPPS) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -314,12 +314,12 @@ $(LALINFER_TARGET) : $(LALPULSAR_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalinference && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalinference && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
+		cd $(LALSUITE_REPO)/lalinference && PYTHON=$(PYTHON) ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR) ; \
 		cd $(LALSUITE_REPO)/lalinference && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALINFERENCE).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALINFERENCE) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALINFERENCE) && ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR)  ; \
+		cd $(SRC_DIR)/$(LALINFERENCE) && PYTHON=$(PYTHON) ./configure --enable-gcc-flags=no --enable-swig-python --prefix=$(INSTALL_DIR)  ; \
 		cd $(SRC_DIR)/$(LALINFERENCE) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -329,12 +329,12 @@ $(LALPULSAR_TARGET) : $(LALINSPIRAL_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalapps && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalpulsar && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalpulsar && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalpulsar && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lalpulsar && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALPULSAR).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALPULSAR) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALPULSAR) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALPULSAR) && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LALPULSAR) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -344,12 +344,12 @@ $(LALINSPIRAL_TARGET) : $(LALBURST_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalinspiral && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalinspiral && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalinspiral && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalinspiral && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lalinspiral && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALINSPIRAL).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALINSPIRAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALINSPIRAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALINSPIRAL) && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LALINSPIRAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -359,12 +359,12 @@ $(LALBURST_TARGET) : $(LALSIM_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalburst && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalburst && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalburst && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalburst && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lalburst && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALBURST).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALBURST) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALBURST) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALBURST) && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LALBURST) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -374,12 +374,12 @@ $(LALSIM_TARGET) : $(LALMETAIO_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalsimulation && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalsimulation && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalsimulation && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalsimulation && PYTHON=$(PYTHON) ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lalsimulation && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALSIMULATION).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALSIMULATION) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALSIMULATION) && ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALSIMULATION) && PYTHON=$(PYTHON) ./configure --disable-openmp --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LALSIMULATION) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -389,12 +389,12 @@ $(LALMETAIO_TARGET) : $(LALFRAME_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalmetaio && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalmetaio && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalmetaio && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalmetaio && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lalmetaio && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALMETAIO).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALMETAIO) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALMETAIO) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALMETAIO) && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LALMETAIO) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -404,12 +404,12 @@ $(LALFRAME_TARGET) : $(LAL_TARGET)
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lalframe && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lalframe && ./00boot ; \
-		cd $(LALSUITE_REPO)/lalframe && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lalframe && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lalframe && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LALFRAME).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LALFRAME) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LALFRAME) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LALFRAME) && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LALFRAME) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
@@ -419,12 +419,12 @@ $(LAL_TARGET) : $(LOGS_DIR)/patch.txt
 	if [ "${LALSUITE_GIT}" = "1" ]; then \
 		cd $(LALSUITE_REPO)/lal && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac ; \
 		cd $(LALSUITE_REPO)/lal && ./00boot ; \
-		cd $(LALSUITE_REPO)/lal && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(LALSUITE_REPO)/lal && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(LALSUITE_REPO)/lal && make -j$(CORES) && make install -j$(CORES) ; \
 	else \
 		tar -xf $(TAR_DIR)/$(LAL).tar.xz -C $(SRC_DIR) ; \
 		cd $(SRC_DIR)/$(LAL) && sed -i -e 's@AC_CHECK_LIB(\[gslcblas\]@#AC_CHECK_LIB(\[gslcblas\]@g' configure.ac && autoreconf ; \
-		cd $(SRC_DIR)/$(LAL) && ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
+		cd $(SRC_DIR)/$(LAL) && PYTHON=$(PYTHON) ./configure --enable-swig-python --prefix=$(INSTALL_DIR) --enable-gcc-flags=no ; \
 		cd $(SRC_DIR)/$(LAL) && make -j$(CORES) && make install -j$(CORES) ; \
 	fi ;
 
