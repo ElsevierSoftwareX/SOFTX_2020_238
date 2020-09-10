@@ -136,7 +136,7 @@ head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.
 head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_type)
 
 # Put O(100000 s) frames in each directory
-#head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, 5))
+head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, 5))
 
 # Run it
 if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
