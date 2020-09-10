@@ -1,7 +1,7 @@
 # This is a Dockerfile to build an EL7 MKL-optimized GstLAL 
 # runtime container. 
 
-FROM containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-testing
+FROM containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
 
 # Labeling/packaging stuff:
 LABEL name="GstLAL Runtime Package, EL7 Testing" \
