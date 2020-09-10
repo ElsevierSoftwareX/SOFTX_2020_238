@@ -136,6 +136,7 @@ test:gstlal:
   only:
     - schedules
     - pushes
+  allow_failure: true
 
 test:gstlal-inspiral:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
@@ -267,6 +268,7 @@ pages:
   except:
     - web
     - pushes
+  allow_failure: true
     
 docker:el7:
   stage: docker
