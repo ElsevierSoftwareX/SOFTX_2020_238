@@ -124,7 +124,7 @@ def parse_command_line():
 	elif options.svd_file.endswith(".json"):
 		assert options.svd_bin is not None
 		import json
-		with open(options.svd_file) as f
+		with open(options.svd_file) as f:
 			manifest = json.loads(f.read())
 		bandwidths = [manifest[options.svd_bin]["min_bw"], manifest[options.svd_bin]["max_bw"]]
 		horizon_factors.update(manifest[options.svd_bin]["horizon_factors"])
