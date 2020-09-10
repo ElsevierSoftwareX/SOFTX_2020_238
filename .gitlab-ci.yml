@@ -132,7 +132,7 @@ test:gstlal:
 
     # Run doctests
     - cd gstlal
-    - python3 -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py
+    - python3 -m pytest -v --doctest-modules --ignore gst/python --ignore port-tools --ignore tests --ignore share --ignore python/misc.py --ignore python/pipeparts/__init__.py --ignore python/matplotlibhelper.py --ignore python/dagfile.py --ignore python/httpinterface.py --ignore python/pipeline.py
   only:
     - schedules
     - pushes
@@ -313,4 +313,5 @@ latest_image:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker tag $DOCKER_BRANCH $DOCKER_LATEST
     - docker push $DOCKER_LATEST
-
+  retry:
+    max: 2
