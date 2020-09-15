@@ -52,8 +52,6 @@ class gYAML(object):
 			basename = ".".join(arg.split('.')[4:])
 			svddir = arg.split(".")[3]
 			ifostr = arg.split('.')[2]
-			import sys
-			print(ifostr, file=sys.stderr)
 			ifos = [ifostr[2*n:2*n+2] for n in range(len(ifostr) // 2)]
 			return ",".join(["%s:%s/%s-%s" % (x,svddir,x,basename) for x in ifos])
 
@@ -68,6 +66,9 @@ class gYAML(object):
 
 		if "svd.bins" in arg:
 			return " ".join(self.svdstats.keys())
+
+		if "svd.dtdphi" in arg:
+			return os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
 
 		if "init.num-segs-per-job" in arg:
 			return int(self("inspiral.num-cores")) * int(self("inspiral.insp-procs-override-factor")) // int(self("svd.number-of-svd-bins")) + 1
