@@ -135,7 +135,6 @@ def parse_command_line():
 
 	if options.psd_xml:
 		psd = reference_psd.harmonic_mean(series.read_psd_xmldoc(ligolw_utils.load_filename(options.psd_xml, verbose = options.verbose, contenthandler = series.PSDContentHandler)))
-		print(psd.deltaF, psd.data.length)
 		f = numpy.arange(len(psd.data.data)) * psd.deltaF
 		psdinterp = scipy.interpolate.interp1d(f, psd.data.data)
 	else:
