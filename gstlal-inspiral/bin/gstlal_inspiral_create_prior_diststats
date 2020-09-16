@@ -128,6 +128,7 @@ def parse_command_line():
 			manifest = json.loads(f.read())
 		bandwidths = [manifest[options.svd_bin]["min_bw"], manifest[options.svd_bin]["max_bw"]]
 		horizon_factors.update(manifest[options.svd_bin]["horizon_factors"])
+		template_ids = [int(template_id) for template_id in list(manifest[options.svd_bin]["horizon_factors"].keys())]
 	else:
 		raise ValueError("svd file cannot be read")
 
