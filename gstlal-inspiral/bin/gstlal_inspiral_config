@@ -4,6 +4,8 @@ import argparse
 import json
 import yaml
 
+from os import path
+
 parser = argparse.ArgumentParser()
 parser.add_argument("yaml")
 parser.add_argument("entry")
@@ -67,9 +69,6 @@ class gYAML(object):
 		if "svd.bins" in arg:
 			return " ".join(self.svdstats.keys())
 
-		if "svd.dtdphi" in arg:
-			return os.path.join(gstlal_config_paths["pkgdatadir"], "inspiral_dtdphi_pdf.h5")
-
 		if "init.num-segs-per-job" in arg:
 			return int(self("inspiral.num-cores")) * int(self("inspiral.insp-procs-override-factor")) // int(self("svd.number-of-svd-bins")) + 1
 
@@ -94,6 +93,17 @@ class gYAML(object):
 			stage = arg.split(".")[0]
 			condor_opts = self("{}.condor".format(stage))
 			return " ".join(["--{} {}".format(k, v) for k, v in condor_opts.items()]) if condor_opts else ""
+
+		if "post.installdir" in arg:
+			return gstlal_config_paths['prefix']
+
+		if "post.dtdphi" in arg:
+			return path.join(self("post.installdir"), "share/gstlal/inspiral_dtdphi_pdf.h5")
+
+		if "post.snr" in arg:
+			return path.join(self("post.installdir"), "share/gstlal/snr_simplify_and_cluster.sql")
+		if "post.simplify" in arg:
+			return path.join(self("post.installdir"), "share/gstlal/simplify_and_cluster.sql")
 
 		# default is an empty string which means not found
 		return ""
