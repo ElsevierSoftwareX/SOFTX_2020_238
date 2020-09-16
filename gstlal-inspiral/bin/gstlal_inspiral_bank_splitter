@@ -241,12 +241,13 @@ for n, svd in enumerate(svd_groups):
 	svd_mchirps = []
 	svd_durs = []
 	svd_bw = []
+	ref_hd = []
+	clipleft = options.overlap // 2
+	clipright = options.overlap // 2
 	for m, split_file in enumerate(svd):
-		clipleft = options.overlap // 2 
-		clipright = options.overlap // 2
-		svd_mchirps.extend([r.mchirp for r in metadata[split_file]])
-		svd_durs.extend([r.template_duration for r in metadata[split_file]])
-		svd_bw.extend([r.bandwidth for r in metadata[split_file]])
+		svd_mchirps.extend([r.mchirp for r in metadata[split_file][clipleft:-clipright]])
+		svd_durs.extend([r.template_duration for r in metadata[split_file][clipleft:-clipright]])
+		svd_bw.extend([r.bandwidth for r in metadata[split_file][clipleft:-clipright]])
 		outfile = os.path.join(outdir, os.path.split(split_file)[1])
 		shutil.move(split_file, outfile)
 		xmldoc = ligolw_utils.load_url(outfile, contenthandler = LIGOLWContentHandler, verbose = options.verbose)
@@ -254,12 +255,15 @@ for n, svd in enumerate(svd_groups):
 		ligolw_utils.write_filename(xmldoc, outfile, gz = outfile.endswith('gz'), verbose = options.verbose)
 
 	# some gymnastics to get the fiducial horizon template in the LR calculation
+	rows = metadata[svd[0]][clipleft:-clipright]
+	for split_file in svd[1:]:
+		rows += metadata[split_file][clipleft:-clipright]
 	class fakebank(object):
-		def __init__(self, sngl_inspiral_table = metadata[split_file]):
+		def __init__(self, sngl_inspiral_table = rows):
 			self.sngl_inspiral_table = sngl_inspiral_table
 	fb = fakebank()
 	tid,_,_,_,_ = svd_bank.preferred_horizon_distance_template([fb])
-	ref_hd = [r.horizon for r in metadata[split_file] if r.template_id == tid][0]
+	ref_hd = [r.horizon for split_file in svd for r in metadata[split_file][clipleft:-clipright] if r.template_id == tid][0]
 	outjson["%04d" % n] = {
 		"mean_mchirp": numpy.mean(svd_mchirps),
 		"median_mchirp": numpy.median(svd_mchirps),
@@ -271,7 +275,7 @@ for n, svd in enumerate(svd_groups):
 		"max_dur": numpy.max(svd_durs),
 		"min_bw": numpy.min(svd_bw),
 		"max_bw": numpy.max(svd_bw),
-		"horizon_factors": dict((r.template_id, r.horizon/ref_hd) for r in metadata[split_file])
+		"horizon_factors": dict((r.template_id, r.horizon/ref_hd) for m, split_file in enumerate(svd) for r in metadata[split_file][clipleft:-clipright])
 		}
 
 #with open(dagparts.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_INSPIRAL_SVD_BANK_METADATA" % (0, n), (0, 0), ".json", path = options.output_path), "w") as jsf:
