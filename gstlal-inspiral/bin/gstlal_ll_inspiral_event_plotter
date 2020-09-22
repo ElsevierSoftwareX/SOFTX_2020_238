@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 # Copyright (C) 2019 Alexander Pace,  Kipp Cannon, Chad Hanna, Drew Keppel
 # Copyright (C) 2020 Patrick Godwin, Cody Messick
@@ -25,13 +25,13 @@ __description__ = 'an executable to upload auxiliary files and plots for GraceDB
 #-------------------------------------------------
 
 from collections import deque, OrderedDict
-import httplib
+import http.client
 from itertools import chain
 import gzip
 import json
 import logging
 from optparse import OptionParser
-import StringIO
+import io
 import sys
 import time
 
@@ -168,7 +168,7 @@ class EventPlotter(events.EventProcessor):
 		payload = json.loads(message.value())
 
 		time = LIGOTimeGPS(payload['time'], payload['time_ns'])
-		coinc_fileobj = StringIO.StringIO(payload['coinc'])
+		coinc_fileobj = io.StringIO(payload['coinc'])
 		xmldoc = ligolw_utils.load_fileobj(coinc_fileobj, gz=False, contenthandler=ligolwcontenthandler)
 		coinc_fileobj.close()
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(xmldoc)
@@ -193,7 +193,7 @@ class EventPlotter(events.EventProcessor):
 		elif message.topic() == self.upload_topic:
 			self.events[event_key]['gid'] = payload['gid']
 			self.events[event_key]['coinc'] = xmldoc
-			psd_fileobj = StringIO.StringIO(payload['psd'])
+			psd_fileobj = io.StringIO(payload['psd'])
 			self.events[event_key]['psd'] = ligolw_utils.load_fileobj(psd_fileobj, contenthandler=series.PSDContentHandler)
 			psd_fileobj.close()
 
@@ -266,7 +266,7 @@ class EventPlotter(events.EventProcessor):
 			except HTTPError as resp:
 				logging.warning(resp)
 			else:
-				if resp.status == httplib.CREATED:
+				if resp.status == http.client.CREATED:
 					break
 			logging.info(
 				'gracedb upload of {} for ID {} '
@@ -278,7 +278,7 @@ class EventPlotter(events.EventProcessor):
 			return False
 
 	def upload_ranking_data(self, event):
-		ranking_fobj = StringIO.StringIO()
+		ranking_fobj = io.StringIO()
 		ligolw_utils.write_fileobj(ligolw_utils.load_filename(event['ranking_data_path'], contenthandler = far.RankingStat.LIGOLWContentHandler), ranking_fobj, gz = True)
 		self.upload_file('ranking statistic PDFs', 'ranking_data.xml.gz', 'ranking_statistic', ranking_fobj.getvalue(), event['gid'])
 		ranking_fobj.close()
