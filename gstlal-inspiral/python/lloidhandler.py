@@ -1338,8 +1338,8 @@ class Handler(simplehandler.Handler):
 
 	def web_get_rankingstat(self):
 		with self.lock:
-			output = io.StringIO()
-			ligolw_utils.write_fileobj(self.__get_rankingstat_xmldoc(), output)
+			output = io.BytesIO()
+			ligolw_utils.write_fileobj(self.__get_rankingstat_xmldoc(), output, gz=False)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
@@ -1356,8 +1356,8 @@ class Handler(simplehandler.Handler):
 
 	def web_get_zerolag_rankingstatpdf(self):
 		with self.lock:
-			output = io.StringIO()
-			ligolw_utils.write_fileobj(self.__get_zerolag_rankingstatpdf_xmldoc(), output)
+			output = io.BytesIO()
+			ligolw_utils.write_fileobj(self.__get_zerolag_rankingstatpdf_xmldoc(), output, gz=False)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
