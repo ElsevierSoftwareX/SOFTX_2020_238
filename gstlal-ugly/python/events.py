@@ -52,7 +52,7 @@ class EventProcessor(object):
 		tag='default'
 	):
 		assert kafka_server, 'kafka_server needs to be set'
-		assert input_topic, 'input_topic needs to be set'
+		self.is_source = not bool(input_topic)
 		if isinstance(input_topic, str):
 			input_topic = [input_topic]
 
@@ -68,8 +68,9 @@ class EventProcessor(object):
 			'group.id': '-'.join([self._name, tag])
 		}
 		self.producer = Producer(self.kafka_settings)
-		self.consumer = Consumer(self.kafka_settings)
-		self.consumer.subscribe([topic for topic in input_topic])
+		if not self.is_source:
+			self.consumer = Consumer(self.kafka_settings)
+			self.consumer.subscribe([topic for topic in input_topic])
 
 		### signal handler
 		for sig in [signal.SIGINT, signal.SIGTERM]:
@@ -97,7 +98,8 @@ class EventProcessor(object):
 		"""
 		while self.is_running:
 			start = timeit.default_timer()
-			self.fetch()
+			if not self.is_source:
+				self.fetch()
 			self.handle()
 			elapsed = timeit.default_timer() - start
 			time.sleep(max(self.process_cadence - elapsed, 0))
