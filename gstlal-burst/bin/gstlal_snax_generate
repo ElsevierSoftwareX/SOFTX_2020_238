@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+
+# Copyright (C) 2020  Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+__usage__ = "gstlal_snax_generate [--options]"
+__description__ = "an executable to generate synthetic low-latency features"
+__author__ = "Patrick Godwin (patrick.godwin@ligo.org)"
+
+#-------------------------------------------------
+#                  Preamble
+#-------------------------------------------------
+
+from collections import deque
+import itertools
+import json
+import logging
+import optparse
+import os
+import shutil
+
+import h5py
+import numpy
+import scipy.stats
+
+from gstlal import aggregator
+from gstlal import events
+
+from ligo.scald import utils
+
+from gstlal.snax import multichannel_datasource
+
+#-------------------------------------------------
+#                  Functions
+#-------------------------------------------------
+
+def parse_command_line():
+
+    parser = optparse.OptionParser(usage=__usage__, description=__description__)
+    group = optparse.OptionGroup(parser, "Generator Options", "General settings for configuring the generator.")
+    group.add_option("-v","--verbose", default=False, action="store_true", help = "Print to stdout in addition to writing to automatically generated log.")
+    group.add_option("--log-level", type = "int", default = 10, help = "Sets the verbosity of logging. Default = 10.")
+    group.add_option("--rootdir", metavar = "path", default = ".", help = "Sets the root directory where logs and metadata are stored.")
+    parser.add_option("--processing-cadence", type = "float", default = 0.1, help = "Rate at which the generator processes data. Default = 0.1 seconds.")
+    group.add_option("--instrument", metavar = "string", default = "H1", help = "Sets the instrument for files written to disk. Default = H1")
+    group.add_option("--tag", metavar = "string", default = "test", help = "Sets the name of the tag used. Default = 'test'")
+    group.add_option("--sample-rate", type = "int", metavar = "Hz", default = 1, help = "Set the sample rate for feature timeseries output, must be a power of 2. Default = 1 Hz.")
+    group.add_option("--kafka-server", metavar = "string", help = "Sets the server url that the kafka topic is hosted on. Required.")
+    parser.add_option("--output-topic", metavar = "string", help = "Sets the output kafka topic name. Required.")
+    parser.add_option_group(group)
+
+    group = optparse.OptionGroup(parser, "Channel Options", "Settings used for deciding which auxiliary channels to generate.")
+    parser.add_option("--target-channel", metavar = "string", help = "Sets the target channel name. Required.")
+    group.add_option("--channel-list", type="string", metavar = "name", help = "Set the list of the channels to process. Command given as --channel-list=location/to/file")
+    group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO:AUX-CHANNEL-NAME:RATE")
+    group.add_option("--section-include", default=[], type="string", action="append", help="Set the channel sections to be included from the INI file. Can be given multiple times. Pass in spaces as underscores instead. If not specified, assumed to include all sections")
+    group.add_option("--safety-include", default=["safe"], type="string", action="append", help="Set the safety values for channels to be included from the INI file. Can be given multiple times. Default = 'safe'.")
+    group.add_option("--fidelity-exclude", default=[], type="string", action="append", help="Set the fidelity values for channels to be excluded from the INI file. Can supply multiple values by repeating this argument. Each must be on of (add here)")
+    group.add_option("--safe-channel-include", default=[], action="append", type="string", help="Include this channel when reading the INI file (requires exact match). Can be repeated. If not specified, assume to include all channels.")
+    group.add_option("--unsafe-channel-include", default=[], action="append", type="string", help="Include this channel when reading the INI file, disregarding safety information (requires exact match). Can be repeated.")
+    parser.add_option_group(group)
+
+    options, args = parser.parse_args()
+
+    return options, args
+
+#-------------------------------------------------
+#                   Classes
+#-------------------------------------------------
+
+class FeatureGenerator(events.EventProcessor):
+    """
+    Handles the low-latency generation of synthetic features.
+    """
+    _name = 'generator'
+
+    def __init__(self, options):
+        logging.info('setting up feature generator...')
+
+        events.EventProcessor.__init__(
+            self,
+            process_cadence=options.processing_cadence,
+            kafka_server=options.kafka_server,
+            tag=options.tag
+        )
+
+        ### set up channels needed to do processing
+        if options.channel_list:
+            self.channels = multichannel_datasource.channel_dict_from_channel_ini(options)
+        elif options.channel_name:
+            self.channels = multichannel_datasource.channel_dict_from_channel_list(options.channel_name)
+        self.columns = ['time', 'frequency', 'q', 'snr', 'phase', 'duration']
+
+        ### iDQ saving properties
+        self.timestamp = None
+        self.last_write_time = None
+        self.sample_rate = options.sample_rate
+        self.write_cadence = 1. / options.sample_rate
+        self.output_topic = options.output_topic
+
+        ### set up distributions for sampling
+        ### FIXME: currently only treats a single distribution for each
+        ###        channels, would want to generalize
+        self.dists = {
+            'snr': {'type': scipy.stats.pareto, 'kwargs': {'b': 2, 'loc': 3}},
+            'frequency': {'type': scipy.stats.uniform, 'kwargs': {'loc': 32, 'scale': (2048 - 32)}},
+            'q': {'type': scipy.stats.uniform, 'kwargs': {'loc': 5, 'scale': (100 - 5)}},
+            'phase': {'type': scipy.stats.uniform, 'kwargs': {'loc': -numpy.pi, 'scale': (2 * numpy.pi)}},
+        }
+
+    def handle(self):
+        """
+        determine if new features need to be generated and push to Kafka
+        """
+        timestamp = utils.floor_div(utils.gps_now(), self.write_cadence)
+        if not self.last_write_time or utils.in_new_epoch(timestamp, self.last_write_time, self.write_cadence):
+            features = self.generate(timestamp)
+            self.push(timestamp, features)
+            self.last_write_time = timestamp
+
+    def generate(self, timestamp):
+        """
+        generate synthetic features for a given timestamp
+        """
+        times = scipy.stats.uniform.rvs(size=len(self.channels.keys()), loc=timestamp, scale=1./self.sample_rate)
+        features = {channel: [] for channel in self.channels.keys()}
+        for i, channel in enumerate(features.keys()):
+            row = {col: float(self.dists[col]['type'].rvs(size=1, **self.dists[col]['kwargs'])) for col in self.dists.keys()}
+            row['timestamp'] = timestamp
+            row['time'] = times[i]
+            features[channel].append(row)
+        return features
+
+    def push(self, timestamp, features):
+        """
+        push features to Kafka
+        """
+        logging.info(
+            'generating features with timestamp {:f}, '
+            'latency is {:.3f}'.format(timestamp, utils.gps_to_latency(timestamp))
+        )
+        feature_packet = {'timestamp': timestamp, 'features': features}
+        self.producer.produce(
+            timestamp=timestamp,
+            topic=self.output_topic,
+            value=json.dumps(feature_packet)
+        )
+        self.producer.poll(0)
+
+
+#-------------------------------------------------
+#                    Main
+#-------------------------------------------------
+
+if __name__ == '__main__':
+    options, args = parse_command_line()
+
+    ### set up logging
+    log_level = logging.DEBUG if options.verbose else logging.INFO
+    logging.basicConfig(format='%(asctime)s | snax_generate : %(levelname)s : %(message)s')
+    logging.getLogger().setLevel(log_level)
+
+    # start up hdf5 sink
+    generator = FeatureGenerator(options)
+    generator.start()
