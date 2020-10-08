@@ -61,7 +61,7 @@ CONDOR_COMMANDS:=--condor-command=accounting_group=$(ACCOUNTING_TAG) --condor-co
 #    * PERSIST_CADENCE: span of a typical hdf5 file.
 #    * OUTPATH: directory in which to save features.
 
-TAG = production_offline
+TAG = test_offline
 
 SAMPLE_RATE = 16
 
@@ -73,10 +73,10 @@ STOP  = 1187100000
 SAVE_CADENCE = 20
 PERSIST_CADENCE = 200
 OUTPATH = $(PWD)
-FEATURES_PATH = /home/patrick.godwin/idq/features
+FEATURES_PATH = /path/to/saved/features
 
 # parameter space for waveforms
-WAVEFORM = tapered_sine_gaussian
+WAVEFORM = sine_gaussian
 MISMATCH = 0.03
 QHIGH = 40
 
@@ -97,7 +97,7 @@ IFO = H1
 EPOCH = O2
 LEVEL = standard
 
-CHANNEL_LIST = $(IFO)-$(EPOCH)-$(LEVEL).ini
+CHANNEL_LIST := $(IFO)-$(EPOCH)-$(LEVEL).ini
 
 # if not specified, use all sections (replace spaces with underscores'_')
 SECTION_INCLUDE =
@@ -107,7 +107,7 @@ SAFETY_INCLUDE = safe unsafe unsafeabove2kHz unknown
 FIDELITY_EXCLUDE =
 
 # if specified, override safety checks for these channels
-UNSAFE_CHANNEL_INCLUDE = $(IFO):CAL-DELTAL_EXTERNAL_DQ
+UNSAFE_CHANNEL_INCLUDE := $(IFO):CAL-DELTAL_EXTERNAL_DQ
 
 # parse include/excludes into command line options
 SECTION_INCLUDE_COMMANDS := $(addprefix --section-include ,$(SECTION_INCLUDE))
@@ -122,11 +122,11 @@ UNSAFE_CHANNEL_INCLUDE_COMMANDS := $(addprefix --unsafe-channel-include ,$(UNSAF
 
 SEG_SERVER=https://segments.ligo.org
 # C00
-LIGO_SEGMENTS="$(IFO):DMT-ANALYSIS_READY:1"
+LIGO_SEGMENTS:="$(IFO):DMT-ANALYSIS_READY:1"
 # C01
-#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C01:1"
+#LIGO_SEGMENTS:="$*:DCS-ANALYSIS_READY_C01:1"
 # C02
-#LIGO_SEGMENTS="$*:DCS-ANALYSIS_READY_C02:1"
+#LIGO_SEGMENTS:="$*:DCS-ANALYSIS_READY_C02:1"
 
 #################################################################################
 # DAG CONFIGURATION (OPTIONAL)                                                  #
@@ -210,8 +210,7 @@ dag : frame.cache $(CHANNEL_LIST) segments.xml.gz
 		--request-cpu 2 \
 		--request-memory 15GB \
 		--request-disk 12GB \
-		--verbose \
-		--disable-web-service
+		--verbose
 	sed -i 's/.*queue.*/Requirements = regexp("Intel.*v[3-5]", TARGET.cpuinfo_model_name)\n&/' *.sub
 	@echo ""
 	@echo "Submit with: condor_submit_dag feature_extractor_pipe.dag"
