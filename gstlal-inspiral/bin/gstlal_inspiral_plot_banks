@@ -130,7 +130,7 @@ def create_plot(x_label = None, y_label = None, width = 165.0, aspect = golden_r
 
 def set_logx_ticks(axis,ax_min,ax_max):
 	n = int(numpy.floor(math.log10(ax_max - ax_min)))
- 	x_minor = MultipleLocator(10**n)
+	x_minor = MultipleLocator(10**n)
 	axis.xaxis.set_minor_locator(x_minor)
 	while len(axis.get_xticks(minor=True))<5:
 		n-=1
@@ -140,11 +140,11 @@ def set_logx_ticks(axis,ax_min,ax_max):
 		x_minor = FixedLocator(axis.get_xticks(minor=True)[::2])
 		axis.xaxis.set_minor_locator(x_minor)
 	axis.xaxis.set_major_locator(NullLocator())
-	axis.xaxis.set_minor_formatter(ScalarFormatter(useMathText=True))	
+	axis.xaxis.set_minor_formatter(ScalarFormatter(useMathText=True))
 
 def set_logy_ticks(axis,ax_min,ax_max):
 	n = int(numpy.floor(math.log10(ax_max - ax_min)))
- 	x_minor = MultipleLocator(10**n)
+	x_minor = MultipleLocator(10**n)
 	axis.yaxis.set_minor_locator(x_minor)
 	while len(axis.get_yticks(minor=True))<5:
 		n-=1
@@ -154,7 +154,7 @@ def set_logy_ticks(axis,ax_min,ax_max):
 		x_minor = FixedLocator(axis.get_yticks(minor=True)[::2])
 		axis.yaxis.set_minor_locator(x_minor)
 	axis.yaxis.set_major_locator(NullLocator())
-	axis.yaxis.set_minor_formatter(ScalarFormatter(useMathText=True))	
+	axis.yaxis.set_minor_formatter(ScalarFormatter(useMathText=True))
 
 def plot_template_bank(filename_template, sngl_inspiral_table):
 
@@ -219,7 +219,7 @@ def color_split_bank_by_svd(filename_template, split_bank_nums, cm_min_vec, cm_m
 	total_svd_banks = max(split_bank_nums)
 	# Create rectangles for split-bank tiling plot
 	patches = []
-	
+
 	cm_range_vec = cm_max_vec-cm_min_vec
 	chi_range_vec = chi_max_vec-chi_min_vec
 
