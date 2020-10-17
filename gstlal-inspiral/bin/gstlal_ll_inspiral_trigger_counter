@@ -37,6 +37,7 @@ from gstlal import servicediscovery
 from ligo import lw
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
+from ligo.scald import aggregator
 from ligo.scald.io import kafka
 
 
@@ -119,8 +120,8 @@ class ZeroLagCounts(object):
 			# that you always get the most up to date.
 			zlpdf = self.zerolag_rankingstatpdf.copy()
 			self.__add_counts_to_zerolag_pdf(zlpdf)
-			output = io.StringIO()
-			ligolw_utils.write_fileobj(self.__get_zerolag_rankingstatpdf_xmldoc(zlpdf), output)
+			output = io.BytesIO()
+			ligolw_utils.write_fileobj(self.__get_zerolag_rankingstatpdf_xmldoc(zlpdf), output, gz = False)
 			outstr = output.getvalue()
 			output.close()
 			return outstr
@@ -203,7 +204,7 @@ if __name__ == '__main__':
 		logging.debug("retrieving data from kafka")
 		start = timeit.default_timer()
 		msgs = [msg for msg in client.query(max_messages=2000)]
-		triggers = kafka.parse_triggers(msgs)
+		triggers = aggregator.parse_triggers(msgs)
 		elapsed = timeit.default_timer() - start
 		logging.debug("time to retrieve data: %.1f s" % elapsed)
 
