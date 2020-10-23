@@ -221,7 +221,7 @@ def load_distributions(filenames, verbose = False):
 	if rankingstatpdf is not None:
 		seg = rankingstatpdf.segments.extent()
 	elif rankingstats:
-		rankingstat = rankingstats.values()[0]
+		rankingstat = list(rankingstats.values())[0]
 		try:
 			seg = rankingstat.segmentlists.extent_all()
 		except ValueError:
@@ -372,7 +372,7 @@ for bin_index, rankingstat in enumerate(sorted(rankingstats.values(), key = lamb
 if options.plot_snr_snr_pdfs:
 	# assume PDFs are identical for all template bank bins, and pick
 	# one set to plot
-	rankingstat = rankingstats.values()[0]
+	rankingstat = list(rankingstats.values())[0]
 	for (instruments, horizon_distances) in sorted(rankingstat.numerator.SNRPDF.snr_joint_pdf_cache.keys(), key = lambda x: sorted(x[1])):
 		# they're stored as a frozen set of quantized key/value
 		# pairs, need to unquantize them and get a dictionary back
