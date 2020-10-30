@@ -926,8 +926,8 @@ class ParameterAccuracyPlots(object):
 	def finish(self):
 
 		def hist(arr, axes):
-			start = scipy.stats.mstats.mquantiles(arr, 0.01)
-			end = scipy.stats.mstats.mquantiles(arr, 0.99)
+			start = scipy.stats.mstats.mquantiles(arr, 0.01)[0]
+			end = scipy.stats.mstats.mquantiles(arr, 0.99)[0]
 
 			axes.hist(arr, numpy.linspace(start, end, 100))
 
