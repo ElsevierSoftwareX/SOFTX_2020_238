@@ -486,7 +486,7 @@ class RankingStatPDF(object):
 	ligo_lw_name_suffix = u"gstlal_inspiral_rankingstatpdf"
 
 	@staticmethod
-	def density_estimate(lnpdf, name, kernel = rate.gaussian_window(4.)):
+	def density_estimate(lnpdf, name, kernel = rate.gaussian_window(12.)): #FIXME original: rate.gaussian_window(4.)
 		"""
 		For internal use only.
 		"""
@@ -757,10 +757,31 @@ WHERE
 
 		norm, rate_eff, m = optimize.fmin(ssr, (zl.sum() / bg.sum(), zl.sum(), 1.), xtol = 1e-8, ftol = 1e-8, disp = 0)
 
-		# compute survival probability model from best fit
-		survival_probability = mk_survival_probability(rate_eff, m)
+                # FIXME this is from gstlal/master (aug 17, 2020) to fix the signal pdf plots for mass-weighting comparison runs
+                noise_counts = self.noise_lr_lnpdf.array.copy()
+                zl_counts = self.zero_lag_lr_lnpdf.array.copy()
+                zl_counts[:40] = 0.
+                if not zl_counts.any():
+                        raise ValueError("zero-lag counts are all zero")
+                if zl_counts.sum() < 100 * 1000:
+                        tail_zl_counts = zl_counts.sum() * 0.99
+                else:
+                        tail_zl_counts = zl_counts.sum() - 1000
+                onepercent = zl_counts.cumsum().searchsorted(tail_zl_counts)
+                noise_counts /= noise_counts.sum()
+                zl_counts /= zl_counts.sum()
+                norm = zl_counts[onepercent] / noise_counts[onepercent]
+                zl_counts[onepercent:] = 0
+                noise_counts[onepercent:] = 0
+                survival_probability = zl_counts / noise_counts
+                survival_probability[onepercent:] = norm
+                survival_probability[numpy.isnan(survival_probability)] = 0.0
 
-		self.noise_lr_lnpdf.array[:self.noise_lr_lnpdf.bins[0][mode]] = 0.
+                # Uncomment next two lines if not using FIXME changes.
+		## compute survival probability model from best fit
+		#survival_probability = mk_survival_probability(rate_eff, m)
+
+		#self.noise_lr_lnpdf.array[:self.noise_lr_lnpdf.bins[0][mode]] = 0.
 		# apply to background counts and signal counts
 		self.noise_lr_lnpdf.array *= survival_probability
 		self.noise_lr_lnpdf.normalize()
