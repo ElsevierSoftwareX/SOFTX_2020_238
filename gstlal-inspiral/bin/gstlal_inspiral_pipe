@@ -1124,8 +1124,8 @@ def parse_command_line():
 		sngl_inspiral_table = lsctables.SnglInspiralTable.get_table(bank_xmldoc)
 		assert len(sngl_inspiral_table) == len(set([r.template_id for r in sngl_inspiral_table])), "Template bank ids are not unique"
 
-	if options.mass_model not in ("narrow-bns", "broad-bns", "bbh", "ligo", "detected-logm", "file"):
-		raise ValueError("--mass-model must be 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', or 'file'")
+	if options.mass_model not in ("narrow-bns", "broad-bns", "bbh", "ligo", "detected-logm", "uniform-template", "file"):
+		raise ValueError("--mass-model must be 'narrow-bns', 'broad-bns', 'bbh', 'ligo', 'detected-logm', 'uniform-template', or 'file'")
 	if options.mass_model == "file" and not options.mass_model_file:
 		raise ValueError("--mass-model-file must be provided if --mass-model=file")
 
