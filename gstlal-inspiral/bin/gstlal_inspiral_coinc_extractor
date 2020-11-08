@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2013 Chad Hanna
 #
@@ -42,7 +42,7 @@ def timesliderow(connection):
 	return lsctables.table.get_table(dbtables.get_xml(connection), lsctables.TimeSlideTable.tableName).row_from_cols
 
 parser = OptionParser()
-parser.add_option("--fap-thresh", default=0.01, type="float", metavar="probability", help="Set the false alarm probability: default 0.01")
+parser.add_option("--far-thresh", default=0.01, type="float", metavar="probability", help="Set the false alarm probability: default 0.01")
 parser.add_option("--gps-times", metavar="GPS (comma separated)", help="Restrict times to this list. give as GPS1,GPS2,...GPSN. Assumes +- 1s")
 options, filenames = parser.parse_args()
 
@@ -53,7 +53,7 @@ if len(filenames) != 1:
 db = sqlite3.connect(filenames[0])
 
 if options.gps_times is None:
-	cids = list(db.cursor().execute('SELECT coinc_inspiral.coinc_event_id, coinc_inspiral.end_time, coinc_inspiral.ifos FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) AND coinc_inspiral.false_alarm_rate <= ?', (options.fap_thresh,)).fetchall())
+	cids = list(db.cursor().execute('SELECT coinc_inspiral.coinc_event_id, coinc_inspiral.end_time, coinc_inspiral.ifos FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) AND coinc_inspiral.combined_far <= ?', (options.far_thresh,)).fetchall())
 else:
 	gps_list = [int(t) for t in options.gps_times.split(',')]
 	# +1
@@ -61,9 +61,9 @@ else:
 	# -1
 	gps_list.extend([t-1 for t in gps_list])
 	print >> sys.stderr, gps_list
-	query = 'SELECT coinc_inspiral.coinc_event_id, coinc_inspiral.end_time, coinc_inspiral.ifos FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) AND coinc_inspiral.false_alarm_rate <= ? AND coinc_inspiral.end_time IN (%s)' % (",".join(["%d" % t for t in sorted(gps_list)]),)
+	query = 'SELECT coinc_inspiral.coinc_event_id, coinc_inspiral.end_time, coinc_inspiral.ifos FROM coinc_inspiral JOIN coinc_event ON coinc_event.coinc_event_id == coinc_inspiral.coinc_event_id WHERE NOT EXISTS(SELECT * FROM time_slide WHERE time_slide.time_slide_id == coinc_event.time_slide_id AND time_slide.offset != 0) AND coinc_inspiral.combined_far <= ? AND coinc_inspiral.end_time IN (%s)' % (",".join(["%d" % t for t in sorted(gps_list)]),)
 	print >> sys.stderr, query
-	cids = list(db.cursor().execute(query, (options.fap_thresh,)).fetchall())
+	cids = list(db.cursor().execute(query, (options.far_thresh,)).fetchall())
 
 for (cid, time, ifos) in cids:
 	xmldocmain = ligolw.Document()
@@ -140,4 +140,4 @@ for (cid, time, ifos) in cids:
 			setattr(fullrow, attr, getattr(thisrow, attr))
 		sngl.append(fullrow)
 
-	ligolw_utils.write_filename(xmldocmain, '%s-LLOID-%d-0.xml.gz' % (ifos.replace(",",""), time), gz=True, verbose=True)
+	ligolw_utils.write_filename(xmldocmain, '%s-GSTLAL_AllSky-%d-0.xml.gz' % (ifos.replace(",",""), time), gz=True, verbose=True)

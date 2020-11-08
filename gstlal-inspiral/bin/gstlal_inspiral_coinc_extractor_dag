@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 '''
 gstlal_inspiral_coinc_extractor_dag --injection-database=path/to/injection/database --zerolag-database=path/to/zerolag/database --tmp-space=path/to/tmp/space --far-threshold=1e-6 --max-number-inspiral-jobs=max_number_inspiral_jobs
 '''
@@ -194,7 +194,7 @@ num_inspiral_jobs = options.max_number_inspiral_jobs
 analysis_dir = os.path.dirname(db)
 
 working_filename = dbtables.get_connection_filename(db, tmp_path = tmp_space, verbose = True)
-connection = sqlite3.connect(working_filename)
+connection = sqlite3.connect(str(working_filename))
 
 if options.injection_database:
 	create_sim_coinc_view(connection)
