@@ -48,7 +48,8 @@ parser.add_argument("--template-bank", metavar='name', type=str, help='The input
 parser.add_argument("--reference-psd", metavar='filename', help = "Load the spectrum from this LIGO light-weight XML file")
 parser.add_argument("--output", metavar='name', type=str, help='The output file name', default = "inspiral_mass_model.h5")
 parser.add_argument("--min-instrument", metavar='name', type=int, default=2, help='Minimum instruments operating. Specified for calculating horizon distance in uniform in template model.')
-parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, ligo-bns, bbh, uniform-template. If you want another one, submit a patch.')
+parser.add_argument("--min-mc-bins", metavar='name', type=int, default=10, help='Minimum number of chirp mass bins.')
+parser.add_argument("--model", metavar='name', type=str, help='Mass model. Options are: ligo, narrow-bns, ligo-bns, bbh, logmc, uniform-template. If you want another one, submit a patch.')
 parser.add_argument("--verbose", help='Be verbose', action="store_true")
 options = parser.parse_args()
 
@@ -61,7 +62,7 @@ if options.model in ("uniform-template"):
 mchirps_of_tmps = chirpmass(sngl_inspiral_table.getColumnByName("mass1").asarray(), sngl_inspiral_table.getColumnByName("mass2").asarray())
 
 num_templates = len(mchirps_of_tmps)
-num_bins = max(10, num_templates / 10000)
+num_bins = max(options.min_mc_bins, num_templates / 10000)
 massBA = rate.BinnedDensity(rate.NDBins((rate.LogarithmicBins(min(mchirps_of_tmps)-5e-6, max(mchirps_of_tmps)+5e-6, num_bins),)))
 for m in mchirps_of_tmps:
       massBA.count[(m,)] += 1
@@ -117,6 +118,11 @@ for row in sngl_inspiral_table:
 
 		# From: https://www.lsc-group.phys.uwm.edu/ligovirgo/cbcnote/RatesAndSignificance/O1O2CatalogRates
 		prob[row.template_id] = schechter(mchirp, bbh_peak, bbh_alpha) / bbhnorm 
+		# Divide out the template density
+		prob[row.template_id] /= TEMPDENS(mchirp)
+
+	elif options.model == "logmc":
+		prob[row.template_id] = numpy.log(mchirp) 
 		# Divide out the template density
 		prob[row.template_id] /= TEMPDENS(mchirp)
 
