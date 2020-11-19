@@ -68,7 +68,7 @@ for m in mchirps_of_tmps:
       massBA.count[(m,)] += 1
 # Does weird stuff at edges :(
 #TEMPDENS = rate.InterpBinnedArray(massBA)
-TEMPDENS = lambda x: massBA[x,]
+TEMPDENS = lambda x: massBA.count[x,]
 
 # Assign the proper mass probabilities
 prob = {}
@@ -122,7 +122,7 @@ for row in sngl_inspiral_table:
 		prob[row.template_id] /= TEMPDENS(mchirp)
 
 	elif options.model == "logmc":
-		prob[row.template_id] = numpy.log(mchirp) 
+		prob[row.template_id] = 1 / row.mass1 + 1. / row.mass2
 		# Divide out the template density
 		prob[row.template_id] /= TEMPDENS(mchirp)
 
