@@ -650,8 +650,9 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 		control_branch = {}
 		for instrument, bank in [(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]:
 			suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
-			control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, control_peak_samples = control_peak_time * max(bank.get_rates()))
-			#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
+			if instrument != "H2":
+				control_branch[(instrument, bank.bank_id)] = mkcontrolsnksrc(pipeline, max(bank.get_rates()), verbose = verbose, suffix = suffix, control_peak_samples = control_peak_time * max(bank.get_rates()))
+				#pipeparts.mknxydumpsink(pipeline, pipeparts.mkqueue(pipeline, control_branch[(instrument, bank.bank_id)][1]), "control_%s.dump" % suffix, segment = nxydump_segment)
 	else:
 		control_branch = None
 
@@ -663,7 +664,10 @@ def mkLLOIDmulti(pipeline, detectors, banks, psd, psd_fft_length = 32, ht_gate_t
 	for i, (instrument, bank) in enumerate([(instrument, bank) for instrument, banklist in banks.items() for bank in banklist]):
 		suffix = "%s%s" % (instrument, (bank.logname and "_%s" % bank.logname or ""))
 		if control_branch is not None:
-			control_snksrc = control_branch[(instrument, bank.bank_id)]
+			if instrument != "H2":
+				control_snksrc = control_branch[(instrument, bank.bank_id)]
+			else:
+				control_snksrc = (None, control_branch[("H1", bank.bank_id)][1])
 		else:
 			control_snksrc = (None, None)
 		if chisq_type == 'timeslicechisq':

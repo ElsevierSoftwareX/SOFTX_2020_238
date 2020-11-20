@@ -403,8 +403,8 @@ class DataSourceInfo(object):
 		else:
 			self.channel_subsets = partition_channels_to_subsets(self.channel_dict, self.max_streams, self.min_sample_rate, self.max_sample_rate)
 
-		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
-		self.shm_part_dict = {"H1": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
+		## A dictionary for shared memory partition, e.g., {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
+		self.shm_part_dict = {"H1": "LHO_Data", "H2": "LHO_Data", "L1": "LLO_Data", "V1": "VIRGO_Data"}
 		if options.shared_memory_partition is not None:
 			self.shm_part_dict.update( datasource.channel_dict_from_channel_list(options.shared_memory_partition) )
 

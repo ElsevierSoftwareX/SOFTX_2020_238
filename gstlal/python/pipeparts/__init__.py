@@ -952,6 +952,15 @@ def mktrigger(pipeline, src, n, autocorrelation_matrix = None, mask_matrix = Non
 def mklatency(pipeline, src, name = None, silent = False):
 	return mkgeneric(pipeline, src, "lal_latency", name = name, silent = silent)
 
+def mklhocoherentnull(pipeline, H1src, H2src, H1_impulse, H1_latency, H2_impulse, H2_latency, srate):
+	elem = mkgeneric(pipeline, None, "lal_lho_coherent_null", block_stride = srate, H1_impulse = H1_impulse, H2_impulse = H2_impulse, H1_latency = H1_latency, H2_latency = H2_latency)
+	for peer, padname in ((H1src, "H1sink"), (H2src, "H2sink")):
+		if isinstance(peer, Gst.Pad):
+			peer.get_parent_element().link_pads(peer, elem, padname)
+		elif peer is not None:
+			peer.link_pads(None, elem, padname)
+	return elem
+
 def mkcomputegamma(pipeline, dctrl, exc, cos, sin, **properties):
 	elem = mkgeneric(pipeline, None, "lal_compute_gamma", **properties)
 	for peer, padname in ((dctrl, "dctrl_sink"), (exc, "exc_sink"), (cos, "cos"), (sin, "sin")):

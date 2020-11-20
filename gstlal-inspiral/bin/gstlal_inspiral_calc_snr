@@ -164,13 +164,13 @@ def parse_command_line():
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Template Options", "Choose a template from a SVD bank file / a bank file (see svd_bank_snr.Bank).")
-	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information. These can be given as a comma separated list such as H1:file1,L1:file2,V1:file3 to analyze multiple instruments (require)." )
+	group.add_option("--svd-bank", metavar = "filename", help = "A LIGO light-weight xml / xml.gz file containing svd bank information. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments (require)." )
 	group.add_option("--coinc", metavar = "filename", help = "The coinc.xml file associated with --svd-bank. This is used to find the --bank-number and --row-number for a particular event. If given, the --bank-number and --row-number will be overwritten. (optional)")
 	group.add_option("--bank-number", type = "int", help = "Bank id is of the form <int>ID_<int>N where N is the sub bank id. (optional). SNRs in all banks will be used if it is not given.")
 	group.add_option("--bank-counts", type = "int", default = 1, help = "Number of banks to used; Counted from --bank-number; default = 1")
 	group.add_option("--row-number", type = "int", help = "The row number of the template (optional). All the SNRs will be outputed if it is not given.")
 	group.add_option("--row-counts", type = "int", default = 1, help = "Number of rows to be outputted; Counted from --row-number; default = 1")
-	group.add_option("--bank", metavar = "filename", help = "LIGO light-weight xml.gz file(s) containing only one template. These can be given as a comma separated list such as H1:file1,L1:file2,V1:file3. Expecting one template only for each file (require).")
+	group.add_option("--bank", metavar = "filename", help = "LIGO light-weight xml.gz file(s) containing only one template. These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3. Expecting one template only for each file (require).")
 	parser.add_option_group(group)
 
 	group = OptionGroup(parser, "Data Quality Options", "Adjust data quality handling")

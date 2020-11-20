@@ -100,7 +100,7 @@ def parse_command_line():
 	# caches
 	parser.add_option("--dist-stats-cache", metavar = "filename", help = "Set the cache file for dist stats")
 	parser.add_option("--lloid-cache", metavar = "filename", help = "Set the cache file for LLOID")
-	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,L1=L1.cache, etc.. (can be given multiple times)")
+	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc.. (can be given multiple times)")
 
 	# Data from a zero lag run in the case of an injection-only run.
 	parser.add_option("--svd-bank-cache", metavar = "filename", help = "Set the cache file for svd banks (required iff running injection-only analysis)")

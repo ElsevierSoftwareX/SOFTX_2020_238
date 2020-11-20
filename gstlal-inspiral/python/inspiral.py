@@ -122,7 +122,7 @@ def parse_svdbank_string(bank_string):
 	"""
 	parses strings of form
 
-	H1:bank1.xml,L1:bank2.xml,V1:bank3.xml
+	H1:bank1.xml,H2:bank2.xml,L1:bank3.xml
 
 	into a dictionary of lists of bank files.
 	"""

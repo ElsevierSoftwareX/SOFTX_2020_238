@@ -99,7 +99,7 @@ def parse_command_line():
 	parser.add_option("--samples-max-256", type = "int", default = 1024, help = "The maximum number of samples to use for time slices with frequencies above 256Hz, default 1024")
 	parser.add_option("--samples-max-64", type = "int", default = 2048, help = "The maximum number of samples to use for time slices with frequencies above 64Hz, default 2048")
 	parser.add_option("--samples-max", type = "int", default = 4096, help = "The maximum number of samples to use for time slices with frequencies below 64Hz, default 4096")
-	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,L1=L1.cache, etc.. (can be given multiple times)")
+	parser.add_option("--bank-cache", metavar = "filenames", action = "append", help = "Set the bank cache files in format H1=H1.cache,H2=H2.cache, etc.. (can be given multiple times)")
 	parser.add_option("--tolerance", metavar = "float", type = "float", default = 0.9999, help = "set the SVD tolerance, default 0.9999")
 	parser.add_option("--flow", metavar = "num", type = "float", action = "append", help = "set the low frequency cutoff. Can be given multiple times.")
 	parser.add_option("--fmax", metavar = "num", type = "float", default = 1600, help = "set the max frequency cutoff, default 1600 (Hz)")
