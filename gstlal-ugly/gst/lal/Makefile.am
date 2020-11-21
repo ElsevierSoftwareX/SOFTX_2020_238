@@ -8,6 +8,7 @@ lib@GSTPLUGINPREFIX@gstlalugly_la_SOURCES = \
 	gstlal_aggregator.h gstlal_aggregator.c \
 	gstlal_bitvectorgen.h gstlal_bitvectorgen.c \
 	gstlaldeglitchfilter.h gstlaldeglitchfilter.c \
+	gstlal_denoiser.h gstlal_denoiser.c \
 	gstlal_interpolator.h gstlal_interpolator.c \
 	gstlal_tdwhiten.h gstlal_tdwhiten.c \
 	gstlal_latency.h gstlal_latency.c \

@@ -57,6 +57,7 @@
 #include <gstlal_pad.h>
 #include <gstlal_trim.h>*/
 #include <gstlal_bitvectorgen.h>
+#include <gstlal_denoiser.h>
 #include <audioratefaker.h>
 #include <gstlal_latency.h>
 #include <gstlaldeglitchfilter.h>
@@ -84,6 +85,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		/*{"lal_pad", GST_TYPE_LALPAD},
 		{"lal_trim", GST_TYPE_LALTRIM},*/
 		{"lal_bitvectorgen", GSTLAL_BITVECTORGEN_TYPE},
+		{"lal_denoiser", GSTLAL_DENOISER_TYPE},
 		{"audioratefaker", GST_TYPE_AUDIO_RATE_FAKER},
 		{"lal_latency", GSTLAL_LATENCY_TYPE},
 		{"lal_deglitcher", GST_TYPE_LALDEGLITCHFILTER},
