@@ -166,20 +166,20 @@ void orthogonalize32(gsl_vector_float *v, gsl_vector_float *x, gsl_vector_float 
 	gsl_vector_float_memcpy(vsub, u1);
 
 	// set up basis vector u2
-	gsl_blas_s_dot(u1, u1, u1u1);
-	gsl_blas_s_dot(u1, v, u1v);
+	gsl_blas_sdot(u1, u1, &u1u1);
+	gsl_blas_sdot(u1, v, &u1v);
 	gsl_vector_float_scale(vsub, u1v / u1u1);
 	gsl_vector_float_sub(u2, vsub);
-	gsl_blas_s_dot(u2, u2, u2u2);
+	gsl_blas_sdot(u2, u2, &u2u2);
 
 	// normalize
 	gsl_vector_float_scale(u1, 1. / sqrt(u1u1));
 	gsl_vector_float_scale(u2, 1. / sqrt(u2u2));
 
 	// get parallel (u1) and perpendicular (u2) components
-	gsl_blas_s_dot(u1, v, u1v);
+	gsl_blas_sdot(u1, v, &u1v);
 	gsl_vector_float_scale(u1, u1v);
-	gsl_blas_s_dot(u2, v, u2v);
+	gsl_blas_sdot(u2, v, &u2v);
 	gsl_vector_float_scale(u2, u2v);
 
 	gsl_vector_float_free(vsub);
@@ -195,20 +195,20 @@ void orthogonalize64(gsl_vector *v, gsl_vector *x, gsl_vector *u1, gsl_vector *u
 	gsl_vector_memcpy(vsub, u1);
 
 	// set up basis vector u2
-	gsl_blas_d_dot(u1, u1, u1u1);
-	gsl_blas_d_dot(u1, v, u1v);
+	gsl_blas_ddot(u1, u1, &u1u1);
+	gsl_blas_ddot(u1, v, &u1v);
 	gsl_vector_scale(vsub, u1v / u1u1);
 	gsl_vector_sub(u2, vsub);
-	gsl_blas_d_dot(u2, u2, u2u2);
+	gsl_blas_ddot(u2, u2, &u2u2);
 
 	// normalize
 	gsl_vector_scale(u1, 1. / sqrt(u1u1));
 	gsl_vector_scale(u2, 1. / sqrt(u2u2));
 
 	// get parallel (u1) and perpendicular (u2) components
-	gsl_blas_d_dot(u1, v, u1v);
+	gsl_blas_ddot(u1, v, &u1v);
 	gsl_vector_scale(u1, u1v);
-	gsl_blas_d_dot(u2, v, u2v);
+	gsl_blas_ddot(u2, v, &u2v);
 	gsl_vector_scale(u2, u2v);
 
 	gsl_vector_free(vsub);
@@ -225,7 +225,7 @@ static GstFlowReturn denoise32(GstBuffer *inbuf, GstBuffer *outbuf, gboolean sta
 	size_t n = sizeof(src) / sizeof(float);
 	size_t *ix[n];
 	gsl_vector_float *npbar = gsl_vector_float_alloc(n);
-	gsl_vector_float *gpbar = gsl_vector__floatalloc(n);
+	gsl_vector_float *gpbar = gsl_vector_float_alloc(n);
 	gsl_vector_float_view src_view = gsl_vector_float_view_array(src, n);
 
 	gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
@@ -267,7 +267,7 @@ static GstFlowReturn denoise32(GstBuffer *inbuf, GstBuffer *outbuf, gboolean sta
 
 	// decompose into stationary/non-stationary components
 	if (!gsl_vector_float_isnull(gpbar)) {
-		gsl_permute_inverse_float(ix, gpbar, 1, n);
+		gsl_permute_float_inverse(ix, gpbar, 1, n);
 		gsl_vector_float *u1 = gsl_vector_float_alloc(gpbar->size);
 		gsl_vector_float *u2 = gsl_vector_float_alloc(gpbar->size);
 		orthogonalize32(&src_view.vector, gpbar, u1, u2);
