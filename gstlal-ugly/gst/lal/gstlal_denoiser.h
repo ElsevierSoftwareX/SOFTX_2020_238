@@ -64,7 +64,7 @@ struct _GSTLALDenoiser {
 	gboolean stationary;
 	gdouble threshold;
 
-	GstFlowReturn (*denoiser_func)(GSTLALDenoiser *, GstBuffer *, GstBuffer *);
+	GstFlowReturn (*denoiser_func)(GstBuffer *, GstBuffer *, gboolean, gdouble);
 };
 
 
