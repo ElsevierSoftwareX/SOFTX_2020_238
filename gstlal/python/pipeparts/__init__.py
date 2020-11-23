@@ -921,6 +921,14 @@ def mkpeak(pipeline, src, n):
 	return mkgeneric(pipeline, src, "lal_peak", n = n)
 
 
+def mkdenoiser(pipeline, src, **properties):
+	return mkgeneric(pipeline, src, "lal_denoiser", **properties)
+
+
+def mkclean(pipeline, src, threshold=1.0):
+	return mkdenoiser(pipeline, src, stationary=True, threshold=threshold)
+
+
 def mkitac(pipeline, src, n, bank, autocorrelation_matrix = None, mask_matrix = None, snr_thresh = 0, sigmasq = None):
 	properties = {
 		"n": n,
