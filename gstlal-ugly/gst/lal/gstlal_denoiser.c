@@ -229,14 +229,16 @@ static GstFlowReturn denoise32(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 	bps = GST_AUDIO_INFO_BPS(&element->info);
 	n = in_info.size / bps;
 
-	size_t *ix[n];
 	gsl_vector_float *npbar = gsl_vector_float_alloc(n);
 	gsl_vector_float *gpbar = gsl_vector_float_alloc(n);
 	gsl_vector_float_const_view src_view = gsl_vector_float_const_view_array(src, n);
+	gsl_permutation *ix = gsl_permutation_alloc(n);
 
 	// switch basis to be ordered by magnitude of data
-	gsl_sort_float_index(ix, src, 1, n);
-	gsl_permute_float(ix, src, 1, n);
+	gsl_vector_float_memcpy(gpbar, &src_view.vector);
+	gsl_permutation_init(ix);
+	gsl_sort_vector_float_index(ix, gpbar);
+	gsl_permute_vector_float(ix, gpbar);
 
 	// calculate the average expected noise in the new basis
 	for (i = 1; i < (n+1); i++) {
@@ -250,7 +252,6 @@ static GstFlowReturn denoise32(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 	gsl_vector_float_scale(npbar, M_SQRT2);
 
 	// remove average expected noise
-	gsl_vector_float_memcpy(gpbar, &src_view.vector);
 	gsl_vector_float_sub(gpbar, npbar);
 
 	// keep non-stationary noise in up to predetermined threshold
@@ -268,7 +269,7 @@ static GstFlowReturn denoise32(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 
 	// decompose into stationary/non-stationary components
 	if (!gsl_vector_float_isnull(gpbar)) {
-		gsl_permute_float_inverse(ix, gpbar, 1, n);
+		gsl_permute_vector_float_inverse(ix, gpbar);
 		gsl_vector_float *u1 = gsl_vector_float_alloc(n);
 		gsl_vector_float *u2 = gsl_vector_float_alloc(n);
 		orthogonalize32(&src_view.vector, gpbar, u1, u2, n);
@@ -287,6 +288,8 @@ static GstFlowReturn denoise32(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 
 	gsl_vector_float_free(npbar);
 	gsl_vector_float_free(gpbar);
+	gsl_permutation_free(ix);
+
 	gst_buffer_unmap(inbuf, &in_info);
 	gst_buffer_unmap(outbuf, &out_info);
 	return GST_FLOW_OK;
@@ -306,14 +309,16 @@ static GstFlowReturn denoise64(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 	bps = GST_AUDIO_INFO_BPS(&element->info);
 	n = in_info.size / bps;
 
-	size_t *ix[n];
 	gsl_vector *npbar = gsl_vector_alloc(n);
 	gsl_vector *gpbar = gsl_vector_alloc(n);
 	gsl_vector_const_view src_view = gsl_vector_const_view_array(src, n);
+	gsl_permutation *ix = gsl_permutation_alloc(n);
 
 	// switch basis to be ordered by magnitude of data
-	gsl_sort_index(ix, src, 1, n);
-	gsl_permute(ix, src, 1, n);
+	gsl_vector_memcpy(gpbar, &src_view.vector);
+	gsl_permutation_init(ix);
+	gsl_sort_vector_index(ix, gpbar);
+	gsl_permute_vector(ix, gpbar);
 
 	// calculate the average expected noise in the new basis
 	for (i = 1; i < (n+1); i++) {
@@ -327,7 +332,6 @@ static GstFlowReturn denoise64(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 	gsl_vector_scale(npbar, M_SQRT2);
 
 	// remove average expected noise
-	gsl_vector_memcpy(gpbar, &src_view.vector);
 	gsl_vector_sub(gpbar, npbar);
 
 	// keep non-stationary noise in up to predetermined threshold
@@ -345,7 +349,7 @@ static GstFlowReturn denoise64(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 
 	// decompose into stationary/non-stationary components
 	if (!gsl_vector_isnull(gpbar)) {
-		gsl_permute_inverse(ix, gpbar, 1, n);
+		gsl_permute_vector_inverse(ix, gpbar);
 		gsl_vector *u1 = gsl_vector_alloc(n);
 		gsl_vector *u2 = gsl_vector_alloc(n);
 		orthogonalize64(&src_view.vector, gpbar, u1, u2, n);
@@ -364,6 +368,8 @@ static GstFlowReturn denoise64(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuf
 
 	gsl_vector_free(npbar);
 	gsl_vector_free(gpbar);
+	gsl_permutation_free(ix);
+
 	gst_buffer_unmap(inbuf, &in_info);
 	gst_buffer_unmap(outbuf, &out_info);
 	return GST_FLOW_OK;
