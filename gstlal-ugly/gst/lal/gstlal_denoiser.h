@@ -60,11 +60,13 @@ typedef struct _GSTLALDenoiserClass GSTLALDenoiserClass;
 struct _GSTLALDenoiser {
 	GstBaseTransform element;
 
+	GstAudioInfo info;
+
 	/* properties */
 	gboolean stationary;
 	gdouble threshold;
 
-	GstFlowReturn (*denoiser_func)(GstBuffer *, GstBuffer *, gboolean, gdouble);
+	GstFlowReturn (*denoiser_func)(GSTLALDenoiser *, GstBuffer *, GstBuffer *, gboolean, gdouble);
 };
 
 

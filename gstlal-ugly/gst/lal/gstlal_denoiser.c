@@ -94,7 +94,7 @@ enum property {
 
 static GParamSpec *properties[ARG_FAKE];
 
-#define DEFAULT_STATIONARY FALSE
+#define DEFAULT_STATIONARY TRUE
 #define DEFAULT_THRESHOLD 1.0
 
 
@@ -146,21 +146,21 @@ float erfinv32(float x) {
 double erfinv64(double x) {
 	// based on https://stackoverflow.com/a/40260471
 	double tt1, tt2, lnx, sgn;
-	sgn = (x < 0) ? -1.0f : 1.0f;
+	sgn = (x < 0) ? -1.0 : 1.0;
 
 	x = (1 - x)*(1 + x);  // x = 1 - x*x;
-	lnx = logf(x);
+	lnx = log(x);
 
-	tt1 = 2/(M_PI*0.147) + 0.5f * lnx;
+	tt1 = 2/(M_PI*0.147) + 0.5 * lnx;
 	tt2 = 1/(0.147) * lnx;
 
-	return(sgn*sqrtf(-tt1 + sqrtf(tt1*tt1 - tt2)));
+	return(sgn*sqrt(-tt1 + sqrt(tt1*tt1 - tt2)));
 }
 
 
-void orthogonalize32(gsl_vector_float *v, gsl_vector_float *x, gsl_vector_float *u1, gsl_vector_float *u2) {
+void orthogonalize32(gsl_vector_float *v, gsl_vector_float *x, gsl_vector_float *u1, gsl_vector_float *u2, size_t n) {
 	float u1u1, u2u2, u1v, u2v;
-	gsl_vector_float *vsub = gsl_vector_float_alloc(x->size);
+	gsl_vector_float *vsub = gsl_vector_float_alloc(n);
 	gsl_vector_float_memcpy(u1, x);
 	gsl_vector_float_memcpy(u2, v);
 	gsl_vector_float_memcpy(vsub, u1);
@@ -187,9 +187,9 @@ void orthogonalize32(gsl_vector_float *v, gsl_vector_float *x, gsl_vector_float 
 }
 
 
-void orthogonalize64(gsl_vector *v, gsl_vector *x, gsl_vector *u1, gsl_vector *u2) {
+void orthogonalize64(gsl_vector *v, gsl_vector *x, gsl_vector *u1, gsl_vector *u2, size_t n) {
 	double u1u1, u2u2, u1v, u2v;
-	gsl_vector *vsub = gsl_vector_alloc(x->size);
+	gsl_vector *vsub = gsl_vector_alloc(n);
 	gsl_vector_memcpy(u1, x);
 	gsl_vector_memcpy(u2, v);
 	gsl_vector_memcpy(vsub, u1);
@@ -216,22 +216,23 @@ void orthogonalize64(gsl_vector *v, gsl_vector *x, gsl_vector *u1, gsl_vector *u
 }
 
 
-static GstFlowReturn denoise32(GstBuffer *inbuf, GstBuffer *outbuf, gboolean stationary, gdouble threshold) {
+static GstFlowReturn denoise32(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuffer *outbuf, gboolean stationary, gdouble threshold) {
 
 	GstMapInfo in_info, out_info;
 	const float *src;
-	float *dst;
-	int i;
-	size_t n = sizeof(src) / sizeof(float);
-	size_t *ix[n];
-	gsl_vector_float *npbar = gsl_vector_float_alloc(n);
-	gsl_vector_float *gpbar = gsl_vector_float_alloc(n);
-	gsl_vector_float_view src_view = gsl_vector_float_view_array(src, n);
-
+	gint bps;
+	size_t i, n;
 	gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
 	src = (const float *) in_info.data;
 	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
-	dst = (float *) out_info.data;
+
+	bps = GST_AUDIO_INFO_BPS(&element->info);
+	n = in_info.size / bps;
+
+	size_t *ix[n];
+	gsl_vector_float *npbar = gsl_vector_float_alloc(n);
+	gsl_vector_float *gpbar = gsl_vector_float_alloc(n);
+	gsl_vector_float_const_view src_view = gsl_vector_float_const_view_array(src, n);
 
 	// switch basis to be ordered by magnitude of data
 	gsl_sort_float_index(ix, src, 1, n);
@@ -239,12 +240,12 @@ static GstFlowReturn denoise32(GstBuffer *inbuf, GstBuffer *outbuf, gboolean sta
 
 	// calculate the average expected noise in the new basis
 	for (i = 1; i < (n+1); i++) {
-		gsl_vector_float_set(npbar, i, i / n);
+		gsl_vector_float_set(npbar, i-1, (float) i / (n+1));
 	}
-	gsl_vector_float_scale(npbar, 2);
-	gsl_vector_float_add_constant(npbar, -1);
+	gsl_vector_float_scale(npbar, 2.0);
+	gsl_vector_float_add_constant(npbar, -1.0);
 	for (i = 0; i < n; i++) {
-		gsl_vector_float_set(npbar, i, erfinv64(gsl_vector_float_get(npbar, i)));
+		gsl_vector_float_set(npbar, i, erfinv32(gsl_vector_float_get(npbar, i)));
 	}
 	gsl_vector_float_scale(npbar, M_SQRT2);
 
@@ -268,48 +269,47 @@ static GstFlowReturn denoise32(GstBuffer *inbuf, GstBuffer *outbuf, gboolean sta
 	// decompose into stationary/non-stationary components
 	if (!gsl_vector_float_isnull(gpbar)) {
 		gsl_permute_float_inverse(ix, gpbar, 1, n);
-		gsl_vector_float *u1 = gsl_vector_float_alloc(gpbar->size);
-		gsl_vector_float *u2 = gsl_vector_float_alloc(gpbar->size);
-		orthogonalize32(&src_view.vector, gpbar, u1, u2);
+		gsl_vector_float *u1 = gsl_vector_float_alloc(n);
+		gsl_vector_float *u2 = gsl_vector_float_alloc(n);
+		orthogonalize32(&src_view.vector, gpbar, u1, u2, n);
 		if (stationary)
-			dst = u2->data;
+			memcpy(out_info.data, u2->data, out_info.size);
 		else
-			dst = u1->data;
+			memcpy(out_info.data, u1->data, out_info.size);
 		gsl_vector_float_free(u1);
 		gsl_vector_float_free(u2);
 	} else {
 		if (stationary)
-			dst = src;
+			memcpy(out_info.data, src, out_info.size);
 		else
-			dst = gpbar->data;
+			memcpy(out_info.data, gpbar->data, out_info.size);
 	}
 
-	free(ix);
 	gsl_vector_float_free(npbar);
 	gsl_vector_float_free(gpbar);
-
 	gst_buffer_unmap(inbuf, &in_info);
 	gst_buffer_unmap(outbuf, &out_info);
 	return GST_FLOW_OK;
 }
 
 
-static GstFlowReturn denoise64(GstBuffer *inbuf, GstBuffer *outbuf, gboolean stationary, gdouble threshold) {
+static GstFlowReturn denoise64(GSTLALDenoiser *element, GstBuffer *inbuf, GstBuffer *outbuf, gboolean stationary, gdouble threshold) {
 
 	GstMapInfo in_info, out_info;
 	const double *src;
-	double *dst;
-	int i;
-	size_t n = sizeof(src) / sizeof(double);
-	size_t *ix[n];
-	gsl_vector *npbar = gsl_vector_alloc(n);
-	gsl_vector *gpbar = gsl_vector_alloc(n);
-	gsl_vector_view src_view = gsl_vector_view_array(src, n);
-
+	gint bps;
+	size_t i, n;
 	gst_buffer_map(inbuf, &in_info, GST_MAP_READ);
 	src = (const double *) in_info.data;
 	gst_buffer_map(outbuf, &out_info, GST_MAP_WRITE);
-	dst = (double *) out_info.data;
+
+	bps = GST_AUDIO_INFO_BPS(&element->info);
+	n = in_info.size / bps;
+
+	size_t *ix[n];
+	gsl_vector *npbar = gsl_vector_alloc(n);
+	gsl_vector *gpbar = gsl_vector_alloc(n);
+	gsl_vector_const_view src_view = gsl_vector_const_view_array(src, n);
 
 	// switch basis to be ordered by magnitude of data
 	gsl_sort_index(ix, src, 1, n);
@@ -317,10 +317,10 @@ static GstFlowReturn denoise64(GstBuffer *inbuf, GstBuffer *outbuf, gboolean sta
 
 	// calculate the average expected noise in the new basis
 	for (i = 1; i < (n+1); i++) {
-		gsl_vector_set(npbar, i, i / n);
+		gsl_vector_set(npbar, i-1, (double) i / (n+1));
 	}
-	gsl_vector_scale(npbar, 2);
-	gsl_vector_add_constant(npbar, -1);
+	gsl_vector_scale(npbar, 2.0);
+	gsl_vector_add_constant(npbar, -1.0);
 	for (i = 0; i < n; i++) {
 		gsl_vector_set(npbar, i, erfinv64(gsl_vector_get(npbar, i)));
 	}
@@ -346,26 +346,24 @@ static GstFlowReturn denoise64(GstBuffer *inbuf, GstBuffer *outbuf, gboolean sta
 	// decompose into stationary/non-stationary components
 	if (!gsl_vector_isnull(gpbar)) {
 		gsl_permute_inverse(ix, gpbar, 1, n);
-		gsl_vector *u1 = gsl_vector_alloc(gpbar->size);
-		gsl_vector *u2 = gsl_vector_alloc(gpbar->size);
-		orthogonalize64(&src_view.vector, gpbar, u1, u2);
+		gsl_vector *u1 = gsl_vector_alloc(n);
+		gsl_vector *u2 = gsl_vector_alloc(n);
+		orthogonalize64(&src_view.vector, gpbar, u1, u2, n);
 		if (stationary)
-			dst = u2->data;
+			memcpy(out_info.data, u2->data, out_info.size);
 		else
-			dst = u1->data;
+			memcpy(out_info.data, u1->data, out_info.size);
 		gsl_vector_free(u1);
 		gsl_vector_free(u2);
 	} else {
 		if (stationary)
-			dst = src;
+			memcpy(out_info.data, src, out_info.size);
 		else
-			dst = gpbar->data;
+			memcpy(out_info.data, gpbar->data, out_info.size);
 	}
 
-	free(ix);
 	gsl_vector_free(npbar);
 	gsl_vector_free(gpbar);
-
 	gst_buffer_unmap(inbuf, &in_info);
 	gst_buffer_unmap(outbuf, &out_info);
 	return GST_FLOW_OK;
@@ -420,6 +418,7 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		GST_ERROR_OBJECT(element, "unable to parse caps %" GST_PTR_FORMAT, incaps);
 		return FALSE;
 	}
+	memcpy(&element->info, &info, sizeof(info));
 
 	/*
 	 * set the denoiser function
@@ -463,7 +462,7 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		 * input is not 0s.
 		 */
 
-		result = element->denoiser_func(inbuf, outbuf, element->stationary, element->threshold);
+		result = element->denoiser_func(element, inbuf, outbuf, element->stationary, element->threshold);
 	} else {
 		/*
 		 * input is 0s.
@@ -656,6 +655,8 @@ static void gstlal_denoiser_init(GSTLALDenoiser *element)
 {
 	element->denoiser_func = NULL;
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
+
+	gst_audio_info_init(&element->info);
 
 	element->stationary = DEFAULT_STATIONARY;
 	element->threshold = DEFAULT_THRESHOLD;
