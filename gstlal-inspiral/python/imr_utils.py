@@ -298,7 +298,7 @@ def get_event_fars(connection, table_name, segments = None):
 		yield (inst, far, ts)
 
 
-def compute_search_efficiency_in_bins(found, total, ndbins, sim_to_bins_function = lambda sim: (sim.distance,)):
+def compute_search_efficiency_in_bins(found, total, ndbins, sim_to_bins_function = lambda sim: (sim.distance,), sim_to_found_weight_function = lambda sim: 1.):
 	"""
 	This program creates the search efficiency in the provided ndbins.  The
 	first dimension of ndbins must be the distance.  You also must provide a
@@ -310,11 +310,11 @@ def compute_search_efficiency_in_bins(found, total, ndbins, sim_to_bins_function
 
 	# increment the numerator with the found injections
 	for sim in found:
-		num[sim_to_bins_function(sim)] += 1
+		num[sim_to_bins_function(sim)] += sim_to_found_weight_function(sim)
 
 	# increment the denominator with the total injections
 	for sim in total:
-		den[sim_to_bins_function(sim)] += 1
+		den[sim_to_bins_function(sim)] += 1.
 
 	# sanity check
 	assert (num.array <= den.array).all(), "some bins have more found injections than were made"
@@ -324,7 +324,7 @@ def compute_search_efficiency_in_bins(found, total, ndbins, sim_to_bins_function
 	# results in efficiency error bars that are too large at zero
 	# efficiencies. Replacing for now.
 	#den.array[numpy.logical_and(num.array == 0, den.array == 0)] = 1
-	den.array[num.array < 1] = 1e35
+	den.array[num.array < 1e-35] = 1e35
 
 	# pull out the efficiency array, it is the ratio
 	eff = rate.BinnedArray(rate.NDBins(ndbins), array = num.array / den.array)
