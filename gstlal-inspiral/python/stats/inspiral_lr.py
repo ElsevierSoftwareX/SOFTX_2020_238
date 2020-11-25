@@ -629,7 +629,7 @@ class LnSignalDensity(LnLRDensity):
 			for instrument, time in list(kwargs["dt"].items()):
 				kwargs["segments"][instrument] = segments.segment(time - template_duration, time)
 				kwargs["snrs"][instrument], kwargs["phase"][instrument] = snr_phase[instrument]()
-				kwargs["chi2s_over_snr2s"][instrument] = chi2_over_snr2_gen(kwargs["snrs"][instrument]).next()
+				kwargs["chi2s_over_snr2s"][instrument] = chi2_over_snr2_gen(kwargs["snrs"][instrument]).__next__()
 				kwargs["dt"][instrument] = time - ref_end
 			yield kwargs
 
