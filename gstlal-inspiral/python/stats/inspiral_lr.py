@@ -545,7 +545,7 @@ class LnSignalDensity(LnLRDensity):
 		params = {u"H1":"alpha4", u"L1":"alpha5", u"V1":"alpha6"}
 		for instrument in self.instruments:
 			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)
-			snr_0[instrument] = getattr(sim, params[instrument])
+			snr_0[instrument] = getattr(sim, params[instrument]) if horizon_distance[instrument] != 0. else 0.
 			phase_0[instrument] = math.atan2(fc * cosi, fp * (1. + cosi**2.)/2.) - 2*sim.coa_phase + numpy.pi/2.
 			phase_0[instrument] = phase_0[instrument] - math.floor((phase_0[instrument] + numpy.pi)/numpy.pi/2.)*numpy.pi*2
 
