@@ -1,4 +1,20 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+#
+# Copyright (C) 2019-2020  Hiroaki Ohta
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 try:
 	from fpconst import NegInf
@@ -9,43 +25,38 @@ import itertools
 import numpy as np
 from optparse import OptionParser
 import pickle
-import scipy
-from scipy.spatial import Delaunay, Voronoi, ConvexHull
-import sys
 import time
 np.random.seed(int(time.time()))
+from tqdm import tqdm
 
-import lal
 from lalburst.snglcoinc import light_travel_time
-from ligo.lw import lsctables, ligolw
+from lalinspiral import inspinjfind
+from ligo.lw import ligolw
+from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
-from gstlal import far, spawaveform
+from gstlal import far
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
 	pass
 
-def extended_templates(m, frac=0.01):
-	# Builds a buffered ConvexHull around the template to bound Voronoi regions
-	# Buffered ConvexHull is needed to avoid infinite volumes for edge points
-	# frac: fractional amount by which new hull points extend (fraction of radius)
-	inner_hull = ConvexHull(m)
-	inner_boundary = inner_hull.points[inner_hull.vertices]
-	v = inner_boundary-np.mean(inner_boundary, axis=0) # create vector from arithmetic centroid to convex hull point
-	outer_boundary = inner_boundary + v*( (1./(1-frac)) - 1.0 ) # define outer boundary points by expanding inner boundary points outwards
-	extended_m = np.concatenate((outer_boundary, m))
-	test_hull = ConvexHull(extended_m) # create convex hull for assert test
-	assert (test_hull.points[test_hull.vertices]==outer_boundary).all(), "Buffered hull points mismatch."
-	return outer_boundary, Voronoi(extended_m)
+def build_tmplt_to_sim_index(xmldoc):
+	coinc_def_id = lsctables.CoincDefTable.get_table(xmldoc).get_coinc_def_id(inspinjfind.InspiralSTCoincDef.search, inspinjfind.InspiralSTCoincDef.search_coinc_type, create_new = False)
+	coinc_event_ids = set(row.coinc_event_id for row in lsctables.CoincTable.get_table(xmldoc) if row.coinc_def_id == coinc_def_id)
 
-def in_hull(p, hull):
-	# Returns a boolean array where True = point p is in hull
-	if not isinstance(hull, Delaunay):
-		try:
-			hull = Delaunay(hull)
-		except scipy.spatial.qhull.QhullError:
-			hull = Delaunay(hull, qhull_options=('Qs'))
-	return hull.find_simplex(p) >= 0
+	sim_index = dict((row.simulation_id, row) for row in lsctables.SimInspiralTable.get_table(xmldoc))
+
+	# index maps template_id to list of simulation_ids for which that is the best template
+	index = {}
+	for coinc_event_id, coinc_event_maps in itertools.groupby(sorted(lsctables.CoincMapTable.get_table(xmldoc), key = lambda row: (row.coinc_event_id, row.table_name)), lambda row: row.coinc_event_id):
+		# implicitly checks that there are only two rows in the coinc
+		coinc_event_map_sim, coinc_event_map_sngl = coinc_event_maps
+		# add to index
+		index.setdefault(coinc_event_map_sngl.event_id, []).append(sim_index[coinc_event_map_sim.event_id])
+
+	# done
+	return index
+
 
 def lnL_wrapper(rankingstat, params):
 	# not all the triggers are above the SNR threshold.  they have been
@@ -122,28 +133,17 @@ def lnL_wrapper(rankingstat, params):
 
 	return NegInf
 
-def filter_injections(inj, source_type, source_types, mbins):
-	min_mchirp, max_mchirp = mbins[source_types.index(source_type):source_types.index(source_type)+2]
-	return inj.mchirp >= min_mchirp and inj.mchirp < max_mchirp
-
 def parse_command_line():
 	parser = OptionParser(description = __doc__)
 
-	# FAR range
-	parser.add_option("--xaxis-points", metavar = "count", default = 50, type = "int", help = "Specify the number of false-alarm rates for which to compute the search volume.  Default is 50.")
-	parser.add_option("--min-far", metavar = "Hertz", default = 1.0e-6/lal.YRJUL_SI, type = "float", help = "Specify the minimum false-alarm rate in Hertz.  Default is 1 per million years.") # one per million years is probably detection worthy
-	parser.add_option("--max-far", metavar = "Hertz", default = 12.0/lal.YRJUL_SI, type = "float", help = "Specify the maximum false-alarm rate in Hertz.  Default is 1 per month.") # one per month is possibly EM-followup worthy
-
 	# Basic option
 	parser.add_option("--f-low", metavar = "Hertz", default = 15., type = "float", help = "Low frequency cutoff.  Default is 15 Hz")
-	parser.add_option("--source-tag", metavar = "name", help = "Source type (required).  bns, nsbh, bbh or imbh.")
-	parser.add_option("--trials-per-injection", metavar = "count", default = 100000, type = "int", help = "Set the number of trials to run per injection.  Default is 100000.")
+	parser.add_option("--trials-per-injection", metavar = "count", default = 1000, type = "int", help = "Set the number of trials to run per injection.  Default is 1000.")
+	parser.add_option("--xaxis-points", metavar = "count", default = 100, type = "int", help = "Specify the number of false-alarm rates for which to compute the search volume.  Default is 100.")
 
 	# Input data options
-	parser.add_option("--injection-file", metavar = "filename", help = "XML file containing injection list (required).")
-	parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers (required).")
-	parser.add_option("--likelihood-dir", metavar = "directory", default = "gstlal_inspiral_marginalize_likelihood", help = "Set the name of directory containing the ranking statistic data file to use (required).")
-	parser.add_option("--ranking-stat-pdf", metavar = "filename", action = "append", help = "Load ranking statistic PDFs for the signal and noise models from this file (required).  The file must include the zero-lag count data.  This is typically in a file named \"post_marginalized_likelihood.xml.gz\".  Can be given multiple times.")
+	parser.add_option("--injection-template-match-file", metavar = "filename", help = "XML file containing injection template match (required).")
+	parser.add_option("-l", "--likelihood-url", metavar = "URL", action = "append", help = "Set the name of the likelihood ratio data file to use.  Can be given more than once.  Filenames and URLs are accepted. (required).")
 
 	# Output data options
 	parser.add_option("--output-file", metavar = "URL", help = "Text file of factored lnlrcdf_signal")
@@ -151,25 +151,12 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	options.injection_database.extend(filenames)
-	required_options = ("source_tag", "injection_file", "output_file", "injection_database", "likelihood_dir", "ranking_stat_pdf")
+	required_options = ("injection_template_match_file", "likelihood_url", "output_file")
 	missing_options = [option for option in required_options if not getattr(options, option)]
 	if missing_options:
 		raise ValueError("%s must be set" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options))
-	allowed_source_tag = ("bns", "nsbh", "bbh", "imbh")
-	if options.source_tag not in allowed_source_tag:
-		raise ValueError("--source-tag must be one of %s" % ", ".join(allowed_source_tag))
-	if len(options.injection_database) != 1:
-		raise ValueError("--injection-database must be only one file")
 
 	return options
-
-###########
-#HARD CORD#
-###########
-
-source_types = ["bns", "nsbh", "bbh", "imbh"]
-mbins = [0.5, 2.0, 4.5, 45., 450]
 
 ##############
 #MAIN PROGRAM#
@@ -178,95 +165,64 @@ mbins = [0.5, 2.0, 4.5, 45., 450]
 options = parse_command_line()
 
 #
-# calculate lnL from false alarm rate
-#
-
-if options.verbose:
-	print("calculating lnL")
-
-rankingstatpdf = far.marginalize_pdf_urls(options.ranking_stat_pdf, "RankingStatPDF", verbose = options.verbose)
-fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
-
-far_th = np.logspace(np.log10(options.min_far), np.log10(options.max_far), options.xaxis_points)
-lnL_th = np.array([fapfar.rank_from_far(val) for val in far_th])
-
-#
 # create output factor
 #
 
-lnlrcdfsignals = []
+# Should choose a sufficiently large interval and small density for false alarm rate
+lnL_th = np.linspace(-75, 75, options.xaxis_points)
+
+lnlrcdfsignals = {"lnlrcdf": [], "lnL_th": lnL_th}
+
 
 #
-# read injection
+# read and index injection<-->template mapping
 #
 
-injs = lsctables.SimInspiralTable.get_table(ligolw_utils.load_filename(options.injection_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose))
-injs = [inj for inj in injs if filter_injections(inj, options.source_tag, source_types, mbins)]
-if len(injs)==0:
-	with open(options.output_file, "w") as f:
-		pickle.dump(lnlrcdfsignals, f)
-	sys.exit()
+
+tmplt_to_sim = build_tmplt_to_sim_index(ligolw_utils.load_filename(options.injection_template_match_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose))
+
 
 #
-# read template bank
+# iterate over ranking stat files
 #
 
-#FIXME Should be done without injection sqlite file
-import sqlite3
-from ligo.lw import dbtables
-def mchirp(m1,m2):
-	return (m1*m2)**0.6/(m1+m2)**0.2
-
-connection = sqlite3.connect(options.injection_database[0])
-bank = dict((Gamma0, np.array([mchirp(mass1, mass2), spawaveform.computechi(mass1, mass2, np.sqrt(s1x**2 + s1y**2 + s1z**2), np.sqrt(s2x**2 + s2y**2 + s2z**2))])) for mass1, mass2, s1x, s1y, s1z, s2x, s2y, s2z, Gamma0 in connection.cursor().execute("""SELECT mass1, mass2, spin1x, spin1y, spin1z, spin2x, spin2y, spin1z, Gamma0 FROM sngl_inspiral"""))
-multi_dim_bank = False
-if np.array(bank.values())[:,1].any():
-	boundary, vor = extended_templates(np.array(bank.values()))
-	multi_dim_bank = True
-
-#
-# search almost proper rankingstat file
-#
-instruments = options.injection_database[0].split("-")[0]
-time = options.injection_database[0].replace("%s-ALL_LLOID_" %(instruments), "").replace(".sqlite","").split("-")
-time = "-".join(time[-2:])
-inj = injs[0]
-inj_point = np.array([inj.mchirp, spawaveform.computechi(inj.mass1, inj.mass2, np.sqrt(np.dot(inj.spin1, inj.spin1)), np.sqrt(np.dot(inj.spin2, inj.spin2)))])
-if multi_dim_bank:
-	for i in range(len(vor.points)):
-		if vor.points[i] not in boundary: # Do not include boundary point regions, which have infinite volume
-			region = vor.vertices[vor.regions[vor.point_region[i]]]
-			if in_hull(inj_point, region):
-				best_tmplt = vor.points[i]
-	tmplt_id = bank.keys()[np.where(np.sum(np.array(bank.values())==best_tmplt,axis=1)==2)[0][0]]
-else:
-	tmplt_id = bank.keys()[np.argmin(abs(np.array(bank.values())[:,0]-inj_point[0]))]
-
-del bank
-num_bank, = connection.cursor().execute("select Gamma1 from sngl_inspiral where Gamma0={}".format(tmplt_id)).next()
-ufrankingstat = far.marginalize_pdf_urls(["%s/%s-%04d_MARG_DIST_STATS-%s.xml.gz"%(options.likelihood_dir, instruments, num_bank, time)], "RankingStat", verbose = options.verbose)
-rankingstat = far.marginalize_pdf_urls(["%s/%s-%04d_MARG_DIST_STATS-%s.xml.gz"%(options.likelihood_dir, instruments, num_bank, time)], "RankingStat", verbose = options.verbose)
-rankingstat.finish()
-
-#
-# read lnL_th
-#
-for n, inj in enumerate(injs):
-	if options.verbose:
-		print("calculating lnL ccdf... %d/%d" %(n+1,len(injs)))
+for filename in tqdm(options.likelihood_url, desc = "opening likelihood", disable = not options.verbose):
+	rankingstat = far.marginalize_pdf_urls([filename], "RankingStat", verbose = options.verbose)
+	rankingstat.finish()
 
 	#
-	# draw ln L's for this injection
+	# iterate over templates covered by this ranking stat object
 	#
 
-	lnL = [lnL_wrapper(rankingstat, params) for params in itertools.islice(ufrankingstat.numerator.random_sim_params(inj, f_low = options.f_low), options.trials_per_injection)]
+	for template_id in tqdm(rankingstat.template_ids, desc = "expanding rankingstat.template_ids", disable = not options.verbose):
+		#
+		# iterate over injections for which that is the best match (if any)
+		#
 
-	#
-	# calc P(lnL >= threshold | candidate) and estimate its uncertainty
-	#
+		if template_id not in tmplt_to_sim:
+			continue
 
-	lnlrcdf = np.array([sum(x >= threshold for x in lnL) for threshold in lnL_th]) / float(options.trials_per_injection)
-	lnlrcdfsignals.append(tuple(((inj.distance, inj.mchirp), lnlrcdf)))
+		for inj in tqdm(tmplt_to_sim[template_id], leave = False, desc = "calculating lnL cdf", disable = not options.verbose):
+			#
+			# draw ln L's for this injection
+			#
 
-with open(options.output_file, "w") as f:
+			lnL = [lnL_wrapper(rankingstat, params) for params in itertools.islice(rankingstat.numerator.random_sim_params(inj, f_low = options.f_low), options.trials_per_injection)]
+
+			#
+			# calc P(lnL >= threshold | candidate) and estimate its uncertainty
+			#
+
+			lnlrcdf = np.array([sum(x >= threshold for x in lnL) for threshold in lnL_th]) / float(options.trials_per_injection)
+			lnlrcdfsignals["lnlrcdf"].append(((inj.distance, inj.mchirp), lnlrcdf))
+
+
+#
+# save the data
+#
+
+if options.verbose:
+	print("saving lnL CDF")
+
+with open(options.output_file, "wb") as f:
 	pickle.dump(lnlrcdfsignals, f)
