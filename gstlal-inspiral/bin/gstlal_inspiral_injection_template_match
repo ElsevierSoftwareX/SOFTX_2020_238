@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2020  Hiroaki Ohta, Heather Fong
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+from optparse import OptionParser
+import numpy as np
+from tqdm import tqdm
+
+from lalinspiral import inspinjfind
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import ligolw_add
+from ligo.lw.utils import coincs as ligolw_coincs
+from ligo.lw.utils import process as ligolw_process
+from gstlal import spawaveform
+
+
+class ApproxID(object):
+	def __init__(self, sngl_inspiral_table):
+		self.sngls = dict((sngl.template_id, sngl) for sngl in sngl_inspiral_table)
+		self.bank = dict(
+			(tmplt_id, np.array([sngl.mchirp, sngl.chi])) for tmplt_id, sngl
+			in self.sngls.items()
+		)
+		self.multi_dim_bank = True if np.array(list(self.bank.values()))[:,1].any() else False
+		if self.multi_dim_bank:
+			self.boundary, self.vor = self.extended_templates(np.array(list(self.bank.values())))
+
+	def __call__(self, inj):
+		#
+		# search almost proper template id for a injection
+		#
+		inj_point = np.array([inj.mchirp, spawaveform.computechi(inj.mass1, inj.mass2, np.sqrt(np.dot(inj.spin1, inj.spin1)), np.sqrt(np.dot(inj.spin2, inj.spin2)))])
+		if self.multi_dim_bank:
+			for i in range(len(self.vor.points)):
+				if self.vor.points[i] not in self.boundary: # Do not include boundary point regions, which have infinite volume
+					region = self.vor.vertices[self.vor.regions[self.vor.point_region[i]]]
+					if self.in_hull(inj_point, region):
+						best_tmplt = self.vor.points[i]
+			tmplt_id = list(self.bank.keys())[np.where(np.sum(np.array(list(self.bank.values()))==best_tmplt,axis=1)==2)[0][0]]
+		else:
+			tmplt_id = list(self.bank.keys())[np.argmin(abs(np.array(list(self.bank.values()))[:,0]-inj_point[0]))]
+		return tmplt_id
+
+	def extended_templates(self, m, frac=0.01):
+		# Builds a buffered ConvexHull around the template to bound Voronoi regions
+		# Buffered ConvexHull is needed to avoid infinite volumes for edge points
+		# frac: fractional amount by which new hull points extend (fraction of radius)
+		inner_hull = ConvexHull(m)
+		inner_boundary = inner_hull.points[inner_hull.vertices]
+		v = inner_boundary-np.mean(inner_boundary, axis=0) # create vector from arithmetic centroid to convex hull point
+		outer_boundary = inner_boundary + v*( (1./(1-frac)) - 1.0 ) # define outer boundary points by expanding inner boundary points outwards
+		extended_m = np.concatenate((outer_boundary, m))
+		test_hull = ConvexHull(extended_m) # create convex hull for assert test
+		assert (test_hull.points[test_hull.vertices]==outer_boundary).all(), "Buffered hull points mismatch."
+		return outer_boundary, Voronoi(extended_m)
+
+	def in_hull(self, p, hull):
+		# Returns a boolean array where True = point p is in hull
+		if not isinstance(hull, Delaunay):
+			try:
+				hull = Delaunay(hull)
+			except scipy.spatial.qhull.QhullError:
+				hull = Delaunay(hull, qhull_options=('Qs'))
+		return hull.find_simplex(p) >= 0
+
+
+#
+# =============================================================================
+#
+#                                 Command Line
+#
+# =============================================================================
+#
+
+def parse_command_line():
+	parser = OptionParser()
+
+	# Input data options
+	parser.add_option("--comment", metavar = "message", help = "Set the string to be recorded in comment and tag columns in various places in the output file (optional).")
+	parser.add_option("--injection-file", metavar = "filename", help = "XML file containing injection list (required).")
+	parser.add_option("--output", metavar = "filename", default = None, help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} (optional).  Document is written to stdout if this is not set.")
+	parser.add_option("--template-bank", metavar = "filename", help = "Set the template bank xml file. (required)")
+	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
+
+	options, filenames = parser.parse_args()
+
+	process_params = options.__dict__.copy()
+
+	required_options = ("injection_file", "template_bank")
+	missing_options = [option for option in required_options if not getattr(options, option)]
+	if missing_options:
+		raise ValueError("%s must be set" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options))
+
+	return options, process_params
+
+
+#
+# =============================================================================
+#
+#                                     Main
+#
+# =============================================================================
+#
+
+
+#
+# command line
+#
+
+
+options, process_params = parse_command_line()
+
+
+#
+# merge input documents into single XML document
+#
+
+
+xmldoc = ligolw_add.ligolw_add(ligolw.Document(), [options.injection_file, options.template_bank], verbose = options.verbose)
+
+
+#
+# add our process metadata
+#
+
+
+process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_inspiral_injection_template_match", paramdict = process_params, comment = options.comment)
+
+
+#
+# add required tables
+#
+
+
+coinc_def_id = ligolw_coincs.get_coinc_def_id(xmldoc, inspinjfind.InspiralSTCoincDef.search, inspinjfind.InspiralSTCoincDef.search_coinc_type, description = inspinjfind.InspiralSTCoincDef.description)
+coinc_event_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincTable))
+coinc_event_table.sync_next_id()
+coinc_event_map_table = xmldoc.childNodes[-1].appendChild(lsctables.New(lsctables.CoincMapTable))
+
+
+#
+# for each injection find and record the matching template
+#
+
+
+approx_id = ApproxID(lsctables.SnglInspiralTable.get_table(xmldoc))
+injs = lsctables.SimInspiralTable.get_table(xmldoc)
+for inj in tqdm(injs, desc = "matching inj", disable = not options.verbose):
+	coinc_event_id = coinc_event_table.appendRow(
+		process_id = process.process_id,
+		coinc_def_id = coinc_def_id,
+		coinc_event_id = coinc_event_table.get_next_id(),
+		time_slide_id = None,
+		instruments = None,
+		nevents = 2,
+		likelihood = None
+	).coinc_event_id
+
+	coinc_event_map_table.appendRow(
+		coinc_event_id = coinc_event_id,
+		table_name = u"sim_inspiral",
+		event_id = inj.simulation_id
+	)
+
+	coinc_event_map_table.appendRow(
+		coinc_event_id = coinc_event_id,
+		table_name = u"sngl_inspiral",
+		event_id = approx_id(inj)
+	)
+
+
+#
+# write output
+#
+
+
+ligolw_process.set_process_end_time(process)
+ligolw_utils.write_filename(xmldoc, options.output, gz = (options.output or "stdout").endswith(".gz"), verbose = options.verbose)

@@ -24,6 +24,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_dlrs_diag \
 	gstlal_inspiral_grid_bank \
 	gstlal_inspiral_injection_snr \
+	gstlal_inspiral_injection_template_match \
 	gstlal_inspiral_lnlrcdf_signal \
 	gstlal_inspiral_lvalert_background_plotter \
 	gstlal_inspiral_lvalert_generic_plot_uploader \
