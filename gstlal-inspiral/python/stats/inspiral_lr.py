@@ -530,7 +530,7 @@ class LnSignalDensity(LnLRDensity):
 		#
 
 		horizon_distance = self.local_mean_horizon_distance(sim.time_geocent)
-		instruments = set(horizon_distance)
+		assert set(horizon_distance) == self.instruments
 
 		#
 		# compute nominal SNRs.  NOTE:  some might be below
@@ -543,7 +543,7 @@ class LnSignalDensity(LnLRDensity):
 		phase_0 = {}
 		# FIXME:  use horizon distance from above instead of this
 		params = {u"H1":"alpha4", u"L1":"alpha5", u"V1":"alpha6"}
-		for instrument, DH in horizon_distance.items():
+		for instrument in self.instruments:
 			fp, fc = lal.ComputeDetAMResponse(lalsimulation.DetectorPrefixToLALDetector(str(instrument)).response, sim.longitude, sim.latitude, sim.polarization, gmst)
 			snr_0[instrument] = getattr(sim, params[instrument])
 			phase_0[instrument] = math.atan2(fc * cosi, fp * (1. + cosi**2.)/2.) - 2*sim.coa_phase + numpy.pi/2.
@@ -609,7 +609,7 @@ class LnSignalDensity(LnLRDensity):
 
 		snr_phase = dict((instrument, iter(snr_phase_gen(snr, phase_0[instrument])).__next__) for instrument, snr in snr_0.items())
 		#chi2s_over_snr2s = dict((instrument, iter(chi2_over_snr2_gen(instrument, snr)).__next__) for instrument, snr in snr_0.items())
-		gens_t = dict((instrument, iter(time_gen(sim.time_at_instrument(instrument, {instrument: 0.0}))).__next__) for instrument in instruments)
+		gens_t = dict((instrument, iter(time_gen(sim.time_at_instrument(instrument, {instrument: 0.0}))).__next__) for instrument in self.instruments)
 
 		#
 		# yield a sequence of randomly generated parameters for
