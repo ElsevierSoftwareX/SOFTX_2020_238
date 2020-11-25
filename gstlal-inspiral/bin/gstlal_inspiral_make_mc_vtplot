@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
+#
+# Copyright (C) 2019-2020  Hiroaki Ohta
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import itertools
 import matplotlib
 matplotlib.use("Agg")
-matplotlib.rcParams.update({"text.usetex": True})
 from matplotlib import pyplot
+pyplot.style.use('classic')
+matplotlib.rcParams.update({"text.usetex": True})
 pyplot.rc('font',**{'family':'serif','serif':['Computer Modern Roman']})
 from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
@@ -13,11 +29,17 @@ import pickle
 import sqlite3
 
 import lal
+from lal import iterutils
 from lal import rate
-from ligo import segments
-from ligo.lw import ligolw, lsctables, dbtables
+from lal.utils import CacheEntry
+from ligo.lw import dbtables
+from ligo.lw import ligolw
+from ligo.lw import lsctables
+from ligo.lw import utils as ligolw_utils
+from gstlal import far
 from gstlal import imr_utils
-from gstlal.plots import util as plotutil
+from gstlal import inspiral_pipe
+from gsltal.plot import util as plotutil
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
@@ -27,15 +49,16 @@ def parse_command_line():
 	parser = OptionParser(description = __doc__)
 
 	# FAR range and resolution
-	parser.add_option("--xaxis-points", metavar = "count", default = 50, type = "int", help = "Specify the number of false-alarm rates for which to compute the search volume.  Default is 50.")
 	parser.add_option("--min-far", metavar = "Hertz", default = 1.0e-6/lal.YRJUL_SI, type = "float", help = "Specify the minimum false-alarm rate in Hertz.  Default is 1 per million years.") # one per million years is probably detection worthy
 	parser.add_option("--max-far", metavar = "Hertz", default = 12.0/lal.YRJUL_SI, type = "float", help = "Specify the maximum false-alarm rate in Hertz.  Default is 1 per month.") # one per month is possibly EM-followup worthy
 
 	# Input data options
-	#parser.add_option("--injection-files", metavar = "filename", help = "XML files containing injection list (required). If there is more than one, separate them with :")
-	parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers (required).")
-	parser.add_option("--zero-lag-database", default = [], action = "append", help = "Name of database containing the zero lag segments and triggers (required).")
-	parser.add_option("--input-dir", default = "gstlal_inspiral_lnlrcdf_signal", metavar = "name", help = "directory of lnlrcdf_signal data")
+	parser.add_option("--injection-database", default = [], action = "append", help = "Name of database containing injection parameters and triggers (required if --check-vt is activated).")
+	parser.add_option("--injection-files", default = [], action = "append", help = "XML files containing injection list (required if --check-vt is not activated).")
+	parser.add_option("--instrument", action = "append", help = "Append to a list of instruments to create dist stats for.  List must be whatever instruments you intend to analyze.")
+	parser.add_option("--lnlrcdf-cache", metavar = "url", help = "The urls of lnlrcdf_signal data (required).")
+	parser.add_option("--ranking-stat-pdf", metavar = "filename", action = "append", help = "Load ranking statistic PDFs for the signal and noise models from this file (required).  The file must include the zero-lag count data.  This is typically in a file named \"post_marginalized_likelihood.xml.gz\".  Can be given multiple times.")
+	parser.add_option("-c", "--check-vt", action = "store_true", help = "Compare VT results (optional).")
 
 	# Output data options
 	parser.add_option("--output-dir", default = "./", metavar = "name", help = "Select a directory to place output files.")
@@ -43,122 +66,147 @@ def parse_command_line():
 
 	options, filenames = parser.parse_args()
 
-	options.injection_database.extend(filenames)
-	#required_options = ("injection_files", "injection_database", "zero_lag_database")
-	required_options = ("injection_database", "zero_lag_database")
-	missing_options = [option for option in required_options if not getattr(options, option)]
+	required_options = ("instrument", "lnlrcdf_cache", "ranking_stat_pdf")
+	if options.check_vt:
+		required_options += ("injection_database",)
+		options.injection_database.extend(filenames)
+	else:
+		required_options += ("injection_files",)
+		options.injection_files.extend(filenames)
 
+	missing_options = [option for option in required_options if not getattr(options, option)]
 	if missing_options:
 		raise ValueError("%s must be set" % ", ".join("--%s" % option.replace("_", "-") for option in missing_options))
 
-	return options
+	urls = [CacheEntry(line).url.replace("file://localhost", "") for line in open(options.lnlrcdf_cache)]
+	if not urls:
+		raise ValueError("no input documents")
+
+	return options, urls
 
 ###########
 #HARD CORD#
 ###########
 
-#Bin injections by source type: BNS mchirp between 0.8 and 2, NSBH between 2 and 4.5, BBH between 4.5 and 45.0, IMBH between 45.0 and 450.0
-bin_types = u"Source_Type"
-num_split_inj = 100
-source_types = ["bns", "nsbh", "bbh", "imbh"]
 mbins = [0.5, 2.0, 4.5, 45., 450]
-
-def filter_injections(inj, source_type, source_types = source_types, mbins = mbins):
-	min_mchirp, max_mchirp = mbins[source_types.index(source_type):source_types.index(source_type)+2]
-	return inj.mchirp >= min_mchirp and inj.mchirp < max_mchirp
+observer = "ALL"
 
 ##############
 #MAIN PROGRAM#
 ##############
 
-options = parse_command_line()
-
-fars = np.logspace(np.log10(options.min_far), np.log10(options.max_far), options.xaxis_points)
-
-observer = options.zero_lag_database[0].split("_")[0]
-observers, observer = observer.split("-")
-
-#
-# Search live time
-#
-if options.verbose:
-	print("Searching livetime")
-
-normal_segments = segments.segmentlistdict()
-for f in options.zero_lag_database:
-	connection = sqlite3.connect(f)
-	normal_segments += imr_utils.get_segments(connection, dbtables.get_xml(connection), "coinc_inspiral", "gstlal_inspiral", "vetoes", "datasegments")
-zero_lag_segments = normal_segments.union(normal_segments.keys())
-livetime = float(abs(zero_lag_segments))/lal.YRJUL_SI
-
-#
-# Search injection data
-#
-if options.verbose:
-	print("Searching injection data")
-connection = {}
-found_injections = []
-total_injections = []
-for f in options.injection_database:
-	inj_file = f.split("-")[1].replace("ALL_LLOID_","")
-	connection[inj_file] = sqlite3.connect(f)
-	#found, total, missed = imr_utils.get_min_far_inspiral_injections(connection[inj_file], segments = zero_lag_segments, table_name="coinc_inspiral")
-	found, total, missed = imr_utils.get_min_far_inspiral_injections(connection[inj_file], table_name="coinc_inspiral")
-	found_injections += found
-	total_injections += total
-
-total_injections = imr_utils.symmetrize_sims(total_injections, "mass1", "mass2")
-
-distances = [tup[0] for tup in map(imr_utils.sim_to_distance_chirp_mass_bins_function, total_injections)]
-bins = rate.NDBins([rate.LinearBins(min(distances), max(distances), 200), rate.IrregularBins(mbins)])
-
-vols_lo_far, vols_far, vols_hi_far = [], [], []
-for far in fars:
-	found_by_far = [s for f, s in found_injections if f < far]
-	eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_by_far, total_injections, bins, imr_utils.sim_to_distance_chirp_mass_bins_function)
-	vol_lo = imr_utils.compute_search_volume(eff_lo)
-	vol_lo.array *= livetime
-	vols_lo_far.append(vol_lo)
-
-	vol = imr_utils.compute_search_volume(eff)
-	vol.array *= livetime
-	vols_far.append(vol)
-
-	vol_hi = imr_utils.compute_search_volume(eff_hi)
-	vol_hi.array *= livetime
-	vols_hi_far.append(vol_hi)
-
-#
-# Ready for plotting
-#
-
-fig_far = pyplot.figure()
-fig_far.set_size_inches((8., 8./plotutil.golden_ratio))
-ax_far = fig_far.gca()
-colors = {"bns":"b", "nsbh":"g", "bbh":"r", "imbh":"c"}
-another_colors = {"bns":"darkblue", "nsbh":"darkgreen", "bbh":"darkred", "imbh":"darkcyan"}
+options, urls = parse_command_line()
 
 #
 # Read caluculation data
 #
 if options.verbose:
 	print("reading calculation data")
-injs = []
-for conn in connection.values():
-	injs += lsctables.SimInspiralTable.get_table(dbtables.get_xml(conn))
+
+injs, inj_files = [], []
+if options.check_vt:
+	connection = {}
+	for f in options.injection_database:
+		inj_file = f.split("-")[1].replace("ALL_LLOID_","")
+		inj_files.append(inj_file)
+		connection[inj_file] = sqlite3.connect(f)
+		injs += lsctables.SimInspiralTable.get_table(dbtables.get_xml(connection[inj_file]))
+else:
+	for injection_file in options.injection_files:
+		inj_files.append(inspiral_pipe.sim_tag_from_inj_file(injection_file))
+		injs += lsctables.SimInspiralTable.get_table(ligolw_utils.load_filename(injection_file, contenthandler = LIGOLWContentHandler, verbose = options.verbose))
+
+distance_mchirps = [tup for tup in map(imr_utils.sim_to_distance_chirp_mass_bins_function, injs)]
+if min(list(zip(*distance_mchirps))[1]) < mbins[0]:
+	mbins[0] = min(list(zip(*distance_mchirps))[1])
+if max(list(zip(*distance_mchirps))[1]) > mbins[-1]:
+	mbins[-1] = max(list(zip(*distance_mchirps))[1])
+bins = rate.NDBins([rate.LinearBins(min(list(zip(*distance_mchirps))[0]), max(list(zip(*distance_mchirps))[0]), 200), rate.IrregularBins(mbins)])
+del distance_mchirps
 
 total_injections = [tuple(((inj.distance, inj.mchirp),)) for inj in injs]
 found_injections = []
-for inj_file, num_split, source_type in itertools.product(connection.keys(), range(num_split_inj), source_types):
-		with open("%s/%s_%04d_%s.pkl" %(options.input_dir, inj_file, num_split, source_type), "r") as f:
-			found_injections.extend(pickle.load(f))
+lnL_th = []
+for url in urls:
+	with open(url, "rb") as f:
+		lnlrcdfsignals = pickle.load(f)
+		found_injections.extend(lnlrcdfsignals["lnlrcdf"])
+		if list(lnL_th):
+			assert (lnL_th == lnlrcdfsignals["lnL_th"]).all()
+		else:
+			lnL_th = lnlrcdfsignals["lnL_th"]
 
-vols_calc = []
+assert len(total_injections) == len(found_injections), "There is a problem with %s. The number of injections analyzed dosen't match up."%(options.lnlrcdf_cache)
+
+#
+# scale lnL to false alarm rate
+#
+if options.verbose:
+	print("scaling lnL to FAR")
+
+rankingstatpdf = far.marginalize_pdf_urls(options.ranking_stat_pdf, "RankingStatPDF", verbose = options.verbose)
+fapfar = far.FAPFAR(rankingstatpdf.new_with_extinction())
+fars = np.array([fapfar.far_from_rank(val) for val in lnL_th])
+mask = (fars >= options.min_far*0.1) & (fars <= options.max_far*10)
+livetime_yr = fapfar.livetime/lal.YRJUL_SI
+
+#
+# Compute sensitivity
+#
+if options.verbose:
+	print("computing sensitivity")
+
+vols_lo_calc, vols_calc, vols_hi_calc = [], [], []
 for k, far in enumerate(fars):
+	if not mask[k]:
+		continue
 	eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_injections, total_injections, bins, sim_to_bins_function = lambda sim: sim[0], sim_to_found_weight_function = lambda sim: sim[1][k])
+	vol_lo = imr_utils.compute_search_volume(eff_lo)
+	vol_lo.array *= livetime_yr
+	vols_lo_calc.append(vol_lo)
+
 	vol = imr_utils.compute_search_volume(eff)
-	vol.array *= livetime
+	vol.array *= livetime_yr
 	vols_calc.append(vol)
+
+	vol_hi = imr_utils.compute_search_volume(eff_hi)
+	vol_hi.array *= livetime_yr
+	vols_hi_calc.append(vol_hi)
+
+fars = fars[mask]
+
+if options.check_vt:
+	#
+	# Search injection data
+	#
+	if options.verbose:
+		print("Searching injection data")
+
+	found_injections = []
+	total_injections = []
+	for conn in connection.values():
+		#found, total, missed = imr_utils.get_min_far_inspiral_injections(conn, segments = zero_lag_segments, table_name="coinc_inspiral")
+		found, total, missed = imr_utils.get_min_far_inspiral_injections(conn, table_name="coinc_inspiral")
+		found_injections += found
+		total_injections += total
+
+	total_injections = imr_utils.symmetrize_sims(total_injections, "mass1", "mass2")
+
+	vols_lo_far, vols_far, vols_hi_far = [], [], []
+	for far in fars:
+		found_by_far = [s for f, s in found_injections if f < far]
+		eff_lo, eff, eff_hi = imr_utils.compute_search_efficiency_in_bins(found_by_far, total_injections, bins, imr_utils.sim_to_distance_chirp_mass_bins_function)
+		vol_lo = imr_utils.compute_search_volume(eff_lo)
+		vol_lo.array *= livetime_yr
+		vols_lo_far.append(vol_lo)
+
+		vol = imr_utils.compute_search_volume(eff)
+		vol.array *= livetime_yr
+		vols_far.append(vol)
+
+		vol_hi = imr_utils.compute_search_volume(eff_hi)
+		vol_hi.array *= livetime_yr
+		vols_hi_far.append(vol_hi)
 
 #
 # plot injection and calculation result
@@ -166,28 +214,42 @@ for k, far in enumerate(fars):
 if options.verbose:
 	print("plotting calculation and injection results")
 
-for source_type in source_types:
-	#injection
-	label = "Injection Result : $M_{\mathrm{chirp}} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % tuple(mbins[source_types.index(source_type):source_types.index(source_type)+2])
-	center = np.array([v.array[source_types.index(source_type)] for v in vols_far])
+fig_far = pyplot.figure()
+fig_far.set_size_inches((8., 8./plotutil.golden_ratio))
+ax_far = fig_far.gca()
+colors = ["b", "g" ,"r", "c"]
+another_colors = ["darkblue", "darkgreen", "darkred", "darkcyan"]
+
+mbins = rate.NDBins(bins[1:])
+for n, (mlo, mmid, mhi) in enumerate(zip(iterutils.MultiIter(*mbins.lower()),
+					iterutils.MultiIter(*mbins.centres()),
+					iterutils.MultiIter(*mbins.upper()))):
+	#calculation
+	label = "Analytic Result : $M_{\mathrm{chirp}} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
+	center = np.array([v[mmid] for v in vols_calc])
+	lo = np.array([v[mmid] for v in vols_lo_calc])
+	hi = np.array([v[mmid] for v in vols_hi_calc])
 	if (center == 0).all():
 		continue
-	lo = np.array([v.array[source_types.index(source_type)] for v in vols_lo_far])
-	hi = np.array([v.array[source_types.index(source_type)] for v in vols_hi_far])
-	line, = ax_far.plot(fars, center, label=label, linewidth=2, color=colors[source_type])
+	line, = ax_far.plot(fars, center, label=label, linewidth=2, color=another_colors[n])
 	ax_far.fill_between(fars, lo, hi, alpha=0.5, color=line.get_color())
 
-	#calculation
-	label = "Our Result : $M_{\mathrm{chirp}} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % tuple(mbins[source_types.index(source_type):source_types.index(source_type)+2])
-	center = np.array([v.array[source_types.index(source_type)] for v in vols_calc])
-	line, = ax_far.plot(fars, center, label=label, linewidth=2, color=another_colors[source_type])
-if len(connection.keys()) > 1:
-	inj_file = "COMBINED"
+	if options.check_vt:
+		#injection
+		label = "Injection Result : $M_{\mathrm{chirp}} \in [%.2f, %.2f] \,\mathrm{M}_\odot$" % (mlo[0], mhi[0])
+		center = np.array([v[mmid] for v in vols_far])
+		lo = np.array([v[mmid] for v in vols_lo_far])
+		hi = np.array([v[mmid] for v in vols_hi_far])
+		line, = ax_far.plot(fars, center, label=label, linewidth=2, color=colors[n])
+		ax_far.fill_between(fars, lo, hi, alpha=0.5, color=line.get_color())
+
+if len(inj_files) > 1:
+	inj_files = ["COMBINED"]
 ax_far.set_xlabel("Combined FAR (Hz)")
 ax_far.set_ylabel(r"Volume $\times$ Time ($\mathrm{Mpc}^3 \mathrm{yr}$)")
 ax_far.set_xscale("log")
 ax_far.set_yscale("log")
-ax_far.set_xlim(fars[[0, -1]])
+ax_far.set_xlim(options.min_far, options.max_far)
 ax_far.invert_xaxis()
 ax_far.legend(loc='upper left', fontsize=8)
 ax_far.grid()
@@ -197,11 +259,15 @@ tx = ax_far.twinx() # map volume to distance
 tx.set_yticks(vol_tix)
 tx.set_yscale("log")
 tx.set_ylim(ax_far.get_ylim())
-tx.set_yticklabels(["%.3g" % ((float(k)/(4.*np.pi*livetime/3.))**(1./3.)) for k in vol_tix])
+tx.set_yticklabels(["%.3g" % ((float(k)/(4.*np.pi*livetime_yr/3.))**(1./3.)) for k in vol_tix])
 tx.set_ylabel("Range (Mpc)")
-ax_far.set_title("%s Observing (%.2f days)" % (observer, livetime*365.25))
+ax_far.set_title("%s Observing (%.2f days)" % (observer, livetime_yr*lal.YRJUL_SI/lal.DAYJUL_SI))
 fig_far.tight_layout(pad = .8)
-pdf = PdfPages("%s/%s_%s-SEARCH_SENSITIVITY_%s.pdf" %(options.output_dir, observers, observer, inj_file))
+if options.check_vt:
+	pdf = PdfPages("%s/%s_%s-SEARCH_SENSITIVITY_%s_CHECK.pdf" %(options.output_dir, "".join(sorted(options.instrument)), observer, inj_files[0]))
+
+else:
+	pdf = PdfPages("%s/%s_%s-SEARCH_SENSITIVITY_%s.pdf" %(options.output_dir, "".join(sorted(options.instrument)), observer, inj_files[0]))
 pdf.savefig(fig_far)
 pdf.close()
 pyplot.close(fig_far)
