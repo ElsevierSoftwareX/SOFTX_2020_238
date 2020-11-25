@@ -591,6 +591,9 @@ class LnSignalDensity(LnLRDensity):
 			# normalize
 			rates_cdf += numpy.linspace(0., 0.00001 * rates_cdf[-1], len(rates_cdf))
 			rates_cdf /= rates_cdf[-1]
+			# guarantee the inverse function is defined in the domain [0, 1], and check for nan failures
+			rates_cdf[0] = 0.0
+			assert rates_cdf[-1] == 1.0
 			assert not numpy.isnan(rates_cdf).any()
 			# construct an interpolator for the inverse CDF
 			interp = interpolate.interp1d(rates_cdf, rates_lnx[:-1])
