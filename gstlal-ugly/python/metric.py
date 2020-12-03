@@ -309,7 +309,7 @@ class Metric(object):
 
 	def __set_diagonal_metric_tensor_component(self, i, wp, wm, deltas, g, w1):
 		plus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
-		minus_match_minus_1 = self.match_minus_1(w1, wp[i,i])
+		minus_match_minus_1 = self.match_minus_1(w1, wm[i,i])
 		d2mbydx2 = (plus_match_minus_1 + minus_match_minus_1) / deltas[i]**2
 		# - 1/2 the second partial derivative
 		g[i,i] = -0.5 * d2mbydx2
