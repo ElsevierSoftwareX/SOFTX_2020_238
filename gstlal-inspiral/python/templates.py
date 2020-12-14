@@ -71,6 +71,8 @@ gstlal_FD_approximants = set((
 	'IMRPhenomC',
 	'IMRPhenomD',
 	'IMRPhenomPv2',
+	'IMRPhenomPv3',
+	'IMRPhenomHM',
 	'SEOBNRv4_ROM',
 	'SEOBNRv2_ROM_DoubleSpin',
 	'TaylorF2',
@@ -91,6 +93,8 @@ gstlal_IMR_approximants = set((
 	'IMRPhenomC',
 	'IMRPhenomD',
 	'IMRPhenomPv2',
+	'IMRPhenomPv3',
+	'IMRPhenomHM',
 	'SEOBNRv4_ROM',
 	'SEOBNRv2_ROM_DoubleSpin'
 ))
