@@ -118,7 +118,7 @@ def array_dot(vec1, vec2):
 	return product
 
 
-def main(m1, m2, s1x, s1y, s1z, s2x, s2y, s2z, iota, fref): 
+def chip_from_sngl(m1, m2, s1x, s1y, s1z, s2x, s2y, s2z, iota, fref): 
 
 	L  = orbital_momentum(fref, m1, m2, iota)
 
