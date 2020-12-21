@@ -373,7 +373,8 @@ def inspiral_layer(dag, jobs, psd_nodes, svd_nodes, segsdict, options, channel_d
 							"frame-segments-file":options.frame_segments_file,
 							"reference-psd":reference_psd,
 							"veto-segments-file":options.vetoes,
-							"injections": injections
+							"injections": injections,
+							"calibration-errors": options.calibration_errors
 						},
 						input_cache_files = {"svd-bank-cache":svd_names},
 						input_cache_file_name = input_cache_name,

@@ -157,6 +157,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	# optional injections
 	if gw_data_source_info.injection_filename is not None:
 		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
+		if gw_data_source_info.calib_errors_filename is not None:
+			src.set_property("calib-errors-location", gw_data_source_info.calib_errors_filename)
+			print("Set calib-errors-location")
 		# let the injection code run in a different thread than the whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)
 

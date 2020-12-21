@@ -74,6 +74,17 @@ struct _GSTLALSimulation {
 	char *channel_name;
 	char *units;
 
+	char *calib_errors_location;
+
+	struct calib_errors_document {
+		REAL8Vector **calib_errors_amplitude;
+		REAL8Vector **calib_errors_phase;
+		REAL8Vector *calib_errors_freqs;
+		size_t Ncols;
+		UINT4 Nrows;
+		UINT4 apply_calib_errors;
+	} *calib_errors_document;
+
 	REAL8TimeSeries *simulation_series;
 };
 

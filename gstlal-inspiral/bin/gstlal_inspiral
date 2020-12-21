@@ -375,7 +375,7 @@ def parse_command_line():
 	required_urls = [options.time_slide_file]
 	for svd_bank_set in svd_banks:
 		required_urls += svd_bank_set.values()
-	for filename in (options.veto_segments_file, options.injections, options.blind_injections, options.reference_psd):
+	for filename in (options.veto_segments_file, options.injections, options.blind_injections, options.reference_psd, options.calibration_errors):
 		if filename:
 			required_urls.append(filename)
 	for i in range(len(required_urls)):
@@ -394,6 +394,9 @@ def parse_command_line():
 
 	if options.blind_injections and options.injections:
 		raise ValueError("cannot set both --blind-injections and --injections")
+
+	if options.calibration_errors and not options.injections:
+		raise ValueError("cannot apply calibration errors unless --injections is also set.")
 
 	if options.data_source in ("lvshm", "framexmit"):
 		missing_options = []

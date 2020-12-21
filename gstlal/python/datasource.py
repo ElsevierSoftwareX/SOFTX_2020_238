@@ -521,6 +521,8 @@ class GWDataSourceInfo(object):
 		self.data_source = options.data_source
 		## Injection file name
 		self.injection_filename = options.injections
+		## Calibration errors file name
+		self.calib_errors_filename = options.calibration_errors
 
 		if options.data_source == "nds":
 			## Store the ndssrc specific options: host
@@ -656,6 +658,7 @@ def append_options(parser):
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
 	group.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")
+	group.add_option("--calibration-errors", metavar = "filename", help = "Set the name of the file from which to load calibration error files.  Should be a list of hdf5 file locations (optional).")
 	group.add_option("--channel-name", metavar = "name", action = "append", help = "Set the name of the channels to process.  Can be given multiple times as --channel-name=IFO=CHANNEL-NAME")
 	group.add_option("--nds-host", metavar = "hostname", help = "Set the remote host or IP address that serves nds data. This is required iff --data-source=nds")
 	group.add_option("--nds-port", metavar = "portnumber", type=int, default=31200, help = "Set the port of the remote host that serves nds data. This is required iff --data-source=nds")
@@ -933,6 +936,9 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 
 	if gw_data_source_info.injection_filename is not None:
 		src = pipeparts.mkinjections(pipeline, src, gw_data_source_info.injection_filename)
+		if gw_data_source_info.calib_errors_filename is not None:
+			src.set_property("calib-errors-location", gw_data_source_info.calib_errors_filename)
+			print("Set calib-errors-location")
 		# let the injection code run in a different thread than the
 		# whitener, etc.,
 		src = pipeparts.mkqueue(pipeline, src, max_size_bytes = 0, max_size_buffers = 0, max_size_time = Gst.SECOND * 64)

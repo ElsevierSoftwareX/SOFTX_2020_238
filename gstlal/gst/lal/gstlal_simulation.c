@@ -47,8 +47,14 @@
 
 
 #include <math.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdlib.h>
+#include <time.h>
+#include <math.h>
+#include <complex.h>
+#include <hdf5.h>
 
 
 /*
@@ -64,8 +70,7 @@
 /*
  * stuff from LAL
  */
-
-
+#include <lal/PrintVector.h>
 #include <lal/Date.h>
 #include <lal/FindChirp.h>
 #include <lal/FrequencySeries.h>
@@ -83,6 +88,14 @@
 #include <lal/SnglBurstUtils.h>
 #include <lal/TimeSeries.h>
 #include <lal/Units.h>
+#include <lal/VectorOps.h>
+#include <lal/TimeFreqFFT.h>
+#include <lal/LALDetectors.h>
+#include <lal/XLALError.h>
+#include <lal/RealFFT.h>
+#include <lal/LIGOLwXMLRead.h>
+#include <lal/H5FileIO.h>
+#include <lal/LIGOMetadataInspiralUtils.h>
 
 
 /*
@@ -95,6 +108,37 @@
 #include <gstlal/gstlal_tags.h>
 #include <gstlal_simulation.h>
 
+/*
+ * files to run Salvo's hdf5 read function
+ */
+
+#include <lal/LALInferenceVCSInfo.h>
+#include <lal/LALVCSInfoType.h>
+#include <lal/LALInferenceHDF5.h>
+#include <hdf5_hl.h>
+#include <assert.h>
+
+#include <assert.h>
+#include <errno.h>
+#include <lal/GenerateInspiral.h>
+#include <lal/LALInference.h>
+#include <lal/StringInput.h>
+#include <lal/LALInferencePrior.h>
+#include <lal/LALInferenceTemplate.h>
+#include <lal/LALInferenceProposal.h>
+#include <lal/LALInferenceLikelihood.h>
+#include <lal/LALInferenceReadData.h>
+#include <lal/LALInferenceInit.h>
+#include <lal/LALInferenceCalibrationErrors.h>
+#include <lal/LALInferenceHDF5.h>
+#include <lal/LALSimNeutronStar.h>
+
+#include <lal/LIGOMetadataUtils.h>
+
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_spline.h>
+
+double PI = M_PI;
 
 /*
  * ============================================================================
@@ -115,6 +159,376 @@ G_DEFINE_TYPE_WITH_CODE(
 	GST_TYPE_BASE_TRANSFORM,
 	GST_DEBUG_CATEGORY_INIT(GST_CAT_DEFAULT, "lal_simulation", 0, "lal_simulation element")
 );
+
+
+/*
+ * ============================================================================
+ *
+ *	                  Calibration Errors Input
+ *
+ * ============================================================================
+ */
+
+int H5DatasetToREAL8Vector(LALH5Dataset *dataset, REAL8Vector **vector, UINT4 *Ndim)
+{
+
+    size_t type_size = XLALH5TableQueryRowSize(dataset);
+    size_t Ndims = XLALH5TableQueryNColumns(dataset);
+    int ret;
+    size_t nbytes = XLALH5DatasetQueryNBytes(dataset);
+    char *data = XLALMalloc(nbytes);
+    assert(data);
+    ret = XLALH5DatasetQueryData(data, dataset);
+    assert(ret == 0);
+    REAL8Vector *vec = NULL;
+    vec = XLALCreateREAL8Vector(Ndims);
+
+    /* Read the group dataset in as a vector */
+    memcpy(vec->data, data, type_size);
+    XLALFree(data);
+
+    /* Construct the array of LALInferenceVariables */
+    for(UINT4 i = 0; i < Ndims; i++)
+    {
+	(*vector)->data[i] = vec->data[i];
+    }
+    *Ndim = Ndims;
+    XLALDestroyREAL8Vector(vec);
+    return(XLAL_SUCCESS);
+}
+
+int H5DatasetToREAL8VectorArray(LALH5Dataset *dataset, REAL8Vector ***array, UINT4 *Nrow, UINT4 *Ncol)
+{
+    size_t type_size = XLALH5TableQueryRowSize(dataset);
+    size_t Ncols = XLALH5TableQueryNColumns(dataset);
+    int ret;
+    size_t nbytes = XLALH5DatasetQueryNBytes(dataset);
+    char *data = XLALMalloc(nbytes);
+    assert(data);
+    ret = XLALH5DatasetQueryData(data, dataset);
+    assert(ret == 0);
+    REAL8Vector **arr = NULL;
+    UINT4 Nrows = XLALH5DatasetQueryNPoints(dataset);
+    arr = XLALCalloc(Nrows, sizeof(REAL8Vector *));
+    for (size_t i = 0; i < Nrows; i++)
+        arr[i] = XLALCreateREAL8Vector(Ncols);
+   /* Read the group datasets in as arrays */
+   for (UINT4 i = 0; i < Nrows; i++)
+        memcpy(arr[i]->data , data + type_size * i, type_size);
+    XLALFree(data);
+
+    /* Construct the array of LALInferenceVariables */
+    //*array = arr;
+    for (UINT4 i = 0; i < Nrows; i++)
+    {
+	for(UINT4 j = 0; j < Ncols; j++)
+        {
+		(*array)[i]->data[j] = arr[i]->data[j];
+	}
+    }
+    *Nrow = Nrows;
+    *Ncol = Ncols;
+    for (UINT4 i = 0; i < Nrows; i++){
+	XLALDestroyREAL8Vector(arr[i]);
+    }
+    return(XLAL_SUCCESS);
+}
+
+static void destroy_calib_errors_document(struct calib_errors_document *doc)
+{
+	if(doc) {
+		for(UINT4 i=0; i<doc->Nrows; i++)
+		{
+			XLALDestroyREAL8Vector(doc->calib_errors_amplitude[i]);
+			doc->calib_errors_amplitude[i] = NULL;
+			XLALDestroyREAL8Vector(doc->calib_errors_phase[i]);
+			doc->calib_errors_phase[i] = NULL;
+		}
+		XLALDestroyREAL8Vector(doc->calib_errors_freqs);
+		doc->calib_errors_freqs = NULL;
+	}
+	g_free(doc);
+}
+
+static struct calib_errors_document *load_calib_errors_document(const char *filename, const char *instrument){
+
+	struct calib_errors_document *out;
+
+	g_assert(filename != NULL);
+
+	/*
+	 * allocate the document
+	 */
+
+	out = g_new0(struct calib_errors_document, 1);
+	if(!out) {
+		XLALPrintError("%s(): malloc() failed\n", __func__);
+		goto allocfailed;
+	}
+
+	/*
+	 * figure out which hdf5 to load from filename
+	 */
+	FILE *fp = NULL;
+	fp = fopen(filename, "r"); // open file that should contain list of paths to HDF5 files
+	LALH5File *calib_errors_file = NULL;
+	if(fp != NULL){
+		//FIXME: There's probably a better way to organize the input than a file with a list of hdf5 file paths in it - maybe use the frame cache tools? or does an xml make sense?
+		char h5filename[1000];
+		char ifo[2];
+		int match = 0; // track if we ever get a match in IFOs
+		while(fscanf(fp, "%s %s", ifo, h5filename) != EOF){ // loop through all the hdf5 files until find the one that matches the relevant detector
+			calib_errors_file = XLALH5FileOpen(h5filename, "r");
+			if(calib_errors_file == NULL){
+				XLALErrorHandler = XLALExitErrorHandler;
+				XLALPrintError("Input file error. Please check that the specified path exists. (in %s, line %d)\n",__FILE__, __LINE__);
+			}
+			if(strcmp(ifo, instrument) == 0){
+				printf("Loading calibration errors for %s\n", instrument);
+				match = 1;
+				break;
+			}
+			else{
+				XLALH5FileClose(calib_errors_file);
+			}
+		}
+		if(match == 0){
+			// FIXME: Does this exit the code or just the function?
+			printf("No calibration error files provided match IFO.\n");
+			XLALErrorHandler = XLALExitErrorHandler;
+			XLALPrintError("No calibration error files provided that match IFO.");
+			goto allocfailed;
+		}
+	}
+	else{
+		XLALPrintError("%s(): fopen() failed\n", __func__);
+		goto fopenfailed;
+	}
+	fclose(fp);
+	/*
+	 * Load the calibration error magnitude, phase, and frequencies int REAL8Vectors
+	 */
+
+	LALH5Dataset *dataset = NULL;
+	LALH5File *group = XLALH5GroupOpen(calib_errors_file, "deltaR");
+	XLALH5FileClose(calib_errors_file);
+
+	UINT4 n_cal_samps, n_cal_freqs, n;
+
+	// Figure out the size of the arrays for amplitude and phase error
+	dataset = XLALH5DatasetRead(group, "draws_amp_rel");
+	size_t Ncols = XLALH5TableQueryNColumns(dataset);
+	UINT4 Nrows = XLALH5DatasetQueryNPoints(dataset);
+	XLALH5DatasetFree(dataset);
+
+	// Allocate memory for each of these arrays
+	// FIXME: I don't know if I need to allocate memory for the arrays being passed to the read file.  I should try commenting this stuff out and see if it works.
+	out->calib_errors_freqs = XLALCalloc(1, sizeof(REAL8Vector*));
+	out->calib_errors_freqs = XLALCreateREAL8Vector(Ncols);
+	out->calib_errors_amplitude = XLALCalloc(Nrows, sizeof(REAL8Vector*));
+	out->calib_errors_phase = XLALCalloc(Nrows, sizeof(REAL8Vector*));
+	for(UINT4 i=0; i<Nrows; i++)
+	{
+		out->calib_errors_amplitude[i] = XLALCreateREAL8Vector(Ncols);
+		out->calib_errors_phase[i] = XLALCreateREAL8Vector(Ncols);
+	}
+
+	/*Get freqs (assumes same number for amp and phase)*/
+	dataset = XLALH5DatasetRead(group, "freq");
+	H5DatasetToREAL8Vector(dataset, &(out->calib_errors_freqs), &n_cal_freqs);
+	XLALH5DatasetFree(dataset);
+
+	/* Get amps and phases*/
+	dataset = XLALH5DatasetRead(group, "draws_amp_rel");
+	H5DatasetToREAL8VectorArray(dataset, &(out->calib_errors_amplitude), &n_cal_samps, &n);
+	XLALH5DatasetFree(dataset);
+
+	dataset = XLALH5DatasetRead(group, "draws_phase");
+	H5DatasetToREAL8VectorArray(dataset, &(out->calib_errors_phase), &n_cal_samps, &n);
+        XLALH5DatasetFree(dataset);
+
+	// Save the size of the errors arrys
+	out->Ncols = Ncols;
+	out->Nrows = Nrows;
+
+	// Close the file because done with reading things in
+	XLALH5FileClose(group);
+
+	return out;
+
+allocfailed:
+	destroy_calib_errors_document(out);
+	return NULL;
+fopenfailed:
+	destroy_calib_errors_document(out);
+	fclose(fp);
+	return NULL;
+}
+
+static int add_calib_errors_to_strain(REAL8TimeSeries *h, struct calib_errors_document* calib_errors_document, int random_draw){
+
+	/*
+	 * Fourier transform strain into frequency domain to apply calibration errors
+	 */
+
+	REAL8FFTPlan *fwdplan = NULL;
+        REAL8FFTPlan *revplan = NULL;
+
+	REAL8 duration = h->data->length*h->deltaT;
+	REAL8 df = 1./duration;
+	REAL8 f0 = 0.0;
+        COMPLEX16FrequencySeries *tilde_h = NULL;
+        tilde_h = XLALCreateCOMPLEX16FrequencySeries(NULL, &h->epoch, f0, df, &lalDimensionlessUnit, h->data->length / 2 + 1);
+
+        /* Create a plan for Forward and Reverse FFT */
+	fwdplan = XLALCreateForwardREAL8FFTPlan(h->data->length, 0);
+        revplan = XLALCreateReverseREAL8FFTPlan(h->data->length, 0);
+
+        if(!tilde_h || !fwdplan || !revplan){
+           XLALDestroyCOMPLEX16FrequencySeries(tilde_h);
+           XLALDestroyREAL8FFTPlan(fwdplan);
+           XLALDestroyCOMPLEX16FrequencySeries(tilde_h);
+           XLAL_ERROR(XLAL_EFUNC);
+        }
+
+	/* FFT the strain into the freq domain */
+        if(XLALREAL8TimeFreqFFT(tilde_h, h, fwdplan)){
+           XLALDestroyCOMPLEX16FrequencySeries(tilde_h);
+           XLALDestroyREAL8FFTPlan(fwdplan);
+           XLALDestroyCOMPLEX16FrequencySeries(tilde_h);
+           XLAL_ERROR(XLAL_EFUNC);
+	}
+
+	/*
+	 * Interpolate the calibration errors to match the waveform
+	 */
+
+	// Figure out the frequency spacing and starting/ending frequencies for interpolated vector
+	REAL8 calib_errors_f0 = 0.0;
+	while(calib_errors_f0 < calib_errors_document->calib_errors_freqs->data[0]){
+		calib_errors_f0 += df;
+	}
+	REAL8 calib_errors_fNyq = calib_errors_f0;
+	while(calib_errors_fNyq < (calib_errors_document->calib_errors_freqs->data[(calib_errors_document->Ncols)-1]-df)){
+		calib_errors_fNyq += df;
+	}
+	UINT4 len_after_interp = (calib_errors_fNyq - calib_errors_f0)/df + 1;
+
+	/* Set up vectors to store interpolated values */
+	REAL8Vector *interp_calib_errors_freqs;
+	REAL8Vector *interp_calib_errors_amplitude;
+	REAL8Vector *interp_calib_errors_phase;
+	interp_calib_errors_amplitude = XLALCalloc(1, sizeof(REAL8Vector*));
+	interp_calib_errors_phase = XLALCalloc(1, sizeof(REAL8Vector*));
+	interp_calib_errors_freqs = XLALCalloc(1, sizeof(REAL8Vector*));
+	interp_calib_errors_amplitude = XLALCreateREAL8Vector(len_after_interp);
+	interp_calib_errors_phase = XLALCreateREAL8Vector(len_after_interp);
+	interp_calib_errors_freqs = XLALCreateREAL8Vector(len_after_interp);
+
+	/* Make interpolated calibration frequency array */
+	interp_calib_errors_freqs->data[0] = calib_errors_f0;
+	for(UINT4 i=1; i < len_after_interp; i++){
+		interp_calib_errors_freqs->data[i]=interp_calib_errors_freqs->data[i-1]+df;
+	}
+
+	/* Use gsl methods to interpolate */
+	gsl_interp_accel *acc_amplitude = gsl_interp_accel_alloc();
+	gsl_interp_accel *acc_phase = gsl_interp_accel_alloc();
+	gsl_spline *spline_amplitude = gsl_spline_alloc(gsl_interp_cspline, calib_errors_document->Ncols);
+	gsl_spline *spline_phase = gsl_spline_alloc(gsl_interp_cspline, calib_errors_document->Ncols);
+
+	gsl_spline_init(spline_amplitude, calib_errors_document->calib_errors_freqs->data, calib_errors_document->calib_errors_amplitude[random_draw]->data, calib_errors_document->Ncols);
+	gsl_spline_init(spline_phase, calib_errors_document->calib_errors_freqs->data, calib_errors_document->calib_errors_phase[random_draw]->data, calib_errors_document->Ncols);
+
+	for(UINT4 i = 0; i < len_after_interp; i++)
+        {
+		interp_calib_errors_amplitude->data[i] = gsl_spline_eval(spline_amplitude, interp_calib_errors_freqs->data[i], acc_amplitude);
+		interp_calib_errors_phase->data[i] = gsl_spline_eval(spline_phase, interp_calib_errors_freqs->data[i], acc_phase);
+        }
+
+	gsl_spline_free (spline_amplitude);
+        gsl_interp_accel_free (acc_amplitude);
+	gsl_spline_free (spline_phase);
+        gsl_interp_accel_free (acc_phase);
+
+	/*One pad the interpolated cal error so it is the same length as the tilde_h*/
+
+	REAL8Vector *padded_interp_calib_errors_amplitude;
+	REAL8Vector *padded_interp_calib_errors_phase;
+	padded_interp_calib_errors_amplitude = XLALCalloc(1, sizeof(REAL8Vector*));
+	padded_interp_calib_errors_phase = XLALCalloc(1, sizeof(REAL8Vector*));
+	padded_interp_calib_errors_amplitude = XLALCreateREAL8Vector(tilde_h->data->length);
+	padded_interp_calib_errors_phase = XLALCreateREAL8Vector(tilde_h->data->length);
+
+	UINT4 pad_front_length = (calib_errors_f0 - h->f0)/df;
+	for(UINT4 i=0; i < tilde_h->data->length; ++i){
+		if (i < pad_front_length){
+			padded_interp_calib_errors_amplitude->data[i] = 1.0;
+			padded_interp_calib_errors_phase->data[i] = 0.0;
+		}
+		else if(i >= pad_front_length && i < len_after_interp){
+			padded_interp_calib_errors_amplitude->data[i] = interp_calib_errors_amplitude->data[i];
+			padded_interp_calib_errors_phase->data[i] = interp_calib_errors_phase->data[i];
+		}
+		else{
+			padded_interp_calib_errors_amplitude->data[i] = 1.0;
+			padded_interp_calib_errors_phase->data[i] = 0.0;
+		}
+	}
+
+	XLALDestroyREAL8Vector(interp_calib_errors_amplitude);
+	XLALDestroyREAL8Vector(interp_calib_errors_phase);
+	XLALDestroyREAL8Vector(interp_calib_errors_freqs);
+
+	// Next need to fix this part.  I can just use XLALZZVectorMultiply, but first I need to make a COMPLEX16 vecotr out of the padded, interpoalted calibration errors.  Then I need to make a new COMPLEX16 vector that will be the output of the multiplication.  Then I can iFFT this output - or maybe just store the data from the output into tilde_h - not sure if it matters which one I do.
+        COMPLEX16Vector *tilde_calib_errors;
+	COMPLEX16Vector *tilde_h_with_errors;
+	tilde_calib_errors = XLALCalloc(1, sizeof(COMPLEX16Vector*));
+	tilde_h_with_errors = XLALCalloc(1, sizeof(COMPLEX16Vector*));
+        tilde_calib_errors = XLALCreateCOMPLEX16Vector(tilde_h->data->length);
+        tilde_h_with_errors = XLALCreateCOMPLEX16Vector(tilde_h->data->length);
+	for(UINT4 i = 0; i < tilde_calib_errors->length; ++i){
+		tilde_calib_errors->data[i] = padded_interp_calib_errors_amplitude->data[i]*cexp(I*padded_interp_calib_errors_phase->data[i]);
+	}
+	XLALDestroyREAL8Vector(padded_interp_calib_errors_amplitude);
+	XLALDestroyREAL8Vector(padded_interp_calib_errors_phase);
+
+	XLALZZVectorMultiply(tilde_h_with_errors, tilde_calib_errors, tilde_h->data);
+	for(UINT4 i = 0; i < tilde_h->data->length; ++i){
+		tilde_h->data->data[i] = tilde_h_with_errors->data[i];
+	}
+	XLALDestroyCOMPLEX16Vector(tilde_calib_errors);
+	XLALDestroyCOMPLEX16Vector(tilde_h_with_errors);
+
+	/* Zero the DC and Nyquist Components */
+	tilde_h->data->data[0] = 0.0;
+        tilde_h->data->data[tilde_h->data->length - 1] = 0.0;
+
+	/* return to time domain */
+
+	/* Calls on the already created XLAL Freq -> Time routine */
+	REAL8TimeSeries *h_new = NULL;
+	size_t h_size = h->data->length;
+	h_new = XLALCreateREAL8TimeSeries(h->name, &h->epoch, h->f0, h->deltaT, &h->sampleUnits, h_size);
+        if(XLALREAL8FreqTimeFFT(h_new, tilde_h, revplan)){
+           XLALDestroyREAL8TimeSeries(h_new);
+           XLALDestroyREAL8FFTPlan(revplan);
+           XLAL_ERROR(XLAL_EFUNC);
+	}
+
+	/*Copy the data to h so it gets seen by the rest of the code*/
+	for(UINT4 i=0; i<h_size; i++){
+		h->data->data[i]=h_new->data->data[i];
+	}
+
+	/* Clean up */
+	XLALDestroyREAL8FFTPlan(revplan);
+	XLALDestroyREAL8FFTPlan(fwdplan);
+        XLALDestroyCOMPLEX16FrequencySeries(tilde_h);
+	XLALDestroyREAL8TimeSeries(h_new);
+
+	return 0;
+}
 
 
 /*
@@ -151,7 +565,6 @@ static void destroy_injection_document(struct injection_document *doc)
 /*
  * Load document
  */
-
 
 static int sim_burst_row_callback(struct ligolw_table *table, struct ligolw_table_row row, void *data)
 {
@@ -487,11 +900,10 @@ allocfailed:
  */
 
 
-static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_inspiral, double deltaT, LALDetector detector)
+static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_inspiral, double deltaT, LALDetector detector, struct calib_errors_document **calib_errors_document)
 {
 	REAL8TimeSeries *hplus = NULL;
 	REAL8TimeSeries *hcross = NULL;
-
 	/*
 	 * create waveform using lalinspiral's wrapping of lalsimulation.
 	 * XLALInspiralTDWaveformFromSimInspiral() translates the
@@ -504,6 +916,7 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 	GST_CAT_INFO(GST_CAT_DEFAULT, "Generating injection with parameters: m1=%e m2=%e spin1x=%e spin1y=%e spin1z=%e spin2x=%e spin2y=%e spin2z=%e geocent_end_time=%d geocent_end_time_ns=%d waveform=%s", sim_inspiral->mass1, sim_inspiral->mass2, sim_inspiral->spin1x, sim_inspiral->spin1y, sim_inspiral->spin1z, sim_inspiral->spin2x, sim_inspiral->spin2y, sim_inspiral->spin2z, sim_inspiral->geocent_end_time.gpsSeconds, sim_inspiral->geocent_end_time.gpsNanoSeconds, sim_inspiral->waveform);
 	if(XLALInspiralTDWaveformFromSimInspiral(&hplus, &hcross, sim_inspiral, deltaT) == XLAL_FAILURE)
 		XLAL_ERROR(XLAL_EFUNC);
+
 
 	/* add the time of the injection at the geocentre to the
 	 * start times of the h+ and hx time series.  after this,
@@ -522,6 +935,20 @@ static int sim_inspiral_strain(REAL8TimeSeries **strain, SimInspiralTable *sim_i
 	XLALDestroyREAL8TimeSeries(hcross);
 	if(!(*strain))
 		XLAL_ERROR(XLAL_EFUNC);
+
+	if(*calib_errors_document != NULL){
+		printf("Applying calibration errors\n");
+		//Use the current geocent_end_time to seed a random number generator to select a random calibration uncertainty draw
+		srand((UINT4)sim_inspiral->geocent_end_time.gpsSeconds);
+		UINT4 random_draw = (rand()%((*calib_errors_document)->Nrows-1));
+		if(add_calib_errors_to_strain(*strain, *calib_errors_document, random_draw) < 0) {
+			XLAL_ERROR(XLAL_EFUNC);
+		}
+	}
+	else{
+		printf("Calibraiton errors not applied\n");
+	}
+
 	return XLAL_SUCCESS;
 }
 
@@ -560,7 +987,7 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 	 * initialize simulation_series if NULL
 	 */
 
-
+	//printf("PSD \n");
 	if(element->simulation_series == NULL) {
 		size_t series_length = 0;
 		LIGOTimeGPS startEpoch = hStartTime;
@@ -633,9 +1060,8 @@ static int update_simulation_series(REAL8TimeSeries *h, GSTLALSimulation *elemen
 		/*
 		 * compute injection waveform
 		 */
-
-		if(sim_inspiral_strain(&inspiral_series, thisSimInspiral, h->deltaT, *detector))
-			XLAL_ERROR(XLAL_EFUNC);
+		if(sim_inspiral_strain(&inspiral_series, thisSimInspiral, h->deltaT, *detector, &(element->calib_errors_document))){
+			XLAL_ERROR(XLAL_EFUNC);}
 
 		/*
 		 * resize simulation_series to cover this time
@@ -874,6 +1300,26 @@ static GstFlowReturn transform_ip(GstBaseTransform *trans, GstBuffer *buf)
 	}
 
 	/*
+	 * Load calibration errors document if needed
+	 */
+	if(element->calib_errors_location){
+		if(!element->calib_errors_document){
+			printf("Calibration errors document is being loaded.\n");
+			element->calib_errors_document = load_calib_errors_document(element->calib_errors_location, element->instrument);
+			if(!element->calib_errors_document) {
+				GST_ELEMENT_ERROR(element, RESOURCE, READ, (NULL), ("error loading \"%s\"", element->calib_errors_location));
+				result = GST_FLOW_ERROR;
+				goto done;
+			}
+			printf("Calibraiton errors document successfully loaded.\n");
+		}
+	}
+	else{
+		element->calib_errors_document = NULL;
+	}
+
+
+	/*
 	 * Make sure stream tags are sufficient
 	 */
 
@@ -956,7 +1402,8 @@ enum property {
 	ARG_XML_LOCATION = 1,
 	ARG_INSTRUMENT,
 	ARG_CHANNEL_NAME,
-	ARG_UNITS
+	ARG_UNITS,
+	ARG_CALIB_ERRORS_LOCATION
 };
 
 
@@ -973,6 +1420,13 @@ static void set_property(GObject *object, enum property id, const GValue *value,
 		element->xml_location = g_value_dup_string(value);
 		destroy_injection_document(element->injection_document);
 		element->injection_document = NULL;
+		break;
+
+	case ARG_CALIB_ERRORS_LOCATION:
+		g_free(element->calib_errors_location);
+		element->calib_errors_location = g_value_dup_string(value);
+		destroy_calib_errors_document(element->calib_errors_document);
+		element->calib_errors_document = NULL;
 		break;
 
 	default:
@@ -1007,6 +1461,10 @@ static void get_property(GObject *object, enum property id, GValue *value, GPara
 		g_value_set_string(value, element->units);
 		break;
 
+	case ARG_CALIB_ERRORS_LOCATION:
+		g_value_set_string(value, element->calib_errors_location);
+		break;
+
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, id, pspec);
 		break;
@@ -1035,6 +1493,10 @@ static void finalize(GObject * object)
 	element->channel_name = NULL;
 	g_free(element->units);
 	element->units = NULL;
+	g_free(element->calib_errors_location);
+	element->calib_errors_location = NULL;
+	destroy_calib_errors_document(element->calib_errors_document);
+	element->calib_errors_document = NULL;
 	XLALDestroyREAL8TimeSeries(element->simulation_series);
 	element->simulation_series = NULL;
 
@@ -1141,6 +1603,17 @@ static void gstlal_simulation_class_init(GSTLALSimulationClass *klass)
 			G_PARAM_READABLE | G_PARAM_STATIC_STRINGS
 		)
 	);
+	g_object_class_install_property(
+		gobject_class,
+		ARG_CALIB_ERRORS_LOCATION,
+		g_param_spec_string(
+			"calib-errors-location",
+			"Calibration Errors Location",
+			"File containing list of HDF5 file location for documents containing calibration errors to be applied to software injections",
+			NULL,
+			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS
+		)
+	);
 }
 
 
@@ -1158,5 +1631,7 @@ static void gstlal_simulation_init(GSTLALSimulation *element)
 	element->instrument = NULL;
 	element->channel_name = NULL;
 	element->units = NULL;
+	element->calib_errors_location = NULL;
+	element->calib_errors_document = NULL;
 	element->simulation_series = NULL;
 }
