@@ -1236,16 +1236,29 @@ def compute_S_from_filters_file(pipeline, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP
 	
 	return S
 
-def compute_S_from_filters_file_split_act(pipeline, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP7R, EP7I, ktst, EP8R, EP8I, kpum, EP18R, EP18I, kuim, EP19R, EP19I):
+def compute_S_from_filters_file_split_act(pipeline, fpcal2, EP6R, EP6I, pcalfpcal2, derrfpcal2, EP7R, EP7I, ftst, ktst, apply_complex_ktst, EP8R, EP8I, fpum, kpum, apply_complex_kpum, EP18R, EP18I, fuim, kuim, apply_complex_kuim, EP19R, EP19I):
 
 	#       
 	# S = (1 / EP6) * (pcalfpcal2 / derrfpcal2 - EP7 * (ktst * EP8 + kpum * EP18 + kuim * EP19))^(-1)
 	#
 
+	if apply_complex_ktst:
+		ktst = pipeparts.mkgeneric(pipeline, ktst, "lpshiftfreq", frequency_ratio = fpcal2 / ftst)
+		ep8_ktst = complex_audioamplify(pipeline, ktst, EP8R, EP8I)
+	else:
+		ep8_ktst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, ktst, "cabs"), matrix = [[EP8R, EP8I]]))
+	if apply_complex_kpum:
+		kpum = pipeparts.mkgeneric(pipeline, kpum, "lpshiftfreq", frequency_ratio = fpcal2 / fpum)
+		ep18_kpum = complex_audioamplify(pipeline, kpum, EP18R, EP18I)
+	else:
+		ep18_kpum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kpum, "cabs"), matrix = [[EP18R, EP18I]]))
+	if apply_complex_kuim:
+		kuim = pipeparts.mkgeneric(pipeline, kuim, "lpshiftfreq", frequency_ratio = fpcal2 / fuim)
+		ep19_kuim = complex_audioamplify(pipeline, kuim, EP19R, EP19I)
+	else:
+		ep19_kuim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kuim, "cabs"), matrix = [[EP19R, EP19I]]))
+
 	pcal_over_derr = complex_division(pipeline, pcalfpcal2, derrfpcal2)
-	ep8_ktst = complex_audioamplify(pipeline, ktst, EP8R, EP8I)
-	ep18_kpum = complex_audioamplify(pipeline, kpum, EP18R, EP18I)
-	ep19_kuim = complex_audioamplify(pipeline, kuim, EP19R, EP19I)
 	A_at_fpcal2 = mkadder(pipeline, list_srcs(pipeline, ep8_ktst, ep18_kpum, ep19_kuim))
 	DA_at_fpcal2 = complex_audioamplify(pipeline, A_at_fpcal2,  -1.0 * EP7R, -1.0 * EP7I)
 	Sinv = mkadder(pipeline, list_srcs(pipeline, pcal_over_derr, DA_at_fpcal2))
@@ -1270,12 +1283,24 @@ def compute_S(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpu, EP9):
 	S = complex_inverse(pipeline, Sinv)
 
 	return S
-
-def compute_S_split_act(pipeline, EP6, pcalfpcal2, derrfpcal2, EP7, ktst, EP8, kpum, EP18, kuim, EP19):
+def compute_S_split_act(pipeline, fpcal2, EP6, pcalfpcal2, derrfpcal2, EP7, ftst, ktst, apply_complex_ktst, EP8, fpum, kpum, apply_complex_kpum, EP18, fuim, kuim, apply_complex_kuim, EP19):
 
 	#       
 	# S = (1 / EP6) * (pcalfpcal2 / derrfpcal2 - EP7 * (ktst * EP8 + kpu * EP18 + kuim * EP19))^(-1)
 	#
+
+	if apply_complex_ktst:
+		ktst = pipeparts.mkgeneric(pipeline, ktst, "lpshiftfreq", frequency_ratio = fpcal2 / ftst)
+	else:
+		ktst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, ktst, "cabs"), matrix = [[1.0, 0.0]]))
+	if apply_complex_kpum:
+		kpum = pipeparts.mkgeneric(pipeline, kpum, "lpshiftfreq", frequency_ratio = fpcal2 / fpum)
+	else:
+		kpum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kpum, "cabs"), matrix = [[1.0, 0.0]]))
+	if apply_complex_kuim:
+		kuim = pipeparts.mkgeneric(pipeline, kuim, "lpshiftfreq", frequency_ratio = fpcal2 / fuim)
+	else:
+		kuim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kuim, "cabs"), matrix = [[1.0, 0.0]]))
 
 	pcal_over_derr = complex_division(pipeline, pcalfpcal2, derrfpcal2)
 	ep8_ktst = mkmultiplier(pipeline, list_srcs(pipeline, ktst, EP8))
@@ -1335,15 +1360,28 @@ def compute_Xi_from_filters_file(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11_
 
 	return Xi
 
-def compute_Xi_from_filters_file_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11R, EP11I, EP12R, EP12I, EP13R, EP13I, EP20R, EP20I, EP21R, EP21I, ktst, kpum, kuim, kc, fcc):
+def compute_Xi_from_filters_file_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11R, EP11I, EP12R, EP12I, EP13R, EP13I, EP20R, EP20I, EP21R, EP21I, ftst, ktst, apply_complex_ktst, fpum, kpum, apply_complex_kpum, fuim, kuim, apply_complex_kuim, kc, fcc):
 
 	#
 	# Xi = -1 + ((EP11 * kc) / (1 + i * f_src / f_cc)) * (pcalfpcal4 / derrfpcal4 - EP12 * (ktst * EP13 + kpum * EP20 + kuim * EP21))
 	#
 
-	Atst = complex_audioamplify(pipeline, ktst, EP13R, EP13I)
-	Apum = complex_audioamplify(pipeline, kpum, EP20R, EP20I)
-	Auim = complex_audioamplify(pipeline, kuim, EP21R, EP21I)
+	if apply_complex_ktst:
+		ktst = pipeparts.mkgeneric(pipeline, ktst, "lpshiftfreq", frequency_ratio = fpcal4 / ftst)
+		Atst = complex_audioamplify(pipeline, ktst, EP13R, EP13I)
+	else:
+		Atst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, ktst, "cabs"), matrix = [[EP13R, EP13I]]))
+	if apply_complex_kpum:
+		kpum = pipeparts.mkgeneric(pipeline, kpum, "lpshiftfreq", frequency_ratio = fpcal4 / fpum)
+		Apum = complex_audioamplify(pipeline, kpum, EP20R, EP20I)
+	else:
+		Apum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kpum, "cabs"), matrix = [[EP20R, EP20I]]))
+	if apply_complex_kuim:
+		kuim = pipeparts.mkgeneric(pipeline, kuim, "lpshiftfreq", frequency_ratio = fpcal4 / fuim)
+		Auim = complex_audioamplify(pipeline, kuim, EP21R, EP21I)
+	else:
+		Auim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kuim, "cabs"), matrix = [[EP21R, EP21I]]))
+
 	A = mkadder(pipeline, list_srcs(pipeline, Atst, Apum, Auim))
 	minusAD = complex_audioamplify(pipeline, A, -1.0 * EP12R, -1.0 * EP12I)
 	pcal_over_derr = complex_division(pipeline, pcalfpcal4, darmfpcal4)
@@ -1380,11 +1418,24 @@ def compute_Xi(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP14,
 
 	return Xi
 
-def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP20, EP21, ktst, kpum, kuim, kc, fcc):
+def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, EP13, EP20, EP21, ftst, ktst, apply_complex_ktst, fpum, kpum, apply_complex_kpum, fuim, kuim, apply_complex_kuim, kc, fcc):
 
 	#
 	# Xi = -1 + ((EP11 * kc) / (1 + i * f_src / f_cc)) * (pcalfpcal4 / derrfpcal4 - EP12 * (ktst * EP13 + kpum * EP20 + kuim * EP21))
 	#
+
+	if apply_complex_ktst:
+		ktst = pipeparts.mkgeneric(pipeline, ktst, "lpshiftfreq", frequency_ratio = fpcal4 / ftst)
+	else:
+		ktst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, ktst, "cabs"), matrix = [[1.0, 0.0]]))
+	if apply_complex_kpum:
+		kpum = pipeparts.mkgeneric(pipeline, kpum, "lpshiftfreq", frequency_ratio = fpcal4 / fpum)
+	else:
+		kpum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kpum, "cabs"), matrix = [[1.0, 0.0]]))
+	if apply_complex_kuim:
+		kuim = pipeparts.mkgeneric(pipeline, kuim, "lpshiftfreq", frequency_ratio = fpcal4 / fuim)
+	else:
+		kuim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, pipeparts.mkgeneric(pipeline, kuim, "cabs"), matrix = [[1.0, 0.0]]))
 
 	complex_kc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, matrix=[[1,0]]))
 	Atst = mkmultiplier(pipeline, list_srcs(pipeline, EP13, ktst))
@@ -1402,6 +1453,294 @@ def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, E
 	Xi = pipeparts.mkgeneric(pipeline, Xi_plus_one, "lal_add_constant", value = -1.0)
 
 	return Xi
+
+def compute_calline_uncertainty(pipeline, coh_unc, coh_samples, demod_samples, median_samples, avg_samples):
+	#
+	# The coherence uncertainties may not be equal to the
+	# uncertainties in the line ratios after the low-pass filtering
+	# (kaiser window), running median, and running mean.
+	#
+
+	# I assume that the uncertainty computed from coherence assumes
+	# that a mean was used.
+	assumed_unc_reduction = 1.0 / numpy.sqrt(coh_samples)
+
+	# Represent each element as a filter with the same effect on uncertainty
+	demod_filt = fir.kaiser(demod_samples, 3 * numpy.pi)
+	demod_filt /= numpy.sum(demod_filt)
+	if demod_samples < 1:
+		demod_filt = numpy.ones(1)
+
+	# In the limit of large N, a median reduces uncertainty by sqrt(pi/(2N)),
+	# so pretend it's a filter where each coefficient equals sqrt(pi/2) / N.
+	median_filt = numpy.ones(median_samples) / median_samples * numpy.sqrt(numpy.pi / 2.0)
+	if median_samples < 1:
+		median_filt = numpy.ones(1)
+
+	avg_filt = numpy.ones(avg_samples) / avg_samples
+	if avg_samples < 1:
+		avg_filt = numpy.ones(1)
+
+	effective_filt = numpy.convolve(numpy.convolve(demod_filt, median_filt), avg_filt)
+	uncertainty_reduction = numpy.sqrt(sum(pow(effective_filt, 2.0)))
+
+	return pipeparts.mkaudioamplify(pipeline, coh_unc, uncertainty_reduction / assumed_unc_reduction)
+
+def compute_act_stage_uncertainty(pipeline, pcaly_line1_coh, sus_line_coh, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples, coherence_unc_threshold):
+	pcaly_line1_coh_clipped = mkinsertgap(pipeline, pcaly_line1_coh, bad_data_intervals = [0, coherence_unc_threshold], replace_value = coherence_unc_threshold, insert_gap = False)
+	sus_line_coh_clipped = mkinsertgap(pipeline, sus_line_coh, bad_data_intervals = [0, coherence_unc_threshold], replace_value = coherence_unc_threshold, insert_gap = False)
+	pcaly_line1_unc = compute_calline_uncertainty(pipeline, pcaly_line1_coh_clipped, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples)
+	sus_line_unc = compute_calline_uncertainty(pipeline, sus_line_coh_clipped, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples)
+	return mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, pcaly_line1_unc, exponent = 2.0), mkpow(pipeline, sus_line_unc, exponent = 2.0))), exponent = 0.5)
+
+def compute_S_c_uncertainty_from_filters_file(pipeline, EP6_real, EP6_imag, EP7_real, EP7_imag, opt_gain_fcc_line_freq, X2, pcaly_line2_coh, EP8_real, EP8_imag, ktst, tau_tst, apply_complex_kappatst, ktst_unc, EP18_real, EP18_imag, kpum, tau_pum, apply_complex_kappapum, kpum_unc, EP19_real, EP19_imag, kuim, tau_uim, apply_complex_kappauim, kuim_unc, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples, coherence_unc_threshold):
+
+	#
+	# S_c = (1 / EP6) * (X2 - EP7 * (ktst * EP8 + kpum * EP18 + kuim * EP19))^(-1)
+	#
+
+	EP7_mag = pow(EP7_real * EP7_real + EP7_imag * EP7_imag, 0.5)
+	EP8_mag = pow(EP8_real * EP8_real + EP8_imag * EP8_imag, 0.5)
+	EP18_mag = pow(EP18_real * EP18_real + EP18_imag * EP18_imag, 0.5)
+	EP19_mag = pow(EP19_real * EP19_real + EP19_imag * EP19_imag, 0.5)
+
+	X2 = pipeparts.mktee(pipeline, X2)
+	pcaly_line2_coh_clipped = mkinsertgap(pipeline, pcaly_line2_coh, bad_data_intervals = [0, coherence_unc_threshold], replace_value = coherence_unc_threshold, insert_gap = False)
+	X2_unc = compute_calline_uncertainty(pipeline, pcaly_line2_coh_clipped, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples)
+	X2_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, X2_unc, pipeparts.mkgeneric(pipeline, X2, "cabs")))
+
+	A_tst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ktst, matrix = [[EP8_real, EP8_imag]]))
+	if apply_complex_kappatst:
+		i_omega_tau_tst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_tst, matrix = [[0, 2 * numpy.pi * opt_gain_fcc_line_freq]]))
+		exp_i_omega_tau_tst = pipeparts.mkgeneric(pipeline, i_omega_tau_tst, "cexp")
+		A_tst = mkmultiplier(pipeline, list_srcs(pipeline, A_tst, exp_i_omega_tau_tst))
+	A_tst_unc_abs = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, ktst, ktst_unc)), EP8_mag)
+	A_pum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kpum, matrix = [[EP18_real, EP18_imag]]))
+	if apply_complex_kappapum:
+		i_omega_tau_pum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_pum, matrix = [[0, 2 * numpy.pi * opt_gain_fcc_line_freq]]))
+		exp_i_omega_tau_pum = pipeparts.mkgeneric(pipeline, i_omega_tau_pum, "cexp")
+		A_pum = mkmultiplier(pipeline, list_srcs(pipeline, A_pum, exp_i_omega_tau_pum))
+	A_pum_unc_abs = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, kpum, kpum_unc)), EP18_mag)
+	A_uim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kuim, matrix = [[EP19_real, EP19_imag]]))
+	if apply_complex_kappauim:
+		i_omega_tau_uim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_uim, matrix = [[0, 2 * numpy.pi * opt_gain_fcc_line_freq]]))
+		exp_i_omega_tau_uim = pipeparts.mkgeneric(pipeline, i_omega_tau_uim, "cexp")
+		A_uim = mkmultiplier(pipeline, list_srcs(pipeline, A_uim, exp_i_omega_tau_uim))
+	A_uim_unc_abs = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, kuim, kuim_unc)), EP19_mag)
+	A = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, A_tst, A_pum, A_uim)))
+	A_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, A_tst_unc_abs, exponent = 2.0), mkpow(pipeline, A_pum_unc_abs, exponent = 2.0), mkpow(pipeline, A_uim_unc_abs, exponent = 2.0))), exponent = 0.5)
+	minus_DA = complex_audioamplify(pipeline, A, -EP7_real, -EP7_imag)
+	DA_unc_abs = pipeparts.mkaudioamplify(pipeline, A_unc_abs, EP7_mag)
+	X2_minus_DA = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, X2, minus_DA)))
+	X2_minus_DA_mag = pipeparts.mkgeneric(pipeline, X2_minus_DA, "cabs")
+	X2_minus_DA_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, X2_unc_abs, exponent = 2.0), mkpow(pipeline, DA_unc_abs, exponent = 2.0))), exponent = 0.5)
+	S_c_unc = pipeparts.mktee(pipeline, complex_division(pipeline, X2_minus_DA_unc_abs, X2_minus_DA_mag))
+	S_c = pipeparts.mktee(pipeline, complex_inverse(pipeline, complex_audioamplify(pipeline, X2_minus_DA, EP6_real, EP6_imag)))
+	S_c_real = pipeparts.mkgeneric(pipeline, S_c, "creal")
+	S_c_imag = pipeparts.mkgeneric(pipeline, S_c, "cimag")
+	S_c_product = pipeparts.mkgeneric(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_c_real, S_c_imag)), "cabs")
+	S_c_square_modulus = pipeparts.mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_c, "cabs"), exponent = 2.0)
+	S_c_square_modulus_over_S_c_product = complex_division(pipeline, S_c_square_modulus, S_c_product)
+	fcc_unc = mkmultiplier(pipeline, list_srcs(pipeline, S_c_square_modulus_over_S_c_product, S_c_unc))
+
+	return S_c, S_c_unc, fcc_unc
+
+def compute_S_c_uncertainty(pipeline, EP6, EP7, opt_gain_fcc_line_freq, X2, pcaly_line2_coh, EP8, ktst, tau_tst, apply_complex_kappatst, ktst_unc, EP18, kpum, tau_pum, apply_complex_kappapum, kpum_unc, EP19, kuim, tau_uim, apply_complex_kappauim, kuim_unc, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples, coherence_unc_threshold):
+
+	#
+	# S_c = (1 / EP6) * (X2 - EP7 * (ktst * EP8 + kpum * EP18 + kuim * EP19))^(-1)
+	#
+
+	EP7_mag = pipeparts.mkgeneric(pipeline, EP7, "cabs")
+	EP8_mag = pipeparts.mkgeneric(pipeline, EP8, "cabs")
+	EP18_mag = pipeparts.mkgeneric(pipeline, EP18, "cabs")
+	EP19_mag = pipeparts.mkgeneric(pipeline, EP19, "cabs")
+
+	X2 = pipeparts.mktee(pipeline, X2)
+	pcaly_line2_coh_clipped = mkinsertgap(pipeline, pcaly_line2_coh, bad_data_intervals = [0, coherence_unc_threshold], replace_value = coherence_unc_threshold, insert_gap = False)
+	X2_unc = compute_calline_uncertainty(pipeline, pcaly_line2_coh_clipped, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples)
+	X2_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, X2_unc, pipeparts.mkgeneric(pipeline, X2, "cabs")))
+
+	complex_ktst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatriximxer(pipeline, ktst, matrix = [[1.0, 0.0]]))
+	A_tst = mkmultiplier(pipeline, list_srcs(pipeline, complex_ktst, EP8))
+	if apply_complex_kappatst:
+		i_omega_tau_tst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_tst, matrix = [[0, 2 * numpy.pi * opt_gain_fcc_line_freq]]))
+		exp_i_omega_tau_tst = pipeparts.mkgeneric(pipeline, i_omega_tau_tst, "cexp")
+		A_tst = mkmultiplier(pipeline, list_srcs(pipeline, A_tst, exp_i_omega_tau_tst))
+	A_tst_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, ktst, ktst_unc, EP8_mag))
+	complex_kpum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatriximxer(pipeline, kpum, matrix = [[1.0, 0.0]]))
+	A_pum = mkmultiplier(pipeline, list_srcs(pipeline, complex_kpum, EP18))
+	if apply_complex_kappapum:
+		i_omega_tau_pum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_pum, matrix = [[0, 2 * numpy.pi * opt_gain_fcc_line_freq]]))
+		exp_i_omega_tau_pum = pipeparts.mkgeneric(pipeline, i_omega_tau_pum, "cexp")
+		A_pum = mkmultiplier(pipeline, list_srcs(pipeline, A_pum, exp_i_omega_tau_pum))
+	A_pum_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, kpum, kpum_unc, EP18_mag))
+	complex_kuim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatriximxer(pipeline, kuim, matrix = [[1.0, 0.0]]))
+	A_uim = mkmultiplier(pipeline, list_srcs(pipeline, complex_kuim, EP19))
+	if apply_complex_kappauim:
+		i_omega_tau_uim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_uim, matrix = [[0, 2 * numpy.pi * opt_gain_fcc_line_freq]]))
+		exp_i_omega_tau_uim = pipeparts.mkgeneric(pipeline, i_omega_tau_uim, "cexp")
+		A_uim = mkmultiplier(pipeline, list_srcs(pipeline, A_uim, exp_i_omega_tau_uim))
+	A_uim_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, kuim, kuim_unc, EP19_mag))
+	A = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, A_tst, A_pum, A_uim)))
+	A_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, A_tst_unc_abs, exponent = 2.0), mkpow(pipeline, A_pum_unc_abs, exponent = 2.0), mkpow(pipeline, A_uim_unc_abs, exponent = 2.0))), exponent = 0.5)
+	minus_DA = complex_audioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, A, EP7)), -1.0, 0.0)
+	DA_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, A_unc_abs, EP7_mag))
+	X2_minus_DA = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, X2, minus_DA)))
+	X2_minus_DA_mag = pipeparts.mkgeneric(pipeline, X2_minus_DA, "cabs")
+	X2_minus_DA_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, X2_unc_abs, exponent = 2.0), mkpow(pipeline, DA_unc_abs, exponent = 2.0))), exponent = 0.5)
+	S_c_unc = pipeparts.mktee(pipeline, complex_division(pipeline, X2_minus_DA_unc_abs, X2_minus_DA_mag))
+	S_c = pipeparts.mktee(pipeline, complex_inverse(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, X2_minus_DA, EP6))))
+	S_c_real = pipeparts.mkgeneric(pipeline, S_c, "creal")
+	S_c_imag = pipeparts.mkgeneric(pipeline, S_c, "cimag")
+	S_c_product = pipeparts.mkgeneric(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_c_real, S_c_imag)), "cabs")
+	S_c_square_modulus = pipeparts.mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_c, "cabs"), exponent = 2.0)
+	S_c_square_modulus_over_S_c_product = complex_division(pipeline, S_c_square_modulus, S_c_product)
+	fcc_unc = mkmultiplier(pipeline, list_srcs(pipeline, S_c_square_modulus_over_S_c_product, S_c_unc))
+
+	return S_c, S_c_unc, fcc_unc
+
+def compute_SRC_uncertainty_from_filters_file(pipeline, EP11_real, EP11_imag, kc, kc_unc, fcc, fcc_unc, EP12_real, EP12_imag, act_pcal_line_freq, X1, pcaly_line1_coh, EP13_real, EP13_imag, ktst, tau_tst, apply_complex_kappatst, ktst_unc, EP20_real, EP20_imag, kpum, tau_pum, apply_complex_kappapum, kpum_unc, EP21_real, EP21_imag, kuim, tau_uim, apply_complex_kappauim, kuim_unc, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples, coherence_unc_threshold):
+
+	#
+	# S_s^{-1} = ((EP11 * kc) / (1 + i * f_src / f_cc)) * (pcalfpcal4 / derrfpcal4 - EP12 * (ktst * EP13 + kpum * EP20 + kuim * EP21))
+	#
+
+	EP12_mag = pow(EP12_real * EP12_real + EP12_imag * EP12_imag, 0.5)
+	EP13_mag = pow(EP13_real * EP13_real + EP13_imag * EP13_imag, 0.5)
+	EP20_mag = pow(EP20_real * EP20_real + EP20_imag * EP20_imag, 0.5)
+	EP21_mag = pow(EP21_real * EP21_real + EP21_imag * EP21_imag, 0.5)
+
+	X1 = pipeparts.mktee(pipeline, X1)
+	fcc = pipeparts.mktee(pipeline, fcc)
+	pcaly_line1_coh_clipped = mkinsertgap(pipeline, pcaly_line1_coh, bad_data_intervals = [0, coherence_unc_threshold], replace_value = coherence_unc_threshold, insert_gap = False)
+	X1_unc = compute_calline_uncertainty(pipeline, pcaly_line1_coh_clipped, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples)
+	X1_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, X1_unc, pipeparts.mkgeneric(pipeline, X1, "cabs")))
+
+	A_tst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ktst, matrix = [[EP13_real, EP13_imag]]))
+	if apply_complex_kappatst:
+		i_omega_tau_tst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_tst, matrix = [[0, 2 * numpy.pi * act_pcal_line_freq]]))
+		exp_i_omega_tau_tst = pipeparts.mkgeneric(pipeline, i_omega_tau_tst, "cexp")
+		A_tst = mkmultiplier(pipeline, list_srcs(pipeline, A_tst, exp_i_omega_tau_tst))
+	A_tst_unc_abs = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, ktst, ktst_unc)), EP13_mag)
+	A_pum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kpum, matrix = [[EP20_real, EP20_imag]]))
+	if apply_complex_kappapum:
+		i_omega_tau_pum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_pum, matrix = [[0, 2 * numpy.pi * act_pcal_line_freq]]))
+		exp_i_omega_tau_pum = pipeparts.mkgeneric(pipeline, i_omega_tau_pum, "cexp")
+		A_pum = mkmultiplier(pipeline, list_srcs(pipeline, A_pum, exp_i_omega_tau_pum))
+	A_pum_unc_abs = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, kpum, kpum_unc)), EP20_mag)
+	A_uim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kuim, matrix = [[EP21_real, EP21_imag]]))
+	if apply_complex_kappauim:
+		i_omega_tau_uim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_uim, matrix = [[0, 2 * numpy.pi * act_pcal_line_freq]]))
+		exp_i_omega_tau_uim = pipeparts.mkgeneric(pipeline, i_omega_tau_uim, "cexp")
+		A_uim = mkmultiplier(pipeline, list_srcs(pipeline, A_uim, exp_i_omega_tau_uim))
+	A_uim_unc_abs = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, kuim, kuim_unc)), EP21_mag)
+	A = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, A_tst, A_pum, A_uim)))
+	A_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, A_tst_unc_abs, exponent = 2.0), mkpow(pipeline, A_pum_unc_abs, exponent = 2.0), mkpow(pipeline, A_uim_unc_abs, exponent = 2.0))), exponent = 0.5)
+	minus_DA = complex_audioamplify(pipeline, A, -EP12_real, -EP12_imag)
+	DA_unc_abs = pipeparts.mkaudioamplify(pipeline, A_unc_abs, EP12_mag)
+	X1_minus_DA = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, X1, minus_DA)))
+	X1_minus_DA_mag = pipeparts.mkgeneric(pipeline, X1_minus_DA, "cabs")
+	X1_minus_DA_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, X1_unc_abs, exponent = 2.0), mkpow(pipeline, DA_unc_abs, exponent = 2.0))), exponent = 0.5)
+	S_s_S_c_inverse_unc_squared = pipeparts.mktee(pipeline, mkpow(pipeline, complex_division(pipeline, X1_minus_DA_unc_abs, X1_minus_DA_mag), exponent = 2.0))
+	S_s_S_c_inverse = pipeparts.mktee(pipeline, complex_audioamplify(pipeline, X1_minus_DA, EP11_real, EP11_imag))
+	S_s_S_c_inverse_real_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_s_S_c_inverse, "creal"), exponent = 2.0))
+	S_s_S_c_inverse_imag_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_s_S_c_inverse, "cimag"), exponent = 2.0))
+
+	complex_kc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, [[1.0, 0.0]]))
+	f_over_fcc = complex_inverse(pipeline, pipeparts.mkaudioamplify(pipeline, fcc, 1.0 / act_pcal_line_freq))
+	i_f_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, f_over_fcc, [[0.0, 1.0]]))
+	one_plus_i_f_over_fcc = pipeparts.mkgeneric(pipeline, i_f_over_fcc, "lal_add_constant", value = 1.0)
+	S_c = pipeparts.mktee(pipeline, complex_division(pipeline, complex_kc, one_plus_i_f_over_fcc))
+	S_c_real_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_c, "creal"), exponent = 2.0))
+	S_c_imag_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_c, "cimag"), exponent = 2.0))
+
+	S_s_inv = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_s_S_c_inverse, S_c)))
+	pipeparts.mkfakesink(pipeline, S_s_inv)
+
+	f_squared_over_fcc_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkaudioamplify(pipeline, fcc, 1.0 / act_pcal_line_freq), exponent = -2.0))
+	fcc_unc_squared = pipeparts.mktee(pipeline, mkpow(pipeline, fcc_unc, exponent = 2.0))
+	inv_denominator = mkpow(pipeline, pipeparts.mkgeneric(pipeline, f_squared_over_fcc_squared, "lal_add_constant", value = 1.0), exponent = -2.0)
+	numerator = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, fcc_unc_squared, mkpow(pipeline, f_squared_over_fcc_squared, exponent = 2.0))), 2.0)
+	S_c_unc_real_squared = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, kc_unc, exponent = 2.0), mkmultiplier(pipeline, list_srcs(pipeline, numerator, inv_denominator)))))
+	S_c_unc_imag_squared = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, S_c_unc_real_squared, fcc_unc_squared)))
+	S_s_inverse_real_unc_abs_squared = mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_c_real_squared, S_s_S_c_inverse_real_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_real_squared, S_s_S_c_inverse_unc_squared)))), mkmultiplier(pipeline, list_srcs(pipeline, S_c_imag_squared, S_s_S_c_inverse_imag_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_imag_squared, S_s_S_c_inverse_unc_squared))))))
+	S_s_inverse_imag_unc_abs_squared = mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_c_real_squared, S_s_S_c_inverse_imag_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_real_squared, S_s_S_c_inverse_unc_squared)))), mkmultiplier(pipeline, list_srcs(pipeline, S_c_imag_squared, S_s_S_c_inverse_real_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_imag_squared, S_s_S_c_inverse_unc_squared))))))
+	fs_squared_unc_abs = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, S_s_inverse_real_unc_abs_squared, exponent = 0.5), act_pcal_line_freq * act_pcal_line_freq)
+	fs_over_Q_unc_abs = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, S_s_inverse_imag_unc_abs_squared, exponent = 0.5), act_pcal_line_freq)
+
+	return S_s_inv, fs_squared_unc_abs, fs_over_Q_unc_abs
+
+def compute_SRC_uncertainty(pipeline, EP11, kc, kc_unc, fcc, fcc_unc, EP12, act_pcal_line_freq, X1, pcaly_line1_coh, EP13, ktst, tau_tst, apply_complex_kappatst, ktst_unc, EP20, kpum, tau_pum, apply_complex_kappapum, kpum_unc, EP21, kuim, tau_uim, apply_complex_kappauim, kuim_unc, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples, coherence_unc_threshold):
+
+	#
+	# S_s^{-1} = ((EP11 * kc) / (1 + i * f_src / f_cc)) * (pcalfpcal4 / derrfpcal4 - EP12 * (ktst * EP13 + kpum * EP20 + kuim * EP21))
+	#
+
+	EP12_mag = pipeparts.mkgeneric(pipeline, EP12, "cabs")
+	EP13_mag = pipeparts.mkgeneric(pipeline, EP13, "cabs")
+	EP20_mag = pipeparts.mkgeneric(pipeline, EP20, "cabs")
+	EP21_mag = pipeparts.mkgeneric(pipeline, EP21, "cabs")
+
+	X1 = pipeparts.mktee(pipeline, X1)
+	fcc = pipeparts.mktee(pipeline, fcc)
+	pcaly_line1_coh_clipped = mkinsertgap(pipeline, pcaly_line1_coh, bad_data_intervals = [0, coherence_unc_threshold], replace_value = coherence_unc_threshold, insert_gap = False)
+	X1_unc = compute_calline_uncertainty(pipeline, pcaly_line1_coh_clipped, coherence_samples, integration_samples, median_smoothing_samples, factors_average_samples)
+	X1_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, X1_unc, pipeparts.mkgeneric(pipeline, X1, "cabs")))
+
+	A_tst = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ktst, matrix = [[1.0, 0.0]])), EP13))
+	if apply_complex_kappatst:
+		i_omega_tau_tst = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_tst, matrix = [[0, 2 * numpy.pi * act_pcal_line_freq]]))
+		exp_i_omega_tau_tst = pipeparts.mkgeneric(pipeline, i_omega_tau_tst, "cexp")
+		A_tst = mkmultiplier(pipeline, list_srcs(pipeline, A_tst, exp_i_omega_tau_tst))
+	A_tst_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, ktst, ktst_unc, EP13_mag))
+	A_pum = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kpum, matrix = [[1.0, 0.0]])), EP20))
+	if apply_complex_kappapum:
+		i_omega_tau_pum = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_pum, matrix = [[0, 2 * numpy.pi * act_pcal_line_freq]]))
+		exp_i_omega_tau_pum = pipeparts.mkgeneric(pipeline, i_omega_tau_pum, "cexp")
+		A_pum = mkmultiplier(pipeline, list_srcs(pipeline, A_pum, exp_i_omega_tau_pum))
+	A_pum_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, kpum, kpum_unc, EP20_mag))
+	A_uim = mkmultiplier(pipeline, list_srcs(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kuim, matrix = [[1.0, 0.0]])), EP21))
+	if apply_complex_kappauim:
+		i_omega_tau_uim = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_uim, matrix = [[0, 2 * numpy.pi * act_pcal_line_freq]]))
+		exp_i_omega_tau_uim = pipeparts.mkgeneric(pipeline, i_omega_tau_uim, "cexp")
+		A_uim = mkmultiplier(pipeline, list_srcs(pipeline, A_uim, exp_i_omega_tau_uim))
+	A_uim_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, kuim, kuim_unc, EP21_mag))
+	A = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, A_tst, A_pum, A_uim)))
+	A_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, A_tst_unc_abs, exponent = 2.0), mkpow(pipeline, A_pum_unc_abs, exponent = 2.0), mkpow(pipeline, A_uim_unc_abs, exponent = 2.0))), exponent = 0.5)
+	minus_DA = complex_audioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, A, EP12)), -1.0, 0.0)
+	DA_unc_abs = mkmultiplier(pipeline, list_srcs(pipeline, A_unc_abs, EP12_mag))
+	X1_minus_DA = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, X1, minus_DA)))
+	X1_minus_DA_mag = pipeparts.mkgeneric(pipeline, X1_minus_DA, "cabs")
+	X1_minus_DA_unc_abs = mkpow(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, X1_unc_abs, exponent = 2.0), mkpow(pipeline, DA_unc_abs, exponent = 2.0))), exponent = 0.5)
+	S_s_S_c_inverse_unc_squared = pipeparts.mktee(pipeline, mkpow(pipeline, complex_division(pipeline, X1_minus_DA_unc_abs, X1_minus_DA_mag), exponent = 2.0))
+	S_s_S_c_inverse = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, X1_minus_DA, EP11)))
+	S_s_S_c_inverse_real_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_s_S_c_inverse, "creal"), exponent = 2.0))
+	S_s_S_c_inverse_imag_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_s_S_c_inverse, "cimag"), exponent = 2.0))
+
+	complex_kc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kc, [[1.0, 0.0]]))
+	f_over_fcc = complex_inverse(pipeline, pipeparts.mkaudioamplify(pipeline, fcc, 1.0 / act_pcal_line_freq))
+	i_f_over_fcc = pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, f_over_fcc, [[0.0, 1.0]]))
+	one_plus_i_f_over_fcc = pipeparts.mkgeneric(pipeline, i_f_over_fcc, "lal_add_constant", value = 1.0)
+	S_c = pipeparts.mktee(pipeline, complex_division(pipeline, complex_kc, one_plus_i_f_over_fcc))
+	S_c_real_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_c, "creal"), exponent = 2.0))
+	S_c_imag_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkgeneric(pipeline, S_c, "cimag"), exponent = 2.0))
+
+	S_s_inv = pipeparts.mktee(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_s_S_c_inverse, S_c)))
+	pipeparts.mkfakesink(pipeline, S_s_inv)
+
+	f_squared_over_fcc_squared = pipeparts.mktee(pipeline, mkpow(pipeline, pipeparts.mkaudioamplify(pipeline, fcc, 1.0 / act_pcal_line_freq), exponent = -2.0))
+	fcc_unc_squared = pipeparts.mktee(pipeline, mkpow(pipeline, fcc_unc, exponent = 2.0))
+	inv_denominator = mkpow(pipeline, pipeparts.mkgeneric(pipeline, f_squared_over_fcc_squared, "lal_add_constant", value = 1.0), exponent = -2.0)
+	numerator = pipeparts.mkaudioamplify(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, fcc_unc_squared, mkpow(pipeline, f_squared_over_fcc_squared, exponent = 2.0))), 2.0)
+	S_c_unc_real_squared = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, mkpow(pipeline, kc_unc, exponent = 2.0), mkmultiplier(pipeline, list_srcs(pipeline, numerator, inv_denominator)))))
+	S_c_unc_imag_squared = pipeparts.mktee(pipeline, mkadder(pipeline, list_srcs(pipeline, S_c_unc_real_squared, fcc_unc_squared)))
+	S_s_inverse_real_unc_abs_squared = mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_c_real_squared, S_s_S_c_inverse_real_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_real_squared, S_s_S_c_inverse_unc_squared)))), mkmultiplier(pipeline, list_srcs(pipeline, S_c_imag_squared, S_s_S_c_inverse_imag_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_imag_squared, S_s_S_c_inverse_unc_squared))))))
+	S_s_inverse_imag_unc_abs_squared = mkadder(pipeline, list_srcs(pipeline, mkmultiplier(pipeline, list_srcs(pipeline, S_c_real_squared, S_s_S_c_inverse_imag_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_real_squared, S_s_S_c_inverse_unc_squared)))), mkmultiplier(pipeline, list_srcs(pipeline, S_c_imag_squared, S_s_S_c_inverse_real_squared, mkadder(pipeline, list_srcs(pipeline, S_c_unc_imag_squared, S_s_S_c_inverse_unc_squared))))))
+	fs_squared_unc_abs = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, S_s_inverse_real_unc_abs_squared, exponent = 0.5), act_pcal_line_freq * act_pcal_line_freq)
+	fs_over_Q_unc_abs = pipeparts.mkaudioamplify(pipeline, mkpow(pipeline, S_s_inverse_imag_unc_abs_squared, exponent = 0.5), act_pcal_line_freq)
+
+	return S_s_inv, fs_squared_unc_abs, fs_over_Q_unc_abs
 
 def update_property_simple(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name, prefactor):
 	prop = prop_maker.get_property(maker_prop_name)

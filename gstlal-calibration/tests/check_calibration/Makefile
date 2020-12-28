@@ -25,6 +25,7 @@ GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1265142330_no_response_corr_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1256655618_v2_test.ini
+DCS_TDCF_UNCERTAINTY_CONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1256655618_v2_tdcf_unc.ini
 SCALAR_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_SCALAR_CORR.ini
 FCC_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_FCC_CORR.ini
 ALL_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_ALL_CORR.ini
@@ -110,6 +111,10 @@ $(IFO)1_lowLatency_asymmetric_GDS_frames.cache: $(IFO)1_easy_raw_frames.cache fi
 $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS-*.gwf | lalapps_path2cache > $@
+
+$(IFO)1_hoft_DCS_TDCFUNC_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCS_TDCF_UNCERTAINTY_CONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TDCFUNC-*.gwf | lalapps_path2cache > $@
 
 $(IFO)1_SCALAR_CORR_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(SCALAR_CORR_CONFIGS)
@@ -197,7 +202,7 @@ lines_ratio_DCS: $(IFO)1_hoft_DCS_frames.cache
 filters_tf_GDS: $(IFO)1_hoft_GDS_frames.cache
 	python3 plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.95 --ratio-magnitude-max 1.05 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -3 --ratio-phase-max 3
 
-filters_tf_DCS: $(IFO)1_NO_CORR_frames.cache
+filters_tf_DCS: $(IFO)1_hoft_DCS_TDCFUNC_frames.cache
 	python3 plot_filters_transfer_function.py --tf-frequency-min 0.5 --tf-frequency-max 8192 --ratio-frequency-min 10 --ratio-frequency-max 8192 --ratio-magnitude-min 0.9 --ratio-magnitude-max 1.1 --tf-phase-min -180 --tf-phase-max 180 --ratio-phase-min -10 --ratio-phase-max 10
 
 filters_tf_CALCS: $(IFO)1_easy_raw_frames.cache
