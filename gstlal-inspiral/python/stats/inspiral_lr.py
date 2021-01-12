@@ -414,8 +414,8 @@ class LnSignalDensity(LnLRDensity):
 			if ifo in snrs:
 				# FIXME don't just use the last segment, somehow include whole template duration?
 				t = float(seg[1])
-				# NOTE choose max over +-1 seconds because the sampling is only at 1 Hz.
-				lnP -= max(self.idq_glitch_lnl[ifo]([t-1., t, t+1.]))
+				# NOTE choose max over +/-1 second window around merger.
+				lnP -= max(self.idq_glitch_lnl[ifo](numpy.linspace(t-1., t+1., num=50, endpoint=True)))
 
 		return lnP + sum(interp(snrs[instrument], chi2_over_snr2) for instrument, chi2_over_snr2 in chi2s_over_snr2s.items())
 
