@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009--2012,2014,2015, 2016  Kipp Cannon <kipp.cannon@ligo.org>, Madeline Wade <madeline.wade@ligo.org>, Aaron Viets <aaron.viets@ligo.org>
+ * Copyright (C) 2021 Aaron Viets <aaron.viets@ligo.org>
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the
@@ -26,8 +26,8 @@
  */
 
 
-#ifndef __GST_LAL_SMOOTHKAPPAS_H__
-#define __GST_LAL_SMOOTHKAPPAS_H__
+#ifndef __GSTLAL_STDEV_H__
+#define __GSTLAL_STDEV_H__
 
 
 #include <glib.h>
@@ -36,28 +36,46 @@
 
 
 G_BEGIN_DECLS
-#define GSTLAL_SMOOTHKAPPAS_TYPE \
-	(gstlal_smoothkappas_get_type())
-#define GSTLAL_SMOOTHKAPPAS(obj) \
-	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_SMOOTHKAPPAS_TYPE, GSTLALSmoothKappas))
-#define GSTLAL_SMOOTHKAPPAS_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_SMOOTHKAPPAS_TYPE, GSTLALSmoothKappasClass))
-#define GST_IS_GSTLAL_SMOOTHKAPPAS(obj) \
-	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_SMOOTHKAPPAS_TYPE))
-#define GST_IS_GSTLAL_SMOOTHKAPPAS_CLASS(klass) \
-	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_SMOOTHKAPPAS_TYPE))
+#define GSTLAL_STDEV_TYPE \
+	(gstlal_stdev_get_type())
+#define GSTLAL_STDEV(obj) \
+	(G_TYPE_CHECK_INSTANCE_CAST((obj), GSTLAL_STDEV_TYPE, GSTLALStDev))
+#define GSTLAL_STDEV_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_CAST((klass), GSTLAL_STDEV_TYPE, GSTLALStDevClass))
+#define GST_IS_GSTLAL_STDEV(obj) \
+	(G_TYPE_CHECK_INSTANCE_TYPE((obj), GSTLAL_STDEV_TYPE))
+#define GST_IS_GSTLAL_STDEV_CLASS(klass) \
+	(G_TYPE_CHECK_CLASS_TYPE((klass), GSTLAL_STDEV_TYPE))
 
 
-typedef struct _GSTLALSmoothKappas GSTLALSmoothKappas;
-typedef struct _GSTLALSmoothKappasClass GSTLALSmoothKappasClass;
+typedef struct _GSTLALStDev GSTLALStDev;
+typedef struct _GSTLALStDevClass GSTLALStDevClass;
 
 
-/**
- * GSTLALSmoothKappas:
+/*
+ * gstlal_stdev_mode enum
  */
 
 
-struct _GSTLALSmoothKappas {
+enum gstlal_stdev_mode {
+	GSTLAL_STDEV_ABSOLUTE = 0,
+	GSTLAL_STDEV_RELATIVE
+};
+
+
+#define GSTLAL_STDEV_MODE \
+	(gstlal_stdev_mode_get_type())
+
+
+GType gstlal_stdev_mode_get_type(void);
+
+
+/**
+ * GSTLALStDev:
+ */
+
+
+struct _GSTLALStDev {
 	GstBaseTransform element;
 
 	/* Pads */
@@ -66,63 +84,69 @@ struct _GSTLALSmoothKappas {
 	/* stream information */
 	gint unit_size;
 	gint rate;
-	enum gstlal_smoothkappas_data_type {
-		GSTLAL_SMOOTHKAPPAS_F32 = 0,
-		GSTLAL_SMOOTHKAPPAS_F64,
-		GSTLAL_SMOOTHKAPPAS_Z64,
-		GSTLAL_SMOOTHKAPPAS_Z128
+	enum gstlal_stdev_data_type {
+		GSTLAL_STDEV_F32 = 0,
+		GSTLAL_STDEV_F64,
+		GSTLAL_STDEV_Z64,
+		GSTLAL_STDEV_Z128
 	} data_type;
 
 	/* timestamp bookkeeping */
 	GstClockTime t0;
 	guint64 offset0;
 	guint64 next_in_offset;
+	guint64 total_insamples;
 	guint64 next_out_offset;
 	gboolean need_discont;
 
 	/* filter memory */
-	double current_median_re;
-	double current_median_im;
-	double *fifo_array_re;
-	double *fifo_array_im;
-	double *avg_array_re;
-	double *avg_array_im;
-	int index_re;
-	int index_im;
-	int avg_index_re;
-	int avg_index_im;
-	int num_bad_in_avg_re;
-	int num_bad_in_avg_im;
-	int samples_in_filter;
+	union {
+		struct {
+			float current_stdev;
+			float *array;
+		} typef;  /* real float */
+		struct {
+			double current_stdev;
+			double *array;
+		} type;  /* real double */
+		struct {
+			float current_stdev;
+			complex float *array;
+		} ctypef;  /* complex float */
+		struct {
+			double current_stdev;
+			complex double *array;
+		} ctype;  /* complex double */
+	} workspace;
+
+	guint64 start_index;
+	guint64 array_index;
+	guint64 buffer_index;
+	guint64 samples_in_array;
 
 	/* properties */
-	int array_size;
-	int avg_array_size;
-	double default_kappa_re;
-	double default_kappa_im;
-	double maximum_offset_re;
-	double maximum_offset_im;
-	gboolean default_to_median;
-	gboolean track_bad_kappa;
+	guint64 array_size;
+	guint64 coherence_length;
+	enum gstlal_stdev_mode mode;
 	double filter_latency;
 };
 
 
 /**
- * GSTLALSmoothKappasClass:
+ * GSTLALStDevClass:
  * @parent_class:  the parent class
  */
 
 
-struct _GSTLALSmoothKappasClass {
+struct _GSTLALStDevClass {
 	GstBaseTransformClass parent_class;
 };
 
 
-GType gstlal_smoothkappas_get_type(void);
+GType gstlal_stdev_get_type(void);
 
 
 G_END_DECLS
 
 
-#endif	/* __GST_LAL_SMOOTHKAPPAS_H__ */
+#endif	/* __GSTLAL_STDEV_H__ */
