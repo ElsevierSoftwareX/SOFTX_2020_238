@@ -104,19 +104,19 @@ struct _GSTLALStDev {
 		struct {
 			float current_stdev;
 			float *array;
-		} typef;  /* real float */
+		} typefloat;  /* real float */
 		struct {
 			double current_stdev;
 			double *array;
-		} type;  /* real double */
+		} typedouble;  /* real double */
 		struct {
 			float current_stdev;
 			complex float *array;
-		} ctypef;  /* complex float */
+		} typecomplexfloat;  /* complex float */
 		struct {
 			double current_stdev;
 			complex double *array;
-		} ctype;  /* complex double */
+		} typecomplexdouble;  /* complex double */
 	} workspace;
 
 	guint64 start_index;

@@ -175,20 +175,28 @@ static void create_workspace(GSTLALStDev *element) {
 
 	switch(element->data_type) {
 	case GSTLAL_STDEV_F32:
-		element->workspace.typef.array = g_malloc(element->array_size * sizeof(float));
-		element->workspace.typef.current_stdev = G_MAXFLOAT;
+		if(element->workspace.typefloat.array)
+			g_free(element->workspace.typefloat.array);
+		element->workspace.typefloat.array = g_malloc(element->array_size * sizeof(float));
+		element->workspace.typefloat.current_stdev = G_MAXFLOAT;
 		break;
 	case GSTLAL_STDEV_F64:
-		element->workspace.type.array = g_malloc(element->array_size * sizeof(float));
-		element->workspace.type.current_stdev = G_MAXDOUBLE;
+		if(element->workspace.typedouble.array)
+			g_free(element->workspace.typedouble.array);
+		element->workspace.typedouble.array = g_malloc(element->array_size * sizeof(double));
+		element->workspace.typedouble.current_stdev = G_MAXDOUBLE;
 		break;
 	case GSTLAL_STDEV_Z64:
-		element->workspace.ctypef.array = g_malloc(element->array_size * sizeof(float));
-		element->workspace.ctypef.current_stdev = G_MAXFLOAT;
+		if(element->workspace.typecomplexfloat.array)
+			g_free(element->workspace.typecomplexfloat.array);
+		element->workspace.typecomplexfloat.array = g_malloc(element->array_size * sizeof(complex float));
+		element->workspace.typecomplexfloat.current_stdev = G_MAXFLOAT;
 		break;
 	case GSTLAL_STDEV_Z128:
-		element->workspace.ctype.array = g_malloc(element->array_size * sizeof(float));
-		element->workspace.ctype.current_stdev = G_MAXDOUBLE;
+		if(element->workspace.typecomplexdouble.array)
+			g_free(element->workspace.typecomplexdouble.array);
+		element->workspace.typecomplexdouble.array = g_malloc(element->array_size * sizeof(complex double));
+		element->workspace.typecomplexdouble.current_stdev = G_MAXDOUBLE;
 		break;
 	default:
 		g_assert_not_reached();
@@ -201,24 +209,24 @@ static void free_workspace(GSTLALStDev *element) {
 
 	switch(element->data_type) {
 	case GSTLAL_STDEV_F32:
-		if(element->workspace.typef.array)
-			g_free(element->workspace.typef.array);
-		element->workspace.typef.array = NULL;
+		if(element->workspace.typefloat.array)
+			g_free(element->workspace.typefloat.array);
+		element->workspace.typefloat.array = NULL;
 		break;
 	case GSTLAL_STDEV_F64:
-		if(element->workspace.type.array)
-			g_free(element->workspace.type.array);
-		element->workspace.type.array = NULL;
+		if(element->workspace.typedouble.array)
+			g_free(element->workspace.typedouble.array);
+		element->workspace.typedouble.array = NULL;
 		break;
 	case GSTLAL_STDEV_Z64:
-		if(element->workspace.ctypef.array)
-			g_free(element->workspace.ctypef.array);
-		element->workspace.ctypef.array = NULL;
+		if(element->workspace.typecomplexfloat.array)
+			g_free(element->workspace.typecomplexfloat.array);
+		element->workspace.typecomplexfloat.array = NULL;
 		break;
 	case GSTLAL_STDEV_Z128:
-		if(element->workspace.ctype.array)
-			g_free(element->workspace.ctype.array);
-		element->workspace.ctype.array = NULL;
+		if(element->workspace.typecomplexdouble.array)
+			g_free(element->workspace.typecomplexdouble.array);
+		element->workspace.typecomplexdouble.array = NULL;
 		break;
 	default:
 		g_assert_not_reached();
@@ -271,7 +279,7 @@ DEFINE_COMPUTE_STDEV(complex, float, c, f);
 DEFINE_COMPUTE_STDEV(complex, double, c, );
 
 
-#define DEFINE_PROCESS_INDATA(COMPLEX, DTYPE, C_OR_NOT, F_OR_NOT) \
+#define DEFINE_PROCESS_INDATA(COMPLEX, DTYPE) \
 static GstFlowReturn process_indata_ ## COMPLEX ## DTYPE(const COMPLEX DTYPE *src, guint64 src_size, DTYPE *dst, guint64 dst_size, GSTLALStDev *element) { \
  \
 	guint64 i, i_start, i_stop = 0; \
@@ -279,35 +287,36 @@ static GstFlowReturn process_indata_ ## COMPLEX ## DTYPE(const COMPLEX DTYPE *sr
 	/* If array is not full, fill it as much as possible before computing any uncertainty */ \
 	if(element->samples_in_array < element->array_size && src_size > 0) { \
 		while(element->samples_in_array < element->array_size && element->buffer_index < src_size) { \
-			element->workspace.C_OR_NOT ## type ## F_OR_NOT.array[element->array_index] = src[element->buffer_index]; \
+			element->workspace.type ## COMPLEX ## DTYPE.array[element->array_index] = src[element->buffer_index]; \
 			element->buffer_index += element->coherence_length; \
 			element->samples_in_array++; \
 			element->array_index++; \
 			element->array_index %= element->array_size; \
 		} \
 		/* Compute first output */ \
-		element->workspace.C_OR_NOT ## type ## F_OR_NOT.current_stdev = compute_stdev ## COMPLEX ## DTYPE(element->workspace.C_OR_NOT ## type ## F_OR_NOT.array, element->array_size, element->start_index, element->samples_in_array, element->mode); \
+		if(element->samples_in_array > 1) \
+			element->workspace.type ## COMPLEX ## DTYPE.current_stdev = compute_stdev ## COMPLEX ## DTYPE(element->workspace.type ## COMPLEX ## DTYPE.array, element->array_size, element->start_index, element->samples_in_array, element->mode); \
 		/* How many samples in the output should be equal to this? */ \
 		i_stop = dst_size + element->buffer_index > src_size ? dst_size + element->buffer_index - src_size : 0; \
 		i_stop = i_stop < dst_size ? i_stop : dst_size; \
 		for(i = 0; i < i_stop; i++) \
-			dst[i] = element->workspace.C_OR_NOT ## type ## F_OR_NOT.current_stdev; \
+			dst[i] = element->workspace.type ## COMPLEX ## DTYPE.current_stdev; \
 	} else { \
 		/* Fill the output with the current uncertainty up to the buffer_index, where the next value becomes valid. */ \
 		i_stop = element->buffer_index < dst_size ? element->buffer_index : dst_size; \
 		for(i = 0; i < i_stop; i++) \
-			dst[i] = element->workspace.C_OR_NOT ## type ## F_OR_NOT.current_stdev; \
+			dst[i] = element->workspace.type ## COMPLEX ## DTYPE.current_stdev; \
 	} \
  \
 	/* Now finish off the inputs */ \
 	while(element->buffer_index < src_size) { \
-		element->workspace.C_OR_NOT ## type ## F_OR_NOT.array[element->array_index] = src[element->buffer_index]; \
-		element->workspace.C_OR_NOT ## type ## F_OR_NOT.current_stdev = compute_stdev ## COMPLEX ## DTYPE(element->workspace.C_OR_NOT ## type ## F_OR_NOT.array, element->array_size, 0, element->samples_in_array, element->mode); \
+		element->workspace.type ## COMPLEX ## DTYPE.array[element->array_index] = src[element->buffer_index]; \
+		element->workspace.type ## COMPLEX ## DTYPE.current_stdev = compute_stdev ## COMPLEX ## DTYPE(element->workspace.type ## COMPLEX ## DTYPE.array, element->array_size, 0, element->samples_in_array, element->mode); \
 		i_start = i_stop; \
 		i_stop += element->coherence_length; \
 		i_stop = i_stop < dst_size ? i_stop : dst_size; \
 		for(i = i_start; i < i_stop; i++) \
-			dst[i] = element->workspace.C_OR_NOT ## type ## F_OR_NOT.current_stdev; \
+			dst[i] = element->workspace.type ## COMPLEX ## DTYPE.current_stdev; \
 		element->buffer_index += element->coherence_length; \
 		element->array_index++; \
 		element->array_index %= element->array_size; \
@@ -315,7 +324,7 @@ static GstFlowReturn process_indata_ ## COMPLEX ## DTYPE(const COMPLEX DTYPE *sr
  \
 	/* Now fill the rest of the outputs with the current uncertainty */ \
 	for(i = i_stop; i < dst_size; i++) \
-		dst[i] = element->workspace.C_OR_NOT ## type ## F_OR_NOT.current_stdev; \
+		dst[i] = element->workspace.type ## COMPLEX ## DTYPE.current_stdev; \
  \
 	/* Calculate the buffer_index of the next buffer */ \
 	element->buffer_index -= src_size; \
@@ -324,10 +333,10 @@ static GstFlowReturn process_indata_ ## COMPLEX ## DTYPE(const COMPLEX DTYPE *sr
 }
 
 
-DEFINE_PROCESS_INDATA( , float, , f);
-DEFINE_PROCESS_INDATA( , double, , );
-DEFINE_PROCESS_INDATA(complex, float, c, f);
-DEFINE_PROCESS_INDATA(complex, double, c, );
+DEFINE_PROCESS_INDATA( , float);
+DEFINE_PROCESS_INDATA( , double);
+DEFINE_PROCESS_INDATA(complex, float);
+DEFINE_PROCESS_INDATA(complex, double);
 
 
 /*
@@ -497,24 +506,9 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 		element->rate = rate_in;
 	}
 
-	return success;
-}
-
-
-/*
- * start()
- */
-
-
-static gboolean start(GstBaseTransform *trans) {
-
-	GSTLALStDev *element = GSTLAL_STDEV(trans);
-
 	create_workspace(element);
 
-	element->need_discont = TRUE;
-
-	return TRUE;
+	return success;
 }
 
 
@@ -530,19 +524,23 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event) {
 
 	guint64 waste_samples = (guint64) (element->filter_latency * (element->array_size * element->coherence_length - 1));
 	if(GST_EVENT_TYPE(event) == GST_EVENT_EOS && waste_samples > 0) {
-		void *data = g_malloc(waste_samples * element->unit_size);
+		void *data;
 		GstFlowReturn result;
 		switch(element->data_type) {
 		case GSTLAL_STDEV_F32:
+			data = g_malloc(waste_samples * sizeof(float));
 			result = process_indata_float(NULL, 0, (float *) data, waste_samples, element);
 			break;
 		case GSTLAL_STDEV_F64:
+			data = g_malloc(waste_samples * sizeof(double));
 			result = process_indata_double(NULL, 0, (double *) data, waste_samples, element);
 			break;
 		case GSTLAL_STDEV_Z64:
+			data = g_malloc(waste_samples * sizeof(float));
 			result = process_indata_complexfloat(NULL, 0, (float *) data, waste_samples, element);
 			break;
 		case GSTLAL_STDEV_Z128:
+			data = g_malloc(waste_samples * sizeof(double));
 			result = process_indata_complexdouble(NULL, 0, (double *) data, waste_samples, element);
 			break;
 		default:
@@ -827,7 +825,6 @@ static void gstlal_stdev_class_init(GSTLALStDevClass *klass) {
 
 	transform_class->get_unit_size = GST_DEBUG_FUNCPTR(get_unit_size);
 	transform_class->set_caps = GST_DEBUG_FUNCPTR(set_caps);
-	transform_class->start = GST_DEBUG_FUNCPTR(start);
 	transform_class->sink_event = GST_DEBUG_FUNCPTR(sink_event);
 	transform_class->transform_caps = GST_DEBUG_FUNCPTR(transform_caps);
 	transform_class->transform_size = GST_DEBUG_FUNCPTR(transform_size);
@@ -843,7 +840,7 @@ static void gstlal_stdev_class_init(GSTLALStDevClass *klass) {
 			"array-size",
 			"Array Size",
 			"Number of samples needed to compute the standard deviation.",
-			1, G_MAXUINT64, 16,
+			2, G_MAXUINT64, 16,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
@@ -909,6 +906,7 @@ static void gstlal_stdev_init(GSTLALStDev *element) {
 	element->array_index = 0;
 	element->samples_in_array = 0;
 	element->total_insamples = 0;
+	element->need_discont = TRUE;
 	gst_base_transform_set_qos_enabled(GST_BASE_TRANSFORM(element), TRUE);
 	gst_base_transform_set_gap_aware(GST_BASE_TRANSFORM(element), TRUE);
 }
