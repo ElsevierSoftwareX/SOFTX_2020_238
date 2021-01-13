@@ -61,6 +61,38 @@
 /*
  * ============================================================================
  *
+ *			      Custom Types
+ *
+ * ============================================================================
+ */
+
+
+/*
+ * mode enum
+ */
+
+
+GType gstlal_stdev_mode_get_type(void) {
+
+	static GType type = 0;
+
+	if(!type) {
+		static GEnumValue values[] = {
+			{GSTLAL_STDEV_ABSOLUTE, "GSTLAL_STDEV_ABSOLUTE", "Compute the absolute uncertainty"},
+			{GSTLAL_STDEV_RELATIVE, "GSTLAL_STDEV_RELATIVE", "Compute the relative uncertainty"},
+			{0, NULL, NULL}
+		};
+
+		type = g_enum_register_static("GSTLAL_STDEV_MODE", values);
+	}
+
+	return type;
+}
+
+
+/*
+ * ============================================================================
+ *
  *			   GStreamer Boiler Plate
  *
  * ============================================================================
@@ -833,7 +865,7 @@ static void gstlal_stdev_class_init(GSTLALStDevClass *klass) {
 		g_param_spec_enum(
 			"mode",
 			"Standard Deviation Mode",
-			"Whether to compute the absolute or relative error",
+			"Whether to compute the absolute or relative uncertainty",
 			GSTLAL_STDEV_MODE,
 			GSTLAL_STDEV_ABSOLUTE,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
