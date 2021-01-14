@@ -461,14 +461,15 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 
 	GSTLALStDev *element = GSTLAL_STDEV(trans);
 	gboolean success = TRUE;
-	gsize unit_size;
+	gsize unit_size_in, unit_size_out;
 	gint rate_in, rate_out;
 
 	/*
 	 * parse the caps
 	 */
 
-	success &= get_unit_size(trans, incaps, &unit_size);
+	success &= get_unit_size(trans, incaps, &unit_size_in);
+	success &= get_unit_size(trans, outcaps, &unit_size_out);
 	GstStructure *str = gst_caps_get_structure(incaps, 0);
 	const gchar *name = gst_structure_get_string(str, "format");
 	success &= (name != NULL);
@@ -489,20 +490,25 @@ static gboolean set_caps(GstBaseTransform *trans, GstCaps *incaps, GstCaps *outc
 	if(success) {
 		if(!strcmp(name, GST_AUDIO_NE(F32))) {
 			element->data_type = GSTLAL_STDEV_F32;
-			g_assert_cmpuint(unit_size, ==, 4);
+			g_assert_cmpuint(unit_size_in, ==, 4);
+			g_assert_cmpuint(unit_size_out, ==, 4);
 		} else if(!strcmp(name, GST_AUDIO_NE(F64))) {
 			element->data_type = GSTLAL_STDEV_F64;
-			g_assert_cmpuint(unit_size, ==, 8);
+			g_assert_cmpuint(unit_size_in, ==, 8);
+			g_assert_cmpuint(unit_size_out, ==, 8);
 		} else if(!strcmp(name, GST_AUDIO_NE(Z64))) {
 			element->data_type = GSTLAL_STDEV_Z64;
-			g_assert_cmpuint(unit_size, ==, 8);
+			g_assert_cmpuint(unit_size_in, ==, 8);
+			g_assert_cmpuint(unit_size_out, ==, 4);
 		} else if(!strcmp(name, GST_AUDIO_NE(Z128))) {
 			element->data_type = GSTLAL_STDEV_Z128;
-			g_assert_cmpuint(unit_size, ==, 16);
+			g_assert_cmpuint(unit_size_in, ==, 16);
+			g_assert_cmpuint(unit_size_out, ==, 8);
 		} else
 			g_assert_not_reached();
 
-		element->unit_size = unit_size;
+		element->unit_size_in = unit_size_in;
+		element->unit_size_out = unit_size_out;
 		element->rate = rate_in;
 	}
 
@@ -551,7 +557,7 @@ static gboolean sink_event(GstBaseTransform *trans, GstEvent *event) {
 
 		if(result == GST_FLOW_OK) {
 			GstBuffer *buf;
-			buf = gst_buffer_new_wrapped(data, waste_samples * element->unit_size);
+			buf = gst_buffer_new_wrapped(data, waste_samples * element->unit_size_out);
 
 			set_metadata(element, buf, waste_samples);
 
@@ -668,28 +674,28 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
 
 	/* sanity checks */
-	g_assert_cmpuint(inmap.size % element->unit_size, ==, 0);
-	g_assert_cmpuint(outmap.size % element->unit_size, ==, 0);
+	g_assert_cmpuint(inmap.size % element->unit_size_in, ==, 0);
+	g_assert_cmpuint(outmap.size % element->unit_size_out, ==, 0);
 
 	/* Process data in buffer */
 	switch(element->data_type) {
 	case GSTLAL_STDEV_F32:
-		result = process_indata_float((const float *) inmap.data, inmap.size / element->unit_size, (float *) outmap.data, outmap.size / element->unit_size, element);
+		result = process_indata_float((const float *) inmap.data, inmap.size / element->unit_size_in, (float *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	case GSTLAL_STDEV_F64:
-		result = process_indata_double((const double *) inmap.data, inmap.size / element->unit_size, (double *) outmap.data, outmap.size / element->unit_size, element);
+		result = process_indata_double((const double *) inmap.data, inmap.size / element->unit_size_in, (double *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	case GSTLAL_STDEV_Z64:
-		result = process_indata_complexfloat((const float complex *) inmap.data, inmap.size / element->unit_size, (float *) outmap.data, outmap.size / element->unit_size, element);
+		result = process_indata_complexfloat((const float complex *) inmap.data, inmap.size / element->unit_size_in, (float *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	case GSTLAL_STDEV_Z128:
-		result = process_indata_complexdouble((const double complex *) inmap.data, inmap.size / element->unit_size, (double *) outmap.data, outmap.size / element->unit_size, element);
+		result = process_indata_complexdouble((const double complex *) inmap.data, inmap.size / element->unit_size_in, (double *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	default:
 		g_assert_not_reached();
 	}
 
-	set_metadata(element, outbuf, outmap.size / element->unit_size);
+	set_metadata(element, outbuf, outmap.size / element->unit_size_out);
 
 	gst_buffer_unmap(inbuf, &inmap);
 
@@ -899,7 +905,8 @@ static void gstlal_stdev_init(GSTLALStDev *element) {
 	GST_PAD_SET_PROXY_SCHEDULING(pad);
 	element->srcpad = pad;
 
-	element->unit_size = 0;
+	element->unit_size_in = 0;
+	element->unit_size_out = 0;
 	element->rate = 0;
 	element->array_size = 0;
 	memset(&element->workspace, 0, sizeof(element->workspace));

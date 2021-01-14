@@ -82,7 +82,8 @@ struct _GSTLALStDev {
 	GstPad *srcpad;
 
 	/* stream information */
-	gint unit_size;
+	gint unit_size_in;
+	gint unit_size_out;
 	gint rate;
 	enum gstlal_stdev_data_type {
 		GSTLAL_STDEV_F32 = 0,
