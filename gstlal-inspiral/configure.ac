@@ -26,8 +26,10 @@ AC_CONFIG_FILES([ \
 	lib/Makefile \
 	lib/skymap/Makefile \
 	Makefile \
-	python/emcee/Makefile \
 	python/Makefile \
+	python/dags/Makefile \
+	python/dags/layers/Makefile \
+	python/emcee/Makefile \
 	python/plots/Makefile \
 	python/stats/Makefile \
 	share/Makefile \

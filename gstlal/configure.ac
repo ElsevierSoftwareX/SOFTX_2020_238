@@ -22,6 +22,8 @@ AC_CONFIG_FILES([ \
 	lib/gstlal/Makefile \
 	python/__init__.py \
 	python/Makefile \
+	python/dags/Makefile \
+	python/dags/layers/Makefile \
 	python/pipeparts/Makefile \
 	python/plots/Makefile \
 	python/stats/Makefile \

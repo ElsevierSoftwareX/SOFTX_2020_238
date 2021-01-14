@@ -1,5 +1,6 @@
 # Copyright (C) 2010  Kipp Cannon (kipp.cannon@ligo.org)
-# Copyright (C) 2010 Chad Hanna (chad.hanna@ligo.org)
+# Copyright (C) 2010  Chad Hanna (chad.hanna@ligo.org)
+# Copyright (C) 2020  Patrick Godwin (patrick.godwin@ligo.org)
 #
 # This program is free software; you can redistribute it and/or modify it under
 # the terms of the GNU General Public License as published by the Free Software
@@ -42,6 +43,8 @@ import sys
 import socket
 import subprocess
 import tempfile
+
+import numpy
 
 from ligo import segments
 
@@ -344,6 +347,61 @@ def breakupseglists(seglists, maxextent, overlap):
 		seglists[instrument] = newseglist
 
 
+def partition_by_time(span, segdict, ifos, min_ifos=1, max_livetime=14440, start_pad=512):
+	"""!
+	Splits a time span roughly equally based on livetime.
+	"""
+	# get segments for all ifo combinations requested and take union
+	segdict_by_combo = segments.segmentlistdict()
+	ifo_combos = flatten(itertools.combinations(ifos, n) for n in range(min_ifos, len(ifos)))
+	ifo_combos = [frozenset(ifo_combo) for ifo_combo in ifo_combos]
+	for ifo_combo in ifo_combos:
+		segdict_by_combo[ifo_combo] = segdict.intersection(ifo_combo)
+	all_segs = segdict_by_combo.union(ifo_combos) & segments.segmentlist([span])
+
+	# split equally into bins
+	num_bins = int(numpy.ceil(float(abs(all_segs) / max_livetime)))
+	time_bins = [segments.segmentlist() for i in range(num_bins)]
+
+	# calculate livetime for each bin_, ensuring
+	# start, end edges fall on integer boundaries
+	small_bin, remainder = divmod(float(abs(all_segs)), num_bins)
+	big_bin = small_bin + remainder
+	bin_livetime = [big_bin if n == 0 else small_bin for n in range(num_bins)]
+
+	# determine bins
+	bin_ = 0
+	for seg in all_segs:
+		# add entire segment to current bin_ if livetime doesn't spill over
+		current_livetime = abs(time_bins[bin_])
+		if current_livetime + abs(segments.segmentlist([seg])) <= bin_livetime[bin_]:
+			time_bins[bin_] |= segments.segmentlist([seg])
+
+		# otherwise, split segment and put spill-over into next bin(s)
+		else:
+			diff_livetime = bin_livetime[bin_] - current_livetime
+			needed_seg = segments.segmentlist([segments.segment(seg[0], seg[0] + diff_livetime)])
+			time_bins[bin_] |= needed_seg
+
+			# if segment is still too big, keep splitting until it isn't
+			remainder = segments.segmentlist([segments.segment(seg[0] + diff_livetime, seg[1])])
+			while abs(remainder) > bin_livetime[bin_]:
+				remainder_start = remainder[0][0]
+				remainder_mid = remainder[0][0] + bin_livetime[bin_]
+				time_bins[bin_+1] |= segments.segmentlist([segments.segment(remainder_start, remainder_mid)])
+				remainder = segments.segmentlist([segments.segment(remainder_mid, seg[1])])
+				bin_ += 1
+
+			# divvy up final piece
+			if bin_ < num_bins - 1:
+				bin_ += 1
+			time_bins[bin_] |= remainder
+
+	# calculate start/end times from each bin and pad accordingly
+	half_pad = start_pad / 2
+	return [segs.extent().protract(half_pad).shift(-half_pad) for segs in time_bins]
+
+
 #
 # =============================================================================
 #
@@ -362,6 +420,14 @@ def cache_to_instruments(cache):
 	for cache_entry in cache:
 		observatories.update(groups(cache_entry.observatory, 2))
 	return ''.join(sorted(list(observatories)))
+
+
+def gps_directory(gpstime):
+	"""!
+	Given a gps time, returns the directory name where files corresponding
+	to this time will be written to, e.g. 1234567890 -> '12345'.
+	"""
+	return str(int(gpstime))[:5]
 
 
 def T050017_filename(instruments, description, seg, extension, path = None):
@@ -449,8 +515,3 @@ def flatten(lst):
 	Flatten a list by one level of nesting.
 	"""
 	return list(itertools.chain.from_iterable(lst))
-
-
-if __name__ == "__main__":
-	import doctest
-	doctest.testmod()

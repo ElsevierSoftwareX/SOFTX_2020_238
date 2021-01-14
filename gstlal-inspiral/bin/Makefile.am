@@ -62,6 +62,7 @@ dist_bin_SCRIPTS = \
 	gstlal_inspiral_combine_injection_sets \
 	gstlal_inspiral_svd_bank \
 	gstlal_inspiral_svd_bank_pipe \
+	gstlal_inspiral_workflow \
 	gstlal_ll_inspiral_calculate_range \
 	gstlal_ll_inspiral_event_plotter \
 	gstlal_ll_inspiral_event_uploader \
