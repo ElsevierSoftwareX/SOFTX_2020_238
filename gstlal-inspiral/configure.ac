@@ -27,6 +27,7 @@ AC_CONFIG_FILES([ \
 	lib/skymap/Makefile \
 	Makefile \
 	python/Makefile \
+	python/config/Makefile \
 	python/dags/Makefile \
 	python/dags/layers/Makefile \
 	python/emcee/Makefile \

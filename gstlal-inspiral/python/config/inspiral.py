@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-#
 # Copyright (C) 2020  Patrick Godwin (patrick.godwin@ligo.org)
 #
 # This program is free software; you can redistribute it and/or modify it
@@ -17,32 +15,25 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-import argparse
+import json
 
-from gstlal.config.inspiral import Config
-from gstlal.dags import util as dagutils
-from gstlal.dags.inspiral import DAG
+from gstlal.config import Config as BaseConfig
+from gstlal.config import dotdict, replace_keys
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument("-c", "--config", help="Sets the path to read configuration from.")
-parser.add_argument("--svd-manifest", help="Load SVD manifest from this path.")
+class Config(BaseConfig):
+	"""
+	Hold configuration used for inspiral-specific analyzes.
+	"""
+	def __init__(self, **kwargs):
+		super().__init__(**kwargs)
 
-# load config
-args = parser.parse_args()
-config = Config.load(args.config)
-config.load_svd_manifest(args.svd_manifest)
+		# section-specific options
+		self.psd = dotdict(replace_keys(kwargs["psd"]))
+		self.svd = dotdict(replace_keys(kwargs["svd"]))
+		self.filter = dotdict(replace_keys(kwargs["filter"]))
 
-# define bins
-time_bins = dagutils.partition_by_time(config.span, config.segments, config.ifos)
-svd_bins = config.svd.bins
-
-# generate dag
-dag = DAG(config)
-
-dag.reference_psd(time_bins) \
-	.median_psd() \
-	.svd_bank(svd_bins) \
-	.filter(time_bins, svd_bins) \
-
-dag.write("trigger_pipe.dag")
+	def load_svd_manifest(self, manifest_file):
+		with open(manifest_file, "r") as f:
+			manifest = json.load(f)
+			self.svd.bins = manifest.keys()

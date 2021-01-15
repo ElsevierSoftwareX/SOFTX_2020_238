@@ -1,4 +1,4 @@
-SUBDIRS = dags pipeparts plots stats
+SUBDIRS = config dags pipeparts plots stats
 
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
@@ -11,9 +11,9 @@ pkgpythondir = $(pkgpyexecdir)
 pkgpython_PYTHON = \
 	__init__.py \
 	bottle.py \
-	config.py \
 	coherent_null.py \
 	dagfile.py \
+	datafind.py \
 	datasource.py \
 	elements.py \
 	httpinterface.py \

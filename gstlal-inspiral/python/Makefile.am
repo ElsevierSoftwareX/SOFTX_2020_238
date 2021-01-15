@@ -1,6 +1,6 @@
 AM_CPPFLAGS = -I$(top_srcdir)/lib
 
-SUBDIRS = dags emcee plots stats
+SUBDIRS = config dags emcee plots stats
 
 # This is a trick taken from the gst-python automake setup.
 # All of the Python scripts will be installed under the exec dir,

@@ -59,9 +59,6 @@ class Config:
 
 		# section-specific options
 		self.source = dotdict(replace_keys(kwargs["source"]))
-		self.psd = dotdict(replace_keys(kwargs["psd"]))
-		self.svd = dotdict(replace_keys(kwargs["svd"]))
-		self.filter = dotdict(replace_keys(kwargs["filter"]))
 		self.condor = dotdict(replace_keys(kwargs["condor"]))
 
 	@classmethod
