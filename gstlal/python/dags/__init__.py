@@ -20,6 +20,7 @@ from typing import Tuple
 
 import htcondor
 from htcondor import dags
+from htcondor.dags.node import BaseNode
 import pluggy
 
 from gstlal import plugins
@@ -47,7 +48,12 @@ class DAG(dags.DAG):
 		"""
 		def register(func):
 			def wrapped(self, *args, **kwargs):
-				self._current_layer = func(self.config, self, self._current_layer, *args, **kwargs)
+				layer = func(self.config, self, *args, **kwargs)
+				self[layer_name] = layer
+				if layer.base_layer and not isinstance(layer, BaseNode):
+					self._current_layer = self.layer(**layer.config())
+				else:
+					self._current_layer = self._current_layer.child_layer(**layer.config())
 				return self
 			setattr(cls, layer_name, wrapped)
 		return register

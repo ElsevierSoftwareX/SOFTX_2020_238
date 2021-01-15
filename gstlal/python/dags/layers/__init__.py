@@ -31,6 +31,8 @@ class Layer:
 	name: str = ""
 	universe: str = "vanilla"
 	log_dir: str = "logs"
+	retries: int = 3
+	base_layer: bool = False
 	requirements: dict = field(default_factory=dict)
 	inputs: dict = field(default_factory=dict)
 	outputs: dict = field(default_factory=dict)
@@ -76,6 +78,7 @@ class Layer:
 			"name": self.name,
 			"submit_description": htcondor.Submit(submit_options),
 			"vars": self._vars(),
+			"retries": self.retries,
 		}
 
 	def append(self, node):

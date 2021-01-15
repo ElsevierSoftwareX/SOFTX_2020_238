@@ -17,16 +17,14 @@
 
 import os
 
-from htcondor.dags.node import BaseNode
-
 from gstlal import plugins
 from gstlal.config import Argument, Option
 from gstlal.dags.layers import Layer, Node
 from gstlal.dags import util as dagutils
 
 
-def reference_psd_layer(config, dag, dag_layer, time_bins):
-	layer = Layer("gstlal_reference_psd", requirements=config.condor.requirements)
+def reference_psd_layer(config, dag, time_bins):
+	layer = Layer("gstlal_reference_psd", requirements=config.condor.requirements, base_layer=True)
 
 	for span in time_bins:
 		start, end = span
@@ -50,14 +48,10 @@ def reference_psd_layer(config, dag, dag_layer, time_bins):
 			],
 		)
 
-	dag["reference_psd"] = layer
-	if isinstance(dag_layer, BaseNode):
-		return dag_layer.child_layer(**layer.config(), retries=3)
-	else:
-		return dag.layer(**layer.config(), retries=3)
+	return layer
 
 
-def median_psd_layer(config, dag, dag_layer):
+def median_psd_layer(config, dag):
 	layer = Layer("gstlal_median_of_psds", requirements=config.condor.requirements)
 
 	median_path = os.path.join("median_psd", dagutils.gps_directory(config.start))
@@ -67,11 +61,10 @@ def median_psd_layer(config, dag, dag_layer):
 		outputs = [Option("output-name", os.path.join(median_path, median_file))]
 	)
 
-	dag["median_psd"] = layer
-	return dag_layer.child_layer(**layer.config(), retries=3)
+	return layer
 
 
-def svd_bank_layer(config, dag, dag_layer, svd_bins):
+def svd_bank_layer(config, dag, svd_bins):
 	layer = Layer("gstlal_inspiral_svd_bank", requirements=config.condor.requirements)
 
 	for svd_bin in svd_bins:
@@ -93,11 +86,10 @@ def svd_bank_layer(config, dag, dag_layer, svd_bins):
 			outputs = [Option("write-svd", os.path.join(svd_path, svd_file))],
 		)
 
-	dag["svd_bank"] = layer
-	return dag_layer.child_layer(**layer.config(), retries=3)
+	return layer
 
 
-def filter_layer(config, dag, dag_layer, time_bins, svd_bins):
+def filter_layer(config, dag, time_bins, svd_bins):
 	layer = Layer("gstlal_inspiral", requirements=config.condor.requirements)
 
 	common_opts = [
@@ -150,15 +142,13 @@ def filter_layer(config, dag, dag_layer, time_bins, svd_bins):
 				],
 			)
 
-	dag["filter"] = layer
-	return dag_layer.child_layer(**layer.config(), retries=3)
+	return layer
 
 
-def aggregate_layer(config, dag, dag_layer, time_bins):
+def aggregate_layer(config, dag, time_bins):
 	layer = Layer("gstlal_inspiral_aggregate", requirements=config.condor.requirements)
 
-	dag["aggregate"] = layer
-	return dag_layer.child_layer(**layer.config(), retries=3)
+	return layer
 
 
 def config_to_channels(config):
