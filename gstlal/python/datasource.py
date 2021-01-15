@@ -40,6 +40,7 @@ A file that contains the datasource module code
 
 import optparse
 import sys
+import tempfile
 import time
 
 import gi
@@ -49,13 +50,15 @@ from gi.repository import Gst
 GObject.threads_init()
 Gst.init(None)
 
-from gstlal import bottle
-from gstlal import pipeparts
-from ligo.lw import utils as ligolw_utils
-from ligo.lw.utils import segments as ligolw_segments
-from ligo import segments
 import lal
 from lal import LIGOTimeGPS
+from ligo import segments
+from ligo.lw import utils as ligolw_utils
+from ligo.lw.utils import segments as ligolw_segments
+
+from gstlal import bottle
+from gstlal import pipeparts
+from gstlal.dags import util as dagutil
 
 
 #
@@ -333,6 +336,26 @@ def framexmit_list_from_framexmit_dict(framexmit_dict, ifos = None, opt = "frame
 	return outstr
 
 
+def frame_type_dict_from_frame_type_list(frame_type_list):
+	"""
+	Given a list of frame types, produce a dictionary keyed by ifo:
+
+	The list here typically comes from an option parser with options that
+	specify the "append" action.
+
+	Examples:
+
+		>>> frame_type_dict_from_frame_type_list(['H1=H1_GWOSC_O2_16KHZ_R1', 'L1=L1_GWOSC_O2_16KHZ_R1'])
+		{'H1': 'H1_GWOSC_O2_16KHZ_R1', 'L1': 'L1_GWOSC_O2_16KHZ_R1'}
+	"""
+	out = {}
+	for frame_opt in frame_type_list:
+		ifo, frame_type = frame_opt.split("=")
+		out[ifo] = frame_type
+
+	return out
+
+
 def pipeline_seek_for_gps(pipeline, gps_start_time, gps_end_time, flags = Gst.SeekFlags.FLUSH):
 	"""
 	Create a new seek event, i.e., Gst.Event.new_seek()  for a given
@@ -429,8 +452,8 @@ class GWDataSourceInfo(object):
 		# Sanity check the options
 		if options.data_source not in self.data_sources:
 			raise ValueError("--data-source must be one of %s" % ", ".join(self.data_sources))
-		if options.data_source == "frames" and options.frame_cache is None:
-			raise ValueError("--frame-cache must be specified when using --data-source=frames")
+		if options.data_source == "frames" and options.frame_cache is None and options.frame_type is None:
+			raise ValueError("--frame-cache or --frame-type must be specified when using --data-source=frames")
 		if not options.channel_name:
 			raise ValueError("must specify at least one channel in the form --channel-name=IFO=CHANNEL-NAME")
 		if options.frame_segments_file is not None and options.data_source != "frames":
@@ -513,8 +536,19 @@ class GWDataSourceInfo(object):
 		self.state_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.state_vector_on_bits, options.state_vector_off_bits, state_vector_on_off_dict)
 		self.dq_vector_on_off_bits = state_vector_on_off_dict_from_bit_lists(options.dq_vector_on_bits, options.dq_vector_off_bits, dq_vector_on_off_dict)
 
-		## frame cache file
-		self.frame_cache = options.frame_cache
+		## load frame cache
+		if options.frame_cache is not None:
+			self.frame_cache = options.frame_cache
+		else:
+			frame_type_dict = frame_type_dict_from_frame_type_list(options.frame_type)
+			frame_cache = datafind.load_frame_cache(start, end, frame_type_dict, host=options.data_find_server)
+			## create a temporary cache file
+			self._frame_cache_fileobj = tempfile.NamedTemporaryFile(suffix=".cache", dir=dagutil.condor_scratch_space())
+			self.frame_cache = self._frame_cache_fileobj.name
+			with open(self.frame_cache, "w") as f:
+				for cacheentry in frame_cache:
+					print(str(cacheentry), file=f)
+
 		## block size in bytes to read data from disk
 		self.block_size = options.block_size
 		## Data source, one of python.datasource.GWDataSourceInfo.data_sources
@@ -547,7 +581,10 @@ def append_options(parser):
 
 -	--frame-cache [filename]
 		Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).
-		This is required iff --data-sourceframes
+
+-	--frame-type [string]
+		Set the frame type for a given instrument.
+		Can be given multiple times as --frame-type=IFO=FRAME-TYPE
 
 -	--gps-start-time [int] (seconds)
 		Set the start time of the segment to analyze in GPS seconds.
@@ -652,7 +689,9 @@ def append_options(parser):
 	group = optparse.OptionGroup(parser, "Data source options", "Use these options to set up the appropriate data source")
 	group.add_option("--data-source", metavar = "source", help = "Set the data source from [frames|framexmit|lvshm|nds|silence|white].  Required.")
 	group.add_option("--block-size", type="int", metavar = "bytes", default = 16384 * 8 * 512, help = "Data block size to read in bytes. Default 16384 * 8 * 512 (512 seconds of double precision data at 16384 Hz.  This parameter is only used if --data-source is one of white, silence, AdvVirgo, LIGO, AdvLIGO, nds.")
-	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).  This is required iff --data-source=frames")
+	group.add_option("--frame-cache", metavar = "filename", help = "Set the name of the LAL cache listing the LIGO-Virgo .gwf frame files (optional).")
+	group.add_option("--frame-type", metavar = "name", action = "append", help = "Set the frame type for a given instrument.  Can be given multiple times as --frame-type=IFO=FRAME-TYPE. Used with --data-source=frames")
+	group.add_option("--data-find-server", metavar = "url", help = "Set the data find server for LIGO data discovery. Used with --data-source=frames")
 	group.add_option("--gps-start-time", metavar = "seconds", help = "Set the start time of the segment to analyze in GPS seconds. Required unless --data-source=lvshm")
 	group.add_option("--gps-end-time", metavar = "seconds", help = "Set the end time of the segment to analyze in GPS seconds.  Required unless --data-source=lvshm")
 	group.add_option("--injections", metavar = "filename", help = "Set the name of the LIGO light-weight XML file from which to load injections (optional).")

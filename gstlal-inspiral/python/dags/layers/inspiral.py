@@ -37,10 +37,11 @@ def reference_psd_layer(config, dag, time_bins):
 				Option("data-source", "frames"),
 				Option("channel-name", config_to_channels(config)),
 				Option("psd-fft-length", config.psd.fft_length),
-				Option("frame-segments-name", config.source.frame_segments_name)
+				Option("frame-type", config.source.frame_type),
+				Option("data-find-server", config.source.data_find_server),
+				Option("frame-segments-name", config.source.frame_segments_name),
 			],
 			inputs = [
-				Option("frame-cache", config.source.frame_cache),
 				Option("frame-segments-file", config.source.frame_segments_file)
 			],
 			outputs = [
@@ -97,6 +98,8 @@ def filter_layer(config, dag, time_bins, svd_bins):
 		Option("local-frame-caching"),
 		Option("data-source", "frames"),
 		Option("psd-fft-length", config.psd.fft_length),
+		Option("frame-type", config.source.frame_type),
+		Option("data-find-server", config.source.data_find_server),
 		Option("frame-segments-name", config.source.frame_segments_name),
 		Option("tmp-space", dagutils.condor_scratch_space()),
 		Option("control-peak-time", config.filter.control_peak_time),
@@ -129,7 +132,6 @@ def filter_layer(config, dag, time_bins, svd_bins):
 			layer += Node(
 				arguments = filter_opts,
 				inputs = [
-					Option("frame-cache", config.source.frame_cache),
 					Option("frame-segments-file", config.source.frame_segments_file),
 					Option("veto-segments-file", config.filter.vetoes),
 					Option("reference-psd", dag["reference_psd"].outputs["write-psd"][time_idx]),
