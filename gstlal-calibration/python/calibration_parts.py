@@ -1454,6 +1454,35 @@ def compute_Xi_split_act(pipeline, pcalfpcal4, darmfpcal4, fpcal4, EP11, EP12, E
 
 	return Xi
 
+def compute_uncertainty_reduction(pipeline, head, demod_samples, median_samples, avg_samples):
+	#
+	# How much is the uncertainty of the TDCFs reduced by the running median
+	# and average, given the length of the demodulation filter?
+	#
+
+	# Represent each process as a filter with the same effect on uncertainty
+	demod_filt = fir.kaiser(demod_samples, 3 * numpy.pi)
+	demod_filt /= numpy.sum(demod_filt)
+	if demod_samples < 1:
+		demod_filt = numpy.ones(1)
+
+	demod_uncertainty_reduction = numpy.sqrt(sum(pow(demod_filt, 2.0)))
+
+	# In the limit of large N, a median reduces uncertainty by sqrt(pi/(2N)),
+	# so pretend it's a filter where each coefficient equals sqrt(pi/2) / N.
+	median_filt = numpy.ones(median_samples) / median_samples * numpy.sqrt(numpy.pi / 2.0)
+	if median_samples < 1:
+		median_filt = numpy.ones(1)
+
+	avg_filt = numpy.ones(avg_samples) / avg_samples
+	if avg_samples < 1:
+		avg_filt = numpy.ones(1)
+
+	effective_filt = numpy.convolve(numpy.convolve(demod_filt, median_filt), avg_filt)
+	uncertainty_reduction = numpy.sqrt(sum(pow(effective_filt, 2.0)))
+
+	return pipeparts.mkaudioamplify(pipeline, head, uncertainty_reduction / demod_uncertainty_reduction)
+
 def compute_calline_uncertainty(pipeline, coh_unc, coh_samples, demod_samples, median_samples, avg_samples):
 	#
 	# The coherence uncertainties may not be equal to the

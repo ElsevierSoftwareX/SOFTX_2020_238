@@ -159,7 +159,6 @@ static void set_metadata(GSTLALStDev *element, GstBuffer *buf, guint64 outsample
 
 	GST_BUFFER_OFFSET(buf) = element->next_out_offset;
 	element->next_out_offset += outsamples;
-	element->total_insamples += outsamples;
 	GST_BUFFER_OFFSET_END(buf) = element->next_out_offset;
 	GST_BUFFER_TIMESTAMP(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET(buf) - element->offset0, GST_SECOND, element->rate);
 	GST_BUFFER_DURATION(buf) = element->t0 + gst_util_uint64_scale_int_round(GST_BUFFER_OFFSET_END(buf) - element->offset0, GST_SECOND, element->rate) - GST_BUFFER_TIMESTAMP(buf);
@@ -325,9 +324,6 @@ static GstFlowReturn process_indata_ ## COMPLEX ## DTYPE(const COMPLEX DTYPE *sr
 	/* Now fill the rest of the outputs with the current uncertainty */ \
 	for(i = i_stop; i < dst_size; i++) \
 		dst[i] = element->workspace.type ## COMPLEX ## DTYPE.current_stdev; \
- \
-	/* Calculate the buffer_index of the next buffer */ \
-	element->buffer_index -= src_size; \
  \
 	return GST_FLOW_OK; \
 }
@@ -661,14 +657,20 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 		element->offset0 = element->next_out_offset = GST_BUFFER_OFFSET(inbuf) - shift_samples;
 		element->t0 = GST_BUFFER_PTS(inbuf) - gst_util_uint64_scale_int_round(shift_samples, GST_SECOND, element->rate);
 		element->need_discont = TRUE;
-		guint64 sample_number = gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf), element->rate, GST_SECOND);
-		element->buffer_index = sample_number % element->coherence_length;
-		element->buffer_index = (element->coherence_length - element->buffer_index) % element->coherence_length;
-		element->array_index = element->start_index = ((sample_number + element->buffer_index) / element->coherence_length) % element->array_size;
 	}
+
 	element->next_in_offset = GST_BUFFER_OFFSET_END(inbuf);
 
-	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP) ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
+	guint64 sample_number = gst_util_uint64_scale_int_round(GST_BUFFER_PTS(inbuf), element->rate, GST_SECOND);
+	element->buffer_index = sample_number % element->coherence_length;
+	element->buffer_index = (element->coherence_length - element->buffer_index) % element->coherence_length;
+	element->array_index = ((sample_number + element->buffer_index) / element->coherence_length) % element->array_size;
+	if(element->samples_in_array == 0)
+		element->start_index = element->array_index;
+
+	gboolean gap = GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_GAP);
+
+	GST_INFO_OBJECT(element, "processing %s%s buffer %p spanning %" GST_BUFFER_BOUNDARIES_FORMAT, gap ? "gap" : "nongap", GST_BUFFER_FLAG_IS_SET(inbuf, GST_BUFFER_FLAG_DISCONT) ? "+discont" : "", inbuf, GST_BUFFER_BOUNDARIES_ARGS(inbuf));
 
 	gst_buffer_map(outbuf, &outmap, GST_MAP_WRITE);
 	gst_buffer_map(inbuf, &inmap, GST_MAP_READ);
@@ -680,21 +682,22 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 	/* Process data in buffer */
 	switch(element->data_type) {
 	case GSTLAL_STDEV_F32:
-		result = process_indata_float((const float *) inmap.data, inmap.size / element->unit_size_in, (float *) outmap.data, outmap.size / element->unit_size_out, element);
+		result = process_indata_float(gap ? NULL : (const float *) inmap.data, gap ? 0 : inmap.size / element->unit_size_in, (float *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	case GSTLAL_STDEV_F64:
-		result = process_indata_double((const double *) inmap.data, inmap.size / element->unit_size_in, (double *) outmap.data, outmap.size / element->unit_size_out, element);
+		result = process_indata_double(gap ? NULL : (const double *) inmap.data, gap ? 0 : inmap.size / element->unit_size_in, (double *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	case GSTLAL_STDEV_Z64:
-		result = process_indata_complexfloat((const float complex *) inmap.data, inmap.size / element->unit_size_in, (float *) outmap.data, outmap.size / element->unit_size_out, element);
+		result = process_indata_complexfloat(gap ? NULL : (const float complex *) inmap.data, gap ? 0 : inmap.size / element->unit_size_in, (float *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	case GSTLAL_STDEV_Z128:
-		result = process_indata_complexdouble((const double complex *) inmap.data, inmap.size / element->unit_size_in, (double *) outmap.data, outmap.size / element->unit_size_out, element);
+		result = process_indata_complexdouble(gap ? NULL : (const double complex *) inmap.data, gap ? 0 : inmap.size / element->unit_size_in, (double *) outmap.data, outmap.size / element->unit_size_out, element);
 		break;
 	default:
 		g_assert_not_reached();
 	}
 
+	element->total_insamples += inmap.size / element->unit_size_in;
 	set_metadata(element, outbuf, outmap.size / element->unit_size_out);
 
 	gst_buffer_unmap(inbuf, &inmap);
