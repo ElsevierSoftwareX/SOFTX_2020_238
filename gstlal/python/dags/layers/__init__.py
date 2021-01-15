@@ -17,11 +17,13 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+import itertools
 import os
 from typing import List, Tuple, Union
 
 import htcondor
 
+from gstlal.config import Argument
 from gstlal.dags.util import which
 
 
@@ -116,7 +118,15 @@ class Layer:
 			assert outputs == [arg.name for arg in node.outputs]
 
 	def _arguments(self):
-		return " ".join([f"$({arg.name})" for arg in self.nodes[0].arguments])
+		args = [f"$({arg.name})" for arg in self.nodes[0].arguments]
+		io_args = []
+		io_opts = []
+		for arg in itertools.chain(self.nodes[0].inputs, self.nodes[0].outputs):
+			if isinstance(arg, Argument):
+				io_args.append(f"$({arg.name})")
+			else:
+				io_opts.append(f"$({arg.name})")
+		return " ".join(itertools.chain(args, io_opts, io_args))
 
 	def _inputs(self):
 		return ",".join([f"$(input_{arg.name})" for arg in self.nodes[0].inputs])
@@ -130,8 +140,10 @@ class Layer:
 			nodevars = {arg.name: arg.vars() for arg in node.arguments}
 			nodevars["nodename"] = f"{self.name}_{i:04X}"
 			if node.inputs:
+				nodevars.update({f"{arg.name}": arg.vars() for arg in node.inputs})
 				nodevars.update({f"input_{arg.name}": arg.files() for arg in node.inputs})
 			if node.outputs:
+				nodevars.update({f"{arg.name}": arg.vars() for arg in node.outputs})
 				nodevars.update({f"output_{arg.name}": arg.files() for arg in node.outputs})
 			allvars.append(nodevars)
 
