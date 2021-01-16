@@ -1500,6 +1500,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	# A little bit of processing is necessary to ensure backwards compatibility
 	if compute_kappatst:
+		smooth_ktst_magnitude_tee = ktst
 		smooth_ktsttee = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, ktst, matrix = [[1.0, 0.0]])), pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_tst, matrix = [[0.0, 2.0 * numpy.pi * esd_act_line_freq]])), "cexp")]))
 		smooth_ktstR, smooth_ktstI = calibration_parts.split_into_real(pipeline, smooth_ktsttee)
 		smooth_ktstRtee = pipeparts.mktee(pipeline, smooth_ktstR)
@@ -1513,6 +1514,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 			pipeparts.mkfakesink(pipeline, tau_tst_unc)
 
 	if compute_kappapum:
+		smooth_kpum_magnitude_tee = kpum
 		smooth_kpumtee = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kpum, matrix = [[1.0, 0.0]])), pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_pum, matrix = [[0.0, 2.0 * numpy.pi * pum_act_line_freq]])), "cexp")]))
 		smooth_kpumR, smooth_kpumI = calibration_parts.split_into_real(pipeline, smooth_kpumtee)
 		smooth_kpumRtee = pipeparts.mktee(pipeline, smooth_kpumR)
@@ -1526,6 +1528,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 			pipeparts.mkfakesink(pipeline, tau_pum_unc)
 
 	if compute_kappauim:
+		smooth_kuim_magnitude_tee = kuim
 		smooth_kuimtee = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, kuim, matrix = [[1.0, 0.0]])), pipeparts.mkgeneric(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, tau_uim, matrix = [[0.0, 2.0 * numpy.pi * uim_act_line_freq]])), "cexp")]))
 		smooth_kuimR, smooth_kuimI = calibration_parts.split_into_real(pipeline, smooth_kuimtee)
 		smooth_kuimRtee = pipeparts.mktee(pipeline, smooth_kuimR)

@@ -325,15 +325,9 @@ for i in range(0, len(frequencies)):
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
 	if options.show_stats:
-<<<<<<< HEAD
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.3f, \sigma = %0.3f]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
-	else:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_')))
-=======
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
->>>>>>> lal_adaptivefirfilt:  fixed issue with using static filter when model is not available.  Also numerous plotting script updates.
 	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
@@ -343,17 +337,10 @@ for i in range(0, len(frequencies)):
 	leg.get_frame().set_alpha(0.8)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 	if options.show_stats:
-<<<<<<< HEAD
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s} \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_'), numpy.mean(phases[0]), numpy.std(phases[0])))
-	else:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'${\rm %s}$' % (labels[0].replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_')))
-	leg = plt.legend(fancybox = True, markerscale = 8.0 / markersize, numpoints = 3, loc = 'upper right' if i < 2 else 'lower right')
-=======
 		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
 	else:
 		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
 	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'lower right')
->>>>>>> lal_adaptivefirfilt:  fixed issue with using static filter when model is not available.  Also numerous plotting script updates.
 	leg.get_frame().set_alpha(0.8)
 	if i == 0:
 		plt.ylabel(r'${\rm Phase \  [deg]}$')

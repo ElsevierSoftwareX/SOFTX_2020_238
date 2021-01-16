@@ -25,13 +25,13 @@ GDSCONFIGS = Filters/O3/GDSFilters/H1GDS_1265142330_no_response_corr_test.ini
 LOWLATENCYCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_1239476409.ini
 LOWLATENCYASYMMETRICCONFIGS = Filters/O3/GDSFilters/H1GDS_lowLatency_asymmetric_1239476409.ini
 DCSCONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1256655618_v2_test.ini
-DCS_TDCF_UNCERTAINTY_CONFIGS = Filters/O3/GDSFilters/H1DCS_C01_1256655618_v2_tdcf_unc.ini
+DCS_TDCF_UNCERTAINTY_CONFIGS = Filters/O3/GDSFilters/H1DCS_1256655618_v2_tdcf_unc.ini
 SCALAR_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_SCALAR_CORR.ini
 FCC_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_FCC_CORR.ini
 ALL_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_ALL_CORR.ini
 FCCFS_CORR_CONFIGS = Filters/O2/GDSFilters/H1DCS_FccFsCorrections_Cleaning.ini
 NO_CORR_CONFIGS = Filters/O3/GDSFilters/H1DCS_test_1256655618_v2_NO_CORR.ini
-EXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_exactKappas_1239472998.ini
+DCSEXACTKAPPASCONFIGS = Filters/O3/GDSFilters/H1DCS_1256655618_v2_exactKappas.ini
 DCSLINESCONFIGS = ../../config_files/O2/H1/tests/H1DCS_AllCorrections_CleaningLines.ini
 DCSFCCCONFIGS = ../../config_files/O2/H1/tests/H1DCS_FreqIndepAndFccCorrections_Cleaning.ini
 GDSTESTCONFIGS = Filters/O3/GDSFilters/H1GDS_1239476409_testAllCorrections.ini
@@ -43,7 +43,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: filters_tf_DCS
+all: DCSEXACTKAPPAS_pcal2darm_plots
 #pcal_DCS_transfer_functions
 #TDCFs_pcal2darm_plots
 #actuation_timing_plot
@@ -112,6 +112,10 @@ $(IFO)1_hoft_DCS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSCONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS-*.gwf | lalapps_path2cache > $@
 
+$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
+	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCSEXACTKAPPASCONFIGS)
+	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_EXACTKAPPAS-*.gwf | lalapps_path2cache > $@
+
 $(IFO)1_hoft_DCS_TDCFUNC_frames.cache: $(IFO)1_easy_raw_frames.cache filters framesdir
 	GST_DEBUG=3 gstlal_compute_strain --gps-start-time $(START) --gps-end-time $(END) --frame-cache $(IFO)1_easy_raw_frames.cache --output-path Frames/$(OBSRUN)/$(IFO)1/DCS/ --frame-duration=64 --frames-per-file=1 --wings=0 --config-file $(DCS_TDCF_UNCERTAINTY_CONFIGS)
 	ls Frames/$(OBSRUN)/$(IFO)1/DCS/$(IFO)-$(IFO)1DCS_TDCFUNC-*.gwf | lalapps_path2cache > $@
@@ -173,6 +177,10 @@ GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 
 DCS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C00_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'GDS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'C00,TEST' --pcal-time-advance 0.00006103515625
+
+DCSEXACTKAPPAS_pcal2darm_plots: 
+	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
+	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache --config-file '$(DCSEXACTKAPPASCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list DCS-CALIB_STRAIN --labels '{\rm Exact Kappas}' --latex-labels --pcal-time-advance 0.00006103515625 --show-stats
 
 TDCFs_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_SCALAR_CORR_frames.cache $(IFO)1_FCC_CORR_frames.cache $(IFO)1_FCCFS_CORR_frames.cache $(IFO)1_ALL_CORR_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_SCALAR_CORR_frames.cache,$(IFO)1_FCC_CORR_frames.cache,$(IFO)1_FCCFS_CORR_frames.cache,$(IFO)1_ALL_CORR_frames.cache' --config-file '$(ALL_CORR_CONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels '{\rm Scalars},+f_{\rm cc},+f_{\rm s}+Q,+\tau_i' --latex-labels --pcal-time-advance 0.00006103515625 --show-stats

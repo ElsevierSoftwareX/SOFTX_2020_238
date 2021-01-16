@@ -1771,6 +1771,90 @@ def compute_SRC_uncertainty(pipeline, EP11, kc, kc_unc, fcc, fcc_unc, EP12, act_
 
 	return S_s_inv, fs_squared_unc_abs, fs_over_Q_unc_abs
 
+def find_injection_ratios_from_model(filters, ktst = 1.0, tau_tst = 0.0, kpum = 1.0, tau_pum = 0.0, kuim = 1.0, tau_uim = 0.0, kc = 1.0, fcc = None, fs_squared = None, Qinv = None):
+	#
+	# Find the model-predicted X's of eqs. 5.2.22 and 5.2.23 in P1900052, given
+	# a filters file and values for the TDCFs.  Useful mainly for testing.
+	#
+
+	f1 = float(filters['ka_pcal_line_freq'])
+	f2 = float(filters['kc_pcal_line_freq'])
+	fT = float(filters['ktst_esd_line_freq'])
+	fP = float(filters['pum_act_line_freq'])
+	fU = float(filters['uim_act_line_freq'])
+
+	Cres1 = float(filters['EP11_real']) + 1j * float(filters['EP11_imag'])
+	CresDAT1 = float(filters['EP25_real']) + 1j * float(filters['EP25_imag'])
+	CresDAP1 = float(filters['EP26_real']) + 1j * float(filters['EP26_imag'])
+	CresDAU1 = float(filters['EP27_real']) + 1j * float(filters['EP27_imag'])
+
+	Cres2 = float(filters['EP6_real']) + 1j * float(filters['EP6_imag'])
+	CresDAT2 = float(filters['EP28_real']) + 1j * float(filters['EP28_imag'])
+	CresDAP2 = float(filters['EP29_real']) + 1j * float(filters['EP29_imag'])
+	CresDAU2 = float(filters['EP30_real']) + 1j * float(filters['EP30_imag'])
+
+	CresAT0T = float(filters['EP31_real']) + 1j * float(filters['EP31_imag'])
+	CresDATT = float(filters['EP32_real']) + 1j * float(filters['EP32_imag'])
+	CresDAPT = float(filters['EP33_real']) + 1j * float(filters['EP33_imag'])
+	CresDAUT = float(filters['EP34_real']) + 1j * float(filters['EP34_imag'])
+
+	CresAP0P = float(filters['EP35_real']) + 1j * float(filters['EP35_imag'])
+	CresDATP = float(filters['EP36_real']) + 1j * float(filters['EP36_imag'])
+	CresDAPP = float(filters['EP37_real']) + 1j * float(filters['EP37_imag'])
+	CresDAUP = float(filters['EP38_real']) + 1j * float(filters['EP38_imag'])
+
+	CresAU0U = float(filters['EP39_real']) + 1j * float(filters['EP39_imag'])
+	CresDATU = float(filters['EP40_real']) + 1j * float(filters['EP40_imag'])
+	CresDAPU = float(filters['EP41_real']) + 1j * float(filters['EP41_imag'])
+	CresDAUU = float(filters['EP42_real']) + 1j * float(filters['EP42_imag'])
+
+	fcc_model = float(filters['fcc'])
+	if fcc is None:
+		fcc = fcc_model
+	fs_squared_model = float(filters['fs_squared'])
+	if fs_squared is None:
+		fs_squared = fs_squared_model
+	Qinv_model = 1.0 / float(filters['srcQ'])
+	if Qinv is None:
+		Qinv = Qinv_model
+
+	CresDAT1 *= ktst * numpy.exp(2.0 * numpy.pi * 1j * f1 * tau_tst)
+	CresDAP1 *= kpum * numpy.exp(2.0 * numpy.pi * 1j * f1 * tau_pum)
+	CresDAU1 *= kuim * numpy.exp(2.0 * numpy.pi * 1j * f1 * tau_uim)
+
+	CresDAT2 *= ktst * numpy.exp(2.0 * numpy.pi * 1j * f2 * tau_tst)
+	CresDAP2 *= kpum * numpy.exp(2.0 * numpy.pi * 1j * f2 * tau_pum)
+	CresDAU2 *= kuim * numpy.exp(2.0 * numpy.pi * 1j * f2 * tau_uim)
+
+	CresAT0T *= ktst * numpy.exp(2.0 * numpy.pi * 1j * fT * tau_tst)
+	CresDATT *= ktst * numpy.exp(2.0 * numpy.pi * 1j * fT * tau_tst)
+	CresDAPT *= kpum * numpy.exp(2.0 * numpy.pi * 1j * fT * tau_pum)
+	CresDAUT *= kuim * numpy.exp(2.0 * numpy.pi * 1j * fT * tau_uim)
+
+	CresAP0P *= kpum * numpy.exp(2.0 * numpy.pi * 1j * fP * tau_pum)
+	CresDATP *= ktst * numpy.exp(2.0 * numpy.pi * 1j * fP * tau_tst)
+	CresDAPP *= kpum * numpy.exp(2.0 * numpy.pi * 1j * fP * tau_pum)
+	CresDAUP *= kuim * numpy.exp(2.0 * numpy.pi * 1j * fP * tau_uim)
+
+	CresAU0U *= kuim * numpy.exp(2.0 * numpy.pi * 1j * fU * tau_uim)
+	CresDATU *= ktst * numpy.exp(2.0 * numpy.pi * 1j * fU * tau_tst)
+	CresDAPU *= kpum * numpy.exp(2.0 * numpy.pi * 1j * fU * tau_pum)
+	CresDAUU *= kuim * numpy.exp(2.0 * numpy.pi * 1j * fU * tau_uim)
+
+	CresX1 = CresDAT1 + CresDAP1 + CresDAU1 + ((1.0 + 1j * f1 / fcc) / kc) * ((f1 * f1 + fs_squared - 1j * f1 * numpy.sqrt(abs(fs_squared)) * Qinv) / (f1 * f1))
+	CresX2 = CresDAT2 + CresDAP2 + CresDAU2 + ((1.0 + 1j * f2 / fcc) / kc) * ((f2 * f2 + fs_squared - 1j * f2 * numpy.sqrt(abs(fs_squared)) * Qinv) / (f2 * f2))
+	CresAT0XT = CresDATT + CresDAPT + CresDAUT + ((1.0 + 1j * fT / fcc) / kc) * ((fT * fT + fs_squared - 1j * fT * numpy.sqrt(abs(fs_squared)) * Qinv) / (fT * fT))
+	CresAP0XP = CresDATP + CresDAPP + CresDAUP + ((1.0 + 1j * fP / fcc) / kc) * ((fP * fP + fs_squared - 1j * fP * numpy.sqrt(abs(fs_squared)) * Qinv) / (fP * fP))
+	CresAU0XU = CresDATU + CresDAPU + CresDAUU + ((1.0 + 1j * fU / fcc) / kc) * ((fU * fU + fs_squared - 1j * fU * numpy.sqrt(abs(fs_squared)) * Qinv) / (fU * fU))
+
+	X1 = CresX1 / Cres1
+	X2 = CresX2 / Cres2
+	XT = CresAT0XT / CresAT0T
+	XP = CresAP0XP / CresAP0P
+	XU = CresAU0XU / CresAU0U
+
+	return X1, X2, XT, XP, XU
+
 def update_property_simple(prop_maker, arg, prop_taker, maker_prop_name, taker_prop_name, prefactor):
 	prop = prop_maker.get_property(maker_prop_name)
 	prop_taker.set_property(taker_prop_name, prefactor * prop)
