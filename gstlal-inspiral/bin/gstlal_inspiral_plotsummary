@@ -57,6 +57,7 @@ import sys
 
 import lal
 from lal import gpstime
+from lal.lal import ComputeDetAMResponse, GreenwichMeanSiderealTime
 from lal.utils import CacheEntry
 
 from glue import iterutils
@@ -330,7 +331,20 @@ class CoincDatabase(object):
 #
 
 def sim_get_chirp_eff_dist(sim, instrument):
-	return getattr(sim, "eff_dist_%s" % instrument[0].lower()) * sim.mchirp**(5./6.) / 1.22**(5./6.)
+	if instrument[0] == u'K':
+		ifo = 'K1'
+		cosiota = math.cos(getattr(sim, "inclination"))
+		sp = -( 1.0 + cosiota * cosiota )
+		sc = -2.0 * cosiota
+		ra = getattr(sim, "longitude")
+		dec = getattr(sim, "latitude")
+		psi = getattr(sim, "polarization")
+		REAL8time = getattr(sim, "geocent_end_time") + 1e-9*getattr(sim, "geocent_end_time_ns")
+		fp, fc = ComputeDetAMResponse(lal.cached_detector_by_prefix[ifo].response, ra, dec, psi, GreenwichMeanSiderealTime(REAL8time))
+		eff_dist_k = 2.0 * getattr(sim, "distance") / math.sqrt( sp*sp*fp*fp + sc*sc*fc*fc )
+		return eff_dist_k
+	else:
+		return getattr(sim, "eff_dist_%s" % instrument[0].lower()) * sim.mchirp**(5./6.) / 1.22**(5./6.)
 
 def roman(i, arabics = (1000,900,500,400,100,90,50,40,10,9,5,4,1), romans = ("m","cm","d","cd","c","xc","l","xl","x","ix","v","iv","i")):
 	if not arabics:
@@ -817,7 +831,9 @@ FROM
 				if len(oninstruments) > 3:
 					raise ValueError("More than 3 instruments not supported for injection snr calculation at this time.")
 				else:
-					alphas = {'H1':sim.alpha4, 'L1':sim.alpha5, 'V1':sim.alpha6}
+#					alphas = {'H1':sim.alpha4, 'L1':sim.alpha5, 'V1':sim.alpha6}
+					# FIXME, I added K1 and G1 ad hoc (Koh) 
+					alphas = {'H1':sim.alpha4, 'L1':sim.alpha5, 'V1':sim.alpha6, 'K1':sim.alpha6, 'G1':sim.alpha6}
 					snrlist = []
 					for ifo in oninstruments:
 						snrlist.append(alphas[ifo])
@@ -1039,6 +1055,8 @@ class ParameterAccuracyPlots(object):
 
 			def get_inj_snr(sim, instrument):
 				alphas = {'H1':'alpha4', 'L1':'alpha5', 'V1':'alpha6'}
+				# FIXME, I added K1 and G1 ad hoc (Koh) 
+				alphas = {'H1':'alpha4', 'L1':'alpha5', 'V1':'alpha6', 'K1':'alpha6', 'G1':'alpha6'}
 				return getattr(sim, "%s" % alphas[instrument])
 
 			fig, axes = create_plot(r"Inj. SNR", r"Rec. SNR")
