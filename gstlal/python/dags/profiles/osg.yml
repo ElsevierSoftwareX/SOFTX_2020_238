@@ -1,0 +1,6 @@
+scheduler: condor
+requirements:
+  - '(IS_GLIDE_IN=?=True)'
+  - 'regexp("Intel.*v[3-5]", OSGVO_CPU_MODEL) || regexp("Intel.*Gold", OSGVO_CPU_MODEL)'
+directives:
+  +OpenScienceGrid: true

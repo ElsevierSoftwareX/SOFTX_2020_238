@@ -1,0 +1,3 @@
+scheduler: condor
+requirements:
+  - 'regexp("Intel.*v[3-5]", TARGET.cpuinfo_model_name) || regexp("Intel.*Gold", TARGET.cpuinfo_model_name)'

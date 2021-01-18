@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2020  Patrick Godwin
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+import argparse
+
+from gstlal.dags import profiles
+
+
+parser = argparse.ArgumentParser(prog="gstlal_grid_profile")
+
+# set up subparser
+subparser = parser.add_subparsers(title="commands", metavar="<command>", dest="cmd")
+subparser.required = True
+
+# register commands
+install_desc = "install site submission profiles"
+install_parser = subparser.add_parser("install", help=install_desc, description=install_desc)
+install_parser.set_defaults(func=profiles.install_profiles)
+install_parser.add_argument(
+	"profile", metavar="PROFILE", nargs="*",
+	help="Profiles to install. If none selected, install default profiles."
+)
+
+list_desc = "list available site submission profiles"
+list_parser = subparser.add_parser("list", help=list_desc, description=list_desc)
+list_parser.set_defaults(func=profiles.list_profiles)
+
+set_desc = "set site submission profile"
+set_parser = subparser.add_parser("set", help=set_desc, description=set_desc)
+set_parser.set_defaults(func=profiles.set_profile)
+set_parser.add_argument("profile", metavar="PROFILE", help="profile to select.")
+
+get_desc = "display current site submission profile"
+get_parser = subparser.add_parser("get", help=get_desc, description=get_desc)
+get_parser.set_defaults(func=profiles.get_profile)
+
+# parse and execute command
+args = parser.parse_args()
+args.func(args)
