@@ -1,4 +1,4 @@
-SUBDIRS = layers
+SUBDIRS = layers profiles
 
 pkgpythondir = $(pkgpyexecdir)
 dagsdir = $(pkgpythondir)/dags

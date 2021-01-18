@@ -17,6 +17,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+import getpass
 from typing import List, Tuple, Union
 
 import yaml
@@ -25,6 +26,8 @@ from lal import LIGOTimeGPS
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import segments as ligolw_segments
 from ligo.segments import segment, segmentlist, segmentlistdict
+
+from gstlal.dags import profiles
 
 
 class Config:
@@ -59,7 +62,47 @@ class Config:
 
 		# section-specific options
 		self.source = dotdict(replace_keys(kwargs["source"]))
-		self.condor = dotdict(replace_keys(kwargs["condor"]))
+
+		# condor options
+		condor_config = kwargs["condor"]
+		if "accounting-group-user" in condor_config:
+			accounting_group_user = condor_config["accounting-group-user"]
+		else:
+			accounting_group_user = getpass.getuser()
+
+		condor_opts = {
+			"want_graceful_removal": "True",
+			"kill_sig": "15",
+			"accounting_group": condor_config["accounting-group"],
+			"accounting_group_user": accounting_group_user,
+		}
+		requirements = []
+
+		# load site profile
+		profile = profiles.load_profile(condor_config["profile"])
+		assert profile["scheduler"] == "condor", "only the condor scheduler is available"
+
+		# add profile-specific options
+		if "directives" in profile:
+			condor_opts.update(profile["directives"])
+		if "requirements" in profile:
+			requirements.extend(profile["requirements"])
+
+		# singularity-specific options
+		if "singularity-image" in condor_config:
+			singularity_image = condor_config["singularity-image"]
+			requirements.append("(HAS_SINGULARITY=?=True)")
+			condor_opts['+SingularityImage'] = f'"{singularity_image}"'
+			condor_opts['x509userproxy'] = 'x509_proxy'
+			condor_opts['use_x509userproxy'] = True
+			condor_opts['transfer_executable'] = False
+			condor_opts['getenv'] = False
+
+		# condor requirements
+		condor_opts['requirements'] = " && ".join(requirements)
+
+		# set up condor config
+		self.condor = dotdict(replace_keys(condor_opts))
 
 	@classmethod
 	def load(cls, path):
@@ -74,6 +117,9 @@ class Config:
 class Argument:
 	name: str
 	argument: Union[str, List]
+
+	def __post_init__(self):
+		self.name = self.name.replace("-", "_")
 
 	def vars(self):
 		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
@@ -92,6 +138,9 @@ class Argument:
 class Option:
 	name: str
 	argument: Union[None, str, List] = None
+
+	def __post_init__(self):
+		self.name = self.name.replace("-", "_")
 
 	def vars(self):
 		if not self.argument:

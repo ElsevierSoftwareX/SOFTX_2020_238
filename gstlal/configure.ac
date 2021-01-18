@@ -25,6 +25,7 @@ AC_CONFIG_FILES([ \
 	python/config/Makefile \
 	python/dags/Makefile \
 	python/dags/layers/Makefile \
+	python/dags/profiles/Makefile \
 	python/pipeparts/Makefile \
 	python/plots/Makefile \
 	python/stats/Makefile \

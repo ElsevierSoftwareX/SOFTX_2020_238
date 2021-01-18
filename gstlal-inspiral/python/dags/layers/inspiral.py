@@ -24,7 +24,7 @@ from gstlal.dags import util as dagutils
 
 
 def reference_psd_layer(config, dag, time_bins):
-	layer = Layer("gstlal_reference_psd", requirements=config.condor.requirements, base_layer=True)
+	layer = Layer("gstlal_reference_psd", requirements=config.condor, base_layer=True)
 
 	for span in time_bins:
 		start, end = span
@@ -53,12 +53,12 @@ def reference_psd_layer(config, dag, time_bins):
 
 
 def median_psd_layer(config, dag):
-	layer = Layer("gstlal_median_of_psds", requirements=config.condor.requirements)
+	layer = Layer("gstlal_median_of_psds", requirements=config.condor)
 
 	median_path = os.path.join("median_psd", dagutils.gps_directory(config.start))
 	median_file = dagutils.T050017_filename(config.ifos, "REFERENCE_PSD", config.span, '.xml.gz')
 	layer += Node(
-		inputs = [Argument("psds", dag["reference_psd"].outputs["write-psd"])],
+		inputs = [Argument("psds", dag["reference_psd"].outputs["write_psd"])],
 		outputs = [Option("output-name", os.path.join(median_path, median_file))]
 	)
 
@@ -66,7 +66,7 @@ def median_psd_layer(config, dag):
 
 
 def svd_bank_layer(config, dag, svd_bins):
-	layer = Layer("gstlal_inspiral_svd_bank", requirements=config.condor.requirements)
+	layer = Layer("gstlal_inspiral_svd_bank", requirements=config.condor)
 
 	for svd_bin in svd_bins:
 		svd_path = os.path.join("svd_bank", dagutils.gps_directory(config.start))
@@ -83,7 +83,7 @@ def svd_bank_layer(config, dag, svd_bins):
 				Option("autocorrelation-length", config.svd.autocorrelation_length),
 				Option("bank-id", svd_bin),
 			],
-			inputs = [Option("reference-psd", dag["median_psd"].outputs["output-name"])],
+			inputs = [Option("reference-psd", dag["median_psd"].outputs["output_name"])],
 			outputs = [Option("write-svd", os.path.join(svd_path, svd_file))],
 		)
 
@@ -91,7 +91,7 @@ def svd_bank_layer(config, dag, svd_bins):
 
 
 def filter_layer(config, dag, time_bins, svd_bins):
-	layer = Layer("gstlal_inspiral", requirements=config.condor.requirements)
+	layer = Layer("gstlal_inspiral", requirements=config.condor)
 
 	common_opts = [
 		Option("track-psd"),
@@ -133,9 +133,9 @@ def filter_layer(config, dag, time_bins, svd_bins):
 				arguments = filter_opts,
 				inputs = [
 					Option("frame-segments-file", config.source.frame_segments_file),
-					Option("veto-segments-file", config.filter.vetoes),
-					Option("reference-psd", dag["reference_psd"].outputs["write-psd"][time_idx]),
-					Option("svd-bank", dag["svd_bank"].outputs["write-svd"][svd_idx]),
+					Option("veto-segments-file", config.filter.veto_segments_file),
+					Option("reference-psd", dag["reference_psd"].outputs["write_psd"][time_idx]),
+					Option("svd-bank", dag["svd_bank"].outputs["write_svd"][svd_idx]),
 					Option("time-slide-file", config.filter.time_slide_file),
 				],
 				outputs = [
@@ -148,7 +148,7 @@ def filter_layer(config, dag, time_bins, svd_bins):
 
 
 def aggregate_layer(config, dag, time_bins):
-	layer = Layer("gstlal_inspiral_aggregate", requirements=config.condor.requirements)
+	layer = Layer("gstlal_inspiral_aggregate", requirements=config.condor)
 
 	return layer
 
