@@ -229,7 +229,6 @@ class StreamThinca(object):
 		self.min_instruments = min_instruments
 		self.sngls_snr_threshold = sngls_snr_threshold
 		self.set_xmldoc(xmldoc, process_id)
-		self.clustered_sngl_ids = set()
 
 
 	def set_xmldoc(self, xmldoc, process_id):
@@ -256,7 +255,7 @@ class StreamThinca(object):
 		return self.time_slide_graph.push(instrument, events, t_complete)
 
 
-	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, cluster = False, cap_singles = False, FAR_trialsfactor = 1.0):
+	def pull(self, rankingstat, fapfar = None, zerolag_rankingstatpdf = None, coinc_sieve = None, flush = False, FAR_trialsfactor = 1.0):
 		# NOTE:  rankingstat is not used to compute the ranking
 		# statistic, it supplies the detector livetime segment
 		# lists to determine which triggers are eligible for
@@ -285,12 +284,20 @@ class StreamThinca(object):
 		flushed = []
 		flushed_unused = []
 		self.last_coincs.clear()
-		max_last_coinc_snr = {}
 		for node, events in self.time_slide_graph.pull(newly_reported = newly_reported, flushed = flushed, flushed_unused = flushed_unused, coinc_sieve = coinc_sieve, event_collector = self.backgroundcollector, flush = flush):
 			# construct row objects for coinc tables.
 
 			coinc, coincmaps, coinc_inspiral = self.coinc_tables.coinc_rows(self.process_id, node.time_slide_id, events, seglists = snr_segments)
-
+                        # assign ranking statistic, FAP and FAR
+                        
+                        if self.ln_lr_from_triggers is not None:
+                                coinc.likelihood = self.ln_lr_from_triggers(events, node.offset_vector)
+                                if fapfar is not None:
+                                        # FIXME:  add proper columns to
+                                        # store these values in
+                                        coinc_inspiral.combined_far = fapfar.far_from_rank(coinc.likelihood)
+                                        coinc_inspiral.false_alarm_rate = fapfar.fap_from_rank(coinc.likelihood)
+                                        
 			# some tasks for zero-lag candidates
 
 			if node.is_zero_lag:
@@ -301,51 +308,22 @@ class StreamThinca(object):
 				for event in events:
 					rankingstat.zerolag.increment(event)
 
-			# latency goes in minimum_duration column.  NOTE:
-			# latency is nonsense unless running live.  FIXME:
-			# add a proper column for latency
-
-			coinc_inspiral.minimum_duration = gps_time_now - float(coinc_inspiral.end)
-
-			# finally, append coinc to tables
-
-			if cluster:
-				max_last_coinc_snr.setdefault(node, None)
-				if max_last_coinc_snr[node] is None or coinc_inspiral.snr > max_last_coinc_snr[node][3].snr:
-					max_last_coinc_snr[node] = (events, coinc, coincmaps, coinc_inspiral)
-			else:
-				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
-
-				# add events to the zero-lag ranking
+                                # add events to the zero-lag ranking
 				# statistic histogram
 
 				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
 					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
 
-				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
+			# latency goes in minimum_duration column.  NOTE:
+			# latency is nonsense unless running live.  FIXME:
+			# add a proper column for latency
 
+			coinc_inspiral.minimum_duration = gps_time_now - float(coinc_inspiral.end)                        
+                        
+                        # finally, append coinc to tables
 
-		for node in max_last_coinc_snr:
-			if max_last_coinc_snr[node] is not None:
-				events, coinc, coincmaps, coinc_inspiral = max_last_coinc_snr[node]
-				# assign ranking statistic, FAP and FAR
-				if self.ln_lr_from_triggers is not None:
-					coinc.likelihood = self.ln_lr_from_triggers(events, node.offset_vector)
-					if fapfar is not None:
-						# FIXME:  add proper columns to
-						# store these values in
-						coinc_inspiral.combined_far = fapfar.far_from_rank(coinc.likelihood) * FAR_trialsfactor
-						if len(events) == 1 and cap_singles and coinc_inspiral.combined_far < 1. / fapfar.livetime:
-							coinc_inspiral.combined_far = 1. / fapfar.livetime	
-						coinc_inspiral.false_alarm_rate = fapfar.fap_from_rank(coinc.likelihood)
-				if zerolag_rankingstatpdf is not None and coinc.likelihood is not None:
-					zerolag_rankingstatpdf.zero_lag_lr_lnpdf.count[coinc.likelihood,] += 1
-
-				self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
-				self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
-				self.sngl_inspiral_table.extend([sngl_trigger for sngl_trigger in events if sngl_trigger.event_id not in self.clustered_sngl_ids])
-				self.clustered_sngl_ids |= set(e.event_id for e in events)
-
+                        self.coinc_tables.append_coinc(coinc, coincmaps, coinc_inspiral)
+                        self.last_coincs.add(events, coinc, coincmaps, coinc_inspiral)
 
 		# add selected singles to the noise model
 
@@ -372,14 +350,7 @@ class StreamThinca(object):
 
 		# add any triggers that have been used in coincidences for
 		# the first time to the sngl_inspiral table
-		# FIXME:  because this information comes from the
-		# coincidence code, which is not aware of the clustering,
-		# we record a lot of singles that aren't really used for
-		# any (retained) coincs.
-
-		if not cluster:
-			self.sngl_inspiral_table.extend(newly_reported)
-
+                self.sngl_inspiral_table.extend(newly_reported)
 		# save all sngls above the requested sngls SNR threshold.
 		# all sngls that participated in coincs are already in the
 		# document, so only need to check for ones being flushed

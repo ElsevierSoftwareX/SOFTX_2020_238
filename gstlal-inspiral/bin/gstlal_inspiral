@@ -882,8 +882,6 @@ for output_file_number, (svd_bank_url_dict, output_url, ranking_stat_output_url,
 		sngls_snr_threshold = options.singles_threshold,
 		tag = options.job_tag,
 		kafka_server = options.output_kafka_server,
-		cluster = True,#options.data_source in ("lvshm", "framexmit"),# If uncommented, we only cluster when running online
-		cap_singles = options.cap_singles,
 		FAR_trialsfactor = options.far_trials_factor,
 		activation_counts = options.activation_counts,
 		verbose = options.verbose
