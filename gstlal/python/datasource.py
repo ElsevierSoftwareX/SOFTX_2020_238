@@ -39,6 +39,7 @@ A file that contains the datasource module code
 
 
 import optparse
+import os
 import sys
 import tempfile
 import time
@@ -57,8 +58,8 @@ from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import segments as ligolw_segments
 
 from gstlal import bottle
+from gstlal import datafind
 from gstlal import pipeparts
-from gstlal.dags import util as dagutil
 
 
 #
@@ -543,7 +544,7 @@ class GWDataSourceInfo(object):
 			frame_type_dict = frame_type_dict_from_frame_type_list(options.frame_type)
 			frame_cache = datafind.load_frame_cache(start, end, frame_type_dict, host=options.data_find_server)
 			## create a temporary cache file
-			self._frame_cache_fileobj = tempfile.NamedTemporaryFile(suffix=".cache", dir=dagutil.condor_scratch_space())
+			self._frame_cache_fileobj = tempfile.NamedTemporaryFile(suffix=".cache", dir=os.getenv('TMPDIR'))
 			self.frame_cache = self._frame_cache_fileobj.name
 			with open(self.frame_cache, "w") as f:
 				for cacheentry in frame_cache:

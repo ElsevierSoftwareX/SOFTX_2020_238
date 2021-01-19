@@ -18,7 +18,7 @@
 import os
 
 import gwdatafind
-from lal import CacheEntry
+from lal.utils import CacheEntry
 
 
 DEFAULT_DATAFIND_SERVER = os.getenv('LIGO_DATAFIND_SERVER', 'ldr.ldas.cit:80')
