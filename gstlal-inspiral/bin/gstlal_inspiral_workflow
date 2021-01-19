@@ -39,6 +39,7 @@ svd_bins = config.svd.bins
 
 # generate dag
 dag = DAG(config)
+dag.create_log_dir()
 
 dag.reference_psd(time_bins) \
 	.median_psd() \

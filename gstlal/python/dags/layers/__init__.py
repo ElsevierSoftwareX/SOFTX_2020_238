@@ -118,33 +118,33 @@ class Layer:
 			assert outputs == [arg.name for arg in node.outputs]
 
 	def _arguments(self):
-		args = [f"$({arg.name})" for arg in self.nodes[0].arguments]
+		args = [f"$({arg.condor_name})" for arg in self.nodes[0].arguments]
 		io_args = []
 		io_opts = []
 		for arg in itertools.chain(self.nodes[0].inputs, self.nodes[0].outputs):
 			if isinstance(arg, Argument):
-				io_args.append(f"$({arg.name})")
+				io_args.append(f"$({arg.condor_name})")
 			else:
-				io_opts.append(f"$({arg.name})")
+				io_opts.append(f"$({arg.condor_name})")
 		return " ".join(itertools.chain(args, io_opts, io_args))
 
 	def _inputs(self):
-		return ",".join([f"$(input_{arg.name})" for arg in self.nodes[0].inputs])
+		return ",".join([f"$(input_{arg.condor_name})" for arg in self.nodes[0].inputs])
 
 	def _outputs(self):
-		return ",".join([f"$(output_{arg.name})" for arg in self.nodes[0].outputs])
+		return ",".join([f"$(output_{arg.condor_name})" for arg in self.nodes[0].outputs])
 
 	def _vars(self):
 		allvars = []
 		for i, node in enumerate(self.nodes):
-			nodevars = {arg.name: arg.vars() for arg in node.arguments}
+			nodevars = {arg.condor_name: arg.vars() for arg in node.arguments}
 			nodevars["nodename"] = f"{self.name}_{i:04X}"
 			if node.inputs:
-				nodevars.update({f"{arg.name}": arg.vars() for arg in node.inputs})
-				nodevars.update({f"input_{arg.name}": arg.files() for arg in node.inputs})
+				nodevars.update({f"{arg.condor_name}": arg.vars() for arg in node.inputs})
+				nodevars.update({f"input_{arg.condor_name}": arg.files() for arg in node.inputs})
 			if node.outputs:
-				nodevars.update({f"{arg.name}": arg.vars() for arg in node.outputs})
-				nodevars.update({f"output_{arg.name}": arg.files() for arg in node.outputs})
+				nodevars.update({f"{arg.condor_name}": arg.vars() for arg in node.outputs})
+				nodevars.update({f"output_{arg.condor_name}": arg.files() for arg in node.outputs})
 			allvars.append(nodevars)
 
 		return allvars

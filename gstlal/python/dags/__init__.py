@@ -39,6 +39,9 @@ class DAG(dags.DAG):
 	def __getitem__(self, key):
 		return self._layers[key]
 
+	def create_log_dir(self, log_dir="logs"):
+		os.makedirs(log_dir, exist_ok=True)
+
 	def write(self, filename, path=None, **kwargs):
 		write_dag(self, dag_file_name=filename, dag_dir=path, **kwargs)
 
@@ -72,10 +75,6 @@ class HexFormatter(dags.SimpleFormatter):
 		layer, index = node_name.split(self.separator)
 		index = int(index, 16)
 		return layer, index - self.offset
-
-
-def create_log_dir(log_dir="logs"):
-	os.makedirs(log_dir, exist_ok=True)
 
 
 def write_dag(dag, dag_dir=None, node_name_formatter=None, **kwargs):

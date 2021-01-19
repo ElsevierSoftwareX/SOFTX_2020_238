@@ -119,7 +119,7 @@ class Argument:
 	argument: Union[str, List]
 
 	def __post_init__(self):
-		self.name = self.name.replace("-", "_")
+		self.condor_name = self.name.replace("-", "_")
 
 	def vars(self):
 		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
@@ -140,7 +140,7 @@ class Option:
 	argument: Union[None, str, List] = None
 
 	def __post_init__(self):
-		self.name = self.name.replace("-", "_")
+		self.condor_name = self.name.replace("-", "_")
 
 	def vars(self):
 		if not self.argument:
