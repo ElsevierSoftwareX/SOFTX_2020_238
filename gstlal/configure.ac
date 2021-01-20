@@ -265,25 +265,6 @@ AC_SUBST([PYGOBJECT_CFLAGS])
 AC_SUBST([PYGOBJECT_LIBS])
 #AM_CHECK_PYTHON_LIBS(, AC_MSG_ERROR([Python libs not found.]))
 
-# on Debian the file is /usr/lib/x86_64-linux-gnu/libpython2.7.so
-# on SL7 the file is /usr/lib64/libpython2.7.so
-# on raspberry pi the file is /usr/lib/aarch64-linux-gnu/libpython2.7.so
-AC_SUBST([PYTHON_ABI_FLAGS], [])
-AC_SUBST([PYTHON_LIB_SUFFIX], [so])
-if test -a "/usr/lib/x86_64-linux-gnu/libpython2.7.so" ; then
-	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/x86_64-linux-gnu])
-elif test -a "/usr/lib/aarch64-linux-gnu/libpython2.7.so" ; then
-	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib/aarch64-linux-gnu])
-elif test -a "/usr/lib64/libpython2.7.so" ; then
-	AC_SUBST([PYTHON_LIB_LOC], [/usr/lib64])
-elif test -a "/opt/local/lib/libpython2.7.dylib" ; then
-	AC_SUBST([PYTHON_LIB_LOC], [/opt/local/lib])
-	AC_SUBST([PYTHON_LIB_SUFFIX], [dylib])
-	# FIXME:  .pc file broken on macs, remove when fixed
-	PYGOBJECT_LIBS="${PYGOBJECT_LIBS} -lgmodule-2.0"
-else
-	AC_MSG_ERROR([libpython2.7.so not found])
-fi
 
 
 #
