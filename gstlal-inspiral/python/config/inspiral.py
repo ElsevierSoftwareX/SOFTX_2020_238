@@ -35,5 +35,5 @@ class Config(BaseConfig):
 
 	def load_svd_manifest(self, manifest_file):
 		with open(manifest_file, "r") as f:
-			manifest = json.load(f)
-			self.svd.bins = manifest.keys()
+			self.svd.stats = json.load(f)
+		self.svd.bins = self.svd.stats.keys()

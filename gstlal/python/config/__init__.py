@@ -18,6 +18,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 import getpass
+import os
 from typing import List, Tuple, Union
 
 import yaml
@@ -36,6 +37,7 @@ class Config:
 	"""
 	def __init__(self, **kwargs):
 		# general options
+		self.rootdir = os.getcwd()
 		if isinstance(kwargs["ifos"], list):
 			self.ifos = kwargs["ifos"]
 		else:
