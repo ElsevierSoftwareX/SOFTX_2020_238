@@ -328,6 +328,26 @@ AS_IF([test "x${HAVE_FRAMECPP}" == "xyes"], [
 	])
 	framecpp_CXXFLAGS="${framecpp_CFLAGS} -D__STDC_CONSTANT_MACROS"
 ])
+
+# Filter out std c++ flags from "framecpp_CFLAGS". Note: they are retained 
+# for framecpp_CXXFLAGS. 
+
+# "pkg-config --cflags framecpp" gives the c++ standard used in compiling
+# for some reason, which results in the following warning for some compilers:
+
+# cc1: warning: command line option '-std=c++11' is valid for C++/ObjC++ but not for C [enabled by default]
+
+# and the following error for more hardnosed compilers:
+
+# error: invalid argument '-std=c++11' not allowed with 'C'
+
+for flag in \
+   --std=c++11 \
+   --std=c++0x
+do
+  framecpp_CFLAGS=${framecpp_CFLAGS#$flag}
+done
+
 AC_SUBST([framecpp_CFLAGS])
 AC_SUBST([framecpp_CXXFLAGS])
 AC_SUBST([framecpp_LIBS])
