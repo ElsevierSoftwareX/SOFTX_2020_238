@@ -35,6 +35,7 @@ class Layer:
 	log_dir: str = "logs"
 	retries: int = 3
 	base_layer: bool = False
+	transfer_files: bool = False
 	requirements: dict = field(default_factory=dict)
 	inputs: dict = field(default_factory=dict)
 	outputs: dict = field(default_factory=dict)
@@ -57,17 +58,17 @@ class Layer:
 		}
 
 		# file submit opts
-		inputs = self._inputs()
-		outputs = self._outputs()
-		if inputs or outputs:
-			submit_options["should_transfer_files"] = "YES"
-			submit_options["when_to_transfer_output"] = "ON_SUCCESS"
-			submit_options["success_exit_code"] = 0
-			submit_options["preserve_relative_paths"] = True
-		if inputs:
-			submit_options["transfer_inputs"] = inputs
-		if outputs:
-			submit_options["transfer_outputs"] = outputs
+		if self.transfer_files:
+			inputs = self._inputs()
+			outputs = self._outputs()
+			if inputs or outputs:
+				submit_options["should_transfer_files"] = "YES"
+				submit_options["when_to_transfer_output"] = "ON_SUCCESS"
+				submit_options["success_exit_code"] = 0
+			if inputs:
+				submit_options["transfer_inputs"] = inputs
+			if outputs:
+				submit_options["transfer_outputs"] = outputs
 
 		# log submit opts
 		submit_options["output"] = f"{self.log_dir}/$(nodename)-$(cluster)-$(process).out"

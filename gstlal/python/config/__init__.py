@@ -31,6 +31,9 @@ from ligo.segments import segment, segmentlist, segmentlistdict
 from gstlal.dags import profiles
 
 
+_PROTECTED_CONDOR_VARS = {"input", "output"}
+
+
 class Config:
 	"""
 	Hold configuration used for analyzes.
@@ -99,6 +102,8 @@ class Config:
 			condor_opts['use_x509userproxy'] = True
 			condor_opts['transfer_executable'] = False
 			condor_opts['getenv'] = False
+		else:
+			condor_opts['getenv'] = True
 
 		# condor requirements
 		condor_opts['requirements'] = " && ".join(requirements)
@@ -122,6 +127,8 @@ class Argument:
 
 	def __post_init__(self):
 		self.condor_name = self.name.replace("-", "_")
+		if self.condor_name in _PROTECTED_CONDOR_VARS:
+			self.condor_name += "_"
 
 	def vars(self):
 		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
@@ -143,9 +150,11 @@ class Option:
 
 	def __post_init__(self):
 		self.condor_name = self.name.replace("-", "_")
+		if self.condor_name in _PROTECTED_CONDOR_VARS:
+			self.condor_name += "_"
 
 	def vars(self):
-		if not self.argument:
+		if self.argument is None:
 			return f"--{self.name}"
 		elif isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
 			return " ".join([f"--{self.name} {arg}" for arg in self.argument])
@@ -153,7 +162,7 @@ class Option:
 			return f"--{self.name} {self.argument}"
 
 	def files(self):
-		if not self.argument:
+		if self.argument is None:
 			return
 		elif isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
 			return ",".join([f"{arg}" for arg in self.argument])
