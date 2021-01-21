@@ -153,8 +153,8 @@ def filter_layer(config, dag, time_bins, svd_bins):
 					Option("svd-bank", svd_bank_files),
 				],
 				outputs = [
-					Option("output", trigger_file),
-					Option("ranking-stat-output", dist_stat_file),
+					Option("output", os.path.join(trigger_path, trigger_file)),
+					Option("ranking-stat-output", os.path.join(dist_stat_path, dist_stat_file)),
 				],
 			)
 
