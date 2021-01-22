@@ -340,7 +340,7 @@ PyMODINIT_FUNC PyInit__rate_estimation(void)
 	import_array();
 
 	if(PyType_Ready(&LogPosterior_Type) < 0)
-		return;
+		return NULL;
 	Py_INCREF((PyObject *) &LogPosterior_Type);
 	PyModule_AddObject(module, "LogPosterior", (PyObject *) &LogPosterior_Type);
 

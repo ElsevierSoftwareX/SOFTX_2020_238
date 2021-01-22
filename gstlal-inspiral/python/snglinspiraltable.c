@@ -889,11 +889,11 @@ PyMODINIT_FUNC PyInit__snglinspiraltable(void)
 	{
 	PyObject *lal = PyImport_ImportModule("lal");
 	if(!lal)
-		return;
+		return NULL;
 	LIGOTimeGPSType = PyDict_GetItemString(PyModule_GetDict(lal), "LIGOTimeGPS");
 	if(!LIGOTimeGPSType) {
 		Py_DECREF(lal);
-		return;
+		return NULL;
 	}
 	Py_INCREF(LIGOTimeGPSType);
 	Py_DECREF(lal);
@@ -901,7 +901,7 @@ PyMODINIT_FUNC PyInit__snglinspiraltable(void)
 
 	/* SnglInspiralTable */
 	if(PyType_Ready(&gstlal_GSTLALSnglInspiral_Type) < 0)
-		return;
+		return NULL;
 	Py_INCREF(&gstlal_GSTLALSnglInspiral_Type);
 	PyModule_AddObject(module, "GSTLALSnglInspiral", (PyObject *) &gstlal_GSTLALSnglInspiral_Type);
 
