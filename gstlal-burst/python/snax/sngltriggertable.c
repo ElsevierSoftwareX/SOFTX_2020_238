@@ -347,7 +347,7 @@ PyMODINIT_FUNC PyInit__sngltriggertable(void)
 
 	/* SnglTriggerTable */
 	if(PyType_Ready(&gstlal_GSTLALSnglTrigger_Type) < 0)
-		return;
+		return NULL;
 	Py_INCREF(&gstlal_GSTLALSnglTrigger_Type);
 	PyModule_AddObject(module, "GSTLALSnglTrigger", (PyObject *) &gstlal_GSTLALSnglTrigger_Type);
 

@@ -319,11 +319,11 @@ PyMODINIT_FUNC PyInit__snglbursttable(void)
 	{
 	PyObject *lal = PyImport_ImportModule("lal");
 	if(!lal)
-		return;
+		return NULL;
 	LIGOTimeGPSType = PyDict_GetItemString(PyModule_GetDict(lal), "LIGOTimeGPS");
 	if(!LIGOTimeGPSType) {
 		Py_DECREF(lal);
-		return;
+		return NULL;
 	}
 	Py_INCREF(LIGOTimeGPSType);
 	Py_DECREF(lal);
@@ -331,7 +331,7 @@ PyMODINIT_FUNC PyInit__snglbursttable(void)
 
 	/* SnglBurst */
 	if(PyType_Ready(&gstlal_GSTLALSnglBurst_Type) < 0)
-		return;
+		return NULL;
 	Py_INCREF(&gstlal_GSTLALSnglBurst_Type);
 	PyModule_AddObject(module, "GSTLALSnglBurst", (PyObject *) &gstlal_GSTLALSnglBurst_Type);
 
