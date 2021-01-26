@@ -16,6 +16,7 @@
 
 
 import os
+import re
 from typing import Tuple
 
 import htcondor
@@ -30,20 +31,62 @@ class DAG(dags.DAG):
 	def __init__(self, config, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.config = config
-		self._current_layer = self
+		self._node_layers = {}
 		self._layers = {}
 
-	def __setitem__(self, key, value):
-		self._layers[key] = value
+	def __setitem__(self, key, layer):
+		if key in self._layers:
+			return KeyError(f"{key} layer already added to DAG")
+		self._layers[key] = layer
+
+		# register layer and parent-child relationships
+		if not layer.parents:
+			self._node_layers[key] = self.layer(**layer.config())
+		else:
+			parents = layer.parents
+			if isinstance(parents, str):
+				parents = [parents]
+			edge = self._get_edge_type(layer, parents[0])
+			self._node_layers[key] = self._node_layers[parents[0]].child_layer(
+				**layer.config(),
+				edge=edge
+			)
+			for parent in parents[1:]:
+				edge = self._get_edge_type(layer, parent)
+				self._node_layers[key].add_parents(
+					self._node_layers[parent],
+					edge=edge
+				)
 
 	def __getitem__(self, key):
-		return self._layers[key]
+		return self._layer_configs[key]
 
 	def create_log_dir(self, log_dir="logs"):
 		os.makedirs(log_dir, exist_ok=True)
 
-	def write(self, filename, path=None, **kwargs):
+	def write_dag(self, filename, path=None, **kwargs):
 		write_dag(self, dag_file_name=filename, dag_dir=path, **kwargs)
+
+	def write_script(self, filename, path=None, formatter=None):
+		if path:
+			filename = os.path.join(path, filename)
+		if not formatter:
+			formatter = HexFormatter()
+
+		# write script
+		with open(filename, "w") as f:
+			# traverse DAG in breadth-first order
+			for layer in self.walk(dags.WalkOrder("BREADTH")):
+				# grab relevant submit args, format $(arg) to {arg}
+				executable = layer.submit_description['executable']
+				args = layer.submit_description['arguments']
+				args = re.sub(r"\$\(((\w+?))\)", r"{\1}", args)
+
+				# evaluate vars for each node in layer, write to disk
+				for idx, node_vars in enumerate(layer.vars):
+					node_name = formatter.generate(layer.name, idx)
+					print(f"# Job {node_name}", file=f)
+					print(executable + " " + args.format(**node_vars) + "\n", file=f)
 
 	@classmethod
 	def register_layer(cls, layer_name):
@@ -51,15 +94,32 @@ class DAG(dags.DAG):
 		"""
 		def register(func):
 			def wrapped(self, *args, **kwargs):
-				layer = func(self.config, self, *args, **kwargs)
-				self[layer_name] = layer
-				if layer.base_layer and not isinstance(layer, BaseNode):
-					self._current_layer = self.layer(**layer.config())
-				else:
-					self._current_layer = self._current_layer.child_layer(**layer.config())
-				return self
+				return func(self.config, self, *args, **kwargs)
 			setattr(cls, layer_name, wrapped)
 		return register
+
+	def _get_edge_type(self, child, parent_name):
+		parent = self._layers[parent_name]
+
+		# check for any explicit parent relationship
+		keys_defined = any(parent_name in node.parent_keys for node in child.nodes)
+		indices_defined = any(parent_name in node.parent_indices for node in child.nodes)
+
+		# if no explicit relationship, assume many-to-many connected
+		if not keys_defined and not indices_defined:
+			return dags.ManyToMany()
+
+		# else get corresponding node edges
+		indices = []
+		for child_idx, child_node in enumerate(child.nodes):
+			if keys_defined:
+				for parent_key in child_node.parent_keys[parent_name]:
+					indices.append((parent.to_index(parent_key), child_idx))
+			else:
+				for parent_idx in child_node.parent_indices[parent_name]:
+					indices.append((parent_idx, child_idx))
+
+		return EdgeConnector(indices)
 
 
 class HexFormatter(dags.SimpleFormatter):
@@ -77,12 +137,24 @@ class HexFormatter(dags.SimpleFormatter):
 		return layer, index - self.offset
 
 
-def write_dag(dag, dag_dir=None, node_name_formatter=None, **kwargs):
-	if not node_name_formatter:
-		node_name_formatter = HexFormatter()
+class EdgeConnector(dags.BaseEdge):
+	"""This edge connects individual nodes in layers given an explicit mapping.
+
+	"""
+	def __init__(self, indices):
+		self.indices = indices
+
+	def get_edges(self, parent, child, join_factory):
+		for parent_idx, child_idx in self.indices:
+			yield (parent_idx,), (child_idx,)
+
+
+def write_dag(dag, dag_dir=None, formatter=None, **kwargs):
+	if not formatter:
+		formatter = HexFormatter()
 	if not dag_dir:
 		dag_dir = os.getcwd()
-	return htcondor.dags.write_dag(dag, dag_dir, node_name_formatter=node_name_formatter, **kwargs)
+	return htcondor.dags.write_dag(dag, dag_dir, node_name_formatter=formatter, **kwargs)
 
 
 def _get_registered_layers():

@@ -28,6 +28,7 @@ from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import segments as ligolw_segments
 from ligo.segments import segment, segmentlist, segmentlistdict
 
+from gstlal.dags import util as dagutils
 from gstlal.dags import profiles
 
 
@@ -45,6 +46,7 @@ class Config:
 			self.ifos = kwargs["ifos"]
 		else:
 			self.ifos = parse_ifo_string(kwargs["ifos"])
+		self.ifo_combo = "".join(self.ifos)
 
 		# time options
 		self.start = LIGOTimeGPS(kwargs["start"])
@@ -64,6 +66,8 @@ class Config:
 			self.segments = ligolw_segments.segmenttable_get_by_name(xmldoc, "segments").coalesce()
 		else:
 			self.segments = segmentlistdict((ifo, segmentlist([self.span])) for ifo in self.ifos)
+
+		self.time_bins = dagutils.partition_by_time(self.span, self.segments, self.ifos)
 
 		# section-specific options
 		self.source = dotdict(replace_keys(kwargs["source"]))

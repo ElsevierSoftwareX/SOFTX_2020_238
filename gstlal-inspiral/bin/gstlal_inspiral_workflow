@@ -33,17 +33,15 @@ args = parser.parse_args()
 config = Config.load(args.config)
 config.load_svd_manifest(args.svd_manifest)
 
-# define bins
-time_bins = dagutils.partition_by_time(config.span, config.segments, config.ifos)
-svd_bins = config.svd.bins
-
-# generate dag
+# create dag
 dag = DAG(config)
 dag.create_log_dir()
 
-dag.reference_psd(time_bins) \
-	.median_psd() \
-	.svd_bank(svd_bins) \
-	.filter(time_bins, svd_bins) \
+# generate dag layers
+ref_psd = dag.reference_psd()
+median_psd = dag.median_psd(ref_psd)
+svd_bank = dag.svd_bank(median_psd)
+triggers, dist_stats = dag.filter(ref_psd, svd_bank)
 
-dag.write("trigger_pipe.dag")
+dag.write_dag("trigger_pipe.dag")
+dag.write_script("trigger_pipe.sh")

@@ -15,24 +15,24 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-import glob
 import os
 
 from gstlal import plugins
 from gstlal.config import Argument, Option
-from gstlal.dags.layers import Layer, Node
+from gstlal.dags.layers import DataType, DataCache, Layer, Node
 from gstlal.dags import util as dagutils
 
 
-def reference_psd_layer(config, dag, time_bins):
-	layer = Layer("gstlal_reference_psd", requirements=config.condor, base_layer=True)
+def reference_psd_layer(config, dag):
+	requirements = {"request_cpu": 2, "request_memory": 2000, **config.condor}
+	layer = Layer("gstlal_reference_psd", requirements=requirements)
 
-	for span in time_bins:
+	psd_cache = DataCache.generate(DataType.REFERENCE_PSD, config.ifo_combo, config.time_bins)
+
+	for span, psds in psd_cache.groupby("time").items():
 		start, end = span
-		psd_path = data_path("psd", start)
-		psd_file = dagutils.T050017_filename(config.ifos, "REFERENCE_PSD", span, '.xml.gz')
-
 		layer += Node(
+			key = span,
 			arguments = [
 				Option("gps-start-time", int(start)),
 				Option("gps-end-time", int(end)),
@@ -43,64 +43,67 @@ def reference_psd_layer(config, dag, time_bins):
 				Option("data-find-server", config.source.data_find_server),
 				Option("psd-fft-length", config.psd.fft_length),
 			],
-			inputs = [
-				Option("frame-segments-file", config.source.frame_segments_file)
-			],
-			outputs = [
-				Option("write-psd", os.path.join(psd_path, psd_file))
-			],
+			inputs = Option("frame-segments-file", config.source.frame_segments_file),
+			outputs = Option("write-psd", psds.files)
 		)
 
-	return layer
+	dag["reference_psd"] = layer
+	return psd_cache
 
 
-def median_psd_layer(config, dag):
-	layer = Layer("gstlal_median_of_psds", requirements=config.condor)
+def median_psd_layer(config, dag, ref_psd_cache):
+	requirements = {"request_cpu": 2, "request_memory": 2000, **config.condor}
+	layer = Layer("gstlal_median_of_psds", parents="reference_psd", requirements=requirements)
 
-	median_path = data_path("median_psd", config.start)
-	median_file = dagutils.T050017_filename(config.ifos, "REFERENCE_PSD", config.span, '.xml.gz')
+	median_psd_cache = DataCache.generate(DataType.REFERENCE_PSD, config.ifo_combo, config.span)
 
 	layer += Node(
-		inputs = [Argument("psds", dag["reference_psd"].outputs["write-psd"])],
-		outputs = [Option("output-name", os.path.join(median_path, median_file))]
+		inputs = Argument("psds", ref_psd_cache.files),
+		outputs = Option("output-name", median_psd_cache.files)
 	)
 
-	return layer
+	dag["median_psd"] = layer
+	return median_psd_cache
 
 
-def svd_bank_layer(config, dag, svd_bins):
-	layer = Layer("gstlal_inspiral_svd_bank", requirements=config.condor)
+def svd_bank_layer(config, dag, median_psd_cache):
+	requirements = {"request_cpu": 1, "request_memory": 4000, **config.condor}
+	layer = Layer("gstlal_inspiral_svd_bank", parents="median_psd", requirements=requirements)
 
-	for svd_bin in svd_bins:
-		for ifo in config.ifos:
-			svd_path = data_path("svd_bank", config.start)
-			svd_file = dagutils.T050017_filename(ifo, f"{svd_bin}_SVD", config.span, '.xml.gz')
-			split_banks = glob.glob(os.path.join(config.rootdir, "split_bank", svd_bin, "*.xml.gz"))
+	svd_cache = DataCache.generate(DataType.SVD_BANK, config.ifos, config.span, svd_bins=config.svd.bins)
+	split_banks = DataCache.find(DataType.SPLIT_BANK, root=config.rootdir).groupby("bin")
 
-			layer += Node(
-				arguments = [
-					Option("instrument-override", ifo),
-					Option("flow", config.svd.f_low),
-					Option("sample-rate", config.svd.sample_rate),
-					Option("samples-min", config.svd.samples_min),
-					Option("samples-max-64", config.svd.samples_max_64),
-					Option("samples-max-256", config.svd.samples_max_256),
-					Option("samples-max", config.svd.samples_max),
-					Option("svd-tolerance", config.svd.tolerance),
-					Option("autocorrelation-length", config.svd.autocorrelation_length),
-				],
-				inputs = [
-					Option("reference-psd", dag["median_psd"].outputs["output-name"]),
-					Argument("split-banks", split_banks),
-				],
-				outputs = [Option("write-svd", os.path.join(svd_path, svd_file))],
-			)
+	for (ifo, svd_bin), svd_banks in svd_cache.groupby("ifo", "bin").items():
+		layer += Node(
+			key = (ifo, svd_bin),
+			arguments = [
+				Option("instrument-override", ifo),
+				Option("flow", config.svd.f_low),
+				Option("sample-rate", config.svd.sample_rate),
+				Option("samples-min", config.svd.samples_min),
+				Option("samples-max-64", config.svd.samples_max_64),
+				Option("samples-max-256", config.svd.samples_max_256),
+				Option("samples-max", config.svd.samples_max),
+				Option("svd-tolerance", config.svd.tolerance),
+				Option("autocorrelation-length", config.svd.autocorrelation_length),
+			],
+			inputs = [
+				Option("reference-psd", median_psd_cache.files),
+				Argument("split-banks", split_banks[svd_bin].files),
+			],
+			outputs = Option("write-svd", svd_banks.files)
+		)
 
-	return layer
+	dag["svd_bank"] = layer
+	return svd_cache
 
 
-def filter_layer(config, dag, time_bins, svd_bins):
-	layer = Layer("gstlal_inspiral", requirements=config.condor)
+def filter_layer(config, dag, ref_psd_cache, svd_bank_cache):
+	requirements = {"request_cpu": 2, "request_memory": 4000, **config.condor}
+	layer = Layer("gstlal_inspiral", parents=("reference_psd", "svd_bank"), requirements=requirements)
+
+	trigger_cache = DataCache.generate(DataType.TRIGGERS, config.ifo_combo, config.time_bins, svd_bins=config.svd.bins)
+	dist_stat_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.time_bins, svd_bins=config.svd.bins)
 
 	common_opts = [
 		Option("track-psd"),
@@ -121,44 +124,41 @@ def filter_layer(config, dag, time_bins, svd_bins):
 	if config.condor.singularity_image:
 		common_opts.append(Option("disable-service-discovery"))
 
-	for time_idx, span in enumerate(time_bins):
+	ref_psds = ref_psd_cache.groupby("time")
+	svd_banks = svd_bank_cache.groupby("bin")
+	dist_stats = dist_stat_cache.groupby("time", "bin")
+	for (span, svd_bin), triggers in trigger_cache.groupby("time", "bin").items():
 		start, end = span
-		for svd_idx, svd_bin in enumerate(svd_bins):
-			filter_opts = [
-				Option("ht-gate-threshold", calc_gate_threshold(config, svd_bin)),
-				Option("gps-start-time", int(start)),
-				Option("gps-end-time", int(end)),
-			]
-			filter_opts.extend(common_opts)
 
-			# filenames
-			trigger_path = data_path("triggers", start)
-			dist_stat_path = data_path("dist_stats", start)
-			trigger_file = dagutils.T050017_filename(config.ifos, f"{svd_bin}_LLOID", span, '.xml.gz')
-			dist_stat_file = dagutils.T050017_filename(config.ifos, f"{svd_bin}_DIST_STATS", span, '.xml.gz')
+		filter_opts = [
+			Option("ht-gate-threshold", calc_gate_threshold(config, svd_bin)),
+			Option("gps-start-time", int(start)),
+			Option("gps-end-time", int(end)),
+		]
+		filter_opts.extend(common_opts)
 
-			# select relevant svd banks from previous layer
-			num_ifos = len(config.ifos)
-			start_svd_idx = num_ifos * svd_idx
-			svd_banks = dag["svd_bank"].outputs["write-svd"][start_svd_idx:(start_svd_idx+num_ifos)]
-			svd_bank_files = ",".join([f"{ifo}:{bank}" for ifo, bank in zip(config.ifos, svd_banks)])
+		layer += Node(
+			key = (span, svd_bin),
+			parent_keys = {
+				"reference_psd": [span],
+				"svd_bank": [(ifo, svd_bin) for ifo in config.ifos],
+			},
+			arguments = filter_opts,
+			inputs = [
+				Option("frame-segments-file", config.source.frame_segments_file),
+				Option("veto-segments-file", config.filter.veto_segments_file),
+				Option("reference-psd", ref_psds[span].files),
+				Option("time-slide-file", config.filter.time_slide_file),
+				Option("svd-bank", svd_banks[svd_bin].files),
+			],
+			outputs = [
+				Option("output", triggers.files),
+				Option("ranking-stat-output", dist_stats[(span, svd_bin)].files),
+			],
+		)
 
-			layer += Node(
-				arguments = filter_opts,
-				inputs = [
-					Option("frame-segments-file", config.source.frame_segments_file),
-					Option("veto-segments-file", config.filter.veto_segments_file),
-					Option("reference-psd", dag["reference_psd"].outputs["write-psd"][time_idx]),
-					Option("time-slide-file", config.filter.time_slide_file),
-					Option("svd-bank", svd_bank_files),
-				],
-				outputs = [
-					Option("output", os.path.join(trigger_path, trigger_file)),
-					Option("ranking-stat-output", os.path.join(dist_stat_path, dist_stat_file)),
-				],
-			)
-
-	return layer
+	dag["filter"] = layer
+	return trigger_cache, dist_stat_cache
 
 
 def aggregate_layer(config, dag, time_bins):
@@ -177,11 +177,6 @@ def calc_gate_threshold(config, svd_bin, aggregate="max"):
 		return gate_mchirp_ratio * (bank_mchirp - min_mchirp) + min_threshold
 	else: # uniform threshold
 		return config.filter.ht_gate_threshold
-
-def data_path(data_name, start, create=True):
-	path = os.path.join(data_name, dagutils.gps_directory(start))
-	os.makedirs(path, exist_ok=True)
-	return path
 
 
 def format_ifo_args(ifos, args):
