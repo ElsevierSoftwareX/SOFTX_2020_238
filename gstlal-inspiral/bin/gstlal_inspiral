@@ -247,7 +247,7 @@ def parse_command_line():
 	group.add_option("--control-peak-time", metavar = "seconds", type = "int", help = "Set a time window in seconds to find peaks in the control signal (optional, default is to disable composite detection statistic).")
 	group.add_option("--output", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML output file *.{xml,xml.gz} or an SQLite database *.sqlite (required).  Can be given multiple times.  Exactly as many output files must be specified as svd-bank files will be processed (see --svd-bank).")
 	group.add_option("--output-cache", metavar = "filename", help = "Provide a cache of output files.  This can be used instead of giving multiple --output options.  Cannot be combined with --output.")
-	group.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument in the form ifo:file.  These can be given as a comma separated list such as H1:file1,H2:file2,L1:file3 to analyze multiple instruments.  This option can be given multiple times, unless --data-source is lvshm or framexmit in which case it must be given exactly once.  If given multiple times, the banks will be processed one-by-one, in order.  At least one svd bank for at least 2 detectors is required, but see also --svd-bank-cache.")
+	group.add_option("--svd-bank", metavar = "filename", action = "append", default = [], help = "Set the name of the LIGO light-weight XML file from which to load the svd bank for a given instrument.  To analyze multiple instruments, --svd-bank can be called multiple times for svd banks corresponding to different instruments.  If --data-source is lvshm or framexmit, then only svd banks corresponding to a single bin must be given.  If given multiple times, the banks will be processed one-by-one, in order.  At least one svd bank for at least 2 detectors is required, but see also --svd-bank-cache.")
 	group.add_option("--svd-bank-cache", metavar = "filename", help = "Provide a cache file of svd-bank files.  This can be used instead of giving multiple --svd-bank options.  Cannot be combined with --svd-bank options.")
 	# NOTE:  the clustering SQL scripts search for this option in the
 	# process_params table to determine the threshold below which it
@@ -324,21 +324,17 @@ def parse_command_line():
 	if options.svd_bank:
 		if options.svd_bank_cache:
 			raise ValueError("cannot supply both --svd-bank and --svd-bank-cache")
-		try:
-			svd_banks = list(map(inspiral.parse_svdbank_string, options.svd_bank))
-		except ValueError as e:
-			print("Unable to parse --svd-bank")
-			raise
+		svd_bank_cache = [CacheEntry.from_T050017(path) for path in options.svd_bank]
 	elif options.svd_bank_cache:
-		svd_banks = []
 		svd_bank_cache = list(map(CacheEntry, open(options.svd_bank_cache)))
 		if not svd_bank_cache:
 			raise ValueError("--svd-bank-cache is empty")
-		svd_bank_cache.sort(key = lambda cache_entry: cache_entry.description)
-		for key, seq in itertools.groupby(svd_bank_cache, key = lambda cache_entry: cache_entry.description):
-			svd_banks.append(dict((cache_entry.observatory, cache_entry.url) for cache_entry in seq))
 	else:
 		missing_options.append("either --svd-bank-cache or at least one --svd-bank")
+	svd_banks = []
+	svd_bank_cache.sort(key = lambda cache_entry: cache_entry.description)
+	for key, seq in itertools.groupby(svd_bank_cache, key = lambda cache_entry: cache_entry.description):
+		svd_banks.append(dict((cache_entry.observatory, cache_entry.url) for cache_entry in seq))
 
 	if options.output:
 		if options.output_cache:
