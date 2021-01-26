@@ -422,34 +422,6 @@ def cache_to_instruments(cache):
 	return ''.join(sorted(list(observatories)))
 
 
-def gps_directory(gpstime):
-	"""!
-	Given a gps time, returns the directory name where files corresponding
-	to this time will be written to, e.g. 1234567890 -> '12345'.
-	"""
-	return str(int(gpstime))[:5]
-
-
-def T050017_filename(instruments, description, seg, extension, path = None):
-	"""!
-	A function to generate a T050017 filename.
-	"""
-	if not isinstance(instruments, str):
-		instruments = "".join(sorted(instruments))
-	start, end = seg
-	start = int(math.floor(start))
-	try:
-		duration = int(math.ceil(end)) - start
-	# FIXME this is not a good way of handling this...
-	except OverflowError:
-		duration = 2000000000
-	extension = extension.strip('.')
-	if path is not None:
-		return '%s/%s-%s-%d-%d.%s' % (path, instruments, description, start, duration, extension)
-	else:
-		return '%s-%s-%d-%d.%s' % (instruments, description, start, duration, extension)
-
-
 def group_T050017_filename_from_T050017_files(cache_entries, extension, path = None):
 	"""!
 	A function to return the name of a file created from multiple files following

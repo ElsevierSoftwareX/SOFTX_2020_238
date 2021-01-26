@@ -15,11 +15,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from enum import Enum
-import glob
 import itertools
 import os
 from typing import List, Tuple, Union
@@ -27,7 +24,6 @@ from typing import List, Tuple, Union
 import htcondor
 
 from lal.utils import CacheEntry
-from ligo.segments import segment, segmentlist
 
 from gstlal.config import Argument, Option
 from gstlal.dags import util as dagutils
@@ -183,111 +179,3 @@ class Node:
 			self.inputs = [self.inputs]
 		if isinstance(self.outputs, Argument) or isinstance(self.outputs, Option):
 			self.outputs = [self.outputs]
-
-
-class DataType(Enum):
-	REFERENCE_PSD = 1
-	SPLIT_BANK = 2
-	SVD_BANK = 3
-	TRIGGERS = 4
-	DIST_STATS = 5
-	DIST_STAT_PDFS = 6
-
-	def __str__(self):
-		return self.name.upper()
-
-
-@dataclass
-class DataCache:
-	name: "DataType"
-	cache: list = field(default_factory=list)
-
-	@property
-	def files(self):
-		return [entry.path for entry in self.cache]
-
-	def groupby(self, *group):
-		# determine groupby operation
-		keyfunc = self._groupby_keyfunc(group)
-
-		# return groups of DataCaches keyed by group
-		grouped = defaultdict(list)
-		for entry in self.cache:
-			grouped[keyfunc(entry)].append(entry)
-		return {key: DataCache(self.name, cache) for key, cache in grouped.items()}
-
-	@staticmethod
-	def _groupby_keyfunc(groups):
-		if isinstance(groups, str):
-			groups = [groups]
-
-		def keyfunc(key):
-			keys = []
-			for group in groups:
-				if group in set(("ifo", "instrument", "observatory")):
-					keys.append(key.observatory)
-				elif group in set(("time", "segment", "time_bin")):
-					keys.append(key.segment)
-				elif group in set(("bin", "svd_bin")):
-					keys.append(key.description.split("_")[0])
-				else:
-					raise ValueError(f"{group} not a valid groupby operation")
-			if len(keys) > 1:
-				return tuple(keys)
-			else:
-				return keys[0]
-
-		return keyfunc
-
-	@classmethod
-	def generate(cls, name, ifos, time_bins, svd_bins=None, root=None, create_dirs=True):
-		if isinstance(ifos, str):
-			ifos = [ifos]
-		if isinstance(time_bins, segment):
-			time_bins = segmentlist([time_bins])
-		if svd_bins and isinstance(svd_bins, str):
-			svd_bins = [svd_bins]
-
-		cache = []
-		for ifo in ifos:
-			for span in time_bins:
-				path = data_path(str(name).lower(), span[0], create=create_dirs)
-				if svd_bins:
-					for svd_bin in svd_bins:
-						desc = f"{svd_bin}_GSTLAL_{str(name)}"
-						filename = dagutils.T050017_filename(ifo, desc, span, ".xml.gz")
-						cache.append(os.path.join(path, filename))
-				else:
-					desc = f"GSTLAL_{str(name)}"
-					filename = dagutils.T050017_filename(ifo, desc, span, ".xml.gz")
-					cache.append(os.path.join(path, filename))
-
-		if root:
-			cache = [os.path.join(root, entry) for entry in cache]
-		return cls(name, [CacheEntry.from_T050017(entry) for entry in cache])
-
-	@classmethod
-	def find(cls, name, start=None, end=None, root=None, segments=None, svd_bins=None):
-		cache = []
-		if svd_bins:
-			svd_bins = set([svd_bins]) if isinstance(svd_bins, str) else set(svd_bins)
-			for svd_bin in svd_bins:
-				pattern = f"*-{svd_bin}_*GSTLAL_{str(name)}*-*-*.xml.gz"
-				glob_path = os.path.join(str(name).lower(), "*", pattern)
-				if root:
-					glob_path = os.path.join(root, glob_path)
-				cache.extend(glob.glob(glob_path))
-		else:
-			pattern = f"*-*GSTLAL_{str(name)}*-*-*.xml.gz"
-			glob_path = os.path.join(str(name).lower(), "*", pattern)
-			if root:
-				glob_path = os.path.join(root, glob_path)
-			cache.extend(glob.glob(glob_path))
-
-		return cls(name, [CacheEntry.from_T050017(entry) for entry in cache])
-
-
-def data_path(data_name, start, create=True):
-	path = os.path.join(data_name, dagutils.gps_directory(start))
-	os.makedirs(path, exist_ok=True)
-	return path

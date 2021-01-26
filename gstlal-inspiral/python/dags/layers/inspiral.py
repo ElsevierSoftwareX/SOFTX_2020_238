@@ -19,8 +19,9 @@ import os
 
 from gstlal import plugins
 from gstlal.config import Argument, Option
-from gstlal.dags.layers import DataType, DataCache, Layer, Node
-from gstlal.dags import util as dagutils
+from gstlal.datafind import DataType, DataCache
+from gstlal.dags.layers import Layer, Node
+from gstlal.dags import util as dagutil
 
 
 def reference_psd_layer(config, dag):
@@ -114,7 +115,7 @@ def filter_layer(config, dag, ref_psd_cache, svd_bank_cache):
 		Option("frame-type", format_ifo_args(config.ifos, config.source.frame_type)),
 		Option("data-find-server", config.source.data_find_server),
 		Option("frame-segments-name", config.source.frame_segments_name),
-		Option("tmp-space", dagutils.condor_scratch_space()),
+		Option("tmp-space", dagutil.condor_scratch_space()),
 		Option("coincidence-threshold", config.filter.coincidence_threshold),
 		Option("fir-stride", config.filter.fir_stride),
 		Option("min-instruments", config.filter.min_instruments),
