@@ -162,10 +162,54 @@ def filter_layer(config, dag, ref_psd_cache, svd_bank_cache):
 	return trigger_cache, dist_stat_cache
 
 
-def aggregate_layer(config, dag, time_bins):
-	layer = Layer("gstlal_inspiral_aggregate", requirements=config.condor)
+def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
+	# cluster triggers by SNR
+	trg_layer = Layer(
+		"lalapps_run_sqlite",
+		name="cluster_triggers_by_snr",
+		parents="filter",
+		requirements={"request_cpu": 1, "request_memory": 2000, **config.condor}
+	)
 
-	return layer
+	# FIXME: find better way of discovering SQL file
+	share_path = os.path.split(dagutil.which("gstlal_inspiral"))[0].replace("bin", "share/gstlal")
+	snr_cluster_sql_file = os.path.join(share_path, "snr_simplify_and_cluster.sql")
+
+	for svd_bin, triggers in trigger_cache.groupby("bin").items():
+		trg_layer += Node(
+			key = svd_bin,
+			parent_keys = {"filter": [(span, svd_bin) for span in config.time_bins]},
+			arguments = [
+				Option("sql-file", snr_cluster_sql_file),
+				Option("tmp-space", dagutil.condor_scratch_space()),
+			],
+			inputs = Argument("triggers", triggers.files),
+		)
+
+	# marginalize dist stats across time
+	dist_layer = Layer(
+		"gstlal_inspiral_marginalize_likelihood",
+		name="marginalize_dist_stats",
+		parents="filter",
+		requirements={"request_cpu": 1, "request_memory": 2000, **config.condor}
+	)
+
+	agg_dist_stat_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+
+	dist_stats = dist_stat_cache.groupby("bin")
+	for svd_bin, agg_dist_stats in agg_dist_stat_cache.groupby("bin").items():
+		dist_layer += Node(
+			key = svd_bin,
+			parent_keys = {"filter": [(span, svd_bin) for span in config.time_bins]},
+			arguments = Option("marginalize", "ranking-stat"),
+			inputs = Argument("dist-stats", dist_stats[svd_bin].files),
+			outputs = Option("output", agg_dist_stats.files)
+		)
+
+	dag["aggregate_triggers"] = trg_layer
+	dag["aggregate_dist_stats"] = dist_layer
+
+	return trigger_cache, agg_dist_stat_cache
 
 
 def calc_gate_threshold(config, svd_bin, aggregate="max"):

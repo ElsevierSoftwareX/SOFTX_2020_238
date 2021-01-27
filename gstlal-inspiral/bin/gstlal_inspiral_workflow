@@ -42,6 +42,7 @@ ref_psd = dag.reference_psd()
 median_psd = dag.median_psd(ref_psd)
 svd_bank = dag.svd_bank(median_psd)
 triggers, dist_stats = dag.filter(ref_psd, svd_bank)
+triggers, dist_stats = dag.aggregate(triggers, dist_stats)
 
 dag.write_dag("trigger_pipe.dag")
 dag.write_script("trigger_pipe.sh")
