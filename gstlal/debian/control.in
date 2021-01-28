@@ -6,7 +6,7 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 9),
- dh-python,
+ dh-python3,
  doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
  gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
@@ -25,12 +25,12 @@ Build-Depends:
  libgstrtspserver-1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python3-all-dev (>= @MIN_PYTHON_VERSION@),
  python-gi-dev (>= @MIN_PYGOBJECT_VERSION@),
- python-lal (>= @MIN_LAL_VERSION@),
- python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
- python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
- python-numpy (>= @MIN_NUMPY_VERSION@),
+ pythoni3-lal (>= @MIN_LAL_VERSION@),
+ python3-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
+ python3-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
+ python3-numpy (>= @MIN_NUMPY_VERSION@),
  zlib1g-dev
 
 Package: gstlal
@@ -59,17 +59,17 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  libgstrtspserver-1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
- python (>= @MIN_PYTHON_VERSION@),
- python-avahi,
- python-gi (>= @MIN_PYGOBJECT_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
- python-gst-1.0,
- python-lal (>= @MIN_LAL_VERSION@),
+ python3 (>= @MIN_PYTHON_VERSION@),
+ python3-avahi,
+ python3-gi (>= @MIN_PYGOBJECT_VERSION@),
+ python3-glue (>= @MIN_GLUE_VERSION@),
+ python3-gst-1.0,
+ python3-lal (>= @MIN_LAL_VERSION@),
  ligo-lw-bin (>= @MIN_LIGO_LW_VERSION@),
- python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
- python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
- python-numpy (>= @MIN_NUMPY_VERSION@),
- python-scipy,
+ python3-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
+ python3-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
+ python3-numpy (>= @MIN_NUMPY_VERSION@),
+ python3-scipy,
  zlib1g
 # FIXME:  gstreamer1.0-python3-plugin-loader is *in fact* a dependency, but
 # it's not possible to have both our own legacy plugin loader and the stock
@@ -102,7 +102,7 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  libgsl-dev (>= 1.9),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
+ python3-all-dev (>= @MIN_PYTHON_VERSION@),
  zlib1g-dev
 Description: Files and documentation needed for compiling gstlal based plugins and programs.
  This package contains the files needed for building gstlal-based plugins

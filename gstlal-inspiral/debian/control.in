@@ -6,7 +6,7 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 9),
- dh-python,
+ dh-python3,
  doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
  gobject-introspection (>= @MIN_GOBJECT_INTROSPECTION_VERSION@),
@@ -22,11 +22,11 @@ Build-Depends:
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
- python-gobject-dev,
- python-lal (>= @MIN_LAL_VERSION@),
- python-lalinspiral (>= @MIN_LALINSPIRAL_VERSION@)
+ python3-all-dev (>= @MIN_PYTHON_VERSION@),
+ python3-glue (>= @MIN_GLUE_VERSION@),
+ python3-gobject-dev,
+ python3-lal (>= @MIN_LAL_VERSION@),
+ python3-lalinspiral (>= @MIN_LALINSPIRAL_VERSION@)
 
 Package: gstlal-inspiral
 Architecture: any
@@ -41,19 +41,19 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  libgstreamer1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  python (>= @MIN_PYTHON_VERSION@),
- python-gi,
- python-glue (>= @MIN_GLUE_VERSION@),
- python-gobject,
- python-gst-1.0,
- python-h5py,
- python-lal (>= @MIN_LAL_VERSION@),
- python-lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
- python-ligo-gracedb (>= 1.11),
- python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
- python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
- python-ligo-scald (>= @MIN_LIGO_SCALD_VERSION@),
- python-numpy (>= @MIN_NUMPY_VERSION@),
- python-scipy
+ python3-gi,
+ python3-glue (>= @MIN_GLUE_VERSION@),
+ python3-gobject,
+ python3-gst-1.0,
+ python3-h5py,
+ python3-lal (>= @MIN_LAL_VERSION@),
+ python3-lalinspiral (>= @MIN_LALINSPIRAL_VERSION@),
+ python3-ligo-gracedb (>= 2.7.5),
+ python3-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
+ python3-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
+ python3-ligo-scald (>= @MIN_LIGO_SCALD_VERSION@),
+ python3-numpy (>= @MIN_NUMPY_VERSION@),
+ python3-scipy
 Description: GStreamer for GW data analysis (inspiral parts)
  This package provides a variety of gstreamer elements for
  gravitational-wave data analysis and some libraries to help write such
@@ -74,9 +74,9 @@ Depends: ${shlibs:Depends}, ${misc:Depends},
  libgsl-dev (>= 1.9),
  libgstreamer1.0-dev (>= @MIN_GSTREAMER_VERSION@),
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
- python-gobject-dev
+ python3-all-dev (>= @MIN_PYTHON_VERSION@),
+ python3-glue (>= @MIN_GLUE_VERSION@),
+ python3-gobject-dev
 Description: Files and documentation needed for compiling gstlal-inspiral based plugins and programs.
  This package contains the files needed for building gstlal-inspiral based
  plugins and programs.

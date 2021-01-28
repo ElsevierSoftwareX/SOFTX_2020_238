@@ -1,6 +1,6 @@
 #!/usr/bin/make -f
 %:
-	dh $@ --with=python2
+	dh $@ --with=python3
 
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-gtk-doc
@@ -8,6 +8,3 @@ override_dh_auto_configure:
 override_dh_auto_test:
 	export PYTHONPATH=$$(pwd)/python; \
 	dh $@
-
-override_dh_python2:
-	dh_python2 --no-guessing-versions

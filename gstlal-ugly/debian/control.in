@@ -6,7 +6,7 @@ Standards-Version: 3.9.2
 X-Python-Version: >= @MIN_PYTHON_VERSION@
 Build-Depends:
  debhelper (>= 9),
- dh-python,
+ dh-python3,
  doxygen (>= @MIN_DOXYGEN_VERSION@),
  fakeroot,
  gds-dev (>= @MIN_GDS_VERSION@),
@@ -26,9 +26,9 @@ Build-Depends:
  libnds2-client-dev (>= @MIN_NDS_VERSION@),
  liborc-0.4-dev (>= 1:@MIN_ORC_VERSION@),
  pkg-config (>= @MIN_PKG_CONFIG_VERSION@),
- python-all-dev (>= @MIN_PYTHON_VERSION@),
- python-glue (>= @MIN_GLUE_VERSION@),
- python-numpy (>= @MIN_NUMPY_VERSION@)
+ python3-all-dev (>= @MIN_PYTHON_VERSION@),
+ python3-glue (>= @MIN_GLUE_VERSION@),
+ python3-numpy (>= @MIN_NUMPY_VERSION@)
 
 Package: gstlal-ugly
 Architecture: any
@@ -46,16 +46,16 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ${python:Depends},
  libgstreamer-plugins-base1.0-0 (>= @MIN_GSTREAMER_VERSION@),
  libnds2-client (>= @MIN_NDS_VERSION@),
  liborc-0.4-0 (>= 1:@MIN_ORC_VERSION@),
- python (>= @MIN_PYTHON_VERSION@),
- python-gi,
- python-glue (>= @MIN_GLUE_VERSION@),
- python-gst-1.0,
- python-h5py,
- python-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
- python-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
- python-ligo-scald (>= @MIN_LIGO_SCALD_VERSION@),
- python-numpy (>= @MIN_NUMPY_VERSION@),
- python-scipy
+ python3 (>= @MIN_PYTHON_VERSION@),
+ python3-gi,
+ python3-glue (>= @MIN_GLUE_VERSION@),
+ python3-gst-1.0,
+ python3-h5py,
+ python3-ligo-lw (>= @MIN_LIGO_LW_VERSION@),
+ python3-ligo-segments (>= @MIN_LIGO_SEGMENTS_VERSION@),
+ python3-ligo-scald (>= @MIN_LIGO_SCALD_VERSION@),
+ python3-numpy (>= @MIN_NUMPY_VERSION@),
+ python3-scipy
 Description: GStreamer for GW data analysis (in-development parts)
  This package provides a variety of GStreamer elements for
  gravitational-wave data analysis and some libraries to help write such
