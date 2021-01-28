@@ -12,7 +12,7 @@ gstlal-burst (0.3.0-1) unstable; urgency=low
   * bump minimum python version to 3.6
   * update minimum versions for lalsuite/gstlal packages
 
- -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 06 Feb 2020 07:11:31 -0800
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 28 Jan 2021 08:58:54 -0800
 
 gstlal-burst (0.2.1-1) unstable; urgency=low
 
