@@ -1,3 +1,19 @@
+gstlal-ugly (1.9.0-1) unstable; urgency=low
+
+  * filter out C++ standard flag from framecpp_CFLAGS
+  * add additional GSL headers
+  * metric.py: fix typo in diagonal metric term
+  * events.py: allow EventProcessor to optionally act as a source
+  * gstlal_svd_bank_checkerboard: require PSD to comply with SVD bank
+    API changes
+  * remove IIR/SPIIR functionality throughout
+  * python3 compatibility fixes
+  * update dependencies to rely on python3 packages
+  * bump minimum python version to 3.6
+  * update minimum versions for lalsuite/gstlal packages
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 28 Jan 2021 08:21:33 -0800
+
 gstlal-ugly (1.7.0-1) unstable; urgency=low
 
   * add events module for event processing

@@ -1,3 +1,16 @@
+gstlal-inspiral (1.9.0-1) unstable; urgency=low
+
+  * migrate plots modules: gstlal.plotX -> gstlal.plots.X
+  * ligolw API updates throughout
+  * remove IIR/SPIIR functionality throughout
+  * remove deprecated CGI-based online functionality
+  * python3 compatibility fixes
+  * update dependencies to rely on python3 packages
+  * bump minimum python version to 3.6
+  * update minimum versions for lalsuite/gstlal packages
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 28 Jan 2021 08:28:55 -0800
+
 gstlal-inspiral (1.7.3-1) unstable; urgency=low
 
   * far.py: put singles penalty to 10 to match final o3a catalog config.

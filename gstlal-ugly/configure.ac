@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-ugly],[1.7.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
+AC_INIT([gstlal-ugly],[1.9.0],[gstlal-discuss@ligo.org],[gstlal-ugly])
 AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -361,7 +361,7 @@ AS_IF([test "x$HAVE_FRAMECPP" != "xyes"], [AC_MSG_ERROR([framecpp not found])])
 #
 
 
-AC_SUBST([MIN_GDS_VERSION], [2.18.0])
+AC_SUBST([MIN_GDS_VERSION], [2.19.0])
 AC_ARG_WITH(
 	[gds],
 	[AS_HELP_STRING([--with-gds], [include gds plugin @<:@default=check@:>@])],
@@ -406,8 +406,8 @@ AC_SUBST([gds_framexmit_LIBS])
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.19.0])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.4.0])
+AC_SUBST([MIN_LAL_VERSION], [7.1.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [2.0.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -424,7 +424,7 @@ AC_SUBST([MIN_GLUE_VERSION], [2.0.0])
 AX_PYTHON_GLUE([$MIN_GLUE_VERSION])
 AC_SUBST([MIN_LIGO_SEGMENTS_VERSION], [1.2.0])
 AX_PYTHON_LIGO_SEGMENTS([$MIN_LIGO_SEGMENTS_VERSION])
-AC_SUBST([MIN_LIGO_LW_VERSION], [1.5.3])
+AC_SUBST([MIN_LIGO_LW_VERSION], [1.6.0])
 AX_PYTHON_LIGO_LW([$MIN_LIGO_LW_VERSION])
 AC_SUBST([MIN_LIGO_SCALD_VERSION], [0.7.2])
 
@@ -434,7 +434,7 @@ AC_SUBST([MIN_LIGO_SCALD_VERSION], [0.7.2])
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.6.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.8.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])

@@ -1,3 +1,19 @@
+gstlal-burst (0.3.0-1) unstable; urgency=low
+
+  * add gstlal_snax_generate to create synthetic features online
+  * add gstlal_snax_whiten to write whitened timeseries to disk
+  * gstlal_snax_extract: remove unused web server feature
+  * SNAX: remove unused row transfer format via Kafka
+  * SNAX: performance improvements in AppSync
+  * SNAX: allow feature generation over multiple frequency bins
+  * SNAX: refactor common pipeline utilities into snax.pipeparts
+  * python3 compatibility fixes
+  * update dependencies to rely on python3 packages
+  * bump minimum python version to 3.6
+  * update minimum versions for lalsuite/gstlal packages
+
+ -- Patrick Godwin <patrick.godwin@ligo.org>  Thu, 06 Feb 2020 07:11:31 -0800
+
 gstlal-burst (0.2.1-1) unstable; urgency=low
 
   * Update minimum versions - gstlal: 1.6.0, gstlal-ugly: 1.7.0

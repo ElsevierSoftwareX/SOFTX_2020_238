@@ -3,7 +3,7 @@
 #
 
 
-AC_INIT([gstlal-burst],[0.2.1],[gstlal-discuss@ligo.org],[gstlal-burst])
+AC_INIT([gstlal-burst],[0.3.0],[gstlal-discuss@ligo.org],[gstlal-burst])
 AC_COPYRIGHT([Copyright (C) The authors (see source code for details)])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
@@ -265,7 +265,7 @@ AC_SUBST([MIN_LIGO_SCALD_VERSION], [0.7.2])
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.6.0])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.8.0])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_VERSION])
@@ -280,7 +280,7 @@ AC_SUBST([GSTLAL_LIBS])
 #
 
 
-AC_SUBST([MIN_GSTLAL_UGLY_VERSION], [1.7.0])
+AC_SUBST([MIN_GSTLAL_UGLY_VERSION], [1.9.0])
 AX_GSTLAL_SPLIT_VERSION([GSTLAL_UGLY_VERSION])
 AC_SUBST([GSTLAL_UGLY_VERSION_MAJOR])
 AC_SUBST([GSTLAL_UGLY_VERSION_MINOR])
