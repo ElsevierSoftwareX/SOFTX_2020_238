@@ -61,17 +61,17 @@ BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
 # FIXME:  add this when it becomes available
 #BuildRequires: %{gstreamername}-rtsp-server-devel >= @MIN_GSTREAMER_VERSION@
-BuildRequires: lal-devel >= @MIN_LAL_VERSION@
-BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
-BuildRequires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
-BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
-BuildRequires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
+BuildRequires: liblal-devel >= @MIN_LAL_VERSION@
+BuildRequires: liblalburst-devel >= @MIN_LALBURST_VERSION@
+BuildRequires: liblalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
+BuildRequires: liblalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+BuildRequires: liblalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
 BuildRequires: numpy >= @MIN_NUMPY_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
 BuildRequires: python3-devel >= @MIN_PYTHON_VERSION@
 # needed for gstpythonplugin.c remove when we remove that plugin from gstlal
-BuildRequires: pygobject3-devel >= @MIN_PYGOBJECT_VERSION@
+BuildRequires: python36-gobject-devel >= @MIN_PYGOBJECT_VERSION@
 BuildRequires: python%{python3_pkgversion}-lal >= @MIN_LAL_VERSION@
 BuildRequires: zlib-devel
 Source: @PACKAGE_NAME@-%{version}.tar.gz
@@ -97,11 +97,11 @@ Requires: fftw-devel >= 3
 Requires: gsl-devel
 Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
-Requires: lal-devel >= @MIN_LAL_VERSION@
-Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
-Requires: lalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
-Requires: lalburst-devel >= @MIN_LALBURST_VERSION@
-Requires: lalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
+Requires: liblal-devel >= @MIN_LAL_VERSION@
+Requires: liblalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+Requires: liblalsimulation-devel >= @MIN_LALSIMULATION_VERSION@
+Requires: liblalburst-devel >= @MIN_LALBURST_VERSION@
+Requires: liblalinspiral-devel >= @MIN_LALINSPIRAL_VERSION@
 Requires: python3-devel >= @MIN_PYTHON_VERSION@
 %description devel
 This package contains the files needed for building gstlal-based plugins

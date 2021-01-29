@@ -41,9 +41,9 @@ BuildRequires: gsl-devel
 BuildRequires: gstlal-devel >= @MIN_GSTLAL_VERSION@
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
-BuildRequires: lal-devel >= @MIN_LAL_VERSION@
-BuildRequires: lalburst-devel >= @MIN_LALBURST_VERSION@
-BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+BuildRequires: liblal-devel >= @MIN_LAL_VERSION@
+BuildRequires: liblalburst-devel >= @MIN_LALBURST_VERSION@
+BuildRequires: liblalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: orc >= @MIN_ORC_VERSION@
 BuildRequires: pkgconfig >= @MIN_PKG_CONFIG_VERSION@
 BuildRequires: python3-devel >= @MIN_PYTHON_VERSION@
@@ -66,9 +66,9 @@ Requires: python3-devel >= @MIN_PYTHON_VERSION@
 Requires: fftw-devel >= 3 
 Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ 
-Requires: lal-devel >= @MIN_LAL_VERSION@
-Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
-Requires: lalburst-devel >= @MIN_LALBURST_VERSION@
+Requires: liblal-devel >= @MIN_LAL_VERSION@
+Requires: liblalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+Requires: liblalburst-devel >= @MIN_LALBURST_VERSION@
 
 %description devel
 This package contains the files needed for building gstlal-burst based plugins

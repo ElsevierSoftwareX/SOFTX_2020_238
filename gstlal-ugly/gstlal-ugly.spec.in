@@ -47,8 +47,8 @@ BuildRequires: fftw-devel >= 3
 BuildRequires: gobject-introspection-devel >= @MIN_GOBJECT_INTROSPECTION_VERSION@
 BuildRequires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@
 BuildRequires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@
-BuildRequires: lal-devel >= @MIN_LAL_VERSION@
-BuildRequires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@
+BuildRequires: liblal-devel >= @MIN_LAL_VERSION@
+BuildRequires: liblalmetaio-devel >= @MIN_LALMETAIO_VERSION@
 BuildRequires: gsl-devel
 BuildRequires: gtk-doc >= @MIN_GTK_DOC_VERSION@
 BuildRequires: ldas-tools-framecpp-devel >= @MIN_FRAMECPP_VERSION@
@@ -82,8 +82,8 @@ Requires: python3-devel >= @MIN_PYTHON_VERSION@
 Requires: fftw-devel >= 3 
 Requires: %{gstreamername}-devel >= @MIN_GSTREAMER_VERSION@ 
 Requires: %{gstreamername}-plugins-base-devel >= @MIN_GSTREAMER_VERSION@ 
-Requires: lal-devel >= @MIN_LAL_VERSION@ 
-Requires: lalmetaio-devel >= @MIN_LALMETAIO_VERSION@ 
+Requires: liblal-devel >= @MIN_LAL_VERSION@ 
+Requires: liblalmetaio-devel >= @MIN_LALMETAIO_VERSION@ 
 Requires: gsl-devel 
 Requires: nds2-client-headers >= @MIN_NDS_VERSION@
 %description devel
