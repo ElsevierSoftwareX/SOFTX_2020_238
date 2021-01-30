@@ -39,7 +39,7 @@ from ligo.lw import utils as ligolw_utils
 from gstlal import far
 from gstlal import imr_utils
 from gstlal import inspiral_pipe
-from gsltal.plot import util as plotutil
+from gstlal.plot import util as plotutil
 
 @lsctables.use_in
 class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
