@@ -217,6 +217,7 @@ if len(gstlal_frame_cache_list) != len(config_files):
 # Read stuff we need from the filters file (we'll just use the first filters file)
 frequencies = []
 act_corrections = []
+stages = []
 act_line_names = options.act_line_names.split(',')
 EPICS = options.act_EPICS_list.split(',')
 if len(act_line_names) != len(act_channels):
@@ -227,6 +228,14 @@ for i in range(len(act_line_names)):
 	frequencies.append(float(filters[0]["%s_line_freq" % act_line_names[i]]))
 	act_corrections.append(float(filters[0]["%s_real" % EPICS[i]]))
 	act_corrections.append(float(filters[0]["%s_imag" % EPICS[i]]))
+	if 'tst' in act_line_names[i] or 'esd' in act_line_names[i]:
+		stages.append('T')
+	elif 'pum' in act_line_names[i]:
+		stages.append('P')
+	elif 'uim' in act_line_names[i]:
+		stages.append('U')
+	else:
+		stages.append('act')
 if(options.act_time_advance):
 	for i in range(0, len(act_corrections) // 2):
 		corr = act_corrections[2 * i] + 1j * act_corrections[2 * i + 1]
@@ -427,7 +436,7 @@ for i in range(0, len(frequencies)):
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.median(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
-	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
+	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm %s} \  {\rm at \  %0.1f \  Hz}$' % (ifo, stages[i], frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
