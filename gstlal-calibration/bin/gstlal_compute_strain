@@ -556,7 +556,7 @@ else:
 	srcQ_default = 0 + 0j
 
 if fs_squared_default < 0:
-	srcQ_default = 1j * srcQ_default
+	srcQ_default = -1j * srcQ_default
 
 # Load kappa dewhitening factors
 if dewhitening:
@@ -2087,11 +2087,11 @@ if apply_complex_kappatst:
 
 if apply_complex_kappapum:
 	# We will apply an adaptive FIR filter to the PUM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_pum_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kpumtee, static_model = pumfilt_model, static_filter = pumfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, adaptive_filter_length = len(pumfilt), frequency_resolution = act_freq_res, window_type = act_window_type, filter_sample_rate = pumchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pum_filter")
+	adaptive_pum_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kpumtee, static_model = pumfilt_model, static_filter = pumfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = pum_act_line_freq, adaptive_filter_length = len(pumfilt), frequency_resolution = act_freq_res, window_type = act_window_type, filter_sample_rate = pumchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_pum_filter")
 
 if apply_complex_kappauim:
 	# We will apply an adaptive FIR filter to the UIM component of the actuation that includes time-dependence in the gain and computational time delay
-	adaptive_uim_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kuimtee, static_model = uimfilt_model, static_filter = uimfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = esd_act_line_freq, adaptive_filter_length = len(uimfilt), frequency_resolution = act_freq_res, window_type = act_window_type, filter_sample_rate = uimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_uim_filter")
+	adaptive_uim_filter = calibration_parts.mkadaptivefirfilt(pipeline, smooth_kuimtee, static_model = uimfilt_model, static_filter = uimfilt, update_samples = int(actuation_filter_update_time * compute_factors_sr), average_samples = int(actuation_filter_averaging_time * compute_factors_sr), phase_measurement_frequency = uim_act_line_freq, adaptive_filter_length = len(uimfilt), frequency_resolution = act_freq_res, window_type = act_window_type, filter_sample_rate = uimchainsr, filter_timeshift = 1000000000 * actuation_filter_update_time, name = "adaptive_uim_filter")
 
 if apply_complex_kappapu:
 	# We will apply an adaptive FIR filter to the PUM/UIM component of the actuation that includes time-dependence in the gain and computational time delay

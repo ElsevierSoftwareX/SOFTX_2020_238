@@ -70,7 +70,7 @@ parser.add_option("--ifo", metavar = "name", help = "Name of the interferometer 
 parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
 parser.add_option("--gstlal-frame-cache-list", metavar = "list", help = "Comma-separated list of gstlal calibrated frame cache files to read")
 parser.add_option("--config-file", metavar = "name", help = "Configurations file used to produce gstlal calibrated frames, needed to get pcal line frequencies and correction factors")
-parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_TX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
+parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
 parser.add_option("--gstlal-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels to compare to pcal")
 parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels in the raw frames to compare to pcal")
 parser.add_option("--demodulation-time", metavar = "seconds", type = int, default = 128, help = "Time in seconds of low-pass filter used for demodulation. (Default = 128)")
@@ -325,7 +325,7 @@ for i in range(0, len(frequencies)):
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
 	if options.show_stats:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.mean(magnitudes[0]), numpy.std(magnitudes[0])))
+		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.median(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
 		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
 	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
@@ -333,14 +333,14 @@ for i in range(0, len(frequencies)):
 		plt.ylabel(r'${\rm Magnitude}$')
 	magnitude_range = options.magnitude_ranges.split(';')[i]
 	ticks_and_grid(plt.gca(), ymin = float(magnitude_range.split(',')[0]), ymax = float(magnitude_range.split(',')[1]))
-	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'lower right')
+	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 	leg.get_frame().set_alpha(0.8)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 	if options.show_stats:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.mean(phases[0]), numpy.std(phases[0])))
+		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.median(phases[0]), numpy.std(phases[0])))
 	else:
 		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
-	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'lower right')
+	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 	leg.get_frame().set_alpha(0.8)
 	if i == 0:
 		plt.ylabel(r'${\rm Phase \  [deg]}$')
@@ -357,17 +357,17 @@ for i in range(0, len(frequencies)):
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
 		if options.show_stats:
-			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.mean(magnitudes[j]), numpy.std(magnitudes[j])))
+			plt.plot(times[:min(len(times), len(magnitudes[j]))], magnitudes[j][:min(len(times), len(magnitudes[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.median(magnitudes[j]), numpy.std(magnitudes[j])))
 		else:
-			plt.plot(times, magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
-		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'lower right')
+			plt.plot(times[:min(len(times), len(magnitudes[j]))], magnitudes[j][:min(len(times), len(magnitudes[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
+		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 		leg.get_frame().set_alpha(0.8)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 		if options.show_stats:
-			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[j], numpy.mean(phases[j]), numpy.std(phases[j])))
+			plt.plot(times[:min(len(times), len(phases[j]))], phases[j][:min(len(times), len(phases[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[j], numpy.median(phases[j]), numpy.std(phases[j])))
 		else:
-			plt.plot(times, phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
-		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'lower right')
+			plt.plot(times[:min(len(times), len(phases[j]))], phases[j][:min(len(times), len(phases[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
+		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 		leg.get_frame().set_alpha(0.8)
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.pdf" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
