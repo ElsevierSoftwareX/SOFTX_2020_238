@@ -20,29 +20,50 @@
 import argparse
 
 from gstlal.config.inspiral import Config
-from gstlal.dags import util as dagutils
 from gstlal.dags.inspiral import DAG
+from gstlal.datafind import DataCache, DataType
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", help="Sets the path to read configuration from.")
+parser.add_argument("-w", "--workflow", default="full", help="Sets the type of workflow to run.")
 parser.add_argument("--svd-manifest", help="Load SVD manifest from this path.")
 
 # load config
 args = parser.parse_args()
 config = Config.load(args.config)
-config.load_svd_manifest(args.svd_manifest)
+#config.load_svd_manifest(args.svd_manifest)
+config.load_svd_manifest(config.svd.manifest)
 
 # create dag
 dag = DAG(config)
 dag.create_log_dir()
 
 # generate dag layers
-ref_psd = dag.reference_psd()
-median_psd = dag.median_psd(ref_psd)
-svd_bank = dag.svd_bank(median_psd)
-triggers, dist_stats = dag.filter(ref_psd, svd_bank)
-triggers, dist_stats = dag.aggregate(triggers, dist_stats)
+if args.workflow in set(("full", "filter")):
+	# generate filter dag layers
+	ref_psd = dag.reference_psd()
+	median_psd = dag.median_psd(ref_psd)
+	svd_bank = dag.svd_bank(median_psd)
+	triggers, dist_stats = dag.filter(ref_psd, svd_bank)
+	triggers, dist_stats = dag.aggregate(triggers, dist_stats)
+else:
+	# load filter data products
+	triggers = DataCache.find(DataType.TRIGGERS, root=config.rootdir)
+	dist_stats = DataCache.find(DataType.DIST_STATS, root=config.rootdir)
+	median_psd = DataCache.find(DataType.MEDIAN_PSD, root=config.rootdir)
 
-dag.write_dag("trigger_pipe.dag")
-dag.write_script("trigger_pipe.sh")
+if args.workflow in set(("full", "rerank")):
+	# generate rerank dag layers
+	prior = dag.prior(median_psd, dist_stats)
+	dist_stats = dag.marginalize(prior, dist_stats)
+	pdfs = dag.calc_pdf(dist_stats)
+	pdfs = dag.marginalize_pdf(pdfs)
+	triggers = dag.calc_likelihood(triggers, dist_stats)
+	triggers = dag.cluster(triggers)
+	triggers = dag.compute_far(triggers, pdfs)
+
+# write dag/script to disk
+dag_name = f"{args.workflow}_inspiral_dag"
+dag.write_dag(f"{dag_name}.dag")
+dag.write_script(f"{dag_name}.sh")

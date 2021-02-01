@@ -32,6 +32,8 @@ class Config(BaseConfig):
 		self.psd = dotdict(replace_keys(kwargs["psd"]))
 		self.svd = dotdict(replace_keys(kwargs["svd"]))
 		self.filter = dotdict(replace_keys(kwargs["filter"]))
+		self.prior = dotdict(replace_keys(kwargs["prior"]))
+		self.rank = dotdict(replace_keys(kwargs["rank"]))
 
 	def load_svd_manifest(self, manifest_file):
 		with open(manifest_file, "r") as f:
