@@ -195,9 +195,9 @@ def parse_command_line():
 	parser.add_option("--color-psd", metavar = "name", help = "Set the name of psd xml file to color the data with")
 	parser.add_option("--output-path", metavar = "name", default = ".", help = "Path to output frame files (default = \".\").")
 	parser.add_option("--output-channel-name", metavar = "name", help = "The name of the channel in the output frames. The default is the same as the channel name")
-	parser.add_option("--frame-type", metavar = "name", help = "Frame type, required")
-	parser.add_option("--frame-duration", metavar = "s", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
-	parser.add_option("--frames-per-file", metavar = "n", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
+	parser.add_option("--output-frame-type", metavar = "name", help = "Frame type, required")
+	parser.add_option("--output-frame-duration", metavar = "s", default = 16, type = "int", help = "Set the duration of the output frames.  The duration of the frame file will be multiplied by --frames-per-file.  Default: 16s")
+	parser.add_option("--output-frames-per-file", metavar = "n", default = 256, type = "int", help = "Set the number of frames per file.  Default: 256")
 	parser.add_option("-v", "--verbose", action = "store_true", help = "Be verbose (optional).")
 
 	#
@@ -209,7 +209,7 @@ def parse_command_line():
 	if options.sample_rate > 16384:
 		raise ValueError("--sample-rate must be <= 16384")
 
-	if options.frame_type is None:
+	if options.output_frame_type is None:
 		raise ValueError("--frame-type is required")
 
 
@@ -329,10 +329,10 @@ else:
 
 
 ## 10) create frames
-head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.output_channel_name): head}, frame_duration = options.frame_duration, frames_per_file = options.frames_per_file)
+head = pipeparts.mkframecppchannelmux(pipeline, {"%s:%s" % (instrument, options.output_channel_name): head}, frame_duration = options.output_frame_duration, frames_per_file = options.output_frames_per_file)
 
 ## 11) Write the frames to disk
-head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.frame_type)
+head = pipeparts.mkframecppfilesink(pipeline, head, frame_type = options.output_frame_type)
 
 # Put O(100000 s) frames in each directory
 head.connect("notify::timestamp", pipeparts.framecpp_filesink_ldas_path_handler, (options.output_path, 5))
