@@ -36,7 +36,7 @@ class Layer:
 	universe: str = "vanilla"
 	log_dir: str = "logs"
 	retries: int = 3
-	transfer_files: bool = False
+	transfer_files: bool = True
 	parents: Union[None, 'Layer', Iterable] = None
 	requirements: dict = field(default_factory=dict)
 	inputs: dict = field(default_factory=dict)
@@ -68,10 +68,12 @@ class Layer:
 				submit_options["should_transfer_files"] = "YES"
 				submit_options["when_to_transfer_output"] = "ON_SUCCESS"
 				submit_options["success_exit_code"] = 0
+				submit_options["preserve_relative_paths"] = True
 			if inputs:
-				submit_options["transfer_inputs"] = inputs
+				submit_options["transfer_input_files"] = inputs
 			if outputs:
-				submit_options["transfer_outputs"] = outputs
+				submit_options["transfer_output_files"] = outputs
+				submit_options["transfer_output_remaps"] = f'"{self._output_remaps()}"'
 
 		# log submit opts
 		submit_options["output"] = f"{self.log_dir}/$(nodename)-$(cluster)-$(process).out"
@@ -133,10 +135,11 @@ class Layer:
 		io_args = []
 		io_opts = []
 		for arg in itertools.chain(self.nodes[0].inputs, self.nodes[0].outputs):
-			if isinstance(arg, Argument):
-				io_args.append(f"$({arg.condor_name})")
-			else:
-				io_opts.append(f"$({arg.condor_name})")
+			if arg.include:
+				if isinstance(arg, Argument):
+					io_args.append(f"$({arg.condor_name})")
+				else:
+					io_opts.append(f"$({arg.condor_name})")
 		return " ".join(itertools.chain(args, io_opts, io_args))
 
 	def _inputs(self):
@@ -145,17 +148,23 @@ class Layer:
 	def _outputs(self):
 		return ",".join([f"$(output_{arg.condor_name})" for arg in self.nodes[0].outputs])
 
+	def _output_remaps(self):
+		return ";".join([f"$(output_{arg.condor_name}_remap)" for arg in self.nodes[0].outputs])
+
 	def _vars(self):
 		allvars = []
 		for i, node in enumerate(self.nodes):
-			nodevars = {arg.condor_name: arg.vars() for arg in node.arguments}
+			nodevars = {arg.condor_name: arg.vars() for arg in node.arguments if arg.include}
 			nodevars["nodename"] = f"{self.name}_{i:04X}"
 			if node.inputs:
-				nodevars.update({f"{arg.condor_name}": arg.vars() for arg in node.inputs})
-				nodevars.update({f"input_{arg.condor_name}": arg.files() for arg in node.inputs})
+				nodevars.update({f"{arg.condor_name}": arg.vars() for arg in node.inputs if arg.include})
+				if self.transfer_files:
+					nodevars.update({f"input_{arg.condor_name}": arg.files() for arg in node.inputs})
 			if node.outputs:
-				nodevars.update({f"{arg.condor_name}": arg.vars() for arg in node.outputs})
-				nodevars.update({f"output_{arg.condor_name}": arg.files() for arg in node.outputs})
+				nodevars.update({f"{arg.condor_name}": arg.vars(basename=self.transfer_files) for arg in node.outputs if arg.include})
+				if self.transfer_files:
+					nodevars.update({f"output_{arg.condor_name}": arg.files(basename=True) for arg in node.outputs})
+					nodevars.update({f"output_{arg.condor_name}_remap": arg.remaps() for arg in node.outputs})
 			allvars.append(nodevars)
 
 		return allvars

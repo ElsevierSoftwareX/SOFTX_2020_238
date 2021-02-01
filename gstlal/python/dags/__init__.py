@@ -59,7 +59,10 @@ class DAG(dags.DAG):
 				)
 
 	def __getitem__(self, key):
-		return self._layer_configs[key]
+		return self._layers[key]
+
+	def __contains__(self, key):
+		return key in self._layers
 
 	def create_log_dir(self, log_dir="logs"):
 		os.makedirs(log_dir, exist_ok=True)

@@ -128,50 +128,79 @@ class Config:
 class Argument:
 	name: str
 	argument: Union[str, List]
+	include: bool = True
 
 	def __post_init__(self):
 		self.condor_name = self.name.replace("-", "_")
 		if self.condor_name in _PROTECTED_CONDOR_VARS:
 			self.condor_name += "_"
 
-	def vars(self):
+	@property
+	def arg_basename(self):
 		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
-			return " ".join(self.argument)
+			return [os.path.basename(arg) for arg in self.argument]
 		else:
-			return f"{self.argument}"
+			return os.path.basename(self.argument)
 
-	def files(self):
+	def vars(self, basename=False):
 		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
-			return ",".join(self.argument)
+			return " ".join(self.arg_basename) if basename else " ".join(self.argument)
 		else:
-			return f"{self.argument}"
+			return f"{self.arg_basename}" if basename else f"{self.argument}"
+
+	def files(self, basename=False):
+		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
+			return ",".join(self.arg_basename) if basename else ",".join(self.argument)
+		else:
+			return f"{self.arg_basename}" if basename else f"{self.argument}"
+
+	def remaps(self):
+		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
+			return ",".join([f"{base}={arg}" for base, arg in zip(self.arg_basename, self.argument)])
+		else:
+			return f"{self.arg_basename}={self.argument}"
 
 
 @dataclass
 class Option:
 	name: str
 	argument: Union[None, str, List] = None
+	include: bool = True
 
 	def __post_init__(self):
 		self.condor_name = self.name.replace("-", "_")
 		if self.condor_name in _PROTECTED_CONDOR_VARS:
 			self.condor_name += "_"
 
-	def vars(self):
+	@property
+	def arg_basename(self):
+		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
+			return [os.path.basename(arg) for arg in self.argument]
+		else:
+			return os.path.basename(self.argument)
+
+	def vars(self, basename=False):
 		if self.argument is None:
 			return f"--{self.name}"
 		elif isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
-			return " ".join([f"--{self.name} {arg}" for arg in self.argument])
+			if basename:
+				return " ".join([f"--{self.name} {arg}" for arg in self.arg_basename])
+			else:
+				return " ".join([f"--{self.name} {arg}" for arg in self.argument])
 		else:
-			return f"--{self.name} {self.argument}"
+			return f"--{self.name} {self.arg_basename}" if basename else f"--{self.name} {self.argument}"
 
-	def files(self):
-		if self.argument is None:
-			return
-		elif isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
-			return ",".join([f"{arg}" for arg in self.argument])
+	def files(self, basename=False):
+		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
+			return ",".join(self.arg_basename) if basename else ",".join(self.argument)
 		else:
-			return f"{self.argument}"
+			return f"{self.arg_basename}" if basename else f"{self.argument}"
+
+	def remaps(self):
+		if isinstance(self.argument, Iterable) and not isinstance(self.argument, str):
+			return ";".join([f"{base}={arg}" for base, arg in zip(self.arg_basename, self.argument)])
+		else:
+			return f"{self.arg_basename}={self.argument}"
 
 
 class dotdict(dict):
