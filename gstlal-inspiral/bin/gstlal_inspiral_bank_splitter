@@ -30,8 +30,7 @@ from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
 from gstlal import templates
-from gstlal import inspiral_pipe
-from gstlal import dagparts
+from gstlal import datafind
 from gstlal import chirptime
 from gstlal import reference_psd
 from gstlal import svd_bank
@@ -223,12 +222,12 @@ for bank_count, (_, rows) in enumerate(outputrows):
 		row.mtotal = row.mass1 + row.mass2
 
 	sngl_inspiral_table[:] = rows
-	output = dagparts.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
+	output = datafind.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
 	metadata[output] = rows
 	svd_dirs.append(output)
 	ligolw_utils.write_filename(xmldoc, output, gz = output.endswith('gz'), verbose = options.verbose)
 
-svd_groups = list(inspiral_pipe.group(svd_dirs, options.num_banks))
+svd_groups = list(svd_bank.group(svd_dirs, options.num_banks))
 outjson = {}
 for n, svd in enumerate(svd_groups):
 	outdir = os.path.join(options.output_path, "%04d" % n)
@@ -277,6 +276,6 @@ for n, svd in enumerate(svd_groups):
 		"horizon_factors": dict((r.template_id, r.horizon/ref_hd) for m, split_file in enumerate(svd) for r in metadata[split_file][clipleft:-clipright])
 		}
 
-#with open(dagparts.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_INSPIRAL_SVD_BANK_METADATA" % (0, n), (0, 0), ".json", path = options.output_path), "w") as jsf:
+#with open(datafind.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_INSPIRAL_SVD_BANK_METADATA" % (0, n), (0, 0), ".json", path = options.output_path), "w") as jsf:
 with open(options.output_stats_file, "w") as jsf:
 	jsf.write(json.dumps(outjson, sort_keys = True, indent = 4))

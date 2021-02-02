@@ -28,9 +28,9 @@ from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
 from gstlal import templates
-from gstlal import inspiral_pipe
-from gstlal import dagparts
+from gstlal import datafind
 from gstlal import chirptime
+from gstlal import svd_bank
 import lal
 from lal.utils import CacheEntry
 import numpy, scipy.interpolate
@@ -241,7 +241,7 @@ with open(options.output_cache, "w") as output_cache_file:
 			row.mtotal = row.mass1 + row.mass2
 
 		sngl_inspiral_table[:] = rows
-		output = dagparts.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
+		output = datafind.T050017_filename(options.instrument, "%04d_GSTLAL_SPLIT_BANK" % bank_count, (0, 0), ".xml.gz", path = options.output_path)
 		if not options.write_svd_caches:
 			output_cache_file.write("%s\n" % CacheEntry.from_T050017("file://localhost%s" % os.path.abspath(output)))
 		else:
@@ -256,8 +256,8 @@ with open(options.output_cache, "w") as output_cache_file:
 			# cache directory already exists
 			pass
 
-		for svd_cache_group in inspiral_pipe.group(svd_caches, options.num_banks):
-			output = dagparts.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), (0, 0), ".cache", path = cache_path)
+		for svd_cache_group in svd_bank.group(svd_caches, options.num_banks):
+			output = datafind.T050017_filename(options.instrument, "%04d_%04d_GSTLAL_SPLIT_BANK" % (svd_cache_group[0][0], svd_cache_group[-1][0]), (0, 0), ".cache", path = cache_path)
 			with open(output, 'w') as svd_cache:
 				for bank_count, split_bank_cache_entry in svd_cache_group:
 					svd_cache.write(split_bank_cache_entry)

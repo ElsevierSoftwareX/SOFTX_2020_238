@@ -40,6 +40,7 @@
 #
 
 
+import copy
 import numpy
 import os
 import sys
@@ -115,6 +116,31 @@ def check_ffinal_and_find_max_ffinal(xmldoc):
 def sum_of_squares_threshold_from_fap(fap, coefficients):
 	return gstlalmisc.max_stat_thresh(coefficients, fap)
 	#return gstlalmisc.cdf_weighted_chisq_Pinv(coefficients, numpy.zeros(coefficients.shape, dtype = "double"), numpy.ones(coefficients.shape, dtype = "int"), 0.0, 1.0 - fap, -1, fap / 16.0)
+
+
+def group(inlist, parts):
+	"""!
+	group a list roughly according to the distribution in parts, e.g.
+
+	>>> A = range(12)
+	>>> B = [2,3]
+	>>> for g in group(A,B):
+	...     print g
+	...
+	[0, 1]
+	[2, 3]
+	[4, 5]
+	[6, 7, 8]
+	[9, 10, 11]
+	"""
+	mult_factor = len(inlist) // sum(parts) + 1
+	l = copy.deepcopy(inlist)
+	for i, p in enumerate(parts):
+		for j in range(mult_factor):
+			if not l:
+				break
+			yield l[:p]
+			del l[:p]
 
 
 #

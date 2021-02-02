@@ -1433,31 +1433,6 @@ def get_rank_file(instruments, boundary_seg, n, basename, job=None):
 #
 
 
-def group(inlist, parts):
-	"""!
-	group a list roughly according to the distribution in parts, e.g.
-
-	>>> A = range(12)
-	>>> B = [2,3]
-	>>> for g in group(A,B):
-	...     print g
-	...
-	[0, 1]
-	[2, 3]
-	[4, 5]
-	[6, 7, 8]
-	[9, 10, 11]
-	"""
-	mult_factor = len(inlist) // sum(parts) + 1
-	l = copy.deepcopy(inlist)
-	for i, p in enumerate(parts):
-		for j in range(mult_factor):
-			if not l:
-				break
-			yield l[:p]
-			del l[:p]
-
-
 def parse_cache_str(instr):
 	"""!
 	A way to decode a command line option that specifies different bank
