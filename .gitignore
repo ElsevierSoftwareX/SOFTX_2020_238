@@ -28,4 +28,6 @@ configure
 */gnuscripts/missing
 */gnuscripts/py-compile
 */gnuscripts/test-driver
+*/tests/*.log
+*/tests/*.trs
 libtool
