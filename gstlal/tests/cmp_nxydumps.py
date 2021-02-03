@@ -57,7 +57,7 @@ def load_file(fobj, transients = (0.0, 0.0)):
 	assert lines, "no data"
 	channel_count_plus_1 = len(lines[0])
 	assert all(len(line) == channel_count_plus_1 for line in lines), "not all lines have the same channel count"
-	for t1, t2 in itertools.izip((line[0] for line in lines), (line[0] for line in lines[1:])):
+	for t1, t2 in zip((line[0] for line in lines), (line[0] for line in lines[1:])):
 		assert t2 > t1, "timestamps not in order @ t = %s s" % str(t2)
 	start = lines[0][0] + transients[0]
 	stop = lines[-1][0] - transients[-1]
@@ -75,7 +75,7 @@ def identify_gaps(lines, timestamp_fuzz = default_timestamp_fuzz, sample_fuzz = 
 	# assume the smallest interval bewteen samples indicates the true
 	# sample rate, and correct for possible round-off by assuming true
 	# sample rate is an integer number of Hertz
-	dt = min(float(line1[0] - line0[0]) for line0, line1 in itertools.izip(lines, lines[1:]))
+	dt = min(float(line1[0] - line0[0]) for line0, line1 in zip(lines, lines[1:]))
 	dt = 1.0 / round(1.0 / dt)
 
 	# convert to absolute fuzz (but don't waste time with this if we
@@ -124,19 +124,19 @@ def compare_fobjs(fobj1, fobj2, transients = (0.0, 0.0), timestamp_fuzz = defaul
 	lines1 = iter(lines1)
 	lines2 = iter(lines2)
 	# guaranteeed to be at least 1 line in both lists
-	line1 = lines1.next()
-	line2 = lines2.next()
+	line1 = next(lines1)
+	line2 = next(lines2)
 	while True:
 		try:
 			if abs(line1[0] - line2[0]) <= timestamp_fuzz:
 				for val1, val2 in zip(line1[1:], line2[1:]):
 					assert abs(val1 - val2) <= sample_fuzz, "values disagree @ t = %s s" % str(line1[0])
-				line1 = lines1.next()
-				line2 = lines2.next()
+				line1 = next(lines1)
+				line2 = next(lines2)
 			elif line1[0] < line2[0] and line1[0] in gaps2:
-				line1 = lines1.next()
+				line1 = next(lines1)
 			elif line2[0] < line1[0] and line2[0] in gaps1:
-				line2 = lines2.next()
+				line2 = next(lines2)
 			else:
 				raise AssertionError("timestamp misalignment @ %s s and %s s" % (str(line1[0]), str(line2[0])))
 		except StopIteration:

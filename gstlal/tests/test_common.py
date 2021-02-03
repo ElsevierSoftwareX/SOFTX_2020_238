@@ -145,7 +145,8 @@ def transform_arrays(input_arrays, elemfunc, name, rate = 1, **elemfunc_kwargs):
 	pipeline = Gst.Pipeline(name = name)
 
 	head = pipeparts.mkgeneric(pipeline, None, "appsrc", caps = pipeio.caps_from_array(input_arrays[0], rate = rate))
-	def need_data(elem, arg, (input_arrays, rate)):
+	def need_data(elem, arg, input_array_rate_pair):
+		input_arrays, rate = input_array_rate_pair
 		if input_arrays:
 			arr = input_arrays.pop(0)
 			elem.set_property("caps", pipeio.caps_from_array(arr, rate))

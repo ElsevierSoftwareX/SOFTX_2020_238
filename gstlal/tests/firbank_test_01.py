@@ -57,7 +57,7 @@ def firbank_test_01(pipeline, name, width, time_domain, gap_frequency):
 	buffer_length = 1.0	# seconds
 	test_duration = 10.0	# seconds
 	fir_length = 21	# samples
-	latency = (fir_length - 1) / 2	# samples, in [0, fir_length)
+	latency = (fir_length - 1) // 2	# samples, in [0, fir_length)
 
 	#
 	# build pipeline

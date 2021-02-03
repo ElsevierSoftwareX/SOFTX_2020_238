@@ -45,8 +45,8 @@ import cmp_nxydumps
 def statevector_test_01(name, width, samples):
 	imax = 1 << width
 	bits = 3		# number of bits to set for required-on and required-off
-        required_on = 1
-        required_off = 1
+	required_on = 1
+	required_off = 1
 
 	while required_on & required_off:
 		# random required-on and required-off bits
