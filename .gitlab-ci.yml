@@ -60,6 +60,7 @@ stages:
     - $PATCHSCRIPT $PATCHFLAGS ./*.spec.in
     - ./configure --enable-gtk-doc $EXTRA_CONFIG_FLAGS
     - make
+    - make check
     - make dist
     # Install dependencies 
     - yum-builddep -y ${CI_JOB_NAME#level?:rpm:}.spec
