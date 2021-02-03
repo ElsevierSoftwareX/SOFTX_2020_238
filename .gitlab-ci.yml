@@ -61,8 +61,6 @@ stages:
     - ./configure --enable-gtk-doc $EXTRA_CONFIG_FLAGS
     - make
     - make dist
-    - make install
-    - make check
     # Install dependencies 
     - yum-builddep -y ${CI_JOB_NAME#level?:rpm:}.spec
     - rpmbuild -tb --define "_topdir $CI_PROJECT_DIR/rpmbuild" ${CI_JOB_NAME#level?:rpm:}-*.tar.gz
