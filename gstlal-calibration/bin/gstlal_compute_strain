@@ -534,7 +534,7 @@ if "fs_squared" in filters:
 elif "expectedfssquared" in TDCFConfigs:
 	fs_squared_default = float(TDCFConfigs["expectedfssquared"])
 elif "fs" in filters:
-	fs_squared_default = pow(float(filters["fs"]), 2)
+	fs_squared_default = pow(float(numpy.real(filters["fs"])), 2)
 elif "expectedfs" in TDCFConfigs:
 	fs_squared_default = pow(float(TDCFConfigs["expectedfs"]), 2)
 else:
