@@ -179,7 +179,7 @@ def array_from_audio_sample(sample):
 
 
 def audio_buffer_from_array(arr, timestamp, offset, rate):
-	buf = Gst.Buffer.new_wrapped(numpy.getbuffer(arr))
+	buf = Gst.Buffer.new_wrapped(arr.tobytes())
 	buf.pts = timestamp
 	buf.duration = (Gst.SECOND * arr.shape[0] + rate // 2) // rate
 	buf.offset = offset
