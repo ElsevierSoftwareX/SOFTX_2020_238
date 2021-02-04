@@ -18,9 +18,9 @@
 
 import sys
 import os
-import urlparse
+from urllib.parse import urljoin
 import re
-from gstlal import plotutil
+from gstlal.plots import util as plotutil
 from glue import markup
 from optparse import OptionParser
 from datetime import datetime
@@ -129,7 +129,7 @@ def to_output_url(output_dir):
 	username = os.getlogin()
 	basepath = os.path.join(os.path.join('/home/', username), 'public_html')
 	extension_url = os.path.relpath(os.path.abspath(output_dir), basepath)
-	base_url = urlparse.urljoin(cluster_urls[options.cluster], '~' + username)
+	base_url = urljoin(cluster_urls[options.cluster], '~' + username)
 	return base_url + '/' + extension_url
 
 def generate_html_file(plot_paths):
