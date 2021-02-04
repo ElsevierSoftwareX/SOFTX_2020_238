@@ -42,6 +42,7 @@ from ligo.lw import dbtables
 from ligo.lw import lsctables
 from ligo.lw import utils as ligolw_utils
 from ligo.lw.utils import process as ligolw_process
+from ligo.lw.utils import ligolw_sqlite
 from lalinspiral import thinca
 from gstlal import far
 
@@ -127,8 +128,22 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 
 	if options.verbose:
 		print("%d/%d: %s" % (n, len(options.non_injection_db), filename), file=sys.stderr)
-	working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
-	connection = sqlite3.connect(str(working_filename))
+
+	if filename.endswith(".xml") or filename.endswith(".xml.gz"):
+		# load XML file into in-ram database for processing
+		fileformat = "xml"
+		working_filename = None
+		connection = sqlite3.connect(":memory:")
+		@dbtables.use_in
+		class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+			connection = connection
+		ligolw_sqlite.insert_from_url(filename, contenthandler = LIGOLWContentHandler, preserve_ids = True, verbose = options.verbose)
+		del LIGOLWContentHandler
+	else:
+		# assume it's an SQLite file
+		fileformat = "sqlite"
+		working_filename = dbtables.get_connection_filename(filename, tmp_path = None, verbose = options.verbose)
+		connection = sqlite3.connect(str(working_filename))
 
 	#
 	# update counts
@@ -143,8 +158,16 @@ for n, filename in enumerate(options.non_injection_db, start = 1):
 	# done
 	#
 
-	connection.close()
-	dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
+	if fileformat == "xml":
+		# overwrite XML file with in-ram database' contents
+		ligolw_sqlite.extract(connection, filename, verbose = options.verbose)
+		connection.close()
+	elif fileformat == "sqlite":
+		# return SQLite file to its home
+		connection.close()
+		dbtables.discard_connection_filename(filename, working_filename, verbose = options.verbose)
+	else:
+		raise Exception("internal error")
 
 
 #
@@ -179,12 +202,27 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 
 	if options.verbose:
 		print("%d/%d: %s" % (n, len(options.non_injection_db + options.injection_db), filename), file=sys.stderr)
-	if not options.force and sqlite3.connect(filename).cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_compute_far_from_snr_chisq_histograms",)).fetchone()[0]:
+
+	if filename.endswith(".xml") or filename.endswith(".xml.gz"):
+		# load XML file into in-ram database for processing
+		fileformat = "xml"
+		working_filename = None
+		connection = sqlite3.connect(":memory:")
+		@dbtables.use_in
+		class LIGOLWContentHandler(ligolw.LIGOLWContentHandler):
+			connection = connection
+		ligolw_sqlite.insert_from_url(filename, contenthandler = LIGOLWContentHandler, preserve_ids = True, verbose = options.verbose)
+		del LIGOLWContentHandler
+	else:
+		# assume it's an SQLite file
+		fileformat = "sqlite"
+		working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
+		connection = sqlite3.connect(str(working_filename))
+
+	if not options.force and connection.cursor().execute("""SELECT EXISTS(SELECT * FROM process WHERE program == ?);""", (u"gstlal_compute_far_from_snr_chisq_histograms",)).fetchone()[0]:
 		if options.verbose:
 			print("already processed, skipping", file=sys.stderr)
 		continue
-	working_filename = dbtables.get_connection_filename(filename, tmp_path = options.tmp_space, verbose = options.verbose)
-	connection = sqlite3.connect(str(working_filename))
 
 	#
 	# record our passage
@@ -205,10 +243,18 @@ for n, filename in enumerate(options.non_injection_db + options.injection_db, st
 
 	ligolw_process.set_process_end_time(process)
 	connection.cursor().execute("UPDATE process SET end_time = ? WHERE process_id == ?", (process.end_time, process.process_id))
-
 	connection.commit()
-	connection.close()
-	dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+
+	if fileformat == "xml":
+		# overwrite XML file with in-ram database' contents
+		ligolw_sqlite.extract(connection, filename, verbose = options.verbose)
+		connection.close()
+	elif fileformat == "sqlite":
+		# return SQLite file to its home
+		connection.close()
+		dbtables.put_connection_filename(filename, working_filename, verbose = options.verbose)
+	else:
+		raise Exception("internal error")
 
 if options.verbose:
 	print("FAP and FAR assignment complete", file=sys.stderr)
