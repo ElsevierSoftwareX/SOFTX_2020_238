@@ -50,12 +50,13 @@ if args.workflow in set(("full", "filter")):
 else:
 	# load filter data products
 	triggers = DataCache.find(DataType.TRIGGERS, root=config.rootdir)
+	svd_bank = DataCache.find(DataType.SVD_BANK, root=config.rootdir)
 	dist_stats = DataCache.find(DataType.DIST_STATS, root=config.rootdir)
 	median_psd = DataCache.find(DataType.MEDIAN_PSD, root=config.rootdir)
 
 if args.workflow in set(("full", "rerank")):
 	# generate rerank dag layers
-	prior = dag.prior(median_psd, dist_stats)
+	prior = dag.prior(svd_bank, median_psd, dist_stats)
 	dist_stats = dag.marginalize(prior, dist_stats)
 	pdfs = dag.calc_pdf(dist_stats)
 	pdfs = dag.marginalize_pdf(pdfs)

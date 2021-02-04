@@ -184,6 +184,7 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 				Option("tmp-space", dagutil.condor_scratch_space()),
 			],
 			inputs = Argument("triggers", triggers.files),
+			outputs = Argument("clustered-triggers", triggers.files, include=False),
 		)
 
 	# marginalize dist stats across time
@@ -212,9 +213,9 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 	return trigger_cache, agg_dist_stat_cache
 
 
-def prior_layer(config, dag, median_psd_cache, dist_stat_cache):
+def prior_layer(config, dag, svd_bank_cache, median_psd_cache, dist_stat_cache):
 	if "aggregate_dist_stats" in dag:
-		parents = ("median_psd", "aggregate_dist_stats")
+		parents = ("svd_bank", "median_psd", "aggregate_dist_stats")
 	else:
 		parents = None
 
@@ -224,11 +225,12 @@ def prior_layer(config, dag, median_psd_cache, dist_stat_cache):
 		requirements={"request_cpus": 2, "request_memory": 4000, **config.condor}
 	)
 
-	prior_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+	prior_cache = DataCache.generate(DataType.PRIOR_DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
 
+	svd_banks = svd_bank_cache.groupby("bin")
 	for svd_bin, prior in prior_cache.groupby("bin").items():
 		prior_inputs = [
-			Option("svd-file", config.svd.manifest),
+			Option("svd-file", svd_banks[svd_bin].files),
 			Option("mass-model-file", config.prior.mass_model),
 			Option("psd-xml", median_psd_cache.files)
 		]
@@ -237,10 +239,12 @@ def prior_layer(config, dag, median_psd_cache, dist_stat_cache):
 
 		layer += Node(
 			key = svd_bin,
-			parent_keys = {"aggregate_dist_stats": [svd_bin]},
+			parent_keys = {
+				"aggregate_dist_stats": [svd_bin],
+				"svd_bank": [(ifo, svd_bin) for ifo in config.ifos],
+			},
 			arguments = [
 				Option("df", "bandwidth"),
-				Option("svd-bin", svd_bin),
 				Option("background-prior", 1),
 				Option("instrument", config.ifos),
 				Option("min-instruments", config.filter.min_instruments),
@@ -267,7 +271,7 @@ def marginalize_layer(config, dag, prior_cache, dist_stat_cache):
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
 	)
 
-	marg_dist_stat_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+	marg_dist_stat_cache = DataCache.generate(DataType.MARG_DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
 
 	prior = prior_cache.groupby("bin")
 	dist_stats = dist_stat_cache.groupby("bin")
@@ -280,7 +284,10 @@ def marginalize_layer(config, dag, prior_cache, dist_stat_cache):
 			key = svd_bin,
 			parent_keys = parent_keys,
 			arguments = Option("marginalize", "ranking-stat"),
-			inputs = Argument("dist-stats", dist_stats[svd_bin].files + prior[svd_bin].files),
+			inputs = [
+				Argument("mass-model", config.prior.mass_model, include=False),
+				Argument("dist-stats", dist_stats[svd_bin].files + prior[svd_bin].files),
+			],
 			outputs = Option("output", marg_dist_stats.files)
 		)
 
@@ -303,7 +310,10 @@ def calc_pdf_layer(config, dag, dist_stat_cache):
 			key = svd_bin,
 			parent_keys = {"marginalize": [svd_bin]},
 			arguments = Option("ranking-stat-samples", config.rank.ranking_stat_samples),
-			inputs = Argument("dist-stats", dist_stats[svd_bin].files),
+			inputs = [
+				Argument("mass-model", config.prior.mass_model, include=False),
+				Argument("dist-stats", dist_stats[svd_bin].files),
+			],
 			outputs = Option("output", pdfs.files)
 		)
 
@@ -357,8 +367,9 @@ def calc_likelihood_layer(config, dag, trigger_cache, dist_stat_cache):
 				Option("tmp-space", dagutil.condor_scratch_space()),
 			],
 			inputs = [
-				Option("likelihood-url", dist_stats[svd_bin].files),
+				Argument("mass-model", config.prior.mass_model, include=False),
 				Argument("triggers", triggers.files),
+				Option("likelihood-url", dist_stats[svd_bin].files),
 			],
 			outputs = Argument("calc-triggers", triggers.files, include=False),
 		)
@@ -388,6 +399,7 @@ def cluster_layer(config, dag, trigger_cache):
 				Option("tmp-space", dagutil.condor_scratch_space()),
 			],
 			inputs = Argument("triggers", triggers.files),
+			outputs = Argument("calc-triggers", triggers.files, include=False),
 		)
 
 	dag["cluster"] = layer
