@@ -64,6 +64,8 @@ class Layer:
 		if self.transfer_files:
 			inputs = self._inputs()
 			outputs = self._outputs()
+			output_remaps = self._output_remaps()
+
 			if inputs or outputs:
 				submit_options["should_transfer_files"] = "YES"
 				submit_options["when_to_transfer_output"] = "ON_SUCCESS"
@@ -161,10 +163,15 @@ class Layer:
 				if self.transfer_files:
 					nodevars.update({f"input_{arg.condor_name}": arg.files() for arg in node.inputs})
 			if node.outputs:
-				nodevars.update({f"{arg.condor_name}": arg.vars(basename=self.transfer_files) for arg in node.outputs if arg.include})
-				if self.transfer_files:
-					nodevars.update({f"output_{arg.condor_name}": arg.files(basename=True) for arg in node.outputs})
-					nodevars.update({f"output_{arg.condor_name}_remap": arg.remaps() for arg in node.outputs})
+				for arg in node.outputs:
+					if arg.include:
+						nodevars.update({f"{arg.condor_name}": arg.vars(basename=self.transfer_files)})
+					if self.transfer_files:
+						if arg.include:
+							nodevars.update({f"output_{arg.condor_name}": arg.files(basename=True)})
+							nodevars.update({f"output_{arg.condor_name}_remap": arg.remaps()})
+						else:
+							nodevars.update({f"output_{arg.condor_name}": arg.files()})
 			allvars.append(nodevars)
 
 		return allvars
