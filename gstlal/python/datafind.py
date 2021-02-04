@@ -31,15 +31,39 @@ DEFAULT_DATAFIND_SERVER = os.getenv('LIGO_DATAFIND_SERVER', 'ldr.ldas.cit:80')
 
 
 class DataType(Enum):
-	REFERENCE_PSD = 1
-	SPLIT_BANK = 2
-	SVD_BANK = 3
-	TRIGGERS = 4
-	DIST_STATS = 5
-	DIST_STAT_PDFS = 6
+	REFERENCE_PSD = (0, "xml.gz")
+	MEDIAN_PSD = (1, "xml.gz")
+	TRIGGERS = (2, "xml.gz")
+	DIST_STATS = (3, "xml.gz")
+	PRIOR_DIST_STATS = (4, "xml.gz")
+	MARG_DIST_STATS = (5, "xml.gz")
+	DIST_STAT_PDFS = (6, "xml.gz")
+	TEMPLATE_BANK = (7, "xml.gz")
+	SPLIT_BANK = (8, "xml.gz")
+	SVD_BANK = (9, "xml.gz")
+
+	def __init__(self, value, extension):
+		self.extension = extension
 
 	def __str__(self):
 		return self.name.upper()
+
+	def description(self, svd_bin=None):
+		description = "GSTLAL"
+		if svd_bin:
+			description = f"{svd_bin}_{description}"
+		return f"{description}_{str(self.name)}"
+
+	def filename(self, ifos, span=None, svd_bin=None):
+		if not span:
+			span = segment(0, 0)
+		return T050017_filename(ifos, self.description(svd_bin), span, self.extension)
+
+	def file_pattern(self, svd_bin=None):
+		if svd_bin:
+			return f"*-{svd_bin}_{self.description()}-*-*{self.extension}"
+		else:
+			return f"*-*{self.description()}-*-*{self.extension}"
 
 
 @dataclass
@@ -99,12 +123,10 @@ class DataCache:
 				path = cls._data_path(str(name).lower(), span[0], create=create_dirs)
 				if svd_bins:
 					for svd_bin in svd_bins:
-						desc = f"{svd_bin}_GSTLAL_{str(name)}"
-						filename = T050017_filename(ifo, desc, span, ".xml.gz")
+						filename = name.filename(ifo, span, svd_bin)
 						cache.append(os.path.join(path, filename))
 				else:
-					desc = f"GSTLAL_{str(name)}"
-					filename = T050017_filename(ifo, desc, span, ".xml.gz")
+					filename = name.filename(ifo, span)
 					cache.append(os.path.join(path, filename))
 
 		if root:
@@ -117,14 +139,12 @@ class DataCache:
 		if svd_bins:
 			svd_bins = set([svd_bins]) if isinstance(svd_bins, str) else set(svd_bins)
 			for svd_bin in svd_bins:
-				pattern = f"*-{svd_bin}_*GSTLAL_{str(name)}*-*-*.xml.gz"
-				glob_path = os.path.join(str(name).lower(), "*", pattern)
+				glob_path = os.path.join(str(name).lower(), "*", name.file_pattern(svd_bin))
 				if root:
 					glob_path = os.path.join(root, glob_path)
 				cache.extend(glob.glob(glob_path))
 		else:
-			pattern = f"*-*GSTLAL_{str(name)}*-*-*.xml.gz"
-			glob_path = os.path.join(str(name).lower(), "*", pattern)
+			glob_path = os.path.join(str(name).lower(), "*", name.file_pattern())
 			if root:
 				glob_path = os.path.join(root, glob_path)
 			cache.extend(glob.glob(glob_path))
