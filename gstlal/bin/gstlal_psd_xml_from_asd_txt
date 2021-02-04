@@ -83,6 +83,6 @@ psdinterp = interp1d(f_padded, psd_padded)
 
 psd = psdinterp(uniformf)
 
-psdseries = lal.CreateREAL8FrequencySeries("Sn(f)", 0, 0, options.df, lal.Unit("s strain^2"), len(psd))
+psdseries = lal.CreateREAL8FrequencySeries("PSD", 0, 0, options.df, lal.Unit("s strain^2"), len(psd))
 psdseries.data.data = psd
 reference_psd.write_psd(options.output, {options.instrument: psdseries})
