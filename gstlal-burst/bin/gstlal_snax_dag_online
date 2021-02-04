@@ -83,7 +83,7 @@ def generate_options(options):
 			"persist-cadence": options.persist_cadence
 		}
 	else:
-		raise NotImplementedError, 'not an available option for online jobs at this time'
+		raise NotImplementedError("not an available option for online jobs at this time")
 
 	# program behavior options
 	program_options = {"psd-fft-length": options.psd_fft_length}
