@@ -79,7 +79,7 @@ class Config:
 		else:
 			accounting_group_user = getpass.getuser()
 
-		condor_opts = {
+		submit_opts = {
 			"want_graceful_removal": "True",
 			"kill_sig": "15",
 			"accounting_group": condor_config["accounting-group"],
@@ -89,11 +89,11 @@ class Config:
 
 		# load site profile
 		profile = profiles.load_profile(condor_config["profile"])
-		assert profile["scheduler"] == "condor", "only the condor scheduler is available"
+		assert profile["scheduler"] == "condor", "only scheduler=condor is allowed currently"
 
 		# add profile-specific options
 		if "directives" in profile:
-			condor_opts.update(profile["directives"])
+			submit_opts.update(profile["directives"])
 		if "requirements" in profile:
 			requirements.extend(profile["requirements"])
 
@@ -101,19 +101,20 @@ class Config:
 		if "singularity-image" in condor_config:
 			singularity_image = condor_config["singularity-image"]
 			requirements.append("(HAS_SINGULARITY=?=True)")
-			condor_opts['+SingularityImage'] = f'"{singularity_image}"'
-			condor_opts['x509userproxy'] = 'x509_proxy'
-			condor_opts['use_x509userproxy'] = True
-			condor_opts['transfer_executable'] = False
-			condor_opts['getenv'] = False
+			submit_opts['+SingularityImage'] = f'"{singularity_image}"'
+			submit_opts['x509userproxy'] = 'x509_proxy'
+			submit_opts['use_x509userproxy'] = True
+			submit_opts['transfer_executable'] = False
+			submit_opts['getenv'] = False
 		else:
-			condor_opts['getenv'] = True
+			submit_opts['getenv'] = True
 
 		# condor requirements
-		condor_opts['requirements'] = " && ".join(requirements)
+		submit_opts['requirements'] = " && ".join(requirements)
 
 		# set up condor config
-		self.condor = dotdict(replace_keys(condor_opts))
+		self.condor = dotdict(replace_keys(condor_config))
+		self.condor.submit = submit_opts
 
 	@classmethod
 	def load(cls, path):

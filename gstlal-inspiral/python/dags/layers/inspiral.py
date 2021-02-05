@@ -25,7 +25,7 @@ from gstlal.dags import util as dagutil
 
 
 def reference_psd_layer(config, dag):
-	requirements = {"request_cpus": 2, "request_memory": 2000, **config.condor}
+	requirements = {"request_cpus": 2, "request_memory": 2000, **config.condor.submit}
 	layer = Layer("gstlal_reference_psd", requirements=requirements)
 
 	psd_cache = DataCache.generate(DataType.REFERENCE_PSD, config.ifo_combo, config.time_bins)
@@ -53,7 +53,7 @@ def reference_psd_layer(config, dag):
 
 
 def median_psd_layer(config, dag, ref_psd_cache):
-	requirements = {"request_cpus": 2, "request_memory": 2000, **config.condor}
+	requirements = {"request_cpus": 2, "request_memory": 2000, **config.condor.submit}
 	layer = Layer("gstlal_median_of_psds", parents="reference_psd", requirements=requirements)
 
 	median_psd_cache = DataCache.generate(DataType.REFERENCE_PSD, config.ifo_combo, config.span)
@@ -68,7 +68,7 @@ def median_psd_layer(config, dag, ref_psd_cache):
 
 
 def svd_bank_layer(config, dag, median_psd_cache):
-	requirements = {"request_cpus": 1, "request_memory": 4000, **config.condor}
+	requirements = {"request_cpus": 1, "request_memory": 4000, **config.condor.submit}
 	layer = Layer("gstlal_inspiral_svd_bank", parents="median_psd", requirements=requirements)
 
 	svd_cache = DataCache.generate(DataType.SVD_BANK, config.ifos, config.span, svd_bins=config.svd.bins)
@@ -100,7 +100,7 @@ def svd_bank_layer(config, dag, median_psd_cache):
 
 
 def filter_layer(config, dag, ref_psd_cache, svd_bank_cache):
-	requirements = {"request_cpus": 2, "request_memory": 4000, **config.condor}
+	requirements = {"request_cpus": 2, "request_memory": 4000, **config.condor.submit}
 	layer = Layer("gstlal_inspiral", parents=("reference_psd", "svd_bank"), requirements=requirements)
 
 	trigger_cache = DataCache.generate(DataType.TRIGGERS, config.ifo_combo, config.time_bins, svd_bins=config.svd.bins)
@@ -168,7 +168,7 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 		"lalapps_run_sqlite",
 		name="cluster_triggers_by_snr",
 		parents="filter",
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	# FIXME: find better way of discovering SQL file
@@ -192,7 +192,7 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 		"gstlal_inspiral_marginalize_likelihood",
 		name="marginalize_dist_stats_across_time_filter",
 		parents="filter",
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	agg_dist_stat_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
@@ -222,7 +222,7 @@ def prior_layer(config, dag, svd_bank_cache, median_psd_cache, dist_stat_cache):
 	layer = Layer(
 		"gstlal_inspiral_create_prior_diststats",
 		parents=parents,
-		requirements={"request_cpus": 2, "request_memory": 4000, **config.condor}
+		requirements={"request_cpus": 2, "request_memory": 4000, **config.condor.submit}
 	)
 
 	prior_cache = DataCache.generate(DataType.PRIOR_DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
@@ -268,7 +268,7 @@ def marginalize_layer(config, dag, prior_cache, dist_stat_cache):
 		"gstlal_inspiral_marginalize_likelihood",
 		name="marginalize_dist_stats_across_time_rank",
 		parents=parents,
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	marg_dist_stat_cache = DataCache.generate(DataType.MARG_DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
@@ -299,7 +299,7 @@ def calc_pdf_layer(config, dag, dist_stat_cache):
 	layer = Layer(
 		"gstlal_inspiral_calc_rank_pdfs",
 		parents="marginalize",
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	pdf_cache = DataCache.generate(DataType.DIST_STAT_PDFS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
@@ -326,7 +326,7 @@ def marginalize_pdf_layer(config, dag, pdf_cache):
 		"gstlal_inspiral_marginalize_likelihood",
 		name="gstlal_inspiral_marginalize_pdfs",
 		parents="calc_pdf",
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	marg_pdf_cache = DataCache.generate(DataType.DIST_STAT_PDFS, config.ifo_combo, config.span)
@@ -351,7 +351,7 @@ def calc_likelihood_layer(config, dag, trigger_cache, dist_stat_cache):
 	layer = Layer(
 		"gstlal_inspiral_calc_likelihood",
 		parents=parents,
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	dist_stats = dist_stat_cache.groupby("bin")
@@ -384,7 +384,7 @@ def cluster_layer(config, dag, trigger_cache):
 		"lalapps_run_sqlite",
 		name="cluster_triggers_by_likelihood",
 		parents="calc_likelihood",
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	# FIXME: find better way of discovering SQL file
@@ -411,7 +411,7 @@ def compute_far_layer(config, dag, trigger_cache, pdf_cache):
 		"gstlal_compute_far_from_snr_chisq_histograms",
 		name="compute_far",
 		parents=("cluster", "marginalize_pdf"),
-		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor}
+		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	for span, triggers in trigger_cache.groupby("time").items():
