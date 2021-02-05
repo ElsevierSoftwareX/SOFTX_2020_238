@@ -3,8 +3,8 @@
 #
 
 
-AC_INIT([gstlal-calibration],[1.2.12],[gstlal-discuss@ligo.org],[gstlal-calibration])
-AC_COPYRIGHT([Copyright (C) 2008-2019 Madeline Wade, Aaron Viets])
+AC_INIT([gstlal-calibration],[1.3.0],[gstlal-discuss@ligo.org],[gstlal-calibration])
+AC_COPYRIGHT([Copyright (C) 2008-2021 Madeline Wade, Aaron Viets])
 # a file whose existance can be used to use to check that we are in the
 # top-level directory of the source tree
 AC_CONFIG_SRCDIR([gnuscripts/ltmain.sh])
@@ -221,8 +221,8 @@ CFLAGS="$old_CFLAGS"
 #
 
 
-AC_SUBST([MIN_LAL_VERSION], [6.15.2])
-AC_SUBST([MIN_LALMETAIO_VERSION], [1.2.6])
+AC_SUBST([MIN_LAL_VERSION], [7.1.0])
+AC_SUBST([MIN_LALMETAIO_VERSION], [2.0.0])
 PKG_CHECK_MODULES([LAL], [lal >= ${MIN_LAL_VERSION} lalmetaio >= ${MIN_LALMETAIO_VERSION} lalsupport])
 AC_SUBST([LAL_CFLAGS])
 AC_SUBST([LAL_LIBS])
@@ -233,7 +233,7 @@ AC_SUBST([LAL_LIBS])
 #
 
 
-AC_SUBST([MIN_LIGO_SEGMENTS_VERSION], [1.1.0])
+AC_SUBST([MIN_LIGO_SEGMENTS_VERSION], [1.2.0])
 AX_PYTHON_LIGO_SEGMENTS([$MIN_LIGO_SEGMENTS_VERSION])
 
 
@@ -242,8 +242,8 @@ AX_PYTHON_LIGO_SEGMENTS([$MIN_LIGO_SEGMENTS_VERSION])
 #
 
 
-AC_SUBST([MIN_GSTLAL_VERSION], [1.0.0])
-AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.5.6])
+AC_SUBST([MIN_GSTLAL_VERSION], [1.8.0])
+AC_SUBST([MIN_GSTLALUGLY_VERSION], [1.9.0])
 AC_SUBST([MIN_GSTPLUGINSMATH_VERSION], [1.0.1])
 PKG_CHECK_MODULES([GSTLAL], [gstlal >= ${MIN_GSTLAL_VERSION}])
 AC_SUBST([GSTLAL_VERSION], [`$PKG_CONFIG --modversion gstlal`])
