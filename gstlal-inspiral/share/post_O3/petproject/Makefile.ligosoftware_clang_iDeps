@@ -10,7 +10,7 @@ SHELL := /bin/bash # Use bash syntax
 # If you would like to rebuild only part of the software stack, but it starts
 # from the beginning if using the above command, then use the touch (-t) option
 # on the previous package.
-#
+
 
 # Goofy mac notes:
 #
@@ -18,15 +18,33 @@ SHELL := /bin/bash # Use bash syntax
 #
 # 2) These are the ports that I've installed so far:
 #❯ port echo requested | cut -d ' ' -f 1 | uniq
-#      bison
-#      boost
-#      gobject-introspection
-#      pkgconfig
-#      py38-gobject3
-#      py38-matplotlib
-#      py38-numpy
-#      python38
-#      wget
+#     bison
+#     boost
+#     cmake
+#     doxygen
+#     git-lfs
+#     gobject-introspection
+#     latexmk
+#     py36-astropy
+#     py36-dateutil
+#     py36-flake8
+#     py36-freezegun
+#     py36-gobject3
+#     py36-h5py
+#     py36-ligo-gracedb
+#     py36-ligo-lw
+#     py36-ligo-segments
+#     py36-lscsoft-glue
+#     py36-matplotlib
+#     py36-numpy
+#     py36-pytest
+#     py36-scipy
+#     python36
+#     texlive-fonts-extra
+#     texlive-fonts-recommended
+#     texlive-fontutils
+#     texlive-latex-extra
+#     wget
 
 
 # Set python version and executable
@@ -47,16 +65,19 @@ PYTHON_MACPORTS_PKGCONFIG:=/opt/local/Library/Frameworks/Python.framework/Versio
 
 # Set package release versions
 GDS=gds-2.19.2
-LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.6.4
-LDASTOOLSAL=ldas-tools-al-2.6.2
-SWIG=swig-3.0.12
+LDASTOOLSFRAMECPP=ldas-tools-framecpp-2.7.0
+LDASTOOLSAL=ldas-tools-al-2.6.4
+LDASTOOLSCMAKE=ldas-tools-cmake-1.1.1
+IGWNCMAKE=igwn-cmake-1.2.1
+SWIG=swig-4.0.2
 METAIO=metaio-8.5.1
+FRAMEL=framel-8.40.1
 LIBFRAME=libframe-8.30
 GSTPYTHON=gst-python-1.14.5
 GSTPLUGINSGOOD=gst-plugins-good-1.14.5
 GSTPLUGINSBASE=gst-plugins-base-1.14.5
 GSTREAMER=gstreamer-1.14.5
-GSL=gsl-1.16
+GSL=gsl-2.6
 ORC=orc-0.4.26
 FFTW=fftw-3.3.8
 
@@ -64,8 +85,11 @@ FFTW=fftw-3.3.8
 GDS_TARGET=$(INSTALL_DIR)/lib/libwpipe.dylib
 LDASTOOLSFRAMECPP_TARGET=$(INSTALL_DIR)/lib/libframecpp.dylib
 LDASTOOLSAL_TARGET=$(INSTALL_DIR)/lib/libldastoolsal.dylib
+LDASTOOLSCMAKE_TARGET=$(INSTALL_DIR)/share/pkgconfig/ldastoolscmake.pc
+IGWNCMAKE_TARGET=$(INSTALL_DIR)/share/pkgconfig/igwncmake.pc
 SWIG_TARGET=$(INSTALL_DIR)/bin/swig
 METAIO_TARGET=$(INSTALL_DIR)/lib/libmetaio.dylib
+FRAMEL_TARGET=$(INSTALL_DIR)/lib/libframel.dylib
 LIBFRAME_TARGET=$(INSTALL_DIR)/lib/libFrame.dylib
 GSTPYTHON_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpython.dylib
 GSTGOOD_TARGET=$(INSTALL_DIR)/lib/gstreamer-1.0/libgstpng.dylib
@@ -80,8 +104,11 @@ FFTW_TARGET=$(INSTALL_DIR)/lib/libfftw3.dylib
 GDS_TAR_TARGET=$(TAR_DIR)/$(GDS).tar.gz
 LDASTOOLSFRAMECPP_TAR_TARGET=$(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz
 LDASTOOLSAL_TAR_TARGET=$(TAR_DIR)/$(LDASTOOLSAL).tar.gz
+LDASTOOLSCMAKE_TAR_TARGET=$(TAR_DIR)/$(LDASTOOLSCMAKE).tar.gz
+IGWNCMAKE_TAR_TARGET=$(TAR_DIR)/$(IGWNCMAKE).tar.gz
 SWIG_TAR_TARGET=$(TAR_DIR)/$(SWIG).tar.gz
 METAIO_TAR_TARGET=$(TAR_DIR)/$(METAIO).tar.gz
+FRAMEL_TAR_TARGET=$(TAR_DIR)/$(FRAMEL).tar.xz
 LIBFRAME_TAR_TARGET=$(TAR_DIR)/$(LIBFRAME).tar.gz
 GSTPYTHON_TAR_TARGET=$(TAR_DIR)/$(GSTPYTHON).tar.xz
 GSTGOOD_TAR_TARGET=$(TAR_DIR)/$(GSTPLUGINSGOOD).tar.xz
@@ -104,7 +131,8 @@ YELLOW="${esc}[0;33m"
 BLUE="${esc}[0;34m"
 WHITE="${esc}[m"
 
-all : logs/gds.txt src/kafka_2.11-2.0.0
+#all : logs/gds.txt src/kafka_2.11-2.0.0
+all : logs/ldas-tools-framecpp.txt src/kafka_2.11-2.0.0
 
 #####################
 # Environment setup #
@@ -118,14 +146,15 @@ deps_env.sh :
 	@echo 'export CFLAGS="$${GCCFLAGS}"' >> $@
 	@echo 'export CC="gcc"' >> $@
 	@echo 'export CXX="g++"' >> $@
-	@echo 'LDFLAGS="-L$${DEPS_PATH}/lib -lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads -framework Python -F/opt/local/Library/Frameworks/"' >> $@
+	@echo 'LDFLAGS="-lfftw3 -lfftw3f -lfftw3_threads -lfftw3f_threads -framework Python -F/opt/local/Library/Frameworks/  -Wl,-rpath,$${DEPS_PATH}/lib"' >> $@
 	@echo '# These are environment variables that do get exported' >> $@
 	@echo 'PATH=$${DEPS_PATH}/bin:$${PATH}' >> $@
 	@echo 'PYTHON=/opt/local/bin/python' >> $@
+	@echo 'XDG_DATA_DIRS=$${DEPS_PATH}/share:$${XDG_DATA_DIRS}' >> $@
 	@echo 'CPATH=$${DEPS_PATH}/include:/opt/local/include:$${CPATH}' >> $@
-	@echo 'LIBRARY_PATH=/opt/local/lib:$${LIBRARY_PATH}' >> $@
+	@echo 'LIBRARY_PATH=$${DEPS_PATH}/lib:/opt/local/lib:$${LIBRARY_PATH}' >> $@
 	@echo 'PYTHON_MACPORTS_PKGCONFIG=${PYTHON_MACPORTS_PKGCONFIG}' >> $@
-	@echo 'PKG_CONFIG_PATH=$${DEPS_PATH}/lib/pkgconfig:$${DEPS_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}:$${PYTHON_MACPORTS_PKGCONFIG}' >> $@
+	@echo 'PKG_CONFIG_PATH=$${DEPS_PATH}/share/pkgconfig:$${DEPS_PATH}/lib/pkgconfig:$${DEPS_PATH}/lib64/pkgconfig:$${PKG_CONFIG_PATH}:$${PYTHON_MACPORTS_PKGCONFIG}' >> $@
 	@echo 'PYTHONPATH=$${DEPS_PATH}/lib/${PYTHON_VERSION}/site-packages:$${DEPS_PATH}/lib64/${PYTHON_VERSION}/site-packages' >> $@
 	@echo 'LAL_DATA_PATH=/home/cbc/ROM_data' >> $@
 	@echo 'GST_PLUGIN_PATH=$${DEPS_PATH}/lib/gstreamer-1.0' >> $@
@@ -133,14 +162,44 @@ deps_env.sh :
 	@echo 'GI_TYPELIB_PATH=$${DEPS_PATH}/lib/girepository-1.0:$${GI_TYPELIB_PATH}' >> $@
 	@echo 'KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:MetaspaceSize=96m -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:G1HeapRegionSize=16M -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80"' >> $@
 	@echo 'KAFKA_HEAP_OPTS="-Xms8G -Xmx8G"' >> $@
-	@echo 'export PATH CPATH PYTHON PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH DEPS_PATH LIBRARY_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0 GI_TYPELIB_PATH KAFKA_JVM_PERFORMANCE_OPTS KAFKA_HEAP_OPTS' >> $@
+	@echo 'export PATH CPATH PYTHON PKG_CONFIG_PATH PYTHONPATH GST_PLUGIN_PATH DEPS_PATH LIBRARY_PATH LDFLAGS LDFLAGS_INTEL LAL_DATA_PATH GST_REGISTRY_1_0 GI_TYPELIB_PATH KAFKA_JVM_PERFORMANCE_OPTS KAFKA_HEAP_OPTS XDG_DATA_DIRS' >> $@
+
+ports.txt:
+	@echo 'bison' > $@
+	@echo 'boost' >> $@
+	@echo 'cmake' >> $@
+	@echo 'doxygen' >> $@
+	@echo 'git-lfs' >> $@
+	@echo 'gobject-introspection' >> $@
+	@echo 'latexmk' >> $@
+	@echo 'openblas +native' >> $@
+	@echo 'py36-astropy' >> $@
+	@echo 'py36-dateutil' >> $@
+	@echo 'py36-flake8' >> $@
+	@echo 'py36-freezegun' >> $@
+	@echo 'py36-gobject3' >> $@
+	@echo 'py36-h5py' >> $@
+	@echo 'py36-ligo-lw' >> $@
+	@echo 'py36-ligo-segments' >> $@
+	@echo 'py36-lscsoft-glue' >> $@
+	@echo 'py36-matplotlib' >> $@
+	@echo 'py36-numpy' >> $@
+	@echo 'py36-pytest' >> $@
+	@echo 'py36-scipy' >> $@
+	@echo 'python36' >> $@
+	@echo 'texlive-fonts-extra' >> $@
+	@echo 'texlive-fonts-recommended' >> $@
+	@echo 'texlive-fontutils' >> $@
+	@echo 'texlive-latex-extra' >> $@
+	@echo 'wget' >> $@
+	@echo 'Run "xargs sudo port setrequested < ports.txt" to install ports.'
 
 ###########
 # Install #
 ###########
 
 src:
-	mkdir -p $@
+	mkdir -p $@/.build
 
 opt/bin:
 	mkdir -p $@/bin
@@ -172,16 +231,16 @@ check :
 	@ls -ltrh $$(cat logs/all.txt)
 
 # gds
-gds : logs/gds.txt
-
-logs/gds.txt : $(LOGS_DIR)/ldas-tools-framecpp.txt $(GDS_TARGET)
-	@echo $^ | sed -e "s@ @\n@g" > $@
-
-$(GDS_TARGET) : $(LDASTOOLSFRAMECPP_TARGET)
-	@echo $(GREEN)gds$(WHITE) 1>&2
-	tar -xzf $(TAR_DIR)/$(GDS).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR)
-	cd $(SRC_DIR)/$(GDS) && make -j$(CORES) && make install -j$(CORES)
+#gds : logs/gds.txt
+#
+#logs/gds.txt : $(LOGS_DIR)/ldas-tools-framecpp.txt $(GDS_TARGET)
+#	@echo $^ | sed -e "s@ @\n@g" > $@
+#
+#$(GDS_TARGET) : $(LDASTOOLSFRAMECPP_TARGET)
+#	@echo $(GREEN)gds$(WHITE) 1>&2
+#	tar -xzf $(TAR_DIR)/$(GDS).tar.gz -C $(SRC_DIR)
+#	cd $(SRC_DIR)/$(GDS) && ./configure --enable-online --prefix=$(INSTALL_DIR)
+#	cd $(SRC_DIR)/$(GDS) && make -j$(CORES) && make install -j$(CORES)
 
 # ldas-tools-framecpp
 ldas-tools-framecpp : logs/ldas-tools-framecpp.txt
@@ -190,10 +249,10 @@ logs/ldas-tools-framecpp.txt : $(LOGS_DIR)/ldas-tools-al.txt $(LDASTOOLSFRAMECPP
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
 $(LDASTOOLSFRAMECPP_TARGET) : $(LDASTOOLSAL_TARGET)
-	@echo $(GREEN)ldas-tools-frmecpp$(WHITE) 1>&2
+	@echo $(GREEN)ldas-tools-framecpp$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(LDASTOOLSFRAMECPP).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen
-	cd $(SRC_DIR)/$(LDASTOOLSFRAMECPP) && make && make install 
+	cd $(SRC_DIR)/.build && rm -rf * && cmake -DCMAKE_INSTALL_PREFIX:PATH=$(INSTALL_DIR) $(SRC_DIR)/$(LDASTOOLSFRAMECPP)
+	cd $(SRC_DIR)/.build && cmake --build . --target install
 
 # ldas-tools-al
 ldas-tools-al : logs/ldas-tools-al.txt
@@ -201,11 +260,35 @@ ldas-tools-al : logs/ldas-tools-al.txt
 logs/ldas-tools-al.txt : $(LOGS_DIR)/swig.txt $(LDASTOOLSAL_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(LDASTOOLSAL_TARGET) : $(SWIG_TARGET)
+$(LDASTOOLSAL_TARGET) : $(LDASTOOLSCMAKE_TARGET)
 	@echo $(GREEN)ldas-tools-al$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(LDASTOOLSAL).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(LDASTOOLSAL) && ./configure --prefix=$(INSTALL_DIR) --without-doxygen --disable-warnings-as-errors
-	cd $(SRC_DIR)/$(LDASTOOLSAL) && make -j$(CORES) && make install -j$(CORES)
+	cd $(SRC_DIR)/.build && rm -rf * && cmake -DCMAKE_INSTALL_PREFIX:PATH=$(INSTALL_DIR) $(SRC_DIR)/$(LDASTOOLSAL)
+	cd $(SRC_DIR)/.build && cmake --build . --target install
+
+# ldas-tools-cmake
+ldas-tools-cmake : logs/ldas-tools-cmake.txt
+
+logs/ldas-tools-cmake.txt : $(LOGS_DIR)/igwn-cmake.txt $(LDASTOOLSCMAKE_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(LDASTOOLSCMAKE_TARGET) : $(IGWNCMAKE_TARGET)
+	@echo $(GREEN)ldas-tools-cmake$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(LDASTOOLSCMAKE).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/.build && rm -rf * && cmake -DCMAKE_INSTALL_PREFIX:PATH=$(INSTALL_DIR) $(SRC_DIR)/$(LDASTOOLSCMAKE)
+	cd $(SRC_DIR)/.build && cmake --build . --target install
+
+# iwgn-cmake
+igwn-cmake : logs/igwm-cmake.txt
+
+logs/igwn-cmake.txt : $(LOGS_DIR)/swig.txt $(IGWNCMAKE_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(IGWNCMAKE_TARGET) : $(SWIG_TARGET)
+	@echo $(GREEN)igwn-cmake$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(IGWNCMAKE).tar.gz -C $(SRC_DIR)
+	cd $(SRC_DIR)/.build && rm -rf * && cmake -DCMAKE_INSTALL_PREFIX:PATH=$(INSTALL_DIR) $(SRC_DIR)/$(IGWNCMAKE)
+	cd $(SRC_DIR)/.build && cmake --build . --target install
 
 # swig
 swig : logs/swig.txt
@@ -222,15 +305,27 @@ $(SWIG_TARGET) : $(METAIO_TARGET)
 # metaio
 metaio : logs/metaio.txt
 
-logs/metaio.txt : $(LOGS_DIR)/libframe.txt $(METAIO_TARGET)
+logs/metaio.txt : $(LOGS_DIR)/framel.txt $(METAIO_TARGET)
 	@echo $^ | sed -e "s@ @\n@g" > $@
 
-$(METAIO_TARGET) : $(LIBFRAME_TARGET)
+$(METAIO_TARGET) : $(FRAMEL_TARGET)
 	@echo $(GREEN)metaio$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(METAIO).tar.gz -C $(SRC_DIR)
 	cd $(SRC_DIR)/$(METAIO) && ./configure --prefix=$(INSTALL_DIR) --with-matlab=no
 	cd $(SRC_DIR)/$(METAIO) && make -j$(CORES) && make install -j$(CORES)
 	# Needed with-matlab option for intel_haswell test
+
+# framel
+framel : logs/framel.txt
+
+logs/framel.txt : $(LOGS_DIR)/libframe.txt $(FRAMEL_TARGET)
+	@echo $^ | sed -e "s@ @\n@g" > $@
+
+$(FRAMEL_TARGET) : $(LIBFRAME_TARGET)
+	@echo $(GREEN)framel$(WHITE) 1>&2
+	tar -xf $(TAR_DIR)/$(FRAMEL).tar.xz -C $(SRC_DIR)
+	cd $(SRC_DIR)/$(FRAMEL) && cmake -DCMAKE_INSTALL_PREFIX:PATH=$(INSTALL_DIR) .
+	cd $(SRC_DIR)/$(FRAMEL) && cmake --build . --target install
 
 # libframe
 libframe : logs/libframe.txt
@@ -294,7 +389,7 @@ $(GSL_2_TARGET) : $(GSL_1_TARGET)
 $(GSL_1_TARGET) : $(ORC_TARGET)
 	@echo $(GREEN)gsl$(WHITE) 1>&2
 	tar -xf $(TAR_DIR)/$(GSL).tar.gz -C $(SRC_DIR)
-	cd $(SRC_DIR)/$(GSL) && ./configure --prefix=$(INSTALL_DIR)  GSL_CBLAS_LIB='$(LDMKLFLAGS)'
+	cd $(SRC_DIR)/$(GSL) && ./configure --prefix=$(INSTALL_DIR)  GSL_CBLAS_LIB='-lopenblas' LIBS='-lopenblas'
 	cd $(SRC_DIR)/$(GSL) && make -j$(CORES) && make install -j$(CORES)
 
 # ORC
@@ -339,7 +434,7 @@ logs/patch.txt : $(LOGS_DIR)/tar.txt
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 #tarballs
-logs/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET)
+logs/tar.txt : $(FFTW_TAR_TARGET) $(ORC_TAR_TARGET) $(GSL_TAR_TARGET) $(GSTREAMER_TAR_TARGET) $(GSTBASE_TAR_TARGET) $(GSTGOOD_TAR_TARGET) $(GSTPYTHON_TAR_TARGET) $(LIBFRAME_TAR_TARGET) $(METAIO_TAR_TARGET) $(SWIG_TAR_TARGET) $(LDASTOOLSAL_TAR_TARGET) $(LDASTOOLSFRAMECPP_TAR_TARGET) $(GDS_TAR_TARGET) $(FRAMEL_TAR_TARGET) $(IGWNCMAKE_TAR_TARGET) $(LDASTOOLSCMAKE_TAR_TARGET)
 	echo $^ | sed -e "s@ @\n@g" > $@
 
 $(GDS_TAR_TARGET) : $(LDASTOOLSFRAMECPP_TAR_TARGET)
@@ -348,14 +443,23 @@ $(GDS_TAR_TARGET) : $(LDASTOOLSFRAMECPP_TAR_TARGET)
 $(LDASTOOLSFRAMECPP_TAR_TARGET) : $(LDASTOOLSAL_TAR_TARGET)
 	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSFRAMECPP).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
-$(LDASTOOLSAL_TAR_TARGET) : $(SWIG_TAR_TARGET)
+$(LDASTOOLSAL_TAR_TARGET) : $(LDASTOOLSCMAKE_TAR_TARGET)
 	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSAL).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(LDASTOOLSCMAKE_TAR_TARGET) : $(IGWNCMAKE_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(LDASTOOLSCMAKE).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(IGWNCMAKE_TAR_TARGET) : $(SWIG_TAR_TARGET)
+	wget --no-check-certificate http://software.ligo.org/lscsoft/source/$(IGWNCMAKE).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
 $(SWIG_TAR_TARGET) : $(METAIO_TAR_TARGET)
 	wget --no-check-certificate http://downloads.sourceforge.net/project/swig/swig/$(SWIG)/$(SWIG).tar.gz --directory-prefix=$(TAR_DIR) -nc
 
-$(METAIO_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
+$(METAIO_TAR_TARGET) : $(FRAMEL_TAR_TARGET)
 	wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(METAIO).tar.gz --directory-prefix=$(TAR_DIR) -nc
+
+$(FRAMEL_TAR_TARGET) : $(LIBFRAME_TAR_TARGET)
+	wget --no-check-certificate http://software.igwn.org/lscsoft/source/$(FRAMEL).tar.xz --directory-prefix=$(TAR_DIR) -nc
 
 $(LIBFRAME_TAR_TARGET) : $(GSTPYTHON_TAR_TARGET)
 	wget --no-check-certificate http://lappweb.in2p3.fr/virgo/FrameL/$(LIBFRAME).tar.gz --directory-prefix=$(TAR_DIR) -nc
@@ -383,7 +487,7 @@ $(FFTW_TAR_TARGET) : $(LOGS_DIR)
 
 # git repos
 $(LOGS_DIR) :
-	mkdir -p $(SRC_DIR) $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(PYTHON_DIR)
+	mkdir -p $(SRC_DIR)/.build $(INSTALL_DIR) $(PATCH_DIR) $(TAR_DIR) $(PYTHON_DIR)
 	mkdir -p $(LOGS_DIR)
 
 ############
