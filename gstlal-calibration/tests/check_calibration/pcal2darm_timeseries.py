@@ -69,7 +69,7 @@ parser.add_option("--gps-end-time", metavar = "seconds", type = int, help = "GPS
 parser.add_option("--ifo", metavar = "name", help = "Name of the interferometer (IFO), e.g., H1, L1")
 parser.add_option("--raw-frame-cache", metavar = "name", help = "Raw frame cache file")
 parser.add_option("--gstlal-frame-cache-list", metavar = "list", help = "Comma-separated list of gstlal calibrated frame cache files to read")
-parser.add_option("--config-file", metavar = "name", help = "Configurations file used to produce gstlal calibrated frames, needed to get pcal line frequencies and correction factors")
+parser.add_option("--config-file-list", metavar = "list", help = "Comma-separated list of Configurations files used to produce gstlal calibrated frames, needed to get line frequencies, EPICS values, and TDCF settings.  Must be equal in length to --gstlal-frame-cache-list.")
 parser.add_option("--pcal-channel-name", metavar = "name", default = "CAL-PCALY_RX_PD_OUT_DQ", help = "Name of the pcal channel you wish to use")
 parser.add_option("--gstlal-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels to compare to pcal")
 parser.add_option("--calcs-channel-list", metavar = "list", type = str, default = None, help = "Comma-separated list of gstlal calibrated channels in the raw frames to compare to pcal")
@@ -84,6 +84,8 @@ parser.add_option("--pcal-time-advance", metavar = "seconds", type = float, defa
 parser.add_option("--show-stats", action = "store_true", help = "If set, plots will have averages (mean) and standard deviations shown in plot legends.")
 
 options, filenames = parser.parse_args()
+
+ifo = options.ifo
 
 # Read the config file
 def ConfigSectionMap(section):
@@ -100,9 +102,25 @@ def ConfigSectionMap(section):
 	return dict1
 
 Config = configparser.ConfigParser()
-Config.read(options.config_file)
 
-InputConfigs = ConfigSectionMap("InputConfigurations")
+config_files = options.config_file_list.split(',')
+DQ_channels = []
+chan_prefixes = []
+chan_suffixes = []
+for i in range(len(config_files)):
+	Config.read(config_files[i])
+	InputConfigs = ConfigSectionMap("InputConfigurations")
+	OutputConfigs = ConfigSectionMap("OutputConfigurations")
+
+	if OutputConfigs["chansuffix"] != "None":
+		chan_suffix = OutputConfigs["chansuffix"]
+	else:
+		chan_suffix = ""
+	chan_prefix = OutputConfigs["chanprefix"]
+	chan_prefixes.append(chan_prefix)
+	chan_suffixes.append(chan_suffix)
+
+	DQ_channels.append((ifo, "%sCALIB_STATE_VECTOR%s" % (chan_prefix, chan_suffix)))
 
 #
 # Load in the filters file that contains filter coefficients, etc.
@@ -137,8 +155,6 @@ else:
 		raise ValueError("Cannot find filters file %s in home directory %s or in /ligo/svncommon/CalSVN/aligocalibration/trunk/Runs/*/GDSFilters", (filters_name, os.environ['HOME']))
 	print("Loading calibration filters from %s\n" % filters_paths[0])
 	filters = numpy.load(filters_paths[0])
-
-ifo = options.ifo
 
 # Set up gstlal frame cache list
 gstlal_frame_cache_list = options.gstlal_frame_cache_list.split(',')
@@ -243,12 +259,20 @@ def pcal2darm(pipeline, name):
 		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(channel_list)]):
 			# Get gstlal channels from the gstlal frames
 			hoft_data = pipeparts.mklalcachesrc(pipeline, location = cache, cache_dsc_regex = ifo)
-			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list)))
+			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list + DQ_channels)))
 			hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0, element_name_suffix = "_%d" % cache_num)
-			cache_num = cache_num + 1
 			hoft = calibration_parts.caps_and_progress(pipeline, hoft, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", label)
 			deltal = pipeparts.mkaudioamplify(pipeline, hoft, arm_length)
 			deltal = pipeparts.mktee(pipeline, deltal)
+
+			# Get a DQ channel
+			DQ_channel = "%sCALIB_STATE_VECTOR%s" % (chan_prefixes[cache_num], chan_suffixes[cache_num])
+			DQ = calibration_parts.hook_up(pipeline, hoft_data, DQ_channel, ifo, 1.0, element_name_suffix = "_%d" % cache_num)
+			DQ = calibration_parts.caps_and_progress(pipeline, DQ, "audio/x-raw,format=U32LE,channels=1,channel-mask=(bitmask)0x0", "DQ_%s" % label)
+			DQ = pipeparts.mkgeneric(pipeline, DQ, "lal_logicalundersample", required_on = 1, status_out = 1)
+			DQ = pipeparts.mkcapsfilter(pipeline, DQ, "audio/x-raw,format=U32LE,rate=%d,channels=1,channel-mask=(bitmask)0x0" % rate_out)
+			DQ = pipeparts.mktee(pipeline, DQ)
+
 			for i in range(0, len(frequencies)):
 				# Demodulate \DeltaL at each line
 				demodulated_deltal = calibration_parts.demodulate(pipeline, deltal, frequencies[i], True, rate_out, filter_time, 0.5)
@@ -264,8 +288,12 @@ def pcal2darm(pipeline, name):
 				phase = pipeparts.mkaudioamplify(pipeline, phase, 180.0 / numpy.pi)
 				# Interleave
 				magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
+				# Gate with DQ channel
+				magnitude_and_phase = calibration_parts.mkgate(pipeline, magnitude_and_phase, pipeparts.mkgeneric(pipeline, DQ, "identity"), 1)
+				magnitude_and_phase = pipeparts.mkprogressreport(pipeline, magnitude_and_phase, name = "progress_sink_%d_%d" % (cache_num, i))
 				# Write to file
 				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label.replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
+			cache_num = cache_num + 1
 
 	#
 	# done
@@ -291,7 +319,7 @@ else:
 		plot_labels.append("{\\rm %s}" % label.replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '))
 
 # Read data from files and plot it
-colors = ['tomato', 'green', 'mediumblue', 'gold', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['red', 'limegreen', 'mediumblue', 'gold', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
 channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):

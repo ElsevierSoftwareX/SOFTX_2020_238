@@ -106,6 +106,7 @@ Config = configparser.ConfigParser()
 
 config_files = options.config_file_list.split(',')
 TDCF_channels = []
+DQ_channels = []
 filters = []
 apply_kappatst = []
 apply_complex_kappatst = []
@@ -181,6 +182,8 @@ for i in range(len(config_files)):
 		TDCF_chan.append((ifo, "%sCALIB_KAPPA_UIM_REAL%s" % (chan_prefix, chan_suffix)))
 		TDCF_chan.append((ifo, "%sCALIB_KAPPA_UIM_IMAGINARY%s" % (chan_prefix, chan_suffix)))
 	TDCF_channels.append(TDCF_chan)
+
+	DQ_channels.append((ifo, "%sCALIB_STATE_VECTOR%s" % (chan_prefix, chan_suffix)))
 
 # Set up gstlal frame cache list
 gstlal_frame_cache_list = options.gstlal_frame_cache_list.split(',')
@@ -306,11 +309,19 @@ def act2darm(pipeline, name):
 		for cache, channel, label in zip(gstlal_frame_cache_list, gstlal_channels, labels[len(calcs_channels) : len(channel_list)]):
 			# Get gstlal channels from the gstlal frames
 			hoft_data = pipeparts.mklalcachesrc(pipeline, location = cache, cache_dsc_regex = ifo)
-			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list + TDCF_channels[cache_num])))
+			hoft_data = pipeparts.mkframecppchanneldemux(pipeline, hoft_data, do_file_checksum = False, skip_bad_files = True, channel_list = list(map("%s:%s".__mod__, channel_list + TDCF_channels[cache_num] + DQ_channels)))
 			hoft = calibration_parts.hook_up(pipeline, hoft_data, channel, ifo, 1.0, element_name_suffix = "_%d" % cache_num)
 			hoft = calibration_parts.caps_and_progress(pipeline, hoft, "audio/x-raw,format=F64LE,channels=1,channel-mask=(bitmask)0x0", label)
 			deltal = pipeparts.mkaudioamplify(pipeline, hoft, arm_length)
 			deltal = pipeparts.mktee(pipeline, deltal)
+
+			# Get a DQ channel
+			DQ_channel = "%sCALIB_STATE_VECTOR%s" % (chan_prefixes[cache_num], chan_suffixes[cache_num])
+			DQ = calibration_parts.hook_up(pipeline, hoft_data, DQ_channel, ifo, 1.0, element_name_suffix = "_%d" % cache_num)
+			DQ = calibration_parts.caps_and_progress(pipeline, DQ, "audio/x-raw,format=U32LE,channels=1,channel-mask=(bitmask)0x0", "DQ_%s" % label)
+			DQ = pipeparts.mkgeneric(pipeline, DQ, "lal_logicalundersample", required_on = 1, status_out = 1)
+			DQ = pipeparts.mkcapsfilter(pipeline, DQ, "audio/x-raw,format=U32LE,rate=%d,channels=1,channel-mask=(bitmask)0x0" % rate_out)
+			DQ = pipeparts.mktee(pipeline, DQ)
 			for i in range(0, len(frequencies)):
 				# Demodulate \DeltaL at each line
 				demodulated_deltal = calibration_parts.demodulate(pipeline, deltal, frequencies[i], True, rate_out, filter_time, 0.5)
@@ -371,6 +382,9 @@ def act2darm(pipeline, name):
 				phase = pipeparts.mkaudioamplify(pipeline, phase, 180.0 / numpy.pi)
 				# Interleave
 				magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
+				# Gate with DQ channel
+				magnitude_and_phase = calibration_parts.mkgate(pipeline, magnitude_and_phase, DQ, 1)
+				magnitude_and_phase = pipeparts.mkprogressreport(pipeline, magnitude_and_phase, name = "progress_sink_%d_%d" % (cache_num, i))
 				# Write to file
 				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label.replace(' ', '_'), act_channels[i], frequencies[i], options.gps_start_time))
 			cache_num = cache_num + 1
@@ -399,7 +413,7 @@ else:
 		plot_labels.append("{\\rm %s}" % label.replace(':', '{:}').replace('-', '\mbox{-}').replace('_', '\_').replace(' ', '\ '))
 
 # Read data from files and plot it
-colors = ['tomato', 'green', 'mediumblue', 'gold', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
+colors = ['red', 'limegreen', 'mediumblue', 'gold', 'b', 'm'] # Hopefully the user will not want to plot more than six datasets on one plot.
 channels = calcs_channels
 channels.extend(gstlal_channels)
 for i in range(0, len(frequencies)):
@@ -418,11 +432,11 @@ for i in range(0, len(frequencies)):
 	elif dur > 100:
 		t_unit = 'minutes'
 		sec_per_t_unit = 60.0
-	times = []
+	times = [[]]
 	magnitudes = [[]]
 	phases = [[]]
 	for k in range(0, int(len(data) / filter_time)):
-		times.append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
+		times[0].append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
 		magnitudes[0].append(data[filter_time * k][1])
 		phases[0].append(data[filter_time * k][2])
 	markersize = 150.0 * numpy.sqrt(float(filter_time / dur))
@@ -433,9 +447,9 @@ for i in range(0, len(frequencies)):
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
 	if options.show_stats:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.median(magnitudes[0]), numpy.std(magnitudes[0])))
+		plt.plot(times[0], magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.median(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
+		plt.plot(times[0], magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
 	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm %s} \  {\rm at \  %0.1f \  Hz}$' % (ifo, stages[i], frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
@@ -445,9 +459,9 @@ for i in range(0, len(frequencies)):
 	leg.get_frame().set_alpha(0.8)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 	if options.show_stats:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.median(phases[0]), numpy.std(phases[0])))
+		plt.plot(times[0], phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.median(phases[0]), numpy.std(phases[0])))
 	else:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
+		plt.plot(times[0], phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
 	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 	leg.get_frame().set_alpha(0.8)
 	if i == 0:
@@ -458,23 +472,25 @@ for i in range(0, len(frequencies)):
 	ticks_and_grid(plt.gca(), ymin = float(phase_range.split(',')[0]), ymax = float(phase_range.split(',')[1]))
 	for j in range(1, len(channels)):
 		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j].replace(' ', '_'), act_channels[i], frequencies[i], options.gps_start_time))
+		times.append([])
 		magnitudes.append([])
 		phases.append([])
 		for k in range(0, int(len(data) / filter_time)):
+			times[j].append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
 		if options.show_stats:
-			plt.plot(times[:min(len(times), len(magnitudes[j]))], magnitudes[j][:min(len(times), len(magnitudes[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.median(magnitudes[j]), numpy.std(magnitudes[j])))
+			plt.plot(times[j], magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.median(magnitudes[j]), numpy.std(magnitudes[j])))
 		else:
-			plt.plot(times[:min(len(times), len(magnitudes[j]))], magnitudes[j][:min(len(times), len(magnitudes[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
+			plt.plot(times[j], magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
 		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 		leg.get_frame().set_alpha(0.8)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 		if options.show_stats:
-			plt.plot(times[:min(len(times), len(phases[j]))], phases[j][:min(len(times), len(phases[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[j], numpy.median(phases[j]), numpy.std(phases[j])))
+			plt.plot(times[j], phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[j], numpy.median(phases[j]), numpy.std(phases[j])))
 		else:
-			plt.plot(times[:min(len(times), len(phases[j]))], phases[j][:min(len(times), len(phases[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
+			plt.plot(times[j], phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
 		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 		leg.get_frame().set_alpha(0.8)
 plt.savefig("%s_deltal_over_act%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
