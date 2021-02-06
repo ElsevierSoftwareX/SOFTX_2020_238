@@ -75,6 +75,7 @@
 #include <gstlal_makediscont.h>
 #include <gstlal_randreplace.h>
 #include <gstlal_stdev.h>
+#include <gstlal_minmax.h>
 
 
 /*
@@ -114,6 +115,7 @@ static gboolean plugin_init(GstPlugin *plugin)
 		{"lal_makediscont", GSTLAL_MAKEDISCONT_TYPE},
 		{"lal_randreplace", GSTLAL_RANDREPLACE_TYPE},
 		{"lal_stdev", GSTLAL_STDEV_TYPE},
+		{"lal_minmax", GSTLAL_MINMAX_TYPE},
 		{NULL, 0},
 	};
 
