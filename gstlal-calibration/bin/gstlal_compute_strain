@@ -284,7 +284,7 @@ actuation_filter_update_time = float(TDCFConfigs["actuationfilterupdatetime"])
 actuation_filter_averaging_time = float(TDCFConfigs["actuationfilteraveragingtime"])
 actuation_filter_taper_length = int(TDCFConfigs["actuationfiltertaperlength"])
 sensing_filter_update_time = float(TDCFConfigs["sensingfilterupdatetime"])
-sensing_filter_averaging_time = float(TDCFConfigs["sensingfilteraveragingtime"])
+sensing_filter_averaging_time = float(TDCFConfigs["sensingfilteraveragingtime"]) if "sensingfilteraveragingtime" in TDCFConfigs else 0
 sensing_filter_taper_length = int(TDCFConfigs["sensingfiltertaperlength"])
 pcal_sign = float(TDCFConfigs["pcalsign"]) if "pcalsign" in TDCFConfigs else 1.0
 cleaning_check_rms_time = float(DataCleaningConfigs["cleaningcheckrmstime"])
@@ -2192,9 +2192,9 @@ if apply_fcc or apply_fs or apply_srcq:
 	# Now interleave the correction channels in tdep_zpk and feed them into lal_adaptivefirfilt to update the inverse sensing filter
 	tdep_zpk = calibration_parts.mkinterleave(pipeline, tdep_zpk, complex_data = True)
 	if minimize_adaptive_sensfilt:
-		adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, window_type = None, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, minimize_filter_length = True, name = "adaptive_invsens_filter")
+		adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr) + 1, num_zeros = variable_invsens_zeros, num_poles = 0, window_type = None, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, minimize_filter_length = True, name = "adaptive_invsens_filter")
 	else:
-		adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, static_model = reschainfilt_model, static_filter = reschainfilt, static_poles = static_invsens_poles, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr), num_zeros = variable_invsens_zeros, num_poles = 0, adaptive_filter_length = len(reschainfilt), frequency_resolution = invsens_freq_res, window_type = invsens_window_type, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, minimize_filter_length = False, name = "adaptive_invsens_filter")
+		adaptive_invsens_filter = calibration_parts.mkadaptivefirfilt(pipeline, tdep_zpk, static_model = reschainfilt_model, static_filter = reschainfilt, static_poles = static_invsens_poles, update_samples = int(sensing_filter_update_time * compute_factors_sr), average_samples = int(sensing_filter_averaging_time * compute_factors_sr) + 1, num_zeros = variable_invsens_zeros, num_poles = 0, adaptive_filter_length = len(reschainfilt), frequency_resolution = invsens_freq_res, window_type = invsens_window_type, filter_sample_rate = hoft_sr, filter_timeshift = 1000000000 * sensing_filter_update_time, minimize_filter_length = False, name = "adaptive_invsens_filter")
 
 #
 # CONTROL BRANCH
@@ -2854,7 +2854,7 @@ if compute_calib_statevector:
 	# FCC BITS BRANCH
 	#
 	if compute_fcc:
-		fccSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, fcc_default, fcc_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fcc_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		fccSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fcctee, fcc_default, fcc_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr) + 1, factors_average_samples, status_out_smooth = pow(2,fcc_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# FS BITS BRANCH
@@ -2862,7 +2862,7 @@ if compute_calib_statevector:
 
 	# We are actually checking the value fs^2, as that is more indicative of significant change.
 	if compute_fs:
-		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs_squared, fs_squared_default, fs_squared_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs_squared, fs_squared_default, fs_squared_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr) + 1, factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# SRCQ BITS BRANCH
@@ -2870,7 +2870,7 @@ if compute_calib_statevector:
 
 	# We are actually checking the value fs / Q, as that is more indicative of significant change.
 	if compute_srcq:
-		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, fs_over_Q, fs_over_Q_default, fs_squared_var / src_pcal_line_freq, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, fs_over_Q, fs_over_Q_default, fs_squared_var / src_pcal_line_freq, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr) + 1, factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# COHERENCE BITS BRANCH
