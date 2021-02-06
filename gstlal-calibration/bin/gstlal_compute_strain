@@ -328,9 +328,7 @@ kappauim_real_var = float(TDCFConfigs["kappauimrealvar"])
 kappauim_imag_var = float(TDCFConfigs["kappauimimagvar"])
 kappac_var = float(TDCFConfigs["kappacvar"])
 fcc_var = float(TDCFConfigs["fccvar"])
-fs_var = float(TDCFConfigs["fsvar"])
-srcQinv_min = float(TDCFConfigs["srcqinvmin"])
-srcQinv_max = float(TDCFConfigs["srcqinvmax"])
+fs_squared_var = float(TDCFConfigs["fssquaredvar"]) if "fssquaredvar" in TDCFConfigs else pow(float(TDCFConfigs["fsvar"]), 2)
 
 # Set up smoothing, averaging and integration sample sizes for kappa calulations
 median_smoothing_time = int(TDCFConfigs["mediansmoothingtime"])
@@ -557,6 +555,7 @@ else:
 
 if fs_squared_default < 0:
 	srcQ_default = -1j * srcQ_default
+fs_over_Q_default = numpy.real(fs_default / srcQ_default)
 
 # Load kappa dewhitening factors
 if dewhitening:
@@ -1459,7 +1458,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 		freq_list = [act_pcal_line_freq, opt_gain_fcc_line_freq, esd_act_line_freq, pum_act_line_freq, uim_act_line_freq]
 		EPICS_list = [EP11_real, EP11_imag, EP25_real, EP25_imag, EP26_real, EP26_imag, EP27_real, EP27_imag, EP6_real, EP6_imag, EP28_real, EP28_imag, EP29_real, EP29_imag, EP30_real, EP30_imag, EP31_real, EP31_imag, EP32_real, EP32_imag, EP33_real, EP33_imag, EP34_real, EP34_imag, EP35_real, EP35_imag, EP36_real, EP36_imag, EP37_real, EP37_imag, EP38_real, EP38_imag, EP39_real, EP39_imag, EP40_real, EP40_imag, EP41_real, EP41_imag, EP42_real, EP42_imag]
 
-		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list, compute_factors_sr, default_fcc = fcc_default, default_fs_squared = fs_squared_default, default_fs_over_Q = numpy.real(pow(fs_squared_default, 0.5) / srcQ_default))
+		[ktst, kpum, kuim, tau_tst, tau_pum, tau_uim, kc, fcc, fs_squared, fs_over_Q] = calibration_parts.compute_exact_kappas_from_filters_file(pipeline, X_list, freq_list, EPICS_list, compute_factors_sr, default_fcc = fcc_default, default_fs_squared = fs_squared_default, default_fs_over_Q = fs_over_Q_default)
 
 	#else: use non-existent channels in the raw frames
 
@@ -1562,6 +1561,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	if compute_srcq:
 		# fs / Q is a real-valued quantity, but fs and Q are not necessarily, so we compute a complex-valued 1/Q.
+		fs_over_Q = pipeparts.mktee(pipeline, fs_over_Q)
 		smooth_srcQ_inv = pipeparts.mktee(pipeline, calibration_parts.mkmultiplier(pipeline, [pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, fs_over_Q, matrix = [[1.0, 0.0]])), calibration_parts.mkpow(pipeline, pipeparts.mktogglecomplex(pipeline, pipeparts.mkmatrixmixer(pipeline, smooth_fs_squared, matrix = [[1.0, 0.0]])), exponent = -0.5)]))
 		# We need a real-valued version of Q^(-1) to write the the frames.  If we have
 		# an optical spring, the computed Q^(-1) is imaginary, and if we have an optical
@@ -1948,8 +1948,7 @@ if not compute_exact_kappas and (compute_kappac or compute_fcc or compute_fs or 
 # compute f_s and Q
 if not compute_exact_kappas and (compute_fs or compute_srcq):
 	expected_Xi = complex((fs_squared_default - 1j * src_pcal_line_freq * fs_default / srcQ_default) / (src_pcal_line_freq * src_pcal_line_freq))
-	Xi_real_var = float((pow(abs(fs_default) + fs_var, 2.0) - pow(abs(fs_default), 2.0)) / pow(src_pcal_line_freq, 2))
-	Xi_imag_var = float(fs_var / (abs(srcQ_default) * src_pcal_line_freq))
+	Xi_var = fs_squared_var / pow(src_pcal_line_freq, 2)
 
 	# demodulate PCAL channel and apply the PCAL correction factor at SRC detuning line frequency
 	if src_pcal_line_freq == act_pcal_line_freq:
@@ -2007,7 +2006,7 @@ if not compute_exact_kappas and (compute_fs or compute_srcq):
 		smooth_Xi = calibration_parts.smooth_complex_kappas(pipeline, Xi_gated, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 
 	else:
-		smooth_Xi = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, Xi, Xi_real_var, Xi_real_var, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
+		smooth_Xi = calibration_parts.smooth_complex_kappas_no_coherence(pipeline, Xi, Xi_var, Xi_var, float(numpy.real(expected_Xi)), float(numpy.imag(expected_Xi)), median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 
 	if compute_tdcf_uncertainty:
 		Xi_unc_abs = pipeparts.mkgeneric(pipeline, Xi_gated if use_coherence else Xi, "lal_stdev", mode = 0, coherence_length = tdcf_coherence_length, array_size = tdcf_unc_samples, filter_latency = filter_latency_factor)
@@ -2026,6 +2025,7 @@ median_smoothing_samples, factors_average_samples)
 		smooth_XiR_nogate = pipeparts.mkgeneric(pipeline, smooth_Xi_nogate, "creal")
 	else:
 		smooth_XiR, smooth_XiI = calibration_parts.split_into_real(pipeline, smooth_Xi)
+		smooth_XiI = pipeparts.mktee(pipeline, smooth_XiI)
 		smooth_XiR_nogate, smooth_XiI_nogate = calibration_parts.split_into_real(pipeline, smooth_Xi_nogate)
 
 	if compute_fs and compute_srcq:
@@ -2076,6 +2076,10 @@ median_smoothing_samples, factors_average_samples)
 		smooth_srcQ_inv_nogate = calibration_parts.mkadder(pipeline, calibration_parts.list_srcs(pipeline, pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_nogate, "creal"), pipeparts.mkgeneric(pipeline, smooth_srcQ_inv_nogate, "cimag")))
 
 		smooth_srcQ_inv_real = pipeparts.mktee(pipeline, smooth_srcQ_inv_real)
+
+		if compute_calib_statevector:
+			# We need the real value fs / Q.
+			fs_over_Q = pipeparts.mkaudioamplify(pipeline, smooth_XiI, -src_pcal_line_freq)
 
 #
 # TIME-VARYING FACTORS COMPENSATIONS
@@ -2855,14 +2859,18 @@ if compute_calib_statevector:
 	#
 	# FS BITS BRANCH
 	#
+
+	# We are actually checking the value fs^2, as that is more indicative of significant change.
 	if compute_fs:
-		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs_squared, fs_squared_default, [-pow(abs(fs_default) + fs_var, 2), pow(abs(fs_default) + fs_var, 2)], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		fsSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_fs_squared, fs_squared_default, fs_squared_var, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,fs_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# SRCQ BITS BRANCH
 	#
+
+	# We are actually checking the value fs / Q, as that is more indicative of significant change.
 	if compute_srcq:
-		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, smooth_srcQ_inv_real, 1.0 / (numpy.real(srcQ_default) + numpy.imag(srcQ_default)), [srcQinv_min, srcQinv_max], median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
+		srcQSmoothInRange = calibration_parts.compute_kappa_bits_only_real(pipeline, fs_over_Q, fs_over_Q_default, fs_squared_var / src_pcal_line_freq, median_smoothing_samples + int((sensing_filter_update_time + sensing_filter_averaging_time) * compute_factors_sr), factors_average_samples, status_out_smooth = pow(2,Qinv_smooth_bitnum), starting_rate = compute_factors_sr, ending_rate = calibstate_sr)
 
 	#
 	# COHERENCE BITS BRANCH

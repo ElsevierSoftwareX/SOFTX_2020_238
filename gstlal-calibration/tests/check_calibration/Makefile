@@ -44,7 +44,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: exactkappastimeseries DCSEXACTKAPPAS_act2darm_plots
+all: exactkappastimeseries DCSEXACTKAPPAS_act2darm_plots DCSEXACTKAPPAS_pcal2darm_plots
 #pcal_DCS_transfer_functions
 #TDCFs_pcal2darm_plots
 #actuation_timing_plot
@@ -183,12 +183,10 @@ GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 DCS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C00_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'GDS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'C00,TEST' --pcal-time-advance 0.00006103515625
 
-DCSEXACTKAPPAS_pcal2darm_plots:
-	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
+DCSEXACTKAPPAS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache,$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache' --config-file-list '$(DCSAPPROXKAPPASCONFIGS),$(DCSEXACTKAPPASCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'DCS-CALIB_STRAINAPPROXKAPPAS,DCS-CALIB_STRAINEXACTKAPPAS' --labels '{\rm Approx},{\rm Exact}' --magnitude-ranges '0.95,1.05;0.95,1.05;0.8,1.2' --phase-ranges '-3.0,3.0;-3.0,3.0;-15.0,15.0' --latex-labels --pcal-time-advance 0.00006103515625 --show-stats
 
-DCSEXACTKAPPAS_act2darm_plots:
-	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
+DCSEXACTKAPPAS_act2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
 	python3 act2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache,$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache' --config-file-list '$(DCSAPPROXKAPPASCONFIGS),$(DCSEXACTKAPPASCONFIGS)' --gstlal-channel-list 'DCS-CALIB_STRAINAPPROXKAPPAS,DCS-CALIB_STRAINEXACTKAPPAS' --act-channel-list "SUS-ETMY_L3_CAL_LINE_OUT_DQ,SUS-ETMX_L2_CAL_LINE_OUT_DQ,SUS-ETMX_L1_CAL_LINE_OUT_DQ" --labels '{\rm Approx},{\rm Exact}' --magnitude-ranges '0.95,1.05;0.95,1.05;0.95,1.05' --phase-ranges '-3.0,3.0;-3.0,3.0;-3.0,3.0' --latex-labels --show-stats
 
 TDCFs_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_SCALAR_CORR_frames.cache $(IFO)1_FCC_CORR_frames.cache $(IFO)1_FCCFS_CORR_frames.cache $(IFO)1_ALL_CORR_frames.cache
@@ -255,8 +253,7 @@ DCS_over_C02: $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C02_frames.cache
 kappastimeseries_GDS: $(IFO)1_hoft_GDS_frames.cache $(IFO)1_easy_raw_frames.cache
 	python3 timeserieskappas.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_GDS_frames.cache --channel-list 'GDS-CALIB_KAPPA_TST_REAL_NOGATE','GDS-CALIB_KAPPA_TST_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_PUM_REAL_NOGATE','GDS-CALIB_KAPPA_PUM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_UIM_REAL_NOGATE','GDS-CALIB_KAPPA_UIM_IMAGINARY_NOGATE','GDS-CALIB_KAPPA_C_NOGATE','GDS-CALIB_F_CC_NOGATE' --raw-channel-list 'CAL-CS_TDEP_KAPPA_TST_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_TST_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_PUM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_REAL_OUTPUT','CAL-CS_TDEP_KAPPA_UIM_IMAG_OUTPUT','CAL-CS_TDEP_KAPPA_C_OUTPUT','CAL-CS_TDEP_F_C_OUTPUT' --raw-frame-cache $(IFO)1_easy_raw_frames.cache
 
-exactkappastimeseries:
-	#$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache
+exactkappastimeseries: $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
 	python3 frame_manipulator.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache --output-path txt --channel-list 'DCS-CALIB_KAPPA_TST_REALEXACTKAPPAS,DCS-CALIB_KAPPA_TST_IMAGINARYEXACTKAPPAS,DCS-CALIB_KAPPA_PUM_REALEXACTKAPPAS,DCS-CALIB_KAPPA_PUM_IMAGINARYEXACTKAPPAS,DCS-CALIB_KAPPA_UIM_REALEXACTKAPPAS,DCS-CALIB_KAPPA_UIM_IMAGINARYEXACTKAPPAS,DCS-CALIB_KAPPA_CEXACTKAPPAS,DCS-CALIB_F_CCEXACTKAPPAS,DCS-CALIB_F_S_SQUAREDEXACTKAPPAS,DCS-CALIB_SRC_Q_INVERSEEXACTKAPPAS'
 	python3 frame_manipulator.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --frame-cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache --output-path txt --channel-list 'DCS-CALIB_KAPPA_TST_REALAPPROXKAPPAS,DCS-CALIB_KAPPA_TST_IMAGINARYAPPROXKAPPAS,DCS-CALIB_KAPPA_PUM_REALAPPROXKAPPAS,DCS-CALIB_KAPPA_PUM_IMAGINARYAPPROXKAPPAS,DCS-CALIB_KAPPA_UIM_REALAPPROXKAPPAS,DCS-CALIB_KAPPA_UIM_IMAGINARYAPPROXKAPPAS,DCS-CALIB_KAPPA_CAPPROXKAPPAS,DCS-CALIB_F_CCAPPROXKAPPAS,DCS-CALIB_F_S_SQUAREDAPPROXKAPPAS,DCS-CALIB_SRC_Q_INVERSEAPPROXKAPPAS'
 	python3 plot_kappas_from_txt.py --txt-list '$(IFO)1-DCS-CALIB_KAPPA_TST_REALAPPROXKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_REALAPPROXKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_REALAPPROXKAPPAS.txt;$(IFO)1-DCS-CALIB_KAPPA_TST_REALEXACTKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_REALEXACTKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_REALEXACTKAPPAS.txt:$(IFO)1-DCS-CALIB_KAPPA_TST_IMAGINARYAPPROXKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_IMAGINARYAPPROXKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_IMAGINARYAPPROXKAPPAS.txt;$(IFO)1-DCS-CALIB_KAPPA_TST_IMAGINARYEXACTKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_PUM_IMAGINARYEXACTKAPPAS.txt,$(IFO)1-DCS-CALIB_KAPPA_UIM_IMAGINARYEXACTKAPPAS.txt' --labels 'Approx;Exact' --filename actuation_TDCFs.png
