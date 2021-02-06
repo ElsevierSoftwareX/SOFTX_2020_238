@@ -45,6 +45,9 @@ from lal import iterutils
 from lal import LIGOTimeGPS
 from lal.utils import CacheEntry
 
+from gstlal import pipeio
+from gstlal import plugins
+
 
 if sys.byteorder == "little":
 	BYTE_ORDER = "LE"
@@ -410,12 +413,12 @@ def mkndssrc(pipeline, host, instrument, channel_name, channel_type, blocksize =
 
 
 ## Adds a <a href="@gstdoc/gstreamer-plugins-capsfilter.html">capsfilter</a> element to a pipeline with useful default properties
-def mkcapsfilter(pipeline, src, caps, **properties):
+def mkcapsfilter(pipeline, src, caps=None, **properties):
 	return mkgeneric(pipeline, src, "capsfilter", caps = Gst.Caps.from_string(caps), **properties)
 
 
 ## Adds a <a href="@gstpluginsgooddoc/gst-plugins-good-plugins-capssetter.html">capssetter</a> element to a pipeline with useful default properties
-def mkcapssetter(pipeline, src, caps, **properties):
+def mkcapssetter(pipeline, src, caps=None, **properties):
 	return mkgeneric(pipeline, src, "capssetter", caps = Gst.Caps.from_string(caps), **properties)
 
 
@@ -659,6 +662,10 @@ def mkfakesink(pipeline, src):
 ## Adds a <a href="@gstdoc/gstreamer-plugins-filesink.html">filesink</a> element to a pipeline with useful default properties
 def mkfilesink(pipeline, src, filename, sync = False, async = False):
 	return mkgeneric(pipeline, src, "filesink", sync = sync, async = async, buffer_mode = 2, location = filename)
+
+
+def mknxydump(pipeline, src):
+	return mkgeneric(pipeline, src, "lal_nxydump")
 
 
 ## Adds a <a href="@gstlalgtkdoc/GstTSVEnc.html">lal_nxydump</a> element to a pipeline with useful default properties
@@ -1114,3 +1121,93 @@ def write_dump_dot(pipeline, filestem, verbose = False):
 	Gst.debug_bin_to_dot_file(pipeline, Gst.DebugGraphDetails.ALL, filestem)
 	if verbose:
 		print("Wrote pipeline to %s" % os.path.join(os.environ["GST_DEBUG_DUMP_DOT_DIR"], "%s.dot" % filestem), file=sys.stderr)
+
+
+#
+# =============================================================================
+#
+#                              Stream Element Registry
+#
+# =============================================================================
+#
+
+
+@plugins.register
+def elements():
+	return {
+		"channelgram": mkchannelgram,
+		"spectrumplot": mkspectrumplot,
+		"histogram": mkhistogram,
+		"uridecodebin": mkuridecodebin,
+		"framecppchanneldemux": mkframecppchanneldemux,
+		"framecppchannelmux": mkframecppchannelmux,
+		"framecppfilesink": mkframecppfilesink,
+		"multifilesink": mkmultifilesink,
+		"capsfilter": mkcapsfilter,
+		"capssetter": mkcapssetter,
+		"statevector": mkstatevector,
+		"taginject": mktaginject,
+		"firfilter": mkfirfilter,
+		"iirfilter": mkiirfilter,
+		"shift": mkshift,
+		"progressreport": mkprogressreport,
+		"injections": mkinjections,
+		"audiochebband": mkaudiochebband,
+		"audiocheblimit": mkaudiocheblimit,
+		"audioamplify": mkaudioamplify,
+		"audioundersample": mkaudioundersample,
+		"resample": mkresample,
+		"interpolator": mkinterpolator,
+		"whiten": mkwhiten,
+		"tee": mktee,
+		"adder": mkadder,
+		"multiplier": mkmultiplier,
+		"queue": mkqueue,
+		"drop": mkdrop,
+		"nofakedisconts": mknofakedisconts,
+		"firbank": mkfirbank,
+		"tdwhiten": mktdwhiten,
+		"trim": mktrim,
+		"mean": mkmean,
+		"abs": mkabs,
+		"pow": mkpow,
+		"reblock": mkreblock,
+		"sumsquares": mksumsquares,
+		"gate": mkgate,
+		"bitvectorgen": mkbitvectorgen,
+		"matrixmixer": mkmatrixmixer,
+		"togglecomplex": mktogglecomplex,
+		"autochisq": mkautochisq,
+		"fakesink": mkfakesink,
+		"filesink": mkfilesink,
+		"nxydump": mknxydump,
+		"nxydumpsink": mknxydumpsink,
+		"nxydumpsinktee": mknxydumpsinktee,
+		"triggergen": mktriggergen,
+		"triggerxmlwritersink": mktriggerxmlwritersink,
+		"wavenc": mkwavenc,
+		"vorbisenc": mkvorbisenc,
+		"colorspace": mkcolorspace,
+		"theoraenc": mktheoraenc,
+		"mpeg4enc": mkmpeg4enc,
+		"oggmux": mkoggmux,
+		"avimux": mkavimux,
+		"audioconvert": mkaudioconvert,
+		"audiorate": mkaudiorate,
+		"flacenc": mkflacenc,
+		"ogmvideosink": mkogmvideosink,
+		"videosink": mkvideosink,
+		"autoaudiosink": mkautoaudiosink,
+		"playbacksink": mkplaybacksink,
+		"deglitcher": mkdeglitcher,
+		"appsink": mkappsink,
+		"checktimestamps": mkchecktimestamps,
+		"peak": mkpeak,
+		"itac": mkitac,
+		"trigger": mktrigger,
+		"latency": mklatency,
+		"computegamma": mkcomputegamma,
+		"bursttriggergen": mkbursttriggergen,
+		"odctodqv": mkodctodqv,
+		"tcpserversink": mktcpserversink,
+	}

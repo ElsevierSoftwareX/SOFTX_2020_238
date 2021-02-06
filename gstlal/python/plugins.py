@@ -24,6 +24,15 @@ specification = pluggy.HookspecMarker("gstlal")
 
 
 @specification
+def elements():
+	"""
+	This plugin spec is used to return GStreamer elements in the form:
+		{"element-name": mkelem}
+
+	"""
+
+
+@specification
 def layers():
 	"""
 	This plugin spec is used to return DAG layers in the form:

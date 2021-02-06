@@ -27,7 +27,8 @@ pkgpython_PYTHON = \
 	reference_psd.py \
 	servicediscovery.py \
 	simplehandler.py \
-	simulation.py
+	simulation.py \
+	stream.py
 
 pkgpyexec_LTLIBRARIES = _misc.la
 
