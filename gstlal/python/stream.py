@@ -233,9 +233,10 @@ class StreamHandler(simplehandler.Handler):
 		"""
 		"""
 		if message.type in self.callbacks:
-			message_name = message.get_structure().get_name()
-			if message_name in self.callbacks[message.type]:
-				self.callbacks[message.type][message_name](message)
+			if message.get_structure():
+				message_name = message.get_structure().get_name()
+				if message_name in self.callbacks[message.type]:
+					self.callbacks[message.type][message_name](message)
 		return False
 
 
