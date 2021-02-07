@@ -19,7 +19,6 @@ pkgpython_PYTHON = \
 	httpinterface.py \
 	matplotlibhelper.py \
 	misc.py \
-	multirate_datasource.py \
 	pipeio.py \
 	pipeline.py \
 	pipeutil.py \

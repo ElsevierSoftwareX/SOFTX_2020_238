@@ -228,6 +228,9 @@ def _get_registered_elements():
 	
 	# load elements
 	manager.register(pipeparts)
+
+	from gstlal.pipeparts import condition
+	manager.register(condition)
 	
 	# add all registered plugins to registry
 	registered = {}
