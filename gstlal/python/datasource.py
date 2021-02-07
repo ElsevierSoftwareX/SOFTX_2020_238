@@ -540,7 +540,7 @@ class GWDataSourceInfo(object):
 		## load frame cache
 		if options.frame_cache is not None:
 			self.frame_cache = options.frame_cache
-		else:
+		elif options.frame_type is not None:
 			frame_type_dict = frame_type_dict_from_frame_type_list(options.frame_type)
 			frame_cache = datafind.load_frame_cache(start, end, frame_type_dict, host=options.data_find_server)
 			## create a temporary cache file
