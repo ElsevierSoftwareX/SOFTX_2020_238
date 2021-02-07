@@ -984,40 +984,6 @@ def mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = False):
 	return src, statevector, dqvector
 
 
-def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128, hold_length = 128, **kwargs):
-	"""
-	A convenience function to provide thresholds on input data.  This can
-	be used to remove large spikes / glitches etc.  Of course you can use it for
-	other stuff by plugging whatever you want as input and ouput
-
-	NOTE:  the queues constructed by this code assume the attack and
-	hold lengths combined are less than 1 second in duration.
-
-	**Gstreamer Graph**
-
-	.. graphviz::
-
-	   digraph G {
-		compound=true;
-		node [shape=record fontsize=10 fontname="Verdana"];
-		rankdir=LR;
-		tee ;
-		inputqueue ;
-		lal_gate ;
-		in [label="\<src\>"];
-		out [label="\<return\>"];
-		in -> tee -> inputqueue -> lal_gate -> out;
-		tee -> lal_gate;
-	   }
-
-	"""
-	# FIXME someday explore a good bandpass filter
-	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
-	if control is None:
-		control = src = pipeparts.mktee(pipeline, src)
-	src = pipeparts.mkqueue(pipeline, src, max_size_time = Gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
-	return pipeparts.mkgate(pipeline, src, control = control, threshold = threshold, attack_length = -attack_length, hold_length = -hold_length, invert_control = True, **kwargs)
-
 # Unit tests
 if __name__ == "__main__":
 	import doctest

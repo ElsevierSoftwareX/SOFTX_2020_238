@@ -32,16 +32,16 @@ import numpy
 
 import gi
 gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
+gi.require_version("GstAudio", "1.0")
+from gi.repository import GObject
+from gi.repository import Gst, GstAudio
 
 import lal
 from ligo import segments
 
-from gstlal import bottle
 from gstlal import pipeparts
 from gstlal import plugins
 from gstlal import reference_psd
-from gstlal import datasource
 
 __doc__ = """
 
@@ -345,7 +345,7 @@ def mkcondition(pipeline, src, target_rate, instrument, psd = None, psd_fft_leng
 	# we need to collect whitened h(t) segments, however something
 	# could be done to collect those if these gates aren't here.
 	ht_gate_window = max(target_rate // 2, 1)	# samples
-	head = datasource.mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
+	head = mkhtgate(pipeline, head, threshold = ht_gate_threshold if ht_gate_threshold is not None else float("+inf"), hold_length = ht_gate_window, attack_length = ht_gate_window, name = "%s_ht_gate" % instrument)
 	# emit signals so that a user can latch on to them
 	head.set_property("emit-signals", True)
 
@@ -413,6 +413,41 @@ def mkmultiband(pipeline, head, rates, unit_normalize = True):
 	return head
 
 
+def mkhtgate(pipeline, src, control = None, threshold = 8.0, attack_length = 128, hold_length = 128, **kwargs):
+	"""
+	A convenience function to provide thresholds on input data.  This can
+	be used to remove large spikes / glitches etc.  Of course you can use it for
+	other stuff by plugging whatever you want as input and ouput
+
+	NOTE:  the queues constructed by this code assume the attack and
+	hold lengths combined are less than 1 second in duration.
+
+	**Gstreamer Graph**
+
+	.. graphviz::
+
+	   digraph G {
+		compound=true;
+		node [shape=record fontsize=10 fontname="Verdana"];
+		rankdir=LR;
+		tee ;
+		inputqueue ;
+		lal_gate ;
+		in [label="\<src\>"];
+		out [label="\<return\>"];
+		in -> tee -> inputqueue -> lal_gate -> out;
+		tee -> lal_gate;
+	   }
+
+	"""
+	# FIXME someday explore a good bandpass filter
+	# src = pipeparts.mkaudiochebband(pipeline, src, low_frequency, high_frequency)
+	if control is None:
+		control = src = pipeparts.mktee(pipeline, src)
+	src = pipeparts.mkqueue(pipeline, src, max_size_time = Gst.SECOND, max_size_bytes = 0, max_size_buffers = 0)
+	return pipeparts.mkgate(pipeline, src, control = control, threshold = threshold, attack_length = -attack_length, hold_length = -hold_length, invert_control = True, **kwargs)
+
+
 #
 # =============================================================================
 #
@@ -427,4 +462,5 @@ def elements():
 	return {
 		"condition": mkcondition,
 		"multiband": mkmultiband,
+		"htgate": mkhtgate,
 	}
