@@ -391,6 +391,13 @@ def mkframecppchannelmux(pipeline, channel_src_map, units = None, seglists = Non
 	return elem
 
 
+def mkframecppchannelmux_from_list(pipeline, *srcs, channels = None, **properties):
+	if isinstance(channels, str):
+		channels = [channels]
+	channel_src_map = {channel: src for channel, src in zip(channels, srcs)}
+	return mkframecppchannelmux(pipeline, channel_src_map, **properties)
+
+
 def mkframecppfilesink(pipeline, src, message_forward = True, **properties):
 	post_messages = properties.pop("post_messages", True)
 	elem = mkgeneric(pipeline, src, "framecpp_filesink", message_forward = message_forward, **properties)
@@ -1140,7 +1147,7 @@ def elements():
 		"histogram": mkhistogram,
 		"uridecodebin": mkuridecodebin,
 		"framecppchanneldemux": mkframecppchanneldemux,
-		"framecppchannelmux": mkframecppchannelmux,
+		"framecppchannelmux": mkframecppchannelmux_from_list,
 		"framecppfilesink": mkframecppfilesink,
 		"multifilesink": mkmultifilesink,
 		"capsfilter": mkcapsfilter,
