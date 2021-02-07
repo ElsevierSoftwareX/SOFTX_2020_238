@@ -20,12 +20,6 @@
 from optparse import OptionParser
 import sys
 
-import gi
-gi.require_version('Gst', '1.0')
-from gi.repository import GObject, Gst
-GObject.threads_init()
-Gst.init(None)
-
 import lal
 
 from ligo.lw import utils as ligolw_utils
@@ -33,6 +27,7 @@ from gstlal import datasource
 from gstlal import multirate_datasource
 from gstlal import pipeparts
 from gstlal import simplehandler
+from gstlal.stream import Stream
 from ligo.lw.utils import segments as ligolw_segments
 from ligo.lw import lsctables, ligolw
 
@@ -192,63 +187,43 @@ if options.veto_segments_file is not None:
 else:
 	veto_segments = None
 
-# building the event loop and pipeline
-mainloop = GObject.MainLoop()
-pipeline = Gst.Pipeline("gstlal_play")
-handler = simplehandler.Handler(mainloop, pipeline)
-
 #
 # the pipeline
 #
 # A basic src
-head, _, _ = datasource.mkbasicsrc(pipeline, gw_data_source_info, instrument, verbose = options.verbose)
+stream = Stream.from_datasource(gw_data_source_info, instrument, verbose=options.verbose)
 
-# if whitening, leverage mkwhitened_multirate_src() otherwise just resample
+# if not whitening, just resample
 if options.whiten:
-	head = multirate_datasource.mkwhitened_multirate_src(pipeline, head, [options.rate], instrument, psd, track_psd = True, veto_segments = veto_segments)[options.rate]
+	stream = stream.condition(options.rate, instrument, psd=psd, track_psd=True, veto_segments=veto_segments)
 else:
-	head = pipeparts.mkresample(pipeline, head, quality = 9)
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, rate=%d" % options.rate)
+	stream = stream.resample(quality=9).capsfilter(f"audio/x-raw, rate={options.rate:d}")
 
 # handle filtering
 if options.high_pass_filter is not None and options.low_pass_filter is not None:
-	head = pipeparts.mkaudiochebband(pipeline, head, lower_frequency = options.high_pass_filter, upper_frequency = options.low_pass_filter)
+	stream = stream.audiochebband(lower_frequency=options.high_pass_filter, upper_frequency=options.low_pass_filter)
 elif options.high_pass_filter is not None:
-	head = pipeparts.mkaudiocheblimit(pipeline, head, cutoff = options.high_pass_filter, mode = "high-pass")
+	stream = stream.audiocheblimit(cutoff=options.high_pass_filter, mode="high-pass")
 elif options.low_pass_filter is not None:
-	head = pipeparts.mkaudiocheblimit(pipeline, head, cutoff = options.low_pass_filter, mode = "low-pass")
+	stream = stream.audiocheblimit(cutoff=options.low_pass_filter, mode="low-pass")
 
 # necessary audio convert and amplify 
-head = pipeparts.mkaudioconvert(pipeline, pipeparts.mkaudioamplify(pipeline, head, options.amplification))
+stream = stream.audioamplify(options.amplification).audioconvert()
 if options.sample_format is not None:
-	head = pipeparts.mkcapsfilter(pipeline, head, "audio/x-raw, format=%s" % options.sample_format)
+	stream.stream.capsfilter(f"audio/x-raw, format={options.sample_format}")
 
 if options.output is None:
-	pipeparts.mkautoaudiosink(pipeline, head)
+	stream.autoaudiosink()
 elif options.output.endswith(".wav"):
-	pipeparts.mkfilesink(pipeline, pipeparts.mkwavenc(pipeline, head), options.output)
+	stream.wavenc().filefink(options.output)
 elif options.output.endswith(".flac"):
-	pipeparts.mkfilesink(pipeline, pipeparts.mkflacenc(pipeline, head), options.output)
+	stream.flacenc().filefink(options.output)
 elif options.output.endswith(".ogg"):
-	head = pipeparts.mkoggmux(pipeline, pipeparts.mkvorbisenc(pipeline, head))
-	pipeparts.mkfilesink(pipeline, head, options.output)
+	stream.vorbisenc().oggmux().filefink(options.output)
 elif options.output.endswith(".txt") or options.output in ("/dev/stdout", "/dev/stderr"):
-	pipeparts.mknxydumpsink(pipeline, head, options.output)
+	stream.nxydumpsink(options.output)
 else:
 	raise ValueError("unrecognized format for --output")
 
-# Allow Ctrl+C or sig term to gracefully shut down the program for online
-# sources, otherwise it will just kill it
-if gw_data_source_info.data_source in ("lvshm", "framexmit"):# what about nds online?
-	simplehandler.OneTimeSignalHandler(pipeline)
-
-# Seek
-if pipeline.set_state(Gst.State.READY) == Gst.StateChangeReturn.FAILURE:
-	raise RuntimeError("pipeline failed to enter READY state")
-if gw_data_source_info.data_source not in ("lvshm", "framexmit"):# what about nds online?
-	datasource.pipeline_seek_for_gps(pipeline, gw_data_source_info.seg[0], gw_data_source_info.seg[1])
-
-# run
-if pipeline.set_state(Gst.State.PLAYING) == Gst.StateChangeReturn.FAILURE:
-	raise RuntimeError("pipeline failed to enter PLAYING state")
-mainloop.run()
+# play
+stream.start()
