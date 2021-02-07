@@ -31,6 +31,7 @@ from collections import namedtuple
 from collections.abc import Mapping
 import functools
 import io
+import os
 import sys
 import uuid
 
@@ -73,7 +74,7 @@ class Stream(object):
 	"""
 	thread_init = False
 
-	def __init__(self, mainloop=None, pipeline=None, handler=None, source=None, head=None):
+	def __init__(self, name=None, mainloop=None, pipeline=None, handler=None, source=None, head=None):
 		# initialize threads if not set
 		if not self.thread_init:
 			GObject.threads_init()
@@ -81,8 +82,9 @@ class Stream(object):
 			self.thread_init = True
 
 		# set up gstreamer pipeline
+		self.name = name if name else str(uuid.uuid1())
 		self.mainloop = mainloop if mainloop else GObject.MainLoop()
-		self.pipeline = pipeline if pipeline else Gst.Pipeline(str(uuid.uuid1()))
+		self.pipeline = pipeline if pipeline else Gst.Pipeline(self.name)
 		self.handler = handler if handler else StreamHandler(self.mainloop, self.pipeline)
 		self.head = head if head else None
 
@@ -98,6 +100,19 @@ class Stream(object):
 		if not self.source.is_live:
 			self._seek_gps()
 		self._set_state(Gst.State.PLAYING)
+
+		## Debugging output
+		if os.environ.get("GST_DEBUG_DUMP_DOT_DIR", False):
+			name = self.pipeline.get_name()
+			pipeparts.write_dump_dot(self.pipeline, f"{name}_PLAYING", verbose=True)
+
+			## Setup a signal handler to intercept SIGINT in order to write
+			## the pipeline graph at ctrl+C before cleanly shutting down
+			class SigHandler(simplehandler.OneTimeSignalHandler):
+				def do_on_call(self, signum, frame):
+					pipeparts.write_dump_dot(self.pipeline, f"{name}_SIGINT", verbose=True)
+			sighandler = SigHandler(self.pipeline)
+
 		self.mainloop.run()
 
 	@classmethod
@@ -112,6 +127,7 @@ class Stream(object):
 					for key, elem in head.items():
 						new_head = {
 							key: cls(
+								name=self.name,
 								mainloop=self.mainloop,
 								pipeline=self.pipeline,
 								handler=self.handler,
@@ -122,6 +138,7 @@ class Stream(object):
 					return new_head
 				else:
 					return cls(
+						name=self.name,
 						mainloop=self.mainloop,
 						pipeline=self.pipeline,
 						handler=self.handler,
@@ -142,6 +159,9 @@ class Stream(object):
 			gps_range=data_source_info.seg,
 		)
 		return stream
+
+	def connect(self, *args, **kwargs):
+		self.head.connect(*args, **kwargs)
 
 	def sink(self, func):
 		def sample_handler(elem):
