@@ -435,10 +435,11 @@ for i in range(0, len(frequencies)):
 	times = [[]]
 	magnitudes = [[]]
 	phases = [[]]
-	for k in range(0, int(len(data) / filter_time)):
-		times[0].append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
-		magnitudes[0].append(data[filter_time * k][1])
-		phases[0].append(data[filter_time * k][2])
+	for k in range(len(data)):
+		if(data[k][0] % filter_time == 0):
+			times[0].append((data[k][0] - t_start) / sec_per_t_unit)
+			magnitudes[0].append(data[k][1])
+			phases[0].append(data[k][2])
 	markersize = 150.0 * numpy.sqrt(float(filter_time / dur))
 	markersize = min(markersize, 10.0)
 	markersize = max(markersize, 0.2)
@@ -475,10 +476,11 @@ for i in range(0, len(frequencies)):
 		times.append([])
 		magnitudes.append([])
 		phases.append([])
-		for k in range(0, int(len(data) / filter_time)):
-			times[j].append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
-			magnitudes[j].append(data[filter_time * k][1])
-			phases[j].append(data[filter_time * k][2])
+		for k in range(len(data)):
+			if(data[k][0] % filter_time == 0):
+				times[j].append((data[k][0] - t_start) / sec_per_t_unit)
+				magnitudes[j].append(data[k][1])
+				phases[j].append(data[k][2])
 		plt.subplot(2, len(frequencies), i + 1)
 		if options.show_stats:
 			plt.plot(times[j], magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.median(magnitudes[j]), numpy.std(magnitudes[j])))
