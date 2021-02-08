@@ -71,6 +71,7 @@ class Config:
 
 		# section-specific options
 		self.source = dotdict(replace_keys(kwargs["source"]))
+		self.psd = dotdict(replace_keys(kwargs["psd"]))
 
 		# condor options
 		condor_config = kwargs["condor"]

@@ -29,7 +29,6 @@ class Config(BaseConfig):
 		super().__init__(**kwargs)
 
 		# section-specific options
-		self.psd = dotdict(replace_keys(kwargs["psd"]))
 		self.svd = dotdict(replace_keys(kwargs["svd"]))
 		self.filter = dotdict(replace_keys(kwargs["filter"]))
 		self.prior = dotdict(replace_keys(kwargs["prior"]))
