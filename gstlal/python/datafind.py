@@ -21,6 +21,7 @@ from enum import Enum
 import glob
 import math
 import os
+from typing import Union
 
 import gwdatafind
 from lal.utils import CacheEntry
@@ -33,14 +34,15 @@ DEFAULT_DATAFIND_SERVER = os.getenv('LIGO_DATAFIND_SERVER', 'ldr.ldas.cit:80')
 class DataType(Enum):
 	REFERENCE_PSD = (0, "xml.gz")
 	MEDIAN_PSD = (1, "xml.gz")
-	TRIGGERS = (2, "xml.gz")
-	DIST_STATS = (3, "xml.gz")
-	PRIOR_DIST_STATS = (4, "xml.gz")
-	MARG_DIST_STATS = (5, "xml.gz")
-	DIST_STAT_PDFS = (6, "xml.gz")
-	TEMPLATE_BANK = (7, "xml.gz")
-	SPLIT_BANK = (8, "xml.gz")
-	SVD_BANK = (9, "xml.gz")
+	SMOOTH_PSD = (2, "xml.gz")
+	TRIGGERS = (10, "xml.gz")
+	DIST_STATS = (20, "xml.gz")
+	PRIOR_DIST_STATS = (21, "xml.gz")
+	MARG_DIST_STATS = (22, "xml.gz")
+	DIST_STAT_PDFS = (30, "xml.gz")
+	TEMPLATE_BANK = (40, "xml.gz")
+	SPLIT_BANK = (41, "xml.gz")
+	SVD_BANK = (42, "xml.gz")
 
 	def __init__(self, value, extension):
 		self.extension = extension
@@ -70,6 +72,7 @@ class DataType(Enum):
 class DataCache:
 	name: "DataType"
 	cache: list = field(default_factory=list)
+	layer: Union[None, str] = None
 
 	@property
 	def files(self):
@@ -83,7 +86,7 @@ class DataCache:
 		grouped = defaultdict(list)
 		for entry in self.cache:
 			grouped[keyfunc(entry)].append(entry)
-		return {key: DataCache(self.name, cache) for key, cache in grouped.items()}
+		return {key: DataCache(self.name, cache, self.layer) for key, cache in grouped.items()}
 
 	@staticmethod
 	def _groupby_keyfunc(groups):
