@@ -9,6 +9,7 @@ dist_bin_SCRIPTS = \
 	gstlal_play \
 	gstlal_plot_psd \
 	gstlal_psd_polyfit \
+	gstlal_psd_workflow \
 	gstlal_psd_xml_from_asd_txt \
 	gstlal_reference_psd \
 	gstlal_spectrum_movie \

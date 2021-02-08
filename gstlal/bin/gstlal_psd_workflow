@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+#
+# Copyright (C) 2020  Patrick Godwin (patrick.godwin@ligo.org)
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation; either version 2 of the License, or (at your
+# option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+# Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+
+import argparse
+
+from gstlal.config import Config
+from gstlal.dags import DAG
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--config", help="Sets the path to read configuration from.")
+
+# load config
+args = parser.parse_args()
+config = Config.load(args.config)
+
+# create dag
+dag = DAG(config)
+dag.create_log_dir()
+
+# generate dag layers
+ref_psd = dag.reference_psd()
+median_psd = dag.median_psd(ref_psd)
+
+# write dag/script to disk
+dag_name = "psd_dag"
+dag.write_dag(f"{dag_name}.dag")
+dag.write_script(f"{dag_name}.sh")
