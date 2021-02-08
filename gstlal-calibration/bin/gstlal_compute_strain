@@ -1348,6 +1348,12 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 	# also take the ratios injection(f) / DARM_ERR(f) at all the calibration lines and
 	# apply the gating and smoothing here, before computing the TDCFs.
 
+	# Since every TDCF depends on all the lines, we will gate every line ratio with all the line coherences.
+	if use_coherence:
+		max_coh = calibration_parts.mkinterleave(pipeline, [pcaly_line1_coh, pcaly_line2_coh, sus_line1_coh, sus_line2_coh, sus_line3_coh])
+		max_coh = pipeparts.mkgeneric(pipeline, max_coh, "lal_minmax", mode = 2)
+		max_coh = pipeparts.mktee(pipeline, max_coh)
+
 	# First, the actuation Pcal line, starting with DARM_ERR.
 	derr_at_act_pcal_freq = calibration_parts.demodulate(pipeline, derrtee, act_pcal_line_freq, td, compute_factors_sr, demodulation_filter_time, filter_latency_factor, freq_update = head_dict["pcal1_linefreq"] if "pcal1_linefreq" in head_dict else None)
 	# Now Pcal
@@ -1363,7 +1369,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	# Now the gating and smoothing
 	if use_coherence:
-		X1 = calibration_parts.mkgate(pipeline, X1, pcaly_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'pcal_line1_gate')
+		X1 = calibration_parts.mkgate(pipeline, X1, max_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'pcal_line1_gate')
 		X1 = calibration_parts.smooth_complex_kappas(pipeline, X1, EP43_real, EP43_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 	else:
 		var = 0.2 * abs(EP43_real + 1j * EP43_imag)
@@ -1384,7 +1390,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	# Now the gating and smoothing
 	if use_coherence:
-		X2 = calibration_parts.mkgate(pipeline, X2, pcaly_line2_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'pcal_line2_gate')
+		X2 = calibration_parts.mkgate(pipeline, X2, max_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'pcal_line2_gate')
 		X2 = calibration_parts.smooth_complex_kappas(pipeline, X2, EP44_real, EP44_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 	else:
 		var = 0.2 * abs(EP44_real + 1j * EP44_imag)
@@ -1406,7 +1412,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	# Now the gating and smoothing
 	if use_coherence:
-		X_T = calibration_parts.mkgate(pipeline, X_T, sus_line3_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line3_gate')
+		X_T = calibration_parts.mkgate(pipeline, X_T, max_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line3_gate')
 		X_T = calibration_parts.smooth_complex_kappas(pipeline, X_T, EP45_real, EP45_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 	else:
 		var = 0.2 * abs(EP45_real + 1j * EP45_imag)
@@ -1426,7 +1432,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	# Now the gating and smoothing
 	if use_coherence:
-		X_P = calibration_parts.mkgate(pipeline, X_P, sus_line2_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line2_gate')
+		X_P = calibration_parts.mkgate(pipeline, X_P, max_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line2_gate')
 		X_P = calibration_parts.smooth_complex_kappas(pipeline, X_P, EP46_real, EP46_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 	else:
 		var = 0.2 * abs(EP46_real + 1j * EP46_imag)
@@ -1446,7 +1452,7 @@ if compute_exact_kappas and (compute_kappatst or compute_kappapum or compute_kap
 
 	# Now the gating and smoothing
 	if use_coherence:
-		X_U = calibration_parts.mkgate(pipeline, X_U, sus_line1_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line1_gate')
+		X_U = calibration_parts.mkgate(pipeline, X_U, max_coh, coherence_unc_threshold, attack_length = kappa_gate_attack_length, hold_length = kappa_gate_hold_length, invert_control = True, name = 'sus_line1_gate')
 		X_U = calibration_parts.smooth_complex_kappas(pipeline, X_U, EP47_real, EP47_imag, median_smoothing_samples, factors_average_samples, tdcf_default_to_median, filter_latency_factor)
 	else:
 		var = 0.2 * abs(EP47_real + 1j * EP47_imag)
