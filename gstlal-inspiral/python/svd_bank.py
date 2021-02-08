@@ -191,7 +191,11 @@ class Bank(object):
 			if verbose:
 				print >>sys.stderr, "constructing template decomposition %d of %d:  %g s ... %g s" % (i + 1, len(self.bank_fragments), -bank_fragment.end, -bank_fragment.start)
 			bank_fragment.set_template_bank(template_bank[i], tolerance, self.snr_threshold, identity_transform = identity_transform, verbose = verbose)
-			cmix = bank_fragment.mix_matrix[:,::2] + 1.j * bank_fragment.mix_matrix[:,1::2]
+
+			if identity_transform: #mixing matrix is the template bank itself
+				cmix = template_bank[i].T[:,::2] +1.j * template_bank[i].T[:,1::2]
+			else:
+				cmix = bank_fragment.mix_matrix[:,::2] + 1.j * bank_fragment.mix_matrix[:,1::2]
 
 			if self.bank_correlation_matrix is None:
 				self.bank_correlation_matrix = numpy.dot(numpy.conj(cmix.T), cmix)
