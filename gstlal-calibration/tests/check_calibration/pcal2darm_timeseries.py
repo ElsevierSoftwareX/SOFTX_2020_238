@@ -271,6 +271,7 @@ def pcal2darm(pipeline, name):
 			DQ = calibration_parts.caps_and_progress(pipeline, DQ, "audio/x-raw,format=U32LE,channels=1,channel-mask=(bitmask)0x0", "DQ_%s" % label)
 			DQ = pipeparts.mkgeneric(pipeline, DQ, "lal_logicalundersample", required_on = 1, status_out = 1)
 			DQ = pipeparts.mkcapsfilter(pipeline, DQ, "audio/x-raw,format=U32LE,rate=%d,channels=1,channel-mask=(bitmask)0x0" % rate_out)
+			DQ = pipeparts.mkgeneric(pipeline, DQ, "lal_drop", drop_samples = int((7.0 + 0.5 * filter_time) * rate_out + 0.5))
 			DQ = pipeparts.mktee(pipeline, DQ)
 
 			for i in range(0, len(frequencies)):
@@ -289,8 +290,8 @@ def pcal2darm(pipeline, name):
 				# Interleave
 				magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
 				# Gate with DQ channel
-				magnitude_and_phase = calibration_parts.mkgate(pipeline, magnitude_and_phase, pipeparts.mkgeneric(pipeline, DQ, "identity"), 1)
-				magnitude_and_phase = pipeparts.mkprogressreport(pipeline, magnitude_and_phase, name = "progress_sink_%d_%d" % (cache_num, i))
+				magnitude_and_phase = calibration_parts.mkgate(pipeline, magnitude_and_phase, DQ, 1)
+				magnitude_and_phase = pipeparts.mkprogressreport(pipeline, magnitude_and_phase, name = "progress_sink_%s_%d" % (label, i))
 				# Write to file
 				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label.replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
 			cache_num = cache_num + 1

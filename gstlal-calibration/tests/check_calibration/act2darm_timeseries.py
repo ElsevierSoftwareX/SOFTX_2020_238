@@ -384,7 +384,7 @@ def act2darm(pipeline, name):
 				magnitude_and_phase = calibration_parts.mkinterleave(pipeline, [magnitude, phase])
 				# Gate with DQ channel
 				magnitude_and_phase = calibration_parts.mkgate(pipeline, magnitude_and_phase, DQ, 1)
-				magnitude_and_phase = pipeparts.mkprogressreport(pipeline, magnitude_and_phase, name = "progress_sink_%d_%d" % (cache_num, i))
+				magnitude_and_phase = pipeparts.mkprogressreport(pipeline, magnitude_and_phase, name = "progress_sink_%s_%d" % (label, i))
 				# Write to file
 				pipeparts.mknxydumpsink(pipeline, magnitude_and_phase, "%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, label.replace(' ', '_'), act_channels[i], frequencies[i], options.gps_start_time))
 			cache_num = cache_num + 1
