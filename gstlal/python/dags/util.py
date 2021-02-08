@@ -296,6 +296,18 @@ def pipeline_dot_py_append_opts_hack(opt, vals):
 	return out
 
 
+def format_ifo_args(ifos, args):
+	"""
+	Given a set of instruments and arguments keyed by instruments, this
+	creates a list of strings in the form {ifo}={arg}. This is suitable
+	for command line options like --channel-name which expects this
+	particular format.
+	"""
+	if isinstance(ifos, str):
+		ifos = [ifos]
+	return [f"{ifo}={args[ifo]}" for ifo in ifos]
+
+
 #
 # =============================================================================
 #

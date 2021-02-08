@@ -24,56 +24,14 @@ from gstlal.dags.layers import Layer, Node
 from gstlal.dags import util as dagutil
 
 
-def reference_psd_layer(config, dag):
-	requirements = {"request_cpus": 2, "request_memory": 2000, **config.condor.submit}
-	layer = Layer("gstlal_reference_psd", requirements=requirements)
-
-	psd_cache = DataCache.generate(DataType.REFERENCE_PSD, config.ifo_combo, config.time_bins)
-
-	for span, psds in psd_cache.groupby("time").items():
-		start, end = span
-		layer += Node(
-			key = span,
-			arguments = [
-				Option("gps-start-time", int(start)),
-				Option("gps-end-time", int(end)),
-				Option("data-source", "frames"),
-				Option("channel-name", format_ifo_args(config.ifos, config.source.channel_name)),
-				Option("frame-type", format_ifo_args(config.ifos, config.source.frame_type)),
-				Option("frame-segments-name", config.source.frame_segments_name),
-				Option("data-find-server", config.source.data_find_server),
-				Option("psd-fft-length", config.psd.fft_length),
-			],
-			inputs = Option("frame-segments-file", config.source.frame_segments_file),
-			outputs = Option("write-psd", psds.files)
-		)
-
-	dag["reference_psd"] = layer
-	return psd_cache
-
-
-def median_psd_layer(config, dag, ref_psd_cache):
-	requirements = {"request_cpus": 2, "request_memory": 2000, **config.condor.submit}
-	layer = Layer("gstlal_median_of_psds", parents="reference_psd", requirements=requirements)
-
-	median_psd_cache = DataCache.generate(DataType.REFERENCE_PSD, config.ifo_combo, config.span)
-
-	layer += Node(
-		inputs = Argument("psds", ref_psd_cache.files),
-		outputs = Option("output-name", median_psd_cache.files)
-	)
-
-	dag["median_psd"] = layer
-	return median_psd_cache
-
-
 def svd_bank_layer(config, dag, median_psd_cache):
 	requirements = {"request_cpus": 1, "request_memory": 4000, **config.condor.submit}
-	layer = Layer("gstlal_inspiral_svd_bank", parents="median_psd", requirements=requirements)
+	layer = Layer("gstlal_inspiral_svd_bank", parents=median_psd_cache.layer, requirements=requirements)
 
 	svd_cache = DataCache.generate(DataType.SVD_BANK, config.ifos, config.span, svd_bins=config.svd.bins)
-	split_banks = DataCache.find(DataType.SPLIT_BANK, root=config.rootdir).groupby("bin")
+	svd_cache.layer = "svd_bank"
 
+	split_banks = DataCache.find(DataType.SPLIT_BANK, root=config.rootdir).groupby("bin")
 	for (ifo, svd_bin), svd_banks in svd_cache.groupby("ifo", "bin").items():
 		layer += Node(
 			key = (ifo, svd_bin),
@@ -100,19 +58,23 @@ def svd_bank_layer(config, dag, median_psd_cache):
 
 
 def filter_layer(config, dag, ref_psd_cache, svd_bank_cache):
-	requirements = {"request_cpus": 2, "request_memory": 4000, **config.condor.submit}
-	layer = Layer("gstlal_inspiral", parents=("reference_psd", "svd_bank"), requirements=requirements)
+	layer = Layer(
+		"gstlal_inspiral",
+		parents=(ref_psd_cache.layer, svd_bank_cache.layer),
+		requirements={"request_cpus": 2, "request_memory": 4000, **config.condor.submit}
+	)
 
 	trigger_cache = DataCache.generate(DataType.TRIGGERS, config.ifo_combo, config.time_bins, svd_bins=config.svd.bins)
 	dist_stat_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.time_bins, svd_bins=config.svd.bins)
+	trigger_cache.layer = dist_stat_cache.layer = "filter"
 
 	common_opts = [
 		Option("track-psd"),
 		Option("data-source", "frames"),
 		Option("control-peak-time", 0),
 		Option("psd-fft-length", config.psd.fft_length),
-		Option("channel-name", format_ifo_args(config.ifos, config.source.channel_name)),
-		Option("frame-type", format_ifo_args(config.ifos, config.source.frame_type)),
+		Option("channel-name", dagutil.format_ifo_args(config.ifos, config.source.channel_name)),
+		Option("frame-type", dagutil.format_ifo_args(config.ifos, config.source.frame_type)),
 		Option("data-find-server", config.source.data_find_server),
 		Option("frame-segments-name", config.source.frame_segments_name),
 		Option("tmp-space", dagutil.condor_scratch_space()),
@@ -141,8 +103,8 @@ def filter_layer(config, dag, ref_psd_cache, svd_bank_cache):
 		layer += Node(
 			key = (span, svd_bin),
 			parent_keys = {
-				"reference_psd": [span],
-				"svd_bank": [(ifo, svd_bin) for ifo in config.ifos],
+				ref_psd_cache.layer: [span],
+				svd_bank_cache.layer: [(ifo, svd_bin) for ifo in config.ifos],
 			},
 			arguments = filter_opts,
 			inputs = [
@@ -167,7 +129,7 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 	trg_layer = Layer(
 		"lalapps_run_sqlite",
 		name="cluster_triggers_by_snr",
-		parents="filter",
+		parents=trigger_cache.layer,
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
@@ -178,7 +140,7 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 	for svd_bin, triggers in trigger_cache.groupby("bin").items():
 		trg_layer += Node(
 			key = svd_bin,
-			parent_keys = {"filter": [(span, svd_bin) for span in config.time_bins]},
+			parent_keys = {trigger_cache.layer: [(span, svd_bin) for span in config.time_bins]},
 			arguments = [
 				Option("sql-file", snr_cluster_sql_file),
 				Option("tmp-space", dagutil.condor_scratch_space()),
@@ -186,22 +148,24 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 			inputs = Argument("triggers", triggers.files),
 			outputs = Argument("clustered-triggers", triggers.files, include=False),
 		)
+	trigger_cache.layer = "aggregate_triggers"
 
 	# marginalize dist stats across time
 	dist_layer = Layer(
 		"gstlal_inspiral_marginalize_likelihood",
 		name="marginalize_dist_stats_across_time_filter",
-		parents="filter",
+		parents=dist_stat_cache.layer,
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	agg_dist_stat_cache = DataCache.generate(DataType.DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+	agg_dist_stat_cache.layer = "aggregate_dist_stats"
 
 	dist_stats = dist_stat_cache.groupby("bin")
 	for svd_bin, agg_dist_stats in agg_dist_stat_cache.groupby("bin").items():
 		dist_layer += Node(
 			key = svd_bin,
-			parent_keys = {"filter": [(span, svd_bin) for span in config.time_bins]},
+			parent_keys = {dist_stat_cache.layer: [(span, svd_bin) for span in config.time_bins]},
 			arguments = Option("marginalize", "ranking-stat"),
 			inputs = Argument("dist-stats", dist_stats[svd_bin].files),
 			outputs = Option("output", agg_dist_stats.files)
@@ -214,10 +178,10 @@ def aggregate_layer(config, dag, trigger_cache, dist_stat_cache):
 
 
 def prior_layer(config, dag, svd_bank_cache, median_psd_cache, dist_stat_cache):
-	if "aggregate_dist_stats" in dag:
-		parents = ("svd_bank", "median_psd", "aggregate_dist_stats")
-	else:
-		parents = None
+	parents = []
+	for cache in (svd_bank_cache, median_psd_cache, dist_stat_cache):
+		if cache.layer:
+			parents.append(cache.layer)
 
 	layer = Layer(
 		"gstlal_inspiral_create_prior_diststats",
@@ -226,6 +190,7 @@ def prior_layer(config, dag, svd_bank_cache, median_psd_cache, dist_stat_cache):
 	)
 
 	prior_cache = DataCache.generate(DataType.PRIOR_DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+	prior_cache.layer = "prior"
 
 	svd_banks = svd_bank_cache.groupby("bin")
 	for svd_bin, prior in prior_cache.groupby("bin").items():
@@ -240,8 +205,8 @@ def prior_layer(config, dag, svd_bank_cache, median_psd_cache, dist_stat_cache):
 		layer += Node(
 			key = svd_bin,
 			parent_keys = {
-				"aggregate_dist_stats": [svd_bin],
-				"svd_bank": [(ifo, svd_bin) for ifo in config.ifos],
+				dist_stat_cache.layer: [svd_bin],
+				svd_bank_cache.layer: [(ifo, svd_bin) for ifo in config.ifos],
 			},
 			arguments = [
 				Option("df", "bandwidth"),
@@ -259,11 +224,7 @@ def prior_layer(config, dag, svd_bank_cache, median_psd_cache, dist_stat_cache):
 
 
 def marginalize_layer(config, dag, prior_cache, dist_stat_cache):
-	if "aggregate_dist_stats" in dag:
-		parents = ("prior", "aggregate_dist_stats")
-	else:
-		parents = "prior"
-
+	parents = [cache.layer for cache in (prior_cache, dist_stat_cache) if cache.layer]
 	layer = Layer(
 		"gstlal_inspiral_marginalize_likelihood",
 		name="marginalize_dist_stats_across_time_rank",
@@ -272,17 +233,17 @@ def marginalize_layer(config, dag, prior_cache, dist_stat_cache):
 	)
 
 	marg_dist_stat_cache = DataCache.generate(DataType.MARG_DIST_STATS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+	marg_dist_stat_cache.layer = "marginalize"
 
 	prior = prior_cache.groupby("bin")
 	dist_stats = dist_stat_cache.groupby("bin")
 	for svd_bin, marg_dist_stats in marg_dist_stat_cache.groupby("bin").items():
-		parent_keys = {"prior": [svd_bin]}
-		if "aggregate_dist_stats" in dag:
-			parent_keys["aggregate_dist_stats"] = [svd_bin]
-
 		layer += Node(
 			key = svd_bin,
-			parent_keys = parent_keys,
+			parent_keys = {
+				prior_cache.layer: [svd_bin],
+				dist_stat_cache.layer: [svd_bin],
+			},
 			arguments = Option("marginalize", "ranking-stat"),
 			inputs = [
 				Argument("mass-model", config.prior.mass_model, include=False),
@@ -298,17 +259,18 @@ def marginalize_layer(config, dag, prior_cache, dist_stat_cache):
 def calc_pdf_layer(config, dag, dist_stat_cache):
 	layer = Layer(
 		"gstlal_inspiral_calc_rank_pdfs",
-		parents="marginalize",
+		parents=dist_stat_cache.layer,
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	pdf_cache = DataCache.generate(DataType.DIST_STAT_PDFS, config.ifo_combo, config.span, svd_bins=config.svd.bins)
+	pdf_cache.layer = "calc_pdf"
 
 	dist_stats = dist_stat_cache.groupby("bin")
 	for svd_bin, pdfs in pdf_cache.groupby("bin").items():
 		layer += Node(
 			key = svd_bin,
-			parent_keys = {"marginalize": [svd_bin]},
+			parent_keys = {dist_stat_cache.layer: [svd_bin]},
 			arguments = Option("ranking-stat-samples", config.rank.ranking_stat_samples),
 			inputs = [
 				Argument("mass-model", config.prior.mass_model, include=False),
@@ -325,14 +287,15 @@ def marginalize_pdf_layer(config, dag, pdf_cache):
 	layer = Layer(
 		"gstlal_inspiral_marginalize_likelihood",
 		name="gstlal_inspiral_marginalize_pdfs",
-		parents="calc_pdf",
+		parents=pdf_cache.layer,
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	marg_pdf_cache = DataCache.generate(DataType.DIST_STAT_PDFS, config.ifo_combo, config.span)
+	marg_pdf_cache.layer = "marginalize_pdf"
 
 	layer += Node(
-		parent_keys = {"calc_pdf": [svd_bin for svd_bin in config.svd.bins]},
+		parent_keys = {pdf_cache.layer: [svd_bin for svd_bin in config.svd.bins]},
 		arguments = Option("marginalize", "ranking-stat-pdf"),
 		inputs = Argument("dist-stat-pdfs", pdf_cache.files),
 		outputs = Option("output", marg_pdf_cache.files)
@@ -343,11 +306,7 @@ def marginalize_pdf_layer(config, dag, pdf_cache):
 
 
 def calc_likelihood_layer(config, dag, trigger_cache, dist_stat_cache):
-	if "aggregate_dist_stats" in dag:
-		parents = ("marginalize", "aggregate_triggers", "aggregate_dist_stats")
-	else:
-		parents = "marginalize"
-
+	parents = [cache.layer for cache in (trigger_cache, dist_stat_cache) if cache.layer]
 	layer = Layer(
 		"gstlal_inspiral_calc_likelihood",
 		parents=parents,
@@ -358,9 +317,8 @@ def calc_likelihood_layer(config, dag, trigger_cache, dist_stat_cache):
 	for svd_bin, triggers in trigger_cache.groupby("bin").items():
 		layer += Node(
 			parent_keys = {
-				"marginalize": [svd_bin],
-				"aggregate_triggers": [svd_bin],
-				"aggregate_dist_stats": [svd_bin],
+				trigger_cache.layer: [svd_bin],
+				dist_stat_cache.layer: [svd_bin],
 			},
 			arguments = [
 				Option("force"),
@@ -373,6 +331,7 @@ def calc_likelihood_layer(config, dag, trigger_cache, dist_stat_cache):
 			],
 			outputs = Argument("calc-triggers", triggers.files, include=False),
 		)
+	trigger_cache.layer = "calc_likelihood"
 
 	dag["calc_likelihood"] = layer
 	return trigger_cache
@@ -401,23 +360,25 @@ def cluster_layer(config, dag, trigger_cache):
 			inputs = Argument("triggers", triggers.files),
 			outputs = Argument("calc-triggers", triggers.files, include=False),
 		)
+	trigger_cache.layer = "cluster"
 
 	dag["cluster"] = layer
 	return trigger_cache
 
 
 def compute_far_layer(config, dag, trigger_cache, pdf_cache):
+	parents = [cache.layer for cache in (trigger_cache, pdf_cache) if cache.layer]
 	layer = Layer(
 		"gstlal_compute_far_from_snr_chisq_histograms",
 		name="compute_far",
-		parents=("cluster", "marginalize_pdf"),
+		parents=parents,
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
 	for span, triggers in trigger_cache.groupby("time").items():
 		layer += Node(
 			key = span,
-			parent_keys = {"cluster": [span]},
+			parent_keys = {trigger_cache.layer: [span]},
 			arguments = [
 				Option("tmp-space", dagutil.condor_scratch_space()),
 			],
@@ -447,23 +408,9 @@ def calc_gate_threshold(config, svd_bin, aggregate="max"):
 		return config.filter.ht_gate_threshold
 
 
-def format_ifo_args(ifos, args):
-	"""
-	Given a set of instruments and arguments keyed by instruments, this
-	creates a list of strings in the form {ifo}={arg}. This is suitable
-	for command line options like --channel-name which expects this
-	particular format.
-	"""
-	if isinstance(ifos, str):
-		ifos = [ifos]
-	return [f"{ifo}={args[ifo]}" for ifo in ifos]
-
-
 @plugins.register
 def layers():
 	return {
-		"reference_psd": reference_psd_layer,
-		"median_psd": median_psd_layer,
 		"svd_bank": svd_bank_layer,
 		"filter": filter_layer,
 		"aggregate": aggregate_layer,
