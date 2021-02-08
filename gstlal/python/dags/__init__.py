@@ -28,11 +28,18 @@ from gstlal import plugins
 
 
 class DAG(dags.DAG):
+	_has_layers = False
+
 	def __init__(self, config, *args, **kwargs):
 		super().__init__(*args, **kwargs)
 		self.config = config
 		self._node_layers = {}
 		self._layers = {}
+
+		# register layers to DAG if needed
+		if not self._has_layers:
+			for layer_name, layer in self._get_registered_layers().items():
+				self.register_layer(layer_name)(layer)
 
 	def __setitem__(self, key, layer):
 		if key in self._layers:
@@ -124,6 +131,26 @@ class DAG(dags.DAG):
 
 		return EdgeConnector(indices)
 
+	@classmethod
+	def _get_registered_layers(cls):
+		"""Get all registered DAG layers.
+		"""
+		# set up plugin manager
+		manager = pluggy.PluginManager("gstlal")
+		manager.add_hookspecs(plugins)
+
+		# load layers
+		from gstlal.dags.layers import psd
+		manager.register(psd)
+
+		# add all registered plugins to registry
+		registered = {}
+		for plugin_name in manager.hook.layers():
+			for name, layer in plugin_name.items():
+				registered[name] = layer
+
+		return registered
+
 
 class HexFormatter(dags.SimpleFormatter):
 	"""A hex-based node formatter that produces names like LayerName_000C.
@@ -158,24 +185,3 @@ def write_dag(dag, dag_dir=None, formatter=None, **kwargs):
 	if not dag_dir:
 		dag_dir = os.getcwd()
 	return htcondor.dags.write_dag(dag, dag_dir, node_name_formatter=formatter, **kwargs)
-
-
-def _get_registered_layers():
-	"""Get all registered DAG layers.
-	"""
-	# set up plugin manager
-	manager = pluggy.PluginManager("gstlal")
-	manager.add_hookspecs(plugins)
-	
-	# add all registered plugins to registry
-	registered = {}
-	for plugin_name in manager.hook.layers():
-		for name, layer in plugin_name.items():
-			registered[name] = layer
-	
-	return registered
-
-
-# register layers to DAG
-for layer_name, layer in _get_registered_layers().items():
-	DAG.register_layer(layer_name)(layer)

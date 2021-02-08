@@ -22,29 +22,25 @@ from gstlal.dags import DAG as BaseDAG
 
 
 class DAG(BaseDAG):
-	pass
+	@classmethod
+	def _get_registered_layers(cls):
+		"""Get all registered DAG layers.
+		"""
+		# set up plugin manager
+		manager = pluggy.PluginManager("gstlal")
+		manager.add_hookspecs(plugins)
 
+		# load layers
+		from gstlal.dags.layers import psd
+		manager.register(psd)
 
-def _get_registered_layers():
-	"""Get all registered DAG layers.
-	"""
-	# set up plugin manager
-	manager = pluggy.PluginManager("gstlal")
-	manager.add_hookspecs(plugins)
-	
-	# load layers
-	from gstlal.dags.layers import inspiral
-	manager.register(inspiral)
+		from gstlal.dags.layers import inspiral
+		manager.register(inspiral)
 
-	# add all registered plugins to registry
-	registered = {}
-	for plugin_name in manager.hook.layers():
-		for name, layer in plugin_name.items():
-			registered[name] = layer
-	
-	return registered
+		# add all registered plugins to registry
+		registered = {}
+		for plugin_name in manager.hook.layers():
+			for name, layer in plugin_name.items():
+				registered[name] = layer
 
-
-# register layers to DAG
-for layer_name, layer in _get_registered_layers().items():
-	DAG.register_layer(layer_name)(layer)
+		return registered
