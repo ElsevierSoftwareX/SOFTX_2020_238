@@ -339,11 +339,11 @@ for i in range(0, len(frequencies)):
 	elif dur > 100:
 		t_unit = 'minutes'
 		sec_per_t_unit = 60.0
-	times = []
+	times = [[]]
 	magnitudes = [[]]
 	phases = [[]]
 	for k in range(0, int(len(data) / filter_time)):
-		times.append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
+		times[0].append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
 		magnitudes[0].append(data[filter_time * k][1])
 		phases[0].append(data[filter_time * k][2])
 	markersize = 150.0 * numpy.sqrt(float(filter_time / dur))
@@ -354,9 +354,9 @@ for i in range(0, len(frequencies)):
 		plt.figure(figsize = (25, 15))
 	plt.subplot(2, len(frequencies), i + 1)
 	if options.show_stats:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.median(magnitudes[0]), numpy.std(magnitudes[0])))
+		plt.plot(times[0], magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[0], numpy.median(magnitudes[0]), numpy.std(magnitudes[0])))
 	else:
-		plt.plot(times, magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
+		plt.plot(times[0], magnitudes[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
 	plt.title(r'${\rm %s} \ \widetilde{\Delta L}_{\rm free} / \tilde{x}_{\rm pc} \  {\rm at \  %0.1f \  Hz}$' % ( ifo, frequencies[i]), fontsize = 32)
 	if i == 0:
 		plt.ylabel(r'${\rm Magnitude}$')
@@ -366,9 +366,9 @@ for i in range(0, len(frequencies)):
 	leg.get_frame().set_alpha(0.8)
 	plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 	if options.show_stats:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.median(phases[0]), numpy.std(phases[0])))
+		plt.plot(times[0], phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[0], numpy.median(phases[0]), numpy.std(phases[0])))
 	else:
-		plt.plot(times, phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
+		plt.plot(times[0], phases[0], colors[0], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[0]))
 	leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 	leg.get_frame().set_alpha(0.8)
 	if i == 0:
@@ -379,23 +379,25 @@ for i in range(0, len(frequencies)):
 	ticks_and_grid(plt.gca(), ymin = float(phase_range.split(',')[0]), ymax = float(phase_range.split(',')[1]))
 	for j in range(1, len(channels)):
 		data = numpy.loadtxt("%s_%s_over_%s_at_%0.1fHz_%d.txt" % (ifo, labels[j].replace(' ', '_'), options.pcal_channel_name, frequencies[i], options.gps_start_time))
+		times.append([])
 		magnitudes.append([])
 		phases.append([])
 		for k in range(0, int(len(data) / filter_time)):
+			times[j].append((data[filter_time * k][0] - t_start) / sec_per_t_unit)
 			magnitudes[j].append(data[filter_time * k][1])
 			phases[j].append(data[filter_time * k][2])
 		plt.subplot(2, len(frequencies), i + 1)
 		if options.show_stats:
-			plt.plot(times[:min(len(times), len(magnitudes[j]))], magnitudes[j][:min(len(times), len(magnitudes[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.median(magnitudes[j]), numpy.std(magnitudes[j])))
+			plt.plot(times[j], magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.3f, \sigma = %0.3f]$' % (plot_labels[j], numpy.median(magnitudes[j]), numpy.std(magnitudes[j])))
 		else:
-			plt.plot(times[:min(len(times), len(magnitudes[j]))], magnitudes[j][:min(len(times), len(magnitudes[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
+			plt.plot(times[j], magnitudes[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
 		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 		leg.get_frame().set_alpha(0.8)
 		plt.subplot(2, len(frequencies), len(frequencies) + i + 1)
 		if options.show_stats:
-			plt.plot(times[:min(len(times), len(phases[j]))], phases[j][:min(len(times), len(phases[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[j], numpy.median(phases[j]), numpy.std(phases[j])))
+			plt.plot(times[j], phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s \ [\mu_{1/2} = %0.2f^{\circ}, \sigma = %0.2f^{\circ}]$' % (plot_labels[j], numpy.median(phases[j]), numpy.std(phases[j])))
 		else:
-			plt.plot(times[:min(len(times), len(phases[j]))], phases[j][:min(len(times), len(phases[j]))], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
+			plt.plot(times[j], phases[j], colors[j % 6], linestyle = 'None', marker = '.', markersize = markersize, label = r'$%s$' % (plot_labels[j]))
 		leg = plt.legend(fancybox = True, markerscale = 16.0 / markersize, numpoints = 1, loc = 'upper right')
 		leg.get_frame().set_alpha(0.8)
 plt.savefig("%s_deltal_over_pcal%s_%d-%d.png" % (ifo, options.file_name_suffix, int(t_start), int(dur_in_seconds)))
