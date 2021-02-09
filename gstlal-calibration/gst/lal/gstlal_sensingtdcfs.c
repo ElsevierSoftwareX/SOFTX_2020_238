@@ -239,7 +239,7 @@ DEFINE_FS_OVER_Q_0(double);
 
 
 #define DEFINE_FIND_BEST_SOLUTION(DTYPE, F_OR_NOT) \
-guint find_best_solution_ ## DTYPE(DTYPE kc1, DTYPE kc2, DTYPE kc3, DTYPE kc4, DTYPE fcc1, DTYPE fcc2, DTYPE fcc3, DTYPE fcc4, DTYPE fs_squared1, DTYPE fs_squared2, DTYPE fs_squared3, DTYPE fs_squared4, DTYPE fs_over_Q1, DTYPE fs_over_Q2, DTYPE fs_over_Q3, DTYPE fs_over_Q4, DTYPE f1, DTYPE f2, DTYPE complex tdep_sensing_at_f1, complex DTYPE tdep_sensing_at_f2, DTYPE default_fcc) { \
+guint find_best_solution_ ## DTYPE(DTYPE kc1, DTYPE kc2, DTYPE kc3, DTYPE kc4, DTYPE fcc1, DTYPE fcc2, DTYPE fcc3, DTYPE fcc4, DTYPE fs_squared1, DTYPE fs_squared2, DTYPE fs_squared3, DTYPE fs_squared4, DTYPE fs_over_Q1, DTYPE fs_over_Q2, DTYPE fs_over_Q3, DTYPE fs_over_Q4, DTYPE f1, DTYPE f2, DTYPE complex tdep_sensing_at_f1, complex DTYPE tdep_sensing_at_f2) { \
  \
 	/*
 	 * In general, more than one of the four solutions can be correct.  This is because
@@ -732,39 +732,39 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 					}
 
 					/* Determine which solution is correct. */
-					best_solution = find_best_solution_float(kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4, f1, f2, indata[4 * i + 2] - indata[4 * i], indata[4 * i + 3] - indata[4 * i + 1], (float) element->default_fcc);
+					best_solution = find_best_solution_float(kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4, f1, f2, indata[4 * i + 2] - indata[4 * i], indata[4 * i + 3] - indata[4 * i + 1]);
 
 					switch(best_solution) {
 					case 1:
-						outdata[4 * i] = kappa_C1;
-						outdata[4 * i + 1] = f_cc1;
-						outdata[4 * i + 2] = f_s_squared1;
-						outdata[4 * i + 3] = f_s_over_Q1;
+						outdata[4 * i] = element->current_kc = kappa_C1;
+						outdata[4 * i + 1] = element->current_fcc = f_cc1;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared1;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q1;
 						break;
 					case 2:
-						outdata[4 * i] = kappa_C2;
-						outdata[4 * i + 1] = f_cc2;
-						outdata[4 * i + 2] = f_s_squared2;
-						outdata[4 * i + 3] = f_s_over_Q2;
+						outdata[4 * i] = element->current_kc = kappa_C2;
+						outdata[4 * i + 1] = element->current_fcc = f_cc2;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared2;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q2;
 						break;
 					case 3:
-						outdata[4 * i] = kappa_C3;
-						outdata[4 * i + 1] = f_cc3;
-						outdata[4 * i + 2] = f_s_squared3;
-						outdata[4 * i + 3] = f_s_over_Q3;
+						outdata[4 * i] = element->current_kc = kappa_C3;
+						outdata[4 * i + 1] = element->current_fcc = f_cc3;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared3;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q3;
 						break;
 					case 4:
-						outdata[4 * i] = kappa_C4;
-						outdata[4 * i + 1] = f_cc4;
-						outdata[4 * i + 2] = f_s_squared4;
-						outdata[4 * i + 3] = f_s_over_Q4;
+						outdata[4 * i] = element->current_kc = kappa_C4;
+						outdata[4 * i + 1] = element->current_fcc = f_cc4;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared4;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q4;
 						break;
 					default:
 						GST_WARNING_OBJECT(element, "Unable to find a solution for sensing function TDCFs");
-						outdata[4 * i] = 1.0;
-						outdata[4 * i + 1] = (float) element->default_fcc;
-						outdata[4 * i + 2] = (float) element->default_fs_squared;
-						outdata[4 * i + 3] = (float) element->default_fs_over_Q;
+						outdata[4 * i] = (float) element->current_kc;
+						outdata[4 * i + 1] = (float) element->current_fcc;
+						outdata[4 * i + 2] = (float) element->current_fs_squared;
+						outdata[4 * i + 3] = (float) element->current_fs_over_Q;
 						break;
 					}
 				}
@@ -826,39 +826,39 @@ static GstFlowReturn transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuf
 					}
 
 					/* Determine which solution is correct. */
-					best_solution = find_best_solution_double(kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4, f1, f2, indata[4 * i + 2] - indata[4 * i], indata[4 * i + 3] - indata[4 * i + 1], element->default_fcc);
+					best_solution = find_best_solution_double(kappa_C1, kappa_C2, kappa_C3, kappa_C4, f_cc1, f_cc2, f_cc3, f_cc4, f_s_squared1, f_s_squared2, f_s_squared3, f_s_squared4, f_s_over_Q1, f_s_over_Q2, f_s_over_Q3, f_s_over_Q4, f1, f2, indata[4 * i + 2] - indata[4 * i], indata[4 * i + 3] - indata[4 * i + 1]);
 
 					switch(best_solution) {
 					case 1:
-						outdata[4 * i] = kappa_C1;
-						outdata[4 * i + 1] = f_cc1;
-						outdata[4 * i + 2] = f_s_squared1;
-						outdata[4 * i + 3] = f_s_over_Q1;
+						outdata[4 * i] = element->current_kc = kappa_C1;
+						outdata[4 * i + 1] = element->current_fcc = f_cc1;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared1;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q1;
 						break;
 					case 2:
-						outdata[4 * i] = kappa_C2;
-						outdata[4 * i + 1] = f_cc2;
-						outdata[4 * i + 2] = f_s_squared2;
-						outdata[4 * i + 3] = f_s_over_Q2;
+						outdata[4 * i] = element->current_kc = kappa_C2;
+						outdata[4 * i + 1] = element->current_fcc = f_cc2;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared2;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q2;
 						break;
 					case 3:
-						outdata[4 * i] = kappa_C3;
-						outdata[4 * i + 1] = f_cc3;
-						outdata[4 * i + 2] = f_s_squared3;
-						outdata[4 * i + 3] = f_s_over_Q3;
+						outdata[4 * i] = element->current_kc = kappa_C3;
+						outdata[4 * i + 1] = element->current_fcc = f_cc3;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared3;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q3;
 						break;
 					case 4:
-						outdata[4 * i] = kappa_C4;
-						outdata[4 * i + 1] = f_cc4;
-						outdata[4 * i + 2] = f_s_squared4;
-						outdata[4 * i + 3] = f_s_over_Q4;
+						outdata[4 * i] = element->current_kc = kappa_C4;
+						outdata[4 * i + 1] = element->current_fcc = f_cc4;
+						outdata[4 * i + 2] = element->current_fs_squared = f_s_squared4;
+						outdata[4 * i + 3] = element->current_fs_over_Q = f_s_over_Q4;
 						break;
 					default:
 						GST_WARNING_OBJECT(element, "Unable to find a solution for sensing function TDCFs");
-						outdata[4 * i] = 1.0;
-						outdata[4 * i + 1] = element->default_fcc;
-						outdata[4 * i + 2] = element->default_fs_squared;
-						outdata[4 * i + 3] = element->default_fs_over_Q;
+						outdata[4 * i] = element->current_kc;
+						outdata[4 * i + 1] = element->current_fcc;
+						outdata[4 * i + 2] = element->current_fs_squared;
+						outdata[4 * i + 3] = element->current_fs_over_Q;
 						break;
 					}
 				}
@@ -918,9 +918,10 @@ enum property {
 	ARG_FREQ1,
 	ARG_FREQ2,
 	ARG_FREQ4,
-	ARG_DEFAULT_FCC,
-	ARG_DEFAULT_FS_SQUARED,
-	ARG_DEFAULT_FS_OVER_Q
+	ARG_CURRENT_KC,
+	ARG_CURRENT_FCC,
+	ARG_CURRENT_FS_SQUARED,
+	ARG_CURRENT_FS_OVER_Q
 };
 
 
@@ -943,14 +944,17 @@ static void set_property(GObject *object, enum property prop_id, const GValue *v
 	case ARG_FREQ4:
 		element->freq4 = g_value_get_double(value);
 		break;
-	case ARG_DEFAULT_FCC:
-		element->default_fcc = g_value_get_double(value);
+	case ARG_CURRENT_KC:
+		element->current_kc = g_value_get_double(value);
 		break;
-	case ARG_DEFAULT_FS_SQUARED:
-		element->default_fs_squared = g_value_get_double(value);
+	case ARG_CURRENT_FCC:
+		element->current_fcc = g_value_get_double(value);
 		break;
-	case ARG_DEFAULT_FS_OVER_Q:
-		element->default_fs_over_Q = g_value_get_double(value);
+	case ARG_CURRENT_FS_SQUARED:
+		element->current_fs_squared = g_value_get_double(value);
+		break;
+	case ARG_CURRENT_FS_OVER_Q:
+		element->current_fs_over_Q = g_value_get_double(value);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -980,14 +984,17 @@ static void get_property(GObject *object, enum property prop_id, GValue *value, 
 	case ARG_FREQ4:
 		g_value_set_double(value, element->freq4);
 		break;
-	case ARG_DEFAULT_FCC:
-		g_value_set_double(value, element->default_fcc);
+	case ARG_CURRENT_KC:
+		g_value_set_double(value, element->current_kc);
 		break;
-	case ARG_DEFAULT_FS_SQUARED:
-		g_value_set_double(value, element->default_fs_over_Q);
+	case ARG_CURRENT_FCC:
+		g_value_set_double(value, element->current_fcc);
 		break;
-	case ARG_DEFAULT_FS_OVER_Q:
-		g_value_set_double(value, element->default_fs_over_Q);
+	case ARG_CURRENT_FS_SQUARED:
+		g_value_set_double(value, element->current_fs_over_Q);
+		break;
+	case ARG_CURRENT_FS_OVER_Q:
+		g_value_set_double(value, element->current_fs_over_Q);
 		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1097,34 +1104,45 @@ static void gstlal_sensingtdcfs_class_init(GSTLALSensingTDCFsClass *klass)
 		)
 	);
 	g_object_class_install_property(
+                gobject_class,
+                ARG_CURRENT_KC,
+                g_param_spec_double(
+                        "current-kc",
+                        "Current kc",
+                        "Current value of the variable optical gain of the sensing function.",
+                        -G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
+                        G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
+                )
+        );
+	g_object_class_install_property(
 		gobject_class,
-		ARG_DEFAULT_FCC,
+		ARG_CURRENT_FCC,
 		g_param_spec_double(
-			"default-fcc",
-			"Default fcc",
-			"Default value of the coupled cavity pole frequency in Hz.",
+			"current-fcc",
+			"Current fcc",
+			"Current value of the coupled cavity pole frequency in Hz.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 400.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_DEFAULT_FS_SQUARED,
+		ARG_CURRENT_FS_SQUARED,
 		g_param_spec_double(
-			"default-fs-squared",
-			"Default fs squared",
-			"Default value of the squared frequency of the SRC optical spring in Hz^2.",
+			"current-fs-squared",
+			"Current fs squared",
+			"Current value of the squared frequency of the SRC optical spring in Hz^2.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)
 	);
 	g_object_class_install_property(
 		gobject_class,
-		ARG_DEFAULT_FS_OVER_Q,
+		ARG_CURRENT_FS_OVER_Q,
 		g_param_spec_double(
-			"default-fs-over-Q",
-			"Default fs over Q",
-			"Default value of the SRC optical spring frequency in Hz divided by the quality factor.",
+			"current-fs-over-Q",
+			"Current fs over Q",
+			"Current value of the SRC optical spring frequency in Hz divided by the quality factor.",
 			-G_MAXDOUBLE, G_MAXDOUBLE, 1.0,
 			G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | G_PARAM_CONSTRUCT
 		)

@@ -1212,7 +1212,7 @@ def compute_exact_kappas_from_filters_file(pipeline, X, freqs, EPICS, rate, defa
 		Gres.append(mkadder(pipeline, Gres_components))
 
 	sensing_inputs = mkinterleave(pipeline, Gres + Y, complex_data = True)
-	sensing_outputs = pipeparts.mkgeneric(pipeline, sensing_inputs, "lal_sensingtdcfs", sensing_model = 0, freq1 = freqs[0], freq2 = freqs[1], default_fcc = default_fcc, default_fs_squared = default_fs_squared, default_fs_over_Q = default_fs_over_Q)
+	sensing_outputs = pipeparts.mkgeneric(pipeline, sensing_inputs, "lal_sensingtdcfs", sensing_model = 0, freq1 = freqs[0], freq2 = freqs[1], current_fcc = default_fcc, current_fs_squared = default_fs_squared, current_fs_over_Q = default_fs_over_Q)
 	sensing_outputs = list(mkdeinterleave(pipeline, sensing_outputs, 4))
 
 	kappas += sensing_outputs

@@ -44,7 +44,7 @@ GDSOLDCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_old.ini
 GDSBETTERCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_better.ini
 GDSBESTCONFIGS = Filters/ER14/GDSFilters/L1GDS_1235491416_best.ini
 
-all: DCSEXACTKAPPAS_pcal2darm_plots DCSEXACTKAPPAS_act2darm_plots
+all: DCSEXACTKAPPAS_pcal2darm_plots DCSEXACTKAPPAS_act2darm_plots exactkappastimeseries
 #pcal_DCS_transfer_functions
 #TDCFs_pcal2darm_plots
 #actuation_timing_plot
@@ -183,13 +183,11 @@ GDS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_GDS_frames.cache
 DCS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_frames.cache $(IFO)1_C00_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_C00_frames.cache,$(IFO)1_hoft_DCS_frames.cache' --config-file '$(DCSCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'GDS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels 'C00,TEST' --pcal-time-advance 0.00006103515625
 
-DCSEXACTKAPPAS_pcal2darm_plots:
-	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
+DCSEXACTKAPPAS_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache,$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache' --config-file-list '$(DCSAPPROXKAPPASCONFIGS),$(DCSEXACTKAPPASCONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'DCS-CALIB_STRAINAPPROXKAPPAS,DCS-CALIB_STRAINEXACTKAPPAS' --labels '{\rm Approx},{\rm Exact}' --magnitude-ranges '0.95,1.05;0.95,1.05;0.8,1.2' --phase-ranges '-3.0,3.0;-3.0,3.0;-15.0,15.0' --latex-labels --pcal-time-advance 0.00006103515625 --show-stats
 
-DCSEXACTKAPPAS_act2darm_plots:
-	#$(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
-	python3 act2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache,$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache' --config-file-list '$(DCSAPPROXKAPPASCONFIGS),$(DCSEXACTKAPPASCONFIGS)' --gstlal-channel-list 'DCS-CALIB_STRAINAPPROXKAPPAS,DCS-CALIB_STRAINEXACTKAPPAS' --act-channel-list "SUS-ETMY_L3_CAL_LINE_OUT_DQ,SUS-ETMX_L2_CAL_LINE_OUT_DQ,SUS-ETMX_L1_CAL_LINE_OUT_DQ" --labels '{\rm Approx},{\rm Exact}' --magnitude-ranges '0.95,1.05;0.95,1.05;0.95,1.05' --phase-ranges '-3.0,3.0;-3.0,3.0;-3.0,3.0' --latex-labels --show-stats
+DCSEXACTKAPPAS_act2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache $(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache
+	python3 act2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_hoft_DCS_APPROXKAPPAS_frames.cache,$(IFO)1_hoft_DCS_EXACTKAPPAS_frames.cache' --config-file-list '$(DCSAPPROXKAPPASCONFIGS),$(DCSEXACTKAPPASCONFIGS)' --gstlal-channel-list 'DCS-CALIB_STRAINAPPROXKAPPAS,DCS-CALIB_STRAINEXACTKAPPAS' --act-channel-list "SUS-ETMY_L3_CAL_LINE_OUT_DQ,SUS-ETMX_L2_CAL_LINE_OUT_DQ,SUS-ETMX_L1_CAL_LINE_OUT_DQ" --labels '{\rm Approx},{\rm Exact}' --magnitude-ranges '0.95,1.05;0.95,1.05;0.95,1.05' --phase-ranges '-3.0,3.0;-3.0,3.0;-3.0,3.0' --latex-labels --act-time-advance 0.00006103515625 --show-stats
 
 TDCFs_pcal2darm_plots: $(IFO)1_easy_raw_frames.cache $(IFO)1_SCALAR_CORR_frames.cache $(IFO)1_FCC_CORR_frames.cache $(IFO)1_FCCFS_CORR_frames.cache $(IFO)1_ALL_CORR_frames.cache
 	python3 pcal2darm_timeseries.py --gps-start-time $(PLOT_START) --gps-end-time $(PLOT_END) --ifo $(IFO)1 --raw-frame-cache $(IFO)1_easy_raw_frames.cache --gstlal-frame-cache-list '$(IFO)1_SCALAR_CORR_frames.cache,$(IFO)1_FCC_CORR_frames.cache,$(IFO)1_FCCFS_CORR_frames.cache,$(IFO)1_ALL_CORR_frames.cache' --config-file '$(ALL_CORR_CONFIGS)' --pcal-channel-name CAL-PCALY_RX_PD_OUT_DQ --gstlal-channel-list 'DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN,DCS-CALIB_STRAIN' --labels '{\rm Scalars},+f_{\rm cc},+f_{\rm s}+Q,+\tau_i' --latex-labels --pcal-time-advance 0.00006103515625 --show-stats

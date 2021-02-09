@@ -72,9 +72,10 @@ struct _GSTLALSensingTDCFs {
 	double freq1;
 	double freq2;
 	double freq4;
-	double default_fcc;
-	double default_fs_squared;
-	double default_fs_over_Q;
+	double current_kc;
+	double current_fcc;
+	double current_fs_squared;
+	double current_fs_over_Q;
 };
 
 
