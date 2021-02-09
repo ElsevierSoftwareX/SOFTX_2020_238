@@ -375,6 +375,9 @@ def compute_far_layer(config, dag, trigger_cache, pdf_cache):
 		requirements={"request_cpus": 1, "request_memory": 2000, **config.condor.submit}
 	)
 
+	post_pdf_cache = DataCache.generate(DataType.POST_DIST_STAT_PDFS, config.ifo_combo, config.span)
+	post_pdf_cache.layer = "compute_far"
+
 	for span, triggers in trigger_cache.groupby("time").items():
 		layer += Node(
 			key = span,
@@ -386,10 +389,11 @@ def compute_far_layer(config, dag, trigger_cache, pdf_cache):
 				Option("non-injection-db", triggers.files),
 				Option("background-bins-file", pdf_cache.files),
 			],
+			outputs = Option("output-background-bins-file", post_pdf_cache.files),
 		)
 
 	dag["compute_far"] = layer
-	return trigger_cache
+	return trigger_cache, post_pdf_cache
 
 
 def calc_gate_threshold(config, svd_bin, aggregate="max"):

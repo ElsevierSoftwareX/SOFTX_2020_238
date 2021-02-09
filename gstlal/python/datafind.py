@@ -40,6 +40,7 @@ class DataType(Enum):
 	PRIOR_DIST_STATS = (21, "xml.gz")
 	MARG_DIST_STATS = (22, "xml.gz")
 	DIST_STAT_PDFS = (30, "xml.gz")
+	POST_DIST_STAT_PDFS = (31, "xml.gz")
 	TEMPLATE_BANK = (40, "xml.gz")
 	SPLIT_BANK = (41, "xml.gz")
 	SVD_BANK = (42, "xml.gz")

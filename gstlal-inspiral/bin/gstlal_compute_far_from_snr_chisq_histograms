@@ -59,6 +59,7 @@ from gstlal import far
 def parse_command_line():
 	parser = OptionParser()
 	parser.add_option("--background-bins-file", metavar = "filename", help = "Set the name of the xml file containing the marginalized likelihood (required).")
+	parser.add_option("--output-background-bins-file", metavar = "filename", help = "Set the name of post marginalized likelihood output file with zero-lag counts populated. If not set, creates a file of the form post_{background_bins_file}.")
 	parser.add_option("--tmp-space", metavar = "dir", help = "Set the name of the tmp space if working with sqlite.")
 	parser.add_option("--non-injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from a non-injection run.  Can be given multiple times.")
 	parser.add_option("--injection-db", metavar = "filename", default = [], action = "append", help = "Provide the name of a database from an injection run.  Can be given multiple times.  Databases are assumed to be over the same time period as the non injection databases using the same templates.  If not the results will be nonsense.")
@@ -76,6 +77,9 @@ def parse_command_line():
 
 	if filenames:
 		raise ValueError("unrecognized trailing arguments")
+
+	if not options.output_background_bins_file:
+		options.output_background_bins_file = "post_%s" % options.background_bins_file
 
 	return options, process_params, filenames
 
@@ -275,9 +279,7 @@ xmldoc.appendChild(ligolw.LIGO_LW())
 process = ligolw_process.register_to_xmldoc(xmldoc, u"gstlal_compute_far_from_snr_chisq_histograms", process_params)
 far.gen_likelihood_control_doc(xmldoc, None, rankingstatpdf)
 ligolw_process.set_process_end_time(process)
-
-outname = "post_%s" % options.background_bins_file
-ligolw_utils.write_filename(xmldoc, outname, gz = outname.endswith(".gz"), verbose = options.verbose)
+ligolw_utils.write_filename(xmldoc, options.output_background_bins_file, gz = options.output_background_bins_file.endswith(".gz"), verbose = options.verbose)
 
 if options.verbose:
 	print("done", file=sys.stderr)
