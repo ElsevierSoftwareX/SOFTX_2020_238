@@ -557,7 +557,9 @@ class templates_workspace(object):
 				pos_freqs_p[0] = 0 # set DC to zero
 				pos_freqs_c[0] = 0 # set DC to zero
 
-				zeros = numpy.zeros((len(pos_freqs_p),), dtype = "cdouble")
+					#negative frequencies saved (no DC is included; nyquist is always included)
+				neg_freqs_p = numpy.array(pos_freqs_p[1:][::-1]) #reverting order of frequencies
+				neg_freqs_c = numpy.array(pos_freqs_c[1:][::-1])
 
 				if have_nyquist:
 					# complex transform never includes positive Nyquist
@@ -573,7 +575,7 @@ class templates_workspace(object):
 					sampleUnits = plus.sampleUnits,
 					length = len(zeros) + len(pos_freqs_p) - 1
 					)
-				fseries.data.data = numpy.concatenate((zeros, pos_freqs_p[1:]-1.j*pos_freqs_c[1:]))
+				fseries.data.data = numpy.concatenate((numpy.conj(neg_freqs_p+1.j*neg_freqs_c), pos_freqs_p-1.j*pos_freqs_c))
 
 		#
 		# compute time-domain autocorrelation function
