@@ -138,6 +138,8 @@ test:gstlal-inspiral:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-inspiral
   needs:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
     - level2:rpm:gstlal-inspiral
   script:
     # Install RPMs and set up the test environment:
@@ -158,6 +160,8 @@ test:gstlal-burst:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-burst
   needs:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
     - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
@@ -177,6 +181,11 @@ test:offline:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-offline
   needs:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
+    - level2:rpm:gstlal-calibration
+    - level2:rpm:gstlal-inspiral
+    - level2:rpm:gstlal-burst
     - test:gstlal
     - test:gstlal-inspiral
     - test:gstlal-burst
@@ -238,6 +247,11 @@ pages:
     - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
   dependencies:
+    - level0:rpm:gstlal
+    - level1:rpm:gstlal-ugly
+    - level2:rpm:gstlal-calibration
+    - level2:rpm:gstlal-inspiral
+    - level2:rpm:gstlal-burst
     - test:gstlal
     - test:gstlal-inspiral
     - test:gstlal-burst
