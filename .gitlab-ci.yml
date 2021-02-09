@@ -82,13 +82,13 @@ level0:rpm:gstlal:
 level1:rpm:gstlal-ugly:
   <<: *levelN-rpm-package
   stage: level1
-  dependencies:
+  needs:
     - level0:rpm:gstlal
 
 level2:rpm:gstlal-inspiral:
   <<: *levelN-rpm-package
   stage: level2
-  dependencies:
+  needs:
     - level0:rpm:gstlal
     - level1:rpm:gstlal-ugly
   variables:
@@ -97,14 +97,14 @@ level2:rpm:gstlal-inspiral:
 level2:rpm:gstlal-calibration:
   <<: *levelN-rpm-package
   stage: level2
-  dependencies:
+  needs:
     - level0:rpm:gstlal
     - level1:rpm:gstlal-ugly
     
 level2:rpm:gstlal-burst:
   <<: *levelN-rpm-package
   stage: level2
-  dependencies:
+  needs:
     - level0:rpm:gstlal
     - level1:rpm:gstlal-ugly
 
@@ -112,12 +112,8 @@ level2:rpm:gstlal-burst:
 test:gstlal:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-gstlal
-  dependencies:
+  needs:
     - level0:rpm:gstlal
-    - level1:rpm:gstlal-ugly
-    - level2:rpm:gstlal-calibration
-    - level2:rpm:gstlal-inspiral
-    - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
     - GLOBIGNORE="*calibration*"
@@ -141,12 +137,8 @@ test:gstlal:
 test:gstlal-inspiral:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-inspiral
-  dependencies:
-    - level0:rpm:gstlal
-    - level1:rpm:gstlal-ugly
-    - level2:rpm:gstlal-calibration
+  needs:
     - level2:rpm:gstlal-inspiral
-    - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
     - GLOBIGNORE="*calibration*"
@@ -165,11 +157,7 @@ test:gstlal-inspiral:
 test:gstlal-burst:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-burst
-  dependencies:
-    - level0:rpm:gstlal
-    - level1:rpm:gstlal-ugly
-    - level2:rpm:gstlal-calibration
-    - level2:rpm:gstlal-inspiral
+  needs:
     - level2:rpm:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
@@ -178,7 +166,6 @@ test:gstlal-burst:
     - unset GLOBIGNORE
     - export GSTLAL_FIR_WHITEN=0
     - gst-inspect-1.0
-
     - cd gstlal-burst
     - python3 -m pytest -v --doctest-modules --ignore python/excesspower --ignore python/string --ignore tests/trigger_test_01.py
   only:
@@ -189,12 +176,10 @@ test:gstlal-burst:
 test:offline:
   image: containers.ligo.org/alexander.pace/gstlal-dev/gstlal-dev:el7-latest
   stage: test-offline
-  dependencies:
-    - level0:rpm:gstlal
-    - level1:rpm:gstlal-ugly
-    - level2:rpm:gstlal-calibration
-    - level2:rpm:gstlal-inspiral
-    - level2:rpm:gstlal-burst
+  needs:
+    - test:gstlal
+    - test:gstlal-inspiral
+    - test:gstlal-burst
   script:
     # Install RPMs and set up the test environment:
     - GLOBIGNORE="*calibration*"
@@ -253,12 +238,9 @@ pages:
     - cd doc; make html
     - cd ..; cp -rf doc/_build/* public/
   dependencies:
-    - level0:rpm:gstlal
-    - level1:rpm:gstlal-ugly
-    - level2:rpm:gstlal-calibration
-    - level2:rpm:gstlal-inspiral
-    - level2:rpm:gstlal-burst
-    - test:offline
+    - test:gstlal
+    - test:gstlal-inspiral
+    - test:gstlal-burst
   artifacts:
     paths:
       - public
@@ -289,7 +271,7 @@ docker:el7:
     - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
     - docker build --pull -t $DOCKER_BRANCH --file .gitlab-ci.Dockerfile.e7-testing .
     - docker push $DOCKER_BRANCH
-  dependencies:
+  needs:
     - level0:rpm:gstlal
     - level1:rpm:gstlal-ugly
     - level2:rpm:gstlal-calibration
@@ -304,7 +286,7 @@ docker:el7:
 latest_image:
   stage: docker-latest
   before_script: []
-  dependencies:
+  needs:
     - docker:el7
   only:
     refs:
